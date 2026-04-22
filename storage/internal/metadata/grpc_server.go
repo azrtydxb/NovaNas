@@ -695,6 +695,56 @@ func (s *GRPCServer) JoinCluster(_ context.Context, req *pb.JoinClusterRequest) 
 	return &pb.JoinClusterResponse{Success: true}, nil
 }
 
+// ---- Per-chunk crypto metadata ----
+
+func (s *GRPCServer) SetChunkCrypto(ctx context.Context, req *pb.SetChunkCryptoRequest) (*pb.SetChunkCryptoResponse, error) {
+	metrics.MetadataOpsTotal.WithLabelValues("SetChunkCrypto").Inc()
+	if req.GetVolumeId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume_id is required")
+	}
+	c := req.GetCrypto()
+	if c == nil || c.GetChunkId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "crypto.chunk_id is required")
+	}
+	entry := ChunkCryptoEntry{
+		PlaintextHash: c.GetPlaintextHash(),
+		AuthTag:       c.GetAuthTag(),
+		DKVersion:     c.GetDkVersion(),
+	}
+	if err := s.store.SetChunkCrypto(ctx, req.GetVolumeId(), c.GetChunkId(), entry); err != nil {
+		return nil, storeErr(err)
+	}
+	return &pb.SetChunkCryptoResponse{}, nil
+}
+
+func (s *GRPCServer) GetChunkCrypto(ctx context.Context, req *pb.GetChunkCryptoRequest) (*pb.GetChunkCryptoResponse, error) {
+	metrics.MetadataOpsTotal.WithLabelValues("GetChunkCrypto").Inc()
+	if req.GetVolumeId() == "" || req.GetChunkId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume_id and chunk_id are required")
+	}
+	entry, err := s.store.GetChunkCrypto(ctx, req.GetVolumeId(), req.GetChunkId())
+	if err != nil {
+		return nil, storeErr(err)
+	}
+	return &pb.GetChunkCryptoResponse{Crypto: &pb.ChunkCrypto{
+		ChunkId:       req.GetChunkId(),
+		PlaintextHash: entry.PlaintextHash,
+		AuthTag:       entry.AuthTag,
+		DkVersion:     entry.DKVersion,
+	}}, nil
+}
+
+func (s *GRPCServer) DeleteChunkCrypto(ctx context.Context, req *pb.DeleteChunkCryptoRequest) (*pb.DeleteChunkCryptoResponse, error) {
+	metrics.MetadataOpsTotal.WithLabelValues("DeleteChunkCrypto").Inc()
+	if req.GetVolumeId() == "" || req.GetChunkId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume_id and chunk_id are required")
+	}
+	if err := s.store.DeleteChunkCrypto(ctx, req.GetVolumeId(), req.GetChunkId()); err != nil {
+		return nil, storeErr(err)
+	}
+	return &pb.DeleteChunkCryptoResponse{}, nil
+}
+
 // ---- Bootstrap ----
 
 // ReportSuperblocks accepts a batch of per-disk superblock descriptors

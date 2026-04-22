@@ -838,3 +838,53 @@ func (c *GRPCClient) GetUsage(ctx context.Context, scope QuotaScope) (*QuotaUsag
 	}
 	return QuotaUsageFromProto(resp.Usage), nil
 }
+
+// ---- Per-chunk crypto metadata (A8-Persistence) ----
+
+// SetChunkCrypto persists per-chunk crypto metadata for an encrypted
+// volume via the remote metadata service. Call this on the chunk write
+// path after a successful encrypt+store.
+func (c *GRPCClient) SetChunkCrypto(ctx context.Context, volumeID, chunkID string, plaintextHash, authTag []byte, dkVersion uint32) error {
+	return c.retryOnUnavailable(func() error {
+		_, err := c.client.SetChunkCrypto(ctx, &pb.SetChunkCryptoRequest{
+			VolumeId: volumeID,
+			Crypto: &pb.ChunkCrypto{
+				ChunkId:       chunkID,
+				PlaintextHash: plaintextHash,
+				AuthTag:       authTag,
+				DkVersion:     dkVersion,
+			},
+		})
+		return err
+	})
+}
+
+// GetChunkCrypto fetches per-chunk crypto metadata. Returns a
+// codes.NotFound status when the entry is missing (volume never wrote an
+// encrypted chunk with that id).
+func (c *GRPCClient) GetChunkCrypto(ctx context.Context, volumeID, chunkID string) (plaintextHash, authTag []byte, dkVersion uint32, err error) {
+	resp, err := c.client.GetChunkCrypto(ctx, &pb.GetChunkCryptoRequest{
+		VolumeId: volumeID,
+		ChunkId:  chunkID,
+	})
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	cp := resp.GetCrypto()
+	if cp == nil {
+		return nil, nil, 0, status.Error(codes.NotFound, "chunk crypto not found")
+	}
+	return cp.GetPlaintextHash(), cp.GetAuthTag(), cp.GetDkVersion(), nil
+}
+
+// DeleteChunkCrypto removes per-chunk crypto metadata. Called on chunk
+// GC / delete to keep the volume's chunk map trimmed.
+func (c *GRPCClient) DeleteChunkCrypto(ctx context.Context, volumeID, chunkID string) error {
+	return c.retryOnUnavailable(func() error {
+		_, err := c.client.DeleteChunkCrypto(ctx, &pb.DeleteChunkCryptoRequest{
+			VolumeId: volumeID,
+			ChunkId:  chunkID,
+		})
+		return err
+	})
+}

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v6.33.4
-// source: metadata/metadata.proto
+// source: api/proto/metadata/metadata.proto
 
 package metadata
 
@@ -77,6 +77,9 @@ const (
 	MetadataService_DeleteHealTask_FullMethodName        = "/metadata.MetadataService/DeleteHealTask"
 	MetadataService_SetQuota_FullMethodName              = "/metadata.MetadataService/SetQuota"
 	MetadataService_GetUsage_FullMethodName              = "/metadata.MetadataService/GetUsage"
+	MetadataService_SetChunkCrypto_FullMethodName        = "/metadata.MetadataService/SetChunkCrypto"
+	MetadataService_GetChunkCrypto_FullMethodName        = "/metadata.MetadataService/GetChunkCrypto"
+	MetadataService_DeleteChunkCrypto_FullMethodName     = "/metadata.MetadataService/DeleteChunkCrypto"
 	MetadataService_ReportSuperblocks_FullMethodName     = "/metadata.MetadataService/ReportSuperblocks"
 )
 
@@ -159,6 +162,14 @@ type MetadataServiceClient interface {
 	// ---- Quota operations ----
 	SetQuota(ctx context.Context, in *SetQuotaRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
+	// ---- Per-chunk crypto metadata (A8-Persistence) ----
+	//
+	// Route per-chunk encryption metadata (PlaintextHash, AuthTag, WrappedDK
+	// version) through the metadata service so chunk servers can be
+	// restarted without losing the ability to decrypt on-disk chunks.
+	SetChunkCrypto(ctx context.Context, in *SetChunkCryptoRequest, opts ...grpc.CallOption) (*SetChunkCryptoResponse, error)
+	GetChunkCrypto(ctx context.Context, in *GetChunkCryptoRequest, opts ...grpc.CallOption) (*GetChunkCryptoResponse, error)
+	DeleteChunkCrypto(ctx context.Context, in *DeleteChunkCryptoRequest, opts ...grpc.CallOption) (*DeleteChunkCryptoResponse, error)
 	// ---- Bootstrap (A4-Metadata-As-Chunks) ----
 	//
 	// ReportSuperblocks is called by agents at startup to push the per-disk
@@ -746,6 +757,36 @@ func (c *metadataServiceClient) GetUsage(ctx context.Context, in *GetUsageReques
 	return out, nil
 }
 
+func (c *metadataServiceClient) SetChunkCrypto(ctx context.Context, in *SetChunkCryptoRequest, opts ...grpc.CallOption) (*SetChunkCryptoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetChunkCryptoResponse)
+	err := c.cc.Invoke(ctx, MetadataService_SetChunkCrypto_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metadataServiceClient) GetChunkCrypto(ctx context.Context, in *GetChunkCryptoRequest, opts ...grpc.CallOption) (*GetChunkCryptoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetChunkCryptoResponse)
+	err := c.cc.Invoke(ctx, MetadataService_GetChunkCrypto_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metadataServiceClient) DeleteChunkCrypto(ctx context.Context, in *DeleteChunkCryptoRequest, opts ...grpc.CallOption) (*DeleteChunkCryptoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteChunkCryptoResponse)
+	err := c.cc.Invoke(ctx, MetadataService_DeleteChunkCrypto_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *metadataServiceClient) ReportSuperblocks(ctx context.Context, in *ReportSuperblocksRequest, opts ...grpc.CallOption) (*ReportSuperblocksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReportSuperblocksResponse)
@@ -835,6 +876,14 @@ type MetadataServiceServer interface {
 	// ---- Quota operations ----
 	SetQuota(context.Context, *SetQuotaRequest) (*emptypb.Empty, error)
 	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
+	// ---- Per-chunk crypto metadata (A8-Persistence) ----
+	//
+	// Route per-chunk encryption metadata (PlaintextHash, AuthTag, WrappedDK
+	// version) through the metadata service so chunk servers can be
+	// restarted without losing the ability to decrypt on-disk chunks.
+	SetChunkCrypto(context.Context, *SetChunkCryptoRequest) (*SetChunkCryptoResponse, error)
+	GetChunkCrypto(context.Context, *GetChunkCryptoRequest) (*GetChunkCryptoResponse, error)
+	DeleteChunkCrypto(context.Context, *DeleteChunkCryptoRequest) (*DeleteChunkCryptoResponse, error)
 	// ---- Bootstrap (A4-Metadata-As-Chunks) ----
 	//
 	// ReportSuperblocks is called by agents at startup to push the per-disk
@@ -1022,6 +1071,15 @@ func (UnimplementedMetadataServiceServer) SetQuota(context.Context, *SetQuotaReq
 }
 func (UnimplementedMetadataServiceServer) GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUsage not implemented")
+}
+func (UnimplementedMetadataServiceServer) SetChunkCrypto(context.Context, *SetChunkCryptoRequest) (*SetChunkCryptoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetChunkCrypto not implemented")
+}
+func (UnimplementedMetadataServiceServer) GetChunkCrypto(context.Context, *GetChunkCryptoRequest) (*GetChunkCryptoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetChunkCrypto not implemented")
+}
+func (UnimplementedMetadataServiceServer) DeleteChunkCrypto(context.Context, *DeleteChunkCryptoRequest) (*DeleteChunkCryptoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteChunkCrypto not implemented")
 }
 func (UnimplementedMetadataServiceServer) ReportSuperblocks(context.Context, *ReportSuperblocksRequest) (*ReportSuperblocksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportSuperblocks not implemented")
@@ -2073,6 +2131,60 @@ func _MetadataService_GetUsage_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MetadataService_SetChunkCrypto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetChunkCryptoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetadataServiceServer).SetChunkCrypto(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetadataService_SetChunkCrypto_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetadataServiceServer).SetChunkCrypto(ctx, req.(*SetChunkCryptoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetadataService_GetChunkCrypto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetChunkCryptoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetadataServiceServer).GetChunkCrypto(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetadataService_GetChunkCrypto_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetadataServiceServer).GetChunkCrypto(ctx, req.(*GetChunkCryptoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetadataService_DeleteChunkCrypto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteChunkCryptoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetadataServiceServer).DeleteChunkCrypto(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetadataService_DeleteChunkCrypto_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetadataServiceServer).DeleteChunkCrypto(ctx, req.(*DeleteChunkCryptoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MetadataService_ReportSuperblocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReportSuperblocksRequest)
 	if err := dec(in); err != nil {
@@ -2327,10 +2439,22 @@ var MetadataService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MetadataService_GetUsage_Handler,
 		},
 		{
+			MethodName: "SetChunkCrypto",
+			Handler:    _MetadataService_SetChunkCrypto_Handler,
+		},
+		{
+			MethodName: "GetChunkCrypto",
+			Handler:    _MetadataService_GetChunkCrypto_Handler,
+		},
+		{
+			MethodName: "DeleteChunkCrypto",
+			Handler:    _MetadataService_DeleteChunkCrypto_Handler,
+		},
+		{
 			MethodName: "ReportSuperblocks",
 			Handler:    _MetadataService_ReportSuperblocks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "metadata/metadata.proto",
+	Metadata: "api/proto/metadata/metadata.proto",
 }

@@ -54,4 +54,15 @@ type TransitClient interface {
 
 	// ReadConfig returns current key metadata.
 	ReadConfig(ctx context.Context, masterKeyName string) (TransitKeyConfig, error)
+
+	// DeleteKey destroys the named Transit key, irrevocably erasing all
+	// wrapped material that depends on it. Used by NovaNas to perform
+	// cryptographic erase on volume destroy (docs/02 S18): destroying
+	// the volume's wrapped-DK key renders the on-disk ciphertext
+	// permanently unrecoverable.
+	//
+	// Implementations MUST surface errors from the backend so callers
+	// (the finalizer path) can retry. OpenBao requires the key's
+	// deletion_allowed=true config flag to be set at creation time.
+	DeleteKey(ctx context.Context, masterKeyName string) error
 }

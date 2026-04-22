@@ -458,3 +458,66 @@ func TestGRPC_JoinCluster_InvalidArgument(t *testing.T) {
 		t.Error("expected error for empty raft_address")
 	}
 }
+
+// TestGRPC_ChunkCrypto_RoundTrip exercises the three A8-Persistence RPCs
+// end-to-end through the real gRPC server + BadgerDB store, demonstrating
+// that per-chunk crypto bookkeeping survives a PutVolumeMeta + Get cycle.
+func TestGRPC_ChunkCrypto_RoundTrip(t *testing.T) {
+	client, cleanup := setupGRPCTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Seed a volume so SetChunkCrypto has something to attach to.
+	vol := &VolumeMeta{
+		VolumeID:          "vol-crypto",
+		Pool:              "ssd",
+		SizeBytes:         1 << 20,
+		EncryptionEnabled: true,
+	}
+	if err := client.PutVolumeMeta(ctx, vol); err != nil {
+		t.Fatalf("PutVolumeMeta: %v", err)
+	}
+
+	// Unknown chunk returns NotFound.
+	if _, _, _, err := client.GetChunkCrypto(ctx, "vol-crypto", "missing"); err == nil {
+		t.Fatalf("expected NotFound for missing chunk")
+	}
+
+	// Set.
+	ph := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+		17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+	tag := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11,
+		0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99}
+	if err := client.SetChunkCrypto(ctx, "vol-crypto", "chunk-1", ph, tag, 3); err != nil {
+		t.Fatalf("SetChunkCrypto: %v", err)
+	}
+
+	// Get.
+	gotPH, gotTag, gotVer, err := client.GetChunkCrypto(ctx, "vol-crypto", "chunk-1")
+	if err != nil {
+		t.Fatalf("GetChunkCrypto: %v", err)
+	}
+	if string(gotPH) != string(ph) {
+		t.Fatalf("plaintextHash mismatch: got %x want %x", gotPH, ph)
+	}
+	if string(gotTag) != string(tag) {
+		t.Fatalf("authTag mismatch: got %x want %x", gotTag, tag)
+	}
+	if gotVer != 3 {
+		t.Fatalf("dkVersion mismatch: got %d want 3", gotVer)
+	}
+
+	// Delete.
+	if err := client.DeleteChunkCrypto(ctx, "vol-crypto", "chunk-1"); err != nil {
+		t.Fatalf("DeleteChunkCrypto: %v", err)
+	}
+	if _, _, _, err := client.GetChunkCrypto(ctx, "vol-crypto", "chunk-1"); err == nil {
+		t.Fatalf("expected NotFound after delete")
+	}
+
+	// Unknown volume yields an error.
+	if err := client.SetChunkCrypto(ctx, "no-such-volume", "c", ph, tag, 1); err == nil {
+		t.Fatalf("expected error for missing volume")
+	}
+}

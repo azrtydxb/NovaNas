@@ -97,6 +97,15 @@ service MetadataService {
   rpc SetQuota(SetQuotaRequest) returns (google.protobuf.Empty);
   rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
 
+  // ---- Per-chunk crypto metadata (A8-Persistence) ----
+  //
+  // Route per-chunk encryption metadata (PlaintextHash, AuthTag, WrappedDK
+  // version) through the metadata service so chunk servers can be
+  // restarted without losing the ability to decrypt on-disk chunks.
+  rpc SetChunkCrypto(SetChunkCryptoRequest)       returns (SetChunkCryptoResponse);
+  rpc GetChunkCrypto(GetChunkCryptoRequest)       returns (GetChunkCryptoResponse);
+  rpc DeleteChunkCrypto(DeleteChunkCryptoRequest) returns (DeleteChunkCryptoResponse);
+
   // ---- Bootstrap (A4-Metadata-As-Chunks) ----
   //
   // ReportSuperblocks is called by agents at startup to push the per-disk
@@ -770,3 +779,43 @@ message BadgerSnapshotEntry {
   bytes key = 1;
   bytes value = 2;
 }
+
+// ============================================================================
+// Per-chunk crypto metadata (A8-Persistence)
+// ============================================================================
+
+// ChunkCrypto is the encryption bookkeeping for a single chunk stored on
+// an encrypted volume. It lives in VolumeMeta so the chunk server can be
+// restarted without losing the ability to re-derive chunk keys.
+message ChunkCrypto {
+  // chunk_id identifies the chunk inside its volume.
+  string chunk_id       = 1;
+  // plaintext_hash is SHA-256(plaintext) used for convergent key derivation.
+  bytes  plaintext_hash = 2;
+  // auth_tag is the AES-GCM authentication tag emitted at encrypt time.
+  bytes  auth_tag       = 3;
+  // dk_version is the Transit master-key version that wrapped the DK used
+  // to encrypt this chunk. Recorded so a rotate-aware read path can pick
+  // the right wrapping.
+  uint32 dk_version     = 4;
+}
+
+message SetChunkCryptoRequest {
+  string      volume_id = 1;
+  ChunkCrypto crypto    = 2;
+}
+message SetChunkCryptoResponse {}
+
+message GetChunkCryptoRequest {
+  string volume_id = 1;
+  string chunk_id  = 2;
+}
+message GetChunkCryptoResponse {
+  ChunkCrypto crypto = 1;
+}
+
+message DeleteChunkCryptoRequest {
+  string volume_id = 1;
+  string chunk_id  = 2;
+}
+message DeleteChunkCryptoResponse {}

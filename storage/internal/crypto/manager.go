@@ -7,6 +7,18 @@ import (
 	"github.com/azrtydxb/novanas/storage/internal/openbao"
 )
 
+// VolumeTransitKeyName returns the Transit key name NovaNas uses to wrap
+// the Dataset Key for volumeID. Per-volume key names are what enable
+// real cryptographic erase on DestroyVolume: the volume's key is
+// destroyed in OpenBao, rendering the on-disk ciphertext permanently
+// unrecoverable (docs/02 S18).
+//
+// The naming scheme mirrors the operator convention used in the
+// provisioning path: "novanas/volumes/<volumeID>/dk".
+func VolumeTransitKeyName(volumeID string) string {
+	return "novanas/volumes/" + volumeID + "/dk"
+}
+
 // VolumeKeyManager couples an OpenBao Transit client with a local
 // KeyCache. It is the single choke point through which the chunk
 // engine fetches per-volume Dataset Keys.
@@ -93,6 +105,33 @@ func (m *VolumeKeyManager) Mount(ctx context.Context, volumeID string, wrapped [
 
 // Unmount evicts the cached DK (zeroising key material).
 func (m *VolumeKeyManager) Unmount(volumeID string) { m.cache.Evict(volumeID) }
+
+// DestroyVolume performs cryptographic erase on the wrapped Dataset Key
+// for volumeID (docs/02 S18). It evicts the local cache and asks
+// OpenBao Transit to delete the per-volume wrapping key, after which
+// all on-disk ciphertext for that volume is permanently unrecoverable.
+//
+// keyName is the Transit key to destroy. Callers that provisioned with
+// the default per-volume naming scheme can pass VolumeTransitKeyName
+// (volumeID); callers that wrapped against a shared master key should
+// NOT call DestroyVolume (doing so would nuke every volume's DK).
+//
+// Returns an error when the OpenBao call fails so the finalizer can
+// retry — the cache is evicted regardless so a subsequent Mount will
+// surface the "key destroyed" error cleanly.
+func (m *VolumeKeyManager) DestroyVolume(ctx context.Context, volumeID, keyName string) error {
+	m.cache.Evict(volumeID)
+	if m.transit == nil {
+		return fmt.Errorf("crypto: DestroyVolume: transit client not configured")
+	}
+	if keyName == "" {
+		return fmt.Errorf("crypto: DestroyVolume: keyName is required for cryptographic erase")
+	}
+	if err := m.transit.DeleteKey(ctx, keyName); err != nil {
+		return fmt.Errorf("crypto: destroy transit key %q: %w", keyName, err)
+	}
+	return nil
+}
 
 // Get returns the cached DataKey for a mounted volume. Returns
 // (nil, false) if the volume is not mounted. Callers should treat

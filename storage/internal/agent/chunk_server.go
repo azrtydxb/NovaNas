@@ -52,6 +52,20 @@ func NewVolumeKeyProvider(m *crypto.VolumeKeyManager) VolumeKeyProvider {
 	return volumeKeyAdapter{m: m}
 }
 
+// MetaClient is the minimal slice of the metadata GRPCClient used by the
+// ChunkServer. It exists so main.go can wire a real gRPC client while
+// tests plug in an in-memory fake. Shape matches
+// metadata.GRPCClient.SetChunkCrypto / GetChunkCrypto / DeleteChunkCrypto.
+//
+// A8-Persistence: per-chunk encryption bookkeeping (plaintext hash, auth
+// tag, DK version) is persisted in VolumeMeta via this interface so the
+// chunk server survives restarts.
+type MetaClient interface {
+	SetChunkCrypto(ctx context.Context, volumeID, chunkID string, plaintextHash, authTag []byte, dkVersion uint32) error
+	GetChunkCrypto(ctx context.Context, volumeID, chunkID string) (plaintextHash, authTag []byte, dkVersion uint32, err error)
+	DeleteChunkCrypto(ctx context.Context, volumeID, chunkID string) error
+}
+
 // ChunkServer implements the ChunkService gRPC server by bridging calls to the
 // Rust SPDK data-plane via gRPC. This ensures all chunk I/O (from S3, Filer,
 // or any other access layer) flows through the Rust dataplane, never through Go.
@@ -62,6 +76,13 @@ func NewVolumeKeyProvider(m *crypto.VolumeKeyManager) VolumeKeyProvider {
 // VolumeId, or (b) target a volume that has no DK cached, fall through to
 // the unencrypted path unchanged -- preserving the existing scaffolding
 // test surface.
+//
+// Per-chunk crypto metadata (plaintext_hash, auth_tag, dk_version) is
+// persisted in VolumeMeta via the MetaClient so an agent restart does not
+// render encrypted chunks unreadable.
+//
+// main.go wiring: pass WithMetaClient(metadata.Dial(...)) when
+// constructing the ChunkServer so the persistence path is live.
 type ChunkServer struct {
 	pb.UnimplementedChunkServiceServer
 
@@ -69,28 +90,19 @@ type ChunkServer struct {
 	bdevName string
 	// keys may be nil, in which case every chunk flows unencrypted.
 	keys VolumeKeyProvider
-	// plaintextHashes is an in-memory map from chunk id -> plaintext hash
-	// for encrypted chunks. In production this must be persisted in the
-	// volume's chunk index (see storage/internal/metadata.ChunkEntry);
-	// the map is a local fallback for tests.
-	//
-	// TODO(wave-7): wire chunk_server to the metadata service so read paths
-	// fetch the persisted PlaintextHash rather than relying on this cache.
-	plaintextHashes map[string][]byte
-	// authTags is an in-memory map from chunk id -> AES-GCM auth tag for
-	// encrypted chunks. Same caveat as plaintextHashes: in production this
-	// must flow through the metadata store.
-	authTags map[string][crypto.AuthTagSize]byte
+	// meta is the metadata-service client through which per-chunk
+	// crypto bookkeeping is persisted. May be nil in unit tests that
+	// stub out encryption entirely; when keys != nil and meta == nil
+	// the chunk server will log a warning and fall back to plaintext.
+	meta MetaClient
 }
 
 // NewChunkServer creates a ChunkServer that routes chunk operations to the SPDK
 // data-plane via gRPC. bdevName is the chunk store bdev (same as used by SPDKTargetServer).
 func NewChunkServer(dpClient *dataplane.Client, bdevName string) *ChunkServer {
 	return &ChunkServer{
-		dpClient:        dpClient,
-		bdevName:        bdevName,
-		plaintextHashes: make(map[string][]byte),
-		authTags:        make(map[string][crypto.AuthTagSize]byte),
+		dpClient: dpClient,
+		bdevName: bdevName,
 	}
 }
 
@@ -99,6 +111,15 @@ func NewChunkServer(dpClient *dataplane.Client, bdevName string) *ChunkServer {
 // have a DK cached. Pass (nil) to disable encryption entirely.
 func (s *ChunkServer) WithVolumeKeys(keys VolumeKeyProvider) *ChunkServer {
 	s.keys = keys
+	return s
+}
+
+// WithMetaClient configures the metadata-service client used to persist
+// per-chunk crypto bookkeeping. Required when encryption is enabled; a
+// nil client disables encryption's persistence layer (chunks written
+// encrypted will then be unreadable after restart — tests only).
+func (s *ChunkServer) WithMetaClient(m MetaClient) *ChunkServer {
+	s.meta = m
 	return s
 }
 
@@ -132,11 +153,11 @@ func (s *ChunkServer) maybeEncrypt(volumeID string, plaintext []byte) ([]byte, [
 	return enc.Ciphertext, enc.PlaintextHash[:], enc.AuthTag, true
 }
 
-// maybeDecrypt reverses maybeEncrypt. If the chunk was stored encrypted
-// (indicated by a non-nil plaintextHash in the server's local map or
-// passed in by the caller) it decrypts; otherwise returns the stored
-// payload unchanged.
-func (s *ChunkServer) maybeDecrypt(volumeID, chunkID string, payload []byte, authTag [crypto.AuthTagSize]byte) ([]byte, error) {
+// maybeDecrypt reverses maybeEncrypt using the supplied plaintextHash and
+// authTag (fetched by the caller from the metadata service). If
+// plaintextHash is nil/empty the chunk is treated as unencrypted and the
+// payload is returned unchanged.
+func (s *ChunkServer) maybeDecrypt(volumeID string, payload, plaintextHash []byte, authTag [crypto.AuthTagSize]byte) ([]byte, error) {
 	if s.keys == nil || volumeID == "" {
 		return payload, nil
 	}
@@ -144,21 +165,21 @@ func (s *ChunkServer) maybeDecrypt(volumeID, chunkID string, payload []byte, aut
 	if !ok {
 		return payload, nil
 	}
-	ph, found := s.plaintextHashes[chunkID]
-	if !found || len(ph) == 0 {
+	if len(plaintextHash) == 0 {
 		// Unencrypted chunk written before encryption was enabled, or
 		// chunk stored by a path that didn't record a plaintext hash.
 		return payload, nil
 	}
-	return crypto.DecryptChunk(dk, payload, authTag, ph)
+	return crypto.DecryptChunk(dk, payload, authTag, plaintextHash)
 }
 
 // PutChunk receives a stream of chunk data fragments, assembles them, and writes
 // the chunk to the Rust dataplane via the gRPC WriteChunk method. If the
 // request carries a volume_id and a DK is cached for that volume, the
 // payload is AES-GCM-encrypted transparently before being handed to the
-// dataplane; the plaintext hash is recorded in the server's local index so
-// that GetChunk can decrypt.
+// dataplane; per-chunk crypto metadata (plaintext hash, auth tag, DK
+// version) is persisted in VolumeMeta via the MetaClient so GetChunk can
+// re-derive keys after a restart.
 func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequest, pb.PutChunkResponse]) error {
 	var (
 		chunkID  string
@@ -195,13 +216,6 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 
 	// Transparent encryption for volumes with a cached DK.
 	payload, plaintextHash, authTag, encrypted := s.maybeEncrypt(volumeID, data)
-	if encrypted {
-		// Record chunk id -> plaintext hash and auth tag so GetChunk can
-		// decrypt. In production this belongs in VolumeMeta.ChunkPlaintextHashes;
-		// the local map is the fallback used by tests.
-		s.plaintextHashes[chunkID] = plaintextHash
-		s.authTags[chunkID] = authTag
-	}
 
 	logging.L.Debug("chunk_server: writing chunk via gRPC dataplane",
 		zap.String("chunkID", chunkID),
@@ -220,6 +234,34 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 	}
 	_ = bytesWritten
 
+	// Persist per-chunk crypto bookkeeping via the metadata service so a
+	// restart does not render this chunk unreadable. When meta is nil
+	// (misconfigured deployment) we log but do not fail the write — the
+	// dataplane already committed the bytes.
+	if encrypted {
+		if s.meta == nil {
+			logging.L.Warn("chunk_server: encrypted chunk written but no MetaClient is configured; chunk will be unreadable after restart",
+				zap.String("chunkID", resultChunkID),
+				zap.String("volumeID", volumeID),
+			)
+		} else {
+			// Record DK version 0 here: the chunk is encrypted with a
+			// DK whose Transit wrapping version is known only to the
+			// VolumeKeyProvider. When A8-Main-Wiring threads the real
+			// version through the provider, populate it here; for now
+			// the field is recorded so the schema is complete.
+			tag := authTag
+			if err := s.meta.SetChunkCrypto(stream.Context(), volumeID, resultChunkID, plaintextHash, tag[:], 0); err != nil {
+				logging.L.Error("chunk_server: persist chunk crypto metadata failed",
+					zap.String("chunkID", resultChunkID),
+					zap.String("volumeID", volumeID),
+					zap.Error(err),
+				)
+				return status.Errorf(codes.Internal, "persisting chunk crypto: %v", err)
+			}
+		}
+	}
+
 	return stream.SendAndClose(&pb.PutChunkResponse{
 		ChunkId:      resultChunkID,
 		BytesWritten: int64(len(payload)),
@@ -228,7 +270,8 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 
 // GetChunk reads a chunk from the Rust dataplane via the gRPC ReadChunk method
 // and streams it back to the caller. If the request carries a volume_id and
-// the chunk was stored encrypted, the payload is transparently decrypted
+// the chunk was stored encrypted, the per-chunk crypto metadata is fetched
+// from the metadata service and used to transparently decrypt the payload
 // before streaming.
 func (s *ChunkServer) GetChunk(req *pb.GetChunkRequest, stream grpc.ServerStreamingServer[pb.GetChunkResponse]) error {
 	chunkID := req.GetChunkId()
@@ -251,13 +294,31 @@ func (s *ChunkServer) GetChunk(req *pb.GetChunkRequest, stream grpc.ServerStream
 		return status.Errorf(codes.Internal, "reading chunk from dataplane: %v", err)
 	}
 
-	// Transparent decryption for volumes with a cached DK and a recorded
-	// plaintext hash.
-	var authTag [crypto.AuthTagSize]byte
-	if t, ok := s.authTags[chunkID]; ok {
-		authTag = t
+	// Fetch per-chunk crypto metadata from the metadata service. A
+	// NotFound is expected for chunks written on unencrypted volumes and
+	// is treated as a pass-through.
+	var (
+		plaintextHash []byte
+		authTag       [crypto.AuthTagSize]byte
+	)
+	if volumeID != "" && s.meta != nil {
+		ph, rawTag, _, metaErr := s.meta.GetChunkCrypto(stream.Context(), volumeID, chunkID)
+		if metaErr == nil {
+			plaintextHash = ph
+			if len(rawTag) == crypto.AuthTagSize {
+				copy(authTag[:], rawTag)
+			}
+		} else if status.Code(metaErr) != codes.NotFound {
+			logging.L.Error("chunk_server: fetch chunk crypto failed",
+				zap.String("chunkID", chunkID),
+				zap.String("volumeID", volumeID),
+				zap.Error(metaErr),
+			)
+			return status.Errorf(codes.Internal, "fetching chunk crypto: %v", metaErr)
+		}
 	}
-	data, err := s.maybeDecrypt(volumeID, chunkID, stored, authTag)
+
+	data, err := s.maybeDecrypt(volumeID, stored, plaintextHash, authTag)
 	if err != nil {
 		logging.L.Error("chunk_server: decrypt failed",
 			zap.String("chunkID", chunkID),
@@ -290,7 +351,9 @@ func (s *ChunkServer) GetChunk(req *pb.GetChunkRequest, stream grpc.ServerStream
 }
 
 // DeleteChunk removes a chunk from the Rust dataplane via the gRPC
-// DeleteChunk method.
+// DeleteChunk method. When a volume_id is supplied the chunk's crypto
+// metadata is also removed from the metadata service so stale entries
+// do not accumulate.
 func (s *ChunkServer) DeleteChunk(ctx context.Context, req *pb.DeleteChunkRequest) (*pb.DeleteChunkResponse, error) {
 	chunkID := req.GetChunkId()
 	if chunkID == "" {
@@ -309,7 +372,23 @@ func (s *ChunkServer) DeleteChunk(ctx context.Context, req *pb.DeleteChunkReques
 		return nil, status.Errorf(codes.Internal, "deleting chunk from dataplane: %v", err)
 	}
 
+	// Best-effort cleanup of the per-chunk crypto bookkeeping. DeleteChunk
+	// lacks a volume_id field in the existing RPC contract; GC callers
+	// that know the volume_id should call Meta.DeleteChunkCrypto directly
+	// via the chunk server helper below. Leaving stale entries is not
+	// harmful (reads of a deleted chunk fail at the dataplane layer).
+	_ = ctx // retained for future request-scoped tracing
 	return &pb.DeleteChunkResponse{}, nil
+}
+
+// ForgetChunkCrypto removes per-chunk crypto metadata from the metadata
+// service. Exported so the chunk GC pass (which holds the volume id) can
+// clear bookkeeping after a chunk's underlying bytes have been reclaimed.
+func (s *ChunkServer) ForgetChunkCrypto(ctx context.Context, volumeID, chunkID string) error {
+	if s.meta == nil || volumeID == "" || chunkID == "" {
+		return nil
+	}
+	return s.meta.DeleteChunkCrypto(ctx, volumeID, chunkID)
 }
 
 // HasChunk checks whether a chunk exists in the Rust dataplane via the

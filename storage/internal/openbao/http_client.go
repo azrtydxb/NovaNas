@@ -209,6 +209,17 @@ func (c *HTTPClient) ReadConfig(ctx context.Context, masterKeyName string) (Tran
 	}, nil
 }
 
+// DeleteKey destroys a Transit key via DELETE /v1/transit/keys/<name>.
+// OpenBao requires the key's deletion_allowed=true config flag to be set
+// beforehand (see update-key-config endpoint). Returns an error when the
+// backend refuses the request so callers can retry or surface the
+// compliance failure.
+func (c *HTTPClient) DeleteKey(ctx context.Context, masterKeyName string) error {
+	path := fmt.Sprintf("%s/keys/%s", c.cfg.MountPath, masterKeyName)
+	_, err := c.do(ctx, http.MethodDelete, path, nil)
+	return err
+}
+
 // parseVersion extracts N from "vault:vN:..." Transit ciphertext.
 func parseVersion(ct string) (uint64, error) {
 	parts := strings.SplitN(ct, ":", 3)

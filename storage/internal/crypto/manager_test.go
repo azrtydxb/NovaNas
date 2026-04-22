@@ -49,6 +49,46 @@ func TestVolumeKeyManager_ProvisionMountUnmount(t *testing.T) {
 	ZeroBytes(raw2)
 }
 
+func TestVolumeKeyManager_DestroyVolume_CryptographicErase(t *testing.T) {
+	ctx := context.Background()
+	fake := openbao.NewFakeTransit()
+	keyName := VolumeTransitKeyName("vol-erase")
+	m := NewVolumeKeyManager(fake, keyName)
+
+	// Provision: wrapped DK materialises in the Fake's keys map under keyName.
+	wrapped, version, err := m.ProvisionVolume(ctx, "vol-erase")
+	if err != nil {
+		t.Fatalf("provision: %v", err)
+	}
+	if _, err := fake.ReadConfig(ctx, keyName); err != nil {
+		t.Fatalf("expected key to exist after provision: %v", err)
+	}
+
+	// Destroy.
+	if err := m.DestroyVolume(ctx, "vol-erase", keyName); err != nil {
+		t.Fatalf("DestroyVolume: %v", err)
+	}
+	// Cache is evicted.
+	if _, ok := m.Get("vol-erase"); ok {
+		t.Fatal("cache entry should be evicted after DestroyVolume")
+	}
+	// Mount now fails because the Transit key is gone.
+	if err := m.Mount(ctx, "vol-erase", wrapped, version); err == nil {
+		t.Fatalf("expected Mount to fail after cryptographic erase")
+	}
+	// Double-destroy surfaces the backend error so the caller can react.
+	if err := m.DestroyVolume(ctx, "vol-erase", keyName); err == nil {
+		t.Fatalf("expected error when destroying an already-destroyed key")
+	}
+}
+
+func TestVolumeKeyManager_DestroyVolume_RequiresKeyName(t *testing.T) {
+	m := NewVolumeKeyManager(openbao.NewFakeTransit(), "mk")
+	if err := m.DestroyVolume(context.Background(), "vol-x", ""); err == nil {
+		t.Fatal("expected error when keyName is empty")
+	}
+}
+
 func TestVolumeKeyManager_RotationSurvives(t *testing.T) {
 	ctx := context.Background()
 	fake := openbao.NewFakeTransit()

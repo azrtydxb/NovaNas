@@ -51,6 +51,17 @@ type VolumeMeta struct {
 	// compatibility with pre-Wave-6 volumes.
 	ChunkPlaintextHashes map[string][]byte `json:"chunkPlaintextHashes,omitempty"`
 
+	// ChunkAuthTags maps chunk id -> AES-GCM auth tag produced at encrypt
+	// time. Required on the read path to authenticate the ciphertext.
+	// (A8-Persistence: was previously held only in the chunk server's
+	// in-memory map and therefore lost on restart.)
+	ChunkAuthTags map[string][]byte `json:"chunkAuthTags,omitempty"`
+
+	// ChunkDKVersions maps chunk id -> Transit master-key version that
+	// wrapped the DK used to encrypt the chunk. Kept alongside so a
+	// future rotation-aware read path can pick the correct wrap.
+	ChunkDKVersions map[string]uint32 `json:"chunkDKVersions,omitempty"`
+
 	// EncryptionEnabled indicates whether new chunks for this volume
 	// should be encrypted. False (default) means unencrypted.
 	EncryptionEnabled bool `json:"encryptionEnabled,omitempty"`
@@ -101,6 +112,74 @@ func (v *VolumeMeta) ChunkPlaintextHash(chunkID string) ([]byte, bool) {
 	}
 	h, ok := v.ChunkPlaintextHashes[chunkID]
 	return h, ok
+}
+
+// ChunkCryptoEntry bundles the per-chunk crypto metadata stored in
+// VolumeMeta: the SHA-256 plaintext hash used for convergent chunk-key
+// derivation, the AES-GCM authentication tag, and the Transit master-key
+// version that wrapped the DK at encrypt time.
+type ChunkCryptoEntry struct {
+	PlaintextHash []byte
+	AuthTag       []byte
+	DKVersion     uint32
+}
+
+// SetChunkCrypto records the full crypto metadata for a chunk. Supersedes
+// SetChunkPlaintextHash (which remains for backward compatibility) — call
+// this on the write path so the read path can both authenticate and
+// re-derive the chunk key after a restart.
+func (v *VolumeMeta) SetChunkCrypto(chunkID string, entry ChunkCryptoEntry) {
+	if v == nil {
+		return
+	}
+	if v.ChunkPlaintextHashes == nil {
+		v.ChunkPlaintextHashes = make(map[string][]byte)
+	}
+	if v.ChunkAuthTags == nil {
+		v.ChunkAuthTags = make(map[string][]byte)
+	}
+	if v.ChunkDKVersions == nil {
+		v.ChunkDKVersions = make(map[string]uint32)
+	}
+	ph := make([]byte, len(entry.PlaintextHash))
+	copy(ph, entry.PlaintextHash)
+	v.ChunkPlaintextHashes[chunkID] = ph
+	tag := make([]byte, len(entry.AuthTag))
+	copy(tag, entry.AuthTag)
+	v.ChunkAuthTags[chunkID] = tag
+	v.ChunkDKVersions[chunkID] = entry.DKVersion
+}
+
+// ChunkCrypto returns the full per-chunk crypto bookkeeping recorded for
+// chunkID, or (nil, false) if the chunk was stored unencrypted / has no
+// recorded entry.
+func (v *VolumeMeta) ChunkCrypto(chunkID string) (ChunkCryptoEntry, bool) {
+	if v == nil {
+		return ChunkCryptoEntry{}, false
+	}
+	ph, ok := v.ChunkPlaintextHashes[chunkID]
+	if !ok {
+		return ChunkCryptoEntry{}, false
+	}
+	entry := ChunkCryptoEntry{PlaintextHash: ph}
+	if v.ChunkAuthTags != nil {
+		entry.AuthTag = v.ChunkAuthTags[chunkID]
+	}
+	if v.ChunkDKVersions != nil {
+		entry.DKVersion = v.ChunkDKVersions[chunkID]
+	}
+	return entry, true
+}
+
+// DeleteChunkCrypto removes per-chunk crypto metadata. Called during
+// chunk GC / delete so stale entries do not accumulate.
+func (v *VolumeMeta) DeleteChunkCrypto(chunkID string) {
+	if v == nil {
+		return
+	}
+	delete(v.ChunkPlaintextHashes, chunkID)
+	delete(v.ChunkAuthTags, chunkID)
+	delete(v.ChunkDKVersions, chunkID)
 }
 
 // PlacementMap records which nodes store replicas of a chunk.
@@ -322,6 +401,44 @@ func (s *RaftStore) ListVolumesMeta(_ context.Context) ([]*VolumeMeta, error) {
 		result = append(result, &meta)
 	}
 	return result, nil
+}
+
+// SetChunkCrypto persists per-chunk crypto metadata into the owning
+// VolumeMeta via a read-modify-write cycle. Returns ErrKeyNotFound when
+// the volume does not exist.
+func (s *RaftStore) SetChunkCrypto(ctx context.Context, volumeID, chunkID string, entry ChunkCryptoEntry) error {
+	meta, err := s.GetVolumeMeta(ctx, volumeID)
+	if err != nil {
+		return err
+	}
+	meta.SetChunkCrypto(chunkID, entry)
+	return s.PutVolumeMeta(ctx, meta)
+}
+
+// GetChunkCrypto fetches per-chunk crypto metadata from VolumeMeta. Returns
+// ErrKeyNotFound when either the volume or the chunk entry does not exist.
+func (s *RaftStore) GetChunkCrypto(ctx context.Context, volumeID, chunkID string) (ChunkCryptoEntry, error) {
+	meta, err := s.GetVolumeMeta(ctx, volumeID)
+	if err != nil {
+		return ChunkCryptoEntry{}, err
+	}
+	entry, ok := meta.ChunkCrypto(chunkID)
+	if !ok {
+		return ChunkCryptoEntry{}, fmt.Errorf("chunk crypto %q/%q: %w", volumeID, chunkID, ErrKeyNotFound)
+	}
+	return entry, nil
+}
+
+// DeleteChunkCrypto removes per-chunk crypto metadata from VolumeMeta.
+// Returns ErrKeyNotFound if the volume does not exist; missing chunk
+// entries are treated as a no-op success.
+func (s *RaftStore) DeleteChunkCrypto(ctx context.Context, volumeID, chunkID string) error {
+	meta, err := s.GetVolumeMeta(ctx, volumeID)
+	if err != nil {
+		return err
+	}
+	meta.DeleteChunkCrypto(chunkID)
+	return s.PutVolumeMeta(ctx, meta)
 }
 
 // PutPlacementMap stores a chunk's placement map.

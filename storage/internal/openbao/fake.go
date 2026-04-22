@@ -150,6 +150,20 @@ func (f *FakeTransit) ReadConfig(_ context.Context, masterKeyName string) (Trans
 	}, nil
 }
 
+// DeleteKey removes a fake Transit key entirely, mirroring OpenBao's
+// DELETE /v1/transit/keys/<name> behaviour. Subsequent UnwrapDK calls
+// against the removed key fail with an explicit "no such key" error,
+// providing real cryptographic-erase semantics in tests.
+func (f *FakeTransit) DeleteKey(_ context.Context, masterKeyName string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.keys[masterKeyName]; !ok {
+		return fmt.Errorf("fake-transit: no such key %q", masterKeyName)
+	}
+	delete(f.keys, masterKeyName)
+	return nil
+}
+
 // touch is a silencer for the unused binary import when this file is
 // compiled in isolation (keeps goimports happy if someone trims).
 var _ = binary.BigEndian

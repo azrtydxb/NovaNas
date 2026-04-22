@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: metadata/metadata.proto
+// source: api/proto/metadata/metadata.proto
 
 package metadata
 
@@ -59,11 +59,11 @@ func (x InodeType) String() string {
 }
 
 func (InodeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_metadata_metadata_proto_enumTypes[0].Descriptor()
+	return file_api_proto_metadata_metadata_proto_enumTypes[0].Descriptor()
 }
 
 func (InodeType) Type() protoreflect.EnumType {
-	return &file_metadata_metadata_proto_enumTypes[0]
+	return &file_api_proto_metadata_metadata_proto_enumTypes[0]
 }
 
 func (x InodeType) Number() protoreflect.EnumNumber {
@@ -72,7 +72,7 @@ func (x InodeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use InodeType.Descriptor instead.
 func (InodeType) EnumDescriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{0}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{0}
 }
 
 type LockType int32
@@ -108,11 +108,11 @@ func (x LockType) String() string {
 }
 
 func (LockType) Descriptor() protoreflect.EnumDescriptor {
-	return file_metadata_metadata_proto_enumTypes[1].Descriptor()
+	return file_api_proto_metadata_metadata_proto_enumTypes[1].Descriptor()
 }
 
 func (LockType) Type() protoreflect.EnumType {
-	return &file_metadata_metadata_proto_enumTypes[1]
+	return &file_api_proto_metadata_metadata_proto_enumTypes[1]
 }
 
 func (x LockType) Number() protoreflect.EnumNumber {
@@ -121,7 +121,7 @@ func (x LockType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LockType.Descriptor instead.
 func (LockType) EnumDescriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{1}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{1}
 }
 
 type ProtectionMode int32
@@ -157,11 +157,11 @@ func (x ProtectionMode) String() string {
 }
 
 func (ProtectionMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_metadata_metadata_proto_enumTypes[2].Descriptor()
+	return file_api_proto_metadata_metadata_proto_enumTypes[2].Descriptor()
 }
 
 func (ProtectionMode) Type() protoreflect.EnumType {
-	return &file_metadata_metadata_proto_enumTypes[2]
+	return &file_api_proto_metadata_metadata_proto_enumTypes[2]
 }
 
 func (x ProtectionMode) Number() protoreflect.EnumNumber {
@@ -170,7 +170,7 @@ func (x ProtectionMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProtectionMode.Descriptor instead.
 func (ProtectionMode) EnumDescriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{2}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{2}
 }
 
 type ComplianceState int32
@@ -212,11 +212,11 @@ func (x ComplianceState) String() string {
 }
 
 func (ComplianceState) Descriptor() protoreflect.EnumDescriptor {
-	return file_metadata_metadata_proto_enumTypes[3].Descriptor()
+	return file_api_proto_metadata_metadata_proto_enumTypes[3].Descriptor()
 }
 
 func (ComplianceState) Type() protoreflect.EnumType {
-	return &file_metadata_metadata_proto_enumTypes[3]
+	return &file_api_proto_metadata_metadata_proto_enumTypes[3]
 }
 
 func (x ComplianceState) Number() protoreflect.EnumNumber {
@@ -225,7 +225,7 @@ func (x ComplianceState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ComplianceState.Descriptor instead.
 func (ComplianceState) EnumDescriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{3}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{3}
 }
 
 type VolumeMeta struct {
@@ -247,7 +247,7 @@ type VolumeMeta struct {
 
 func (x *VolumeMeta) Reset() {
 	*x = VolumeMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[0]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -259,7 +259,7 @@ func (x *VolumeMeta) String() string {
 func (*VolumeMeta) ProtoMessage() {}
 
 func (x *VolumeMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[0]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -272,7 +272,7 @@ func (x *VolumeMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeMeta.ProtoReflect.Descriptor instead.
 func (*VolumeMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{0}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *VolumeMeta) GetVolumeId() string {
@@ -362,7 +362,7 @@ type PlacementMap struct {
 
 func (x *PlacementMap) Reset() {
 	*x = PlacementMap{}
-	mi := &file_metadata_metadata_proto_msgTypes[1]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -374,7 +374,7 @@ func (x *PlacementMap) String() string {
 func (*PlacementMap) ProtoMessage() {}
 
 func (x *PlacementMap) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[1]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -387,7 +387,7 @@ func (x *PlacementMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementMap.ProtoReflect.Descriptor instead.
 func (*PlacementMap) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{1}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PlacementMap) GetChunkId() string {
@@ -421,7 +421,7 @@ type NodeMeta struct {
 
 func (x *NodeMeta) Reset() {
 	*x = NodeMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[2]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -433,7 +433,7 @@ func (x *NodeMeta) String() string {
 func (*NodeMeta) ProtoMessage() {}
 
 func (x *NodeMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[2]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -446,7 +446,7 @@ func (x *NodeMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeMeta.ProtoReflect.Descriptor instead.
 func (*NodeMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{2}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *NodeMeta) GetNodeId() string {
@@ -533,7 +533,7 @@ type InodeMeta struct {
 
 func (x *InodeMeta) Reset() {
 	*x = InodeMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[3]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +545,7 @@ func (x *InodeMeta) String() string {
 func (*InodeMeta) ProtoMessage() {}
 
 func (x *InodeMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[3]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +558,7 @@ func (x *InodeMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InodeMeta.ProtoReflect.Descriptor instead.
 func (*InodeMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{3}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *InodeMeta) GetIno() uint64 {
@@ -663,7 +663,7 @@ type DirEntry struct {
 
 func (x *DirEntry) Reset() {
 	*x = DirEntry{}
-	mi := &file_metadata_metadata_proto_msgTypes[4]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +675,7 @@ func (x *DirEntry) String() string {
 func (*DirEntry) ProtoMessage() {}
 
 func (x *DirEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[4]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +688,7 @@ func (x *DirEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirEntry.ProtoReflect.Descriptor instead.
 func (*DirEntry) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{4}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DirEntry) GetName() string {
@@ -729,7 +729,7 @@ type ObjectMeta struct {
 
 func (x *ObjectMeta) Reset() {
 	*x = ObjectMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[5]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -741,7 +741,7 @@ func (x *ObjectMeta) String() string {
 func (*ObjectMeta) ProtoMessage() {}
 
 func (x *ObjectMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[5]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -754,7 +754,7 @@ func (x *ObjectMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObjectMeta.ProtoReflect.Descriptor instead.
 func (*ObjectMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{5}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ObjectMeta) GetBucket() string {
@@ -833,7 +833,7 @@ type BucketMeta struct {
 
 func (x *BucketMeta) Reset() {
 	*x = BucketMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[6]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +845,7 @@ func (x *BucketMeta) String() string {
 func (*BucketMeta) ProtoMessage() {}
 
 func (x *BucketMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[6]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +858,7 @@ func (x *BucketMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketMeta.ProtoReflect.Descriptor instead.
 func (*BucketMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{6}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BucketMeta) GetName() string {
@@ -909,7 +909,7 @@ type MultipartUpload struct {
 
 func (x *MultipartUpload) Reset() {
 	*x = MultipartUpload{}
-	mi := &file_metadata_metadata_proto_msgTypes[7]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +921,7 @@ func (x *MultipartUpload) String() string {
 func (*MultipartUpload) ProtoMessage() {}
 
 func (x *MultipartUpload) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[7]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +934,7 @@ func (x *MultipartUpload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultipartUpload.ProtoReflect.Descriptor instead.
 func (*MultipartUpload) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{7}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MultipartUpload) GetUploadId() string {
@@ -984,7 +984,7 @@ type MultipartPart struct {
 
 func (x *MultipartPart) Reset() {
 	*x = MultipartPart{}
-	mi := &file_metadata_metadata_proto_msgTypes[8]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -996,7 +996,7 @@ func (x *MultipartPart) String() string {
 func (*MultipartPart) ProtoMessage() {}
 
 func (x *MultipartPart) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[8]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1009,7 +1009,7 @@ func (x *MultipartPart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultipartPart.ProtoReflect.Descriptor instead.
 func (*MultipartPart) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{8}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MultipartPart) GetPartNumber() int32 {
@@ -1054,7 +1054,7 @@ type SnapshotMeta struct {
 
 func (x *SnapshotMeta) Reset() {
 	*x = SnapshotMeta{}
-	mi := &file_metadata_metadata_proto_msgTypes[9]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1066,7 @@ func (x *SnapshotMeta) String() string {
 func (*SnapshotMeta) ProtoMessage() {}
 
 func (x *SnapshotMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[9]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1079,7 @@ func (x *SnapshotMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotMeta.ProtoReflect.Descriptor instead.
 func (*SnapshotMeta) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{9}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SnapshotMeta) GetSnapshotId() string {
@@ -1135,7 +1135,7 @@ type ProtectionProfile struct {
 
 func (x *ProtectionProfile) Reset() {
 	*x = ProtectionProfile{}
-	mi := &file_metadata_metadata_proto_msgTypes[10]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1147,7 +1147,7 @@ func (x *ProtectionProfile) String() string {
 func (*ProtectionProfile) ProtoMessage() {}
 
 func (x *ProtectionProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[10]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1160,7 +1160,7 @@ func (x *ProtectionProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtectionProfile.ProtoReflect.Descriptor instead.
 func (*ProtectionProfile) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{10}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ProtectionProfile) GetMode() ProtectionMode {
@@ -1194,7 +1194,7 @@ type ReplicationProfile struct {
 
 func (x *ReplicationProfile) Reset() {
 	*x = ReplicationProfile{}
-	mi := &file_metadata_metadata_proto_msgTypes[11]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1206,7 +1206,7 @@ func (x *ReplicationProfile) String() string {
 func (*ReplicationProfile) ProtoMessage() {}
 
 func (x *ReplicationProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[11]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1219,7 +1219,7 @@ func (x *ReplicationProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicationProfile.ProtoReflect.Descriptor instead.
 func (*ReplicationProfile) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{11}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ReplicationProfile) GetFactor() int32 {
@@ -1246,7 +1246,7 @@ type ErasureCodingProfile struct {
 
 func (x *ErasureCodingProfile) Reset() {
 	*x = ErasureCodingProfile{}
-	mi := &file_metadata_metadata_proto_msgTypes[12]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1258,7 +1258,7 @@ func (x *ErasureCodingProfile) String() string {
 func (*ErasureCodingProfile) ProtoMessage() {}
 
 func (x *ErasureCodingProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[12]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1271,7 +1271,7 @@ func (x *ErasureCodingProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErasureCodingProfile.ProtoReflect.Descriptor instead.
 func (*ErasureCodingProfile) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{12}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ErasureCodingProfile) GetDataShards() int32 {
@@ -1301,7 +1301,7 @@ type ComplianceInfo struct {
 
 func (x *ComplianceInfo) Reset() {
 	*x = ComplianceInfo{}
-	mi := &file_metadata_metadata_proto_msgTypes[13]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1313,7 +1313,7 @@ func (x *ComplianceInfo) String() string {
 func (*ComplianceInfo) ProtoMessage() {}
 
 func (x *ComplianceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[13]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1326,7 +1326,7 @@ func (x *ComplianceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceInfo.ProtoReflect.Descriptor instead.
 func (*ComplianceInfo) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{13}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ComplianceInfo) GetState() ComplianceState {
@@ -1375,7 +1375,7 @@ type DataProtectionConfig struct {
 
 func (x *DataProtectionConfig) Reset() {
 	*x = DataProtectionConfig{}
-	mi := &file_metadata_metadata_proto_msgTypes[14]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1387,7 +1387,7 @@ func (x *DataProtectionConfig) String() string {
 func (*DataProtectionConfig) ProtoMessage() {}
 
 func (x *DataProtectionConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[14]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1400,7 +1400,7 @@ func (x *DataProtectionConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataProtectionConfig.ProtoReflect.Descriptor instead.
 func (*DataProtectionConfig) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{14}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DataProtectionConfig) GetMode() ProtectionMode {
@@ -1441,7 +1441,7 @@ type LockLease struct {
 
 func (x *LockLease) Reset() {
 	*x = LockLease{}
-	mi := &file_metadata_metadata_proto_msgTypes[15]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1453,7 @@ func (x *LockLease) String() string {
 func (*LockLease) ProtoMessage() {}
 
 func (x *LockLease) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[15]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1466,7 @@ func (x *LockLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LockLease.ProtoReflect.Descriptor instead.
 func (*LockLease) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{15}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LockLease) GetLeaseId() string {
@@ -1544,7 +1544,7 @@ type VolumeOwnership struct {
 
 func (x *VolumeOwnership) Reset() {
 	*x = VolumeOwnership{}
-	mi := &file_metadata_metadata_proto_msgTypes[16]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1556,7 +1556,7 @@ func (x *VolumeOwnership) String() string {
 func (*VolumeOwnership) ProtoMessage() {}
 
 func (x *VolumeOwnership) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[16]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1569,7 +1569,7 @@ func (x *VolumeOwnership) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeOwnership.ProtoReflect.Descriptor instead.
 func (*VolumeOwnership) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{16}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *VolumeOwnership) GetVolumeId() string {
@@ -1613,7 +1613,7 @@ type ShardPlacementMsg struct {
 
 func (x *ShardPlacementMsg) Reset() {
 	*x = ShardPlacementMsg{}
-	mi := &file_metadata_metadata_proto_msgTypes[17]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1625,7 +1625,7 @@ func (x *ShardPlacementMsg) String() string {
 func (*ShardPlacementMsg) ProtoMessage() {}
 
 func (x *ShardPlacementMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[17]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1638,7 +1638,7 @@ func (x *ShardPlacementMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardPlacementMsg.ProtoReflect.Descriptor instead.
 func (*ShardPlacementMsg) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{17}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ShardPlacementMsg) GetChunkId() string {
@@ -1685,7 +1685,7 @@ type PutVolumeMetaRequest struct {
 
 func (x *PutVolumeMetaRequest) Reset() {
 	*x = PutVolumeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[18]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1697,7 +1697,7 @@ func (x *PutVolumeMetaRequest) String() string {
 func (*PutVolumeMetaRequest) ProtoMessage() {}
 
 func (x *PutVolumeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[18]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1710,7 +1710,7 @@ func (x *PutVolumeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutVolumeMetaRequest.ProtoReflect.Descriptor instead.
 func (*PutVolumeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{18}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PutVolumeMetaRequest) GetMeta() *VolumeMeta {
@@ -1729,7 +1729,7 @@ type GetVolumeMetaRequest struct {
 
 func (x *GetVolumeMetaRequest) Reset() {
 	*x = GetVolumeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[19]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1741,7 +1741,7 @@ func (x *GetVolumeMetaRequest) String() string {
 func (*GetVolumeMetaRequest) ProtoMessage() {}
 
 func (x *GetVolumeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[19]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1754,7 +1754,7 @@ func (x *GetVolumeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVolumeMetaRequest.ProtoReflect.Descriptor instead.
 func (*GetVolumeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{19}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetVolumeMetaRequest) GetVolumeId() string {
@@ -1773,7 +1773,7 @@ type GetVolumeMetaResponse struct {
 
 func (x *GetVolumeMetaResponse) Reset() {
 	*x = GetVolumeMetaResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[20]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1785,7 +1785,7 @@ func (x *GetVolumeMetaResponse) String() string {
 func (*GetVolumeMetaResponse) ProtoMessage() {}
 
 func (x *GetVolumeMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[20]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1798,7 +1798,7 @@ func (x *GetVolumeMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVolumeMetaResponse.ProtoReflect.Descriptor instead.
 func (*GetVolumeMetaResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{20}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetVolumeMetaResponse) GetMeta() *VolumeMeta {
@@ -1817,7 +1817,7 @@ type DeleteVolumeMetaRequest struct {
 
 func (x *DeleteVolumeMetaRequest) Reset() {
 	*x = DeleteVolumeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[21]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +1829,7 @@ func (x *DeleteVolumeMetaRequest) String() string {
 func (*DeleteVolumeMetaRequest) ProtoMessage() {}
 
 func (x *DeleteVolumeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[21]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +1842,7 @@ func (x *DeleteVolumeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVolumeMetaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteVolumeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{21}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DeleteVolumeMetaRequest) GetVolumeId() string {
@@ -1861,7 +1861,7 @@ type ListVolumesMetaResponse struct {
 
 func (x *ListVolumesMetaResponse) Reset() {
 	*x = ListVolumesMetaResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[22]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1873,7 +1873,7 @@ func (x *ListVolumesMetaResponse) String() string {
 func (*ListVolumesMetaResponse) ProtoMessage() {}
 
 func (x *ListVolumesMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[22]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1886,7 +1886,7 @@ func (x *ListVolumesMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVolumesMetaResponse.ProtoReflect.Descriptor instead.
 func (*ListVolumesMetaResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{22}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListVolumesMetaResponse) GetMetas() []*VolumeMeta {
@@ -1905,7 +1905,7 @@ type PutPlacementMapRequest struct {
 
 func (x *PutPlacementMapRequest) Reset() {
 	*x = PutPlacementMapRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[23]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +1917,7 @@ func (x *PutPlacementMapRequest) String() string {
 func (*PutPlacementMapRequest) ProtoMessage() {}
 
 func (x *PutPlacementMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[23]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,7 +1930,7 @@ func (x *PutPlacementMapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutPlacementMapRequest.ProtoReflect.Descriptor instead.
 func (*PutPlacementMapRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{23}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PutPlacementMapRequest) GetPlacementMap() *PlacementMap {
@@ -1949,7 +1949,7 @@ type GetPlacementMapRequest struct {
 
 func (x *GetPlacementMapRequest) Reset() {
 	*x = GetPlacementMapRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[24]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1961,7 +1961,7 @@ func (x *GetPlacementMapRequest) String() string {
 func (*GetPlacementMapRequest) ProtoMessage() {}
 
 func (x *GetPlacementMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[24]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1974,7 +1974,7 @@ func (x *GetPlacementMapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlacementMapRequest.ProtoReflect.Descriptor instead.
 func (*GetPlacementMapRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{24}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetPlacementMapRequest) GetChunkId() string {
@@ -1993,7 +1993,7 @@ type GetPlacementMapResponse struct {
 
 func (x *GetPlacementMapResponse) Reset() {
 	*x = GetPlacementMapResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[25]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2005,7 +2005,7 @@ func (x *GetPlacementMapResponse) String() string {
 func (*GetPlacementMapResponse) ProtoMessage() {}
 
 func (x *GetPlacementMapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[25]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2018,7 +2018,7 @@ func (x *GetPlacementMapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlacementMapResponse.ProtoReflect.Descriptor instead.
 func (*GetPlacementMapResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{25}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetPlacementMapResponse) GetPlacementMap() *PlacementMap {
@@ -2037,7 +2037,7 @@ type DeletePlacementMapRequest struct {
 
 func (x *DeletePlacementMapRequest) Reset() {
 	*x = DeletePlacementMapRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[26]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2049,7 +2049,7 @@ func (x *DeletePlacementMapRequest) String() string {
 func (*DeletePlacementMapRequest) ProtoMessage() {}
 
 func (x *DeletePlacementMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[26]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2062,7 +2062,7 @@ func (x *DeletePlacementMapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePlacementMapRequest.ProtoReflect.Descriptor instead.
 func (*DeletePlacementMapRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{26}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DeletePlacementMapRequest) GetChunkId() string {
@@ -2081,7 +2081,7 @@ type ListPlacementMapsResponse struct {
 
 func (x *ListPlacementMapsResponse) Reset() {
 	*x = ListPlacementMapsResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[27]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2093,7 +2093,7 @@ func (x *ListPlacementMapsResponse) String() string {
 func (*ListPlacementMapsResponse) ProtoMessage() {}
 
 func (x *ListPlacementMapsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[27]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2106,7 +2106,7 @@ func (x *ListPlacementMapsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementMapsResponse.ProtoReflect.Descriptor instead.
 func (*ListPlacementMapsResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{27}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListPlacementMapsResponse) GetPlacementMaps() []*PlacementMap {
@@ -2125,7 +2125,7 @@ type PutObjectMetaRequest struct {
 
 func (x *PutObjectMetaRequest) Reset() {
 	*x = PutObjectMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[28]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2137,7 +2137,7 @@ func (x *PutObjectMetaRequest) String() string {
 func (*PutObjectMetaRequest) ProtoMessage() {}
 
 func (x *PutObjectMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[28]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2150,7 +2150,7 @@ func (x *PutObjectMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutObjectMetaRequest.ProtoReflect.Descriptor instead.
 func (*PutObjectMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{28}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PutObjectMetaRequest) GetMeta() *ObjectMeta {
@@ -2170,7 +2170,7 @@ type GetObjectMetaRequest struct {
 
 func (x *GetObjectMetaRequest) Reset() {
 	*x = GetObjectMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[29]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2182,7 @@ func (x *GetObjectMetaRequest) String() string {
 func (*GetObjectMetaRequest) ProtoMessage() {}
 
 func (x *GetObjectMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[29]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2195,7 @@ func (x *GetObjectMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetObjectMetaRequest.ProtoReflect.Descriptor instead.
 func (*GetObjectMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{29}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetObjectMetaRequest) GetBucket() string {
@@ -2221,7 +2221,7 @@ type GetObjectMetaResponse struct {
 
 func (x *GetObjectMetaResponse) Reset() {
 	*x = GetObjectMetaResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[30]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2233,7 +2233,7 @@ func (x *GetObjectMetaResponse) String() string {
 func (*GetObjectMetaResponse) ProtoMessage() {}
 
 func (x *GetObjectMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[30]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2246,7 +2246,7 @@ func (x *GetObjectMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetObjectMetaResponse.ProtoReflect.Descriptor instead.
 func (*GetObjectMetaResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{30}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetObjectMetaResponse) GetMeta() *ObjectMeta {
@@ -2266,7 +2266,7 @@ type DeleteObjectMetaRequest struct {
 
 func (x *DeleteObjectMetaRequest) Reset() {
 	*x = DeleteObjectMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[31]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2278,7 +2278,7 @@ func (x *DeleteObjectMetaRequest) String() string {
 func (*DeleteObjectMetaRequest) ProtoMessage() {}
 
 func (x *DeleteObjectMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[31]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2291,7 +2291,7 @@ func (x *DeleteObjectMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteObjectMetaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteObjectMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{31}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeleteObjectMetaRequest) GetBucket() string {
@@ -2318,7 +2318,7 @@ type ListObjectMetasRequest struct {
 
 func (x *ListObjectMetasRequest) Reset() {
 	*x = ListObjectMetasRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[32]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2330,7 +2330,7 @@ func (x *ListObjectMetasRequest) String() string {
 func (*ListObjectMetasRequest) ProtoMessage() {}
 
 func (x *ListObjectMetasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[32]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2343,7 +2343,7 @@ func (x *ListObjectMetasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListObjectMetasRequest.ProtoReflect.Descriptor instead.
 func (*ListObjectMetasRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{32}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListObjectMetasRequest) GetBucket() string {
@@ -2369,7 +2369,7 @@ type ListObjectMetasResponse struct {
 
 func (x *ListObjectMetasResponse) Reset() {
 	*x = ListObjectMetasResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[33]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2381,7 +2381,7 @@ func (x *ListObjectMetasResponse) String() string {
 func (*ListObjectMetasResponse) ProtoMessage() {}
 
 func (x *ListObjectMetasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[33]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2394,7 +2394,7 @@ func (x *ListObjectMetasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListObjectMetasResponse.ProtoReflect.Descriptor instead.
 func (*ListObjectMetasResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{33}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListObjectMetasResponse) GetMetas() []*ObjectMeta {
@@ -2413,7 +2413,7 @@ type PutBucketMetaRequest struct {
 
 func (x *PutBucketMetaRequest) Reset() {
 	*x = PutBucketMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[34]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2425,7 +2425,7 @@ func (x *PutBucketMetaRequest) String() string {
 func (*PutBucketMetaRequest) ProtoMessage() {}
 
 func (x *PutBucketMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[34]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2438,7 +2438,7 @@ func (x *PutBucketMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutBucketMetaRequest.ProtoReflect.Descriptor instead.
 func (*PutBucketMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{34}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PutBucketMetaRequest) GetMeta() *BucketMeta {
@@ -2457,7 +2457,7 @@ type GetBucketMetaRequest struct {
 
 func (x *GetBucketMetaRequest) Reset() {
 	*x = GetBucketMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[35]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2469,7 +2469,7 @@ func (x *GetBucketMetaRequest) String() string {
 func (*GetBucketMetaRequest) ProtoMessage() {}
 
 func (x *GetBucketMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[35]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2482,7 +2482,7 @@ func (x *GetBucketMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBucketMetaRequest.ProtoReflect.Descriptor instead.
 func (*GetBucketMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{35}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetBucketMetaRequest) GetName() string {
@@ -2501,7 +2501,7 @@ type GetBucketMetaResponse struct {
 
 func (x *GetBucketMetaResponse) Reset() {
 	*x = GetBucketMetaResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[36]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2513,7 +2513,7 @@ func (x *GetBucketMetaResponse) String() string {
 func (*GetBucketMetaResponse) ProtoMessage() {}
 
 func (x *GetBucketMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[36]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2526,7 +2526,7 @@ func (x *GetBucketMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBucketMetaResponse.ProtoReflect.Descriptor instead.
 func (*GetBucketMetaResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{36}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetBucketMetaResponse) GetMeta() *BucketMeta {
@@ -2545,7 +2545,7 @@ type DeleteBucketMetaRequest struct {
 
 func (x *DeleteBucketMetaRequest) Reset() {
 	*x = DeleteBucketMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[37]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2557,7 +2557,7 @@ func (x *DeleteBucketMetaRequest) String() string {
 func (*DeleteBucketMetaRequest) ProtoMessage() {}
 
 func (x *DeleteBucketMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[37]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2570,7 +2570,7 @@ func (x *DeleteBucketMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBucketMetaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteBucketMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{37}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *DeleteBucketMetaRequest) GetName() string {
@@ -2589,7 +2589,7 @@ type ListBucketMetasResponse struct {
 
 func (x *ListBucketMetasResponse) Reset() {
 	*x = ListBucketMetasResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[38]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2601,7 +2601,7 @@ func (x *ListBucketMetasResponse) String() string {
 func (*ListBucketMetasResponse) ProtoMessage() {}
 
 func (x *ListBucketMetasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[38]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2614,7 +2614,7 @@ func (x *ListBucketMetasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBucketMetasResponse.ProtoReflect.Descriptor instead.
 func (*ListBucketMetasResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{38}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListBucketMetasResponse) GetMetas() []*BucketMeta {
@@ -2633,7 +2633,7 @@ type PutMultipartUploadRequest struct {
 
 func (x *PutMultipartUploadRequest) Reset() {
 	*x = PutMultipartUploadRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[39]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2645,7 +2645,7 @@ func (x *PutMultipartUploadRequest) String() string {
 func (*PutMultipartUploadRequest) ProtoMessage() {}
 
 func (x *PutMultipartUploadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[39]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2658,7 +2658,7 @@ func (x *PutMultipartUploadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutMultipartUploadRequest.ProtoReflect.Descriptor instead.
 func (*PutMultipartUploadRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{39}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PutMultipartUploadRequest) GetUpload() *MultipartUpload {
@@ -2677,7 +2677,7 @@ type GetMultipartUploadRequest struct {
 
 func (x *GetMultipartUploadRequest) Reset() {
 	*x = GetMultipartUploadRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[40]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2689,7 +2689,7 @@ func (x *GetMultipartUploadRequest) String() string {
 func (*GetMultipartUploadRequest) ProtoMessage() {}
 
 func (x *GetMultipartUploadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[40]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2702,7 +2702,7 @@ func (x *GetMultipartUploadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMultipartUploadRequest.ProtoReflect.Descriptor instead.
 func (*GetMultipartUploadRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{40}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetMultipartUploadRequest) GetUploadId() string {
@@ -2721,7 +2721,7 @@ type GetMultipartUploadResponse struct {
 
 func (x *GetMultipartUploadResponse) Reset() {
 	*x = GetMultipartUploadResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[41]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2733,7 +2733,7 @@ func (x *GetMultipartUploadResponse) String() string {
 func (*GetMultipartUploadResponse) ProtoMessage() {}
 
 func (x *GetMultipartUploadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[41]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2746,7 +2746,7 @@ func (x *GetMultipartUploadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMultipartUploadResponse.ProtoReflect.Descriptor instead.
 func (*GetMultipartUploadResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{41}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetMultipartUploadResponse) GetUpload() *MultipartUpload {
@@ -2765,7 +2765,7 @@ type DeleteMultipartUploadRequest struct {
 
 func (x *DeleteMultipartUploadRequest) Reset() {
 	*x = DeleteMultipartUploadRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[42]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2777,7 +2777,7 @@ func (x *DeleteMultipartUploadRequest) String() string {
 func (*DeleteMultipartUploadRequest) ProtoMessage() {}
 
 func (x *DeleteMultipartUploadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[42]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2790,7 +2790,7 @@ func (x *DeleteMultipartUploadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteMultipartUploadRequest.ProtoReflect.Descriptor instead.
 func (*DeleteMultipartUploadRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{42}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *DeleteMultipartUploadRequest) GetUploadId() string {
@@ -2809,7 +2809,7 @@ type PutSnapshotRequest struct {
 
 func (x *PutSnapshotRequest) Reset() {
 	*x = PutSnapshotRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[43]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2821,7 +2821,7 @@ func (x *PutSnapshotRequest) String() string {
 func (*PutSnapshotRequest) ProtoMessage() {}
 
 func (x *PutSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[43]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2834,7 +2834,7 @@ func (x *PutSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*PutSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{43}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *PutSnapshotRequest) GetMeta() *SnapshotMeta {
@@ -2853,7 +2853,7 @@ type GetSnapshotRequest struct {
 
 func (x *GetSnapshotRequest) Reset() {
 	*x = GetSnapshotRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[44]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2865,7 +2865,7 @@ func (x *GetSnapshotRequest) String() string {
 func (*GetSnapshotRequest) ProtoMessage() {}
 
 func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[44]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2878,7 +2878,7 @@ func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{44}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetSnapshotRequest) GetSnapshotId() string {
@@ -2897,7 +2897,7 @@ type GetSnapshotResponse struct {
 
 func (x *GetSnapshotResponse) Reset() {
 	*x = GetSnapshotResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[45]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2909,7 +2909,7 @@ func (x *GetSnapshotResponse) String() string {
 func (*GetSnapshotResponse) ProtoMessage() {}
 
 func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[45]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2922,7 +2922,7 @@ func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*GetSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{45}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetSnapshotResponse) GetMeta() *SnapshotMeta {
@@ -2941,7 +2941,7 @@ type DeleteSnapshotRequest struct {
 
 func (x *DeleteSnapshotRequest) Reset() {
 	*x = DeleteSnapshotRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[46]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2953,7 +2953,7 @@ func (x *DeleteSnapshotRequest) String() string {
 func (*DeleteSnapshotRequest) ProtoMessage() {}
 
 func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[46]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2966,7 +2966,7 @@ func (x *DeleteSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{46}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *DeleteSnapshotRequest) GetSnapshotId() string {
@@ -2985,7 +2985,7 @@ type ListSnapshotsResponse struct {
 
 func (x *ListSnapshotsResponse) Reset() {
 	*x = ListSnapshotsResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[47]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2997,7 +2997,7 @@ func (x *ListSnapshotsResponse) String() string {
 func (*ListSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[47]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3010,7 +3010,7 @@ func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{47}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListSnapshotsResponse) GetMetas() []*SnapshotMeta {
@@ -3029,7 +3029,7 @@ type CreateInodeRequest struct {
 
 func (x *CreateInodeRequest) Reset() {
 	*x = CreateInodeRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[48]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3041,7 +3041,7 @@ func (x *CreateInodeRequest) String() string {
 func (*CreateInodeRequest) ProtoMessage() {}
 
 func (x *CreateInodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[48]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3054,7 +3054,7 @@ func (x *CreateInodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInodeRequest.ProtoReflect.Descriptor instead.
 func (*CreateInodeRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{48}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CreateInodeRequest) GetMeta() *InodeMeta {
@@ -3073,7 +3073,7 @@ type GetInodeRequest struct {
 
 func (x *GetInodeRequest) Reset() {
 	*x = GetInodeRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[49]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3085,7 +3085,7 @@ func (x *GetInodeRequest) String() string {
 func (*GetInodeRequest) ProtoMessage() {}
 
 func (x *GetInodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[49]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3098,7 +3098,7 @@ func (x *GetInodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInodeRequest.ProtoReflect.Descriptor instead.
 func (*GetInodeRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{49}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetInodeRequest) GetIno() uint64 {
@@ -3117,7 +3117,7 @@ type GetInodeResponse struct {
 
 func (x *GetInodeResponse) Reset() {
 	*x = GetInodeResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[50]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3129,7 +3129,7 @@ func (x *GetInodeResponse) String() string {
 func (*GetInodeResponse) ProtoMessage() {}
 
 func (x *GetInodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[50]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3142,7 +3142,7 @@ func (x *GetInodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInodeResponse.ProtoReflect.Descriptor instead.
 func (*GetInodeResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{50}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetInodeResponse) GetMeta() *InodeMeta {
@@ -3161,7 +3161,7 @@ type UpdateInodeRequest struct {
 
 func (x *UpdateInodeRequest) Reset() {
 	*x = UpdateInodeRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[51]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3173,7 +3173,7 @@ func (x *UpdateInodeRequest) String() string {
 func (*UpdateInodeRequest) ProtoMessage() {}
 
 func (x *UpdateInodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[51]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3186,7 +3186,7 @@ func (x *UpdateInodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateInodeRequest.ProtoReflect.Descriptor instead.
 func (*UpdateInodeRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{51}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *UpdateInodeRequest) GetMeta() *InodeMeta {
@@ -3205,7 +3205,7 @@ type DeleteInodeRequest struct {
 
 func (x *DeleteInodeRequest) Reset() {
 	*x = DeleteInodeRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[52]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3217,7 +3217,7 @@ func (x *DeleteInodeRequest) String() string {
 func (*DeleteInodeRequest) ProtoMessage() {}
 
 func (x *DeleteInodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[52]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3230,7 +3230,7 @@ func (x *DeleteInodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteInodeRequest.ProtoReflect.Descriptor instead.
 func (*DeleteInodeRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{52}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *DeleteInodeRequest) GetIno() uint64 {
@@ -3249,7 +3249,7 @@ type AllocateInoResponse struct {
 
 func (x *AllocateInoResponse) Reset() {
 	*x = AllocateInoResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[53]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3261,7 +3261,7 @@ func (x *AllocateInoResponse) String() string {
 func (*AllocateInoResponse) ProtoMessage() {}
 
 func (x *AllocateInoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[53]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3274,7 +3274,7 @@ func (x *AllocateInoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateInoResponse.ProtoReflect.Descriptor instead.
 func (*AllocateInoResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{53}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *AllocateInoResponse) GetIno() uint64 {
@@ -3294,7 +3294,7 @@ type CreateDirEntryRequest struct {
 
 func (x *CreateDirEntryRequest) Reset() {
 	*x = CreateDirEntryRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[54]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3306,7 +3306,7 @@ func (x *CreateDirEntryRequest) String() string {
 func (*CreateDirEntryRequest) ProtoMessage() {}
 
 func (x *CreateDirEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[54]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3319,7 +3319,7 @@ func (x *CreateDirEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDirEntryRequest.ProtoReflect.Descriptor instead.
 func (*CreateDirEntryRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{54}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CreateDirEntryRequest) GetParentIno() uint64 {
@@ -3346,7 +3346,7 @@ type DeleteDirEntryRequest struct {
 
 func (x *DeleteDirEntryRequest) Reset() {
 	*x = DeleteDirEntryRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[55]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3358,7 +3358,7 @@ func (x *DeleteDirEntryRequest) String() string {
 func (*DeleteDirEntryRequest) ProtoMessage() {}
 
 func (x *DeleteDirEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[55]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3371,7 +3371,7 @@ func (x *DeleteDirEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDirEntryRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDirEntryRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{55}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *DeleteDirEntryRequest) GetParentIno() uint64 {
@@ -3398,7 +3398,7 @@ type LookupDirEntryRequest struct {
 
 func (x *LookupDirEntryRequest) Reset() {
 	*x = LookupDirEntryRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[56]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3410,7 +3410,7 @@ func (x *LookupDirEntryRequest) String() string {
 func (*LookupDirEntryRequest) ProtoMessage() {}
 
 func (x *LookupDirEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[56]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3423,7 +3423,7 @@ func (x *LookupDirEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupDirEntryRequest.ProtoReflect.Descriptor instead.
 func (*LookupDirEntryRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{56}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *LookupDirEntryRequest) GetParentIno() uint64 {
@@ -3449,7 +3449,7 @@ type LookupDirEntryResponse struct {
 
 func (x *LookupDirEntryResponse) Reset() {
 	*x = LookupDirEntryResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[57]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3461,7 +3461,7 @@ func (x *LookupDirEntryResponse) String() string {
 func (*LookupDirEntryResponse) ProtoMessage() {}
 
 func (x *LookupDirEntryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[57]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3474,7 +3474,7 @@ func (x *LookupDirEntryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupDirEntryResponse.ProtoReflect.Descriptor instead.
 func (*LookupDirEntryResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{57}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *LookupDirEntryResponse) GetEntry() *DirEntry {
@@ -3493,7 +3493,7 @@ type ListDirectoryRequest struct {
 
 func (x *ListDirectoryRequest) Reset() {
 	*x = ListDirectoryRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[58]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3505,7 +3505,7 @@ func (x *ListDirectoryRequest) String() string {
 func (*ListDirectoryRequest) ProtoMessage() {}
 
 func (x *ListDirectoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[58]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3518,7 +3518,7 @@ func (x *ListDirectoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDirectoryRequest.ProtoReflect.Descriptor instead.
 func (*ListDirectoryRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{58}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListDirectoryRequest) GetParentIno() uint64 {
@@ -3537,7 +3537,7 @@ type ListDirectoryResponse struct {
 
 func (x *ListDirectoryResponse) Reset() {
 	*x = ListDirectoryResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[59]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3549,7 +3549,7 @@ func (x *ListDirectoryResponse) String() string {
 func (*ListDirectoryResponse) ProtoMessage() {}
 
 func (x *ListDirectoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[59]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3562,7 +3562,7 @@ func (x *ListDirectoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDirectoryResponse.ProtoReflect.Descriptor instead.
 func (*ListDirectoryResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{59}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListDirectoryResponse) GetEntries() []*DirEntry {
@@ -3581,7 +3581,7 @@ type PutNodeMetaRequest struct {
 
 func (x *PutNodeMetaRequest) Reset() {
 	*x = PutNodeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[60]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3593,7 +3593,7 @@ func (x *PutNodeMetaRequest) String() string {
 func (*PutNodeMetaRequest) ProtoMessage() {}
 
 func (x *PutNodeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[60]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3606,7 +3606,7 @@ func (x *PutNodeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutNodeMetaRequest.ProtoReflect.Descriptor instead.
 func (*PutNodeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{60}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *PutNodeMetaRequest) GetMeta() *NodeMeta {
@@ -3625,7 +3625,7 @@ type GetNodeMetaRequest struct {
 
 func (x *GetNodeMetaRequest) Reset() {
 	*x = GetNodeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[61]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3637,7 +3637,7 @@ func (x *GetNodeMetaRequest) String() string {
 func (*GetNodeMetaRequest) ProtoMessage() {}
 
 func (x *GetNodeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[61]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3650,7 +3650,7 @@ func (x *GetNodeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeMetaRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{61}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GetNodeMetaRequest) GetNodeId() string {
@@ -3669,7 +3669,7 @@ type GetNodeMetaResponse struct {
 
 func (x *GetNodeMetaResponse) Reset() {
 	*x = GetNodeMetaResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[62]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3681,7 +3681,7 @@ func (x *GetNodeMetaResponse) String() string {
 func (*GetNodeMetaResponse) ProtoMessage() {}
 
 func (x *GetNodeMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[62]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3694,7 +3694,7 @@ func (x *GetNodeMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeMetaResponse.ProtoReflect.Descriptor instead.
 func (*GetNodeMetaResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{62}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GetNodeMetaResponse) GetMeta() *NodeMeta {
@@ -3713,7 +3713,7 @@ type DeleteNodeMetaRequest struct {
 
 func (x *DeleteNodeMetaRequest) Reset() {
 	*x = DeleteNodeMetaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[63]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3725,7 +3725,7 @@ func (x *DeleteNodeMetaRequest) String() string {
 func (*DeleteNodeMetaRequest) ProtoMessage() {}
 
 func (x *DeleteNodeMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[63]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3738,7 +3738,7 @@ func (x *DeleteNodeMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeMetaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNodeMetaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{63}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *DeleteNodeMetaRequest) GetNodeId() string {
@@ -3757,7 +3757,7 @@ type ListNodeMetasResponse struct {
 
 func (x *ListNodeMetasResponse) Reset() {
 	*x = ListNodeMetasResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[64]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3769,7 +3769,7 @@ func (x *ListNodeMetasResponse) String() string {
 func (*ListNodeMetasResponse) ProtoMessage() {}
 
 func (x *ListNodeMetasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[64]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3782,7 +3782,7 @@ func (x *ListNodeMetasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodeMetasResponse.ProtoReflect.Descriptor instead.
 func (*ListNodeMetasResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{64}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ListNodeMetasResponse) GetMetas() []*NodeMeta {
@@ -3808,7 +3808,7 @@ type AcquireLockRequest struct {
 
 func (x *AcquireLockRequest) Reset() {
 	*x = AcquireLockRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[65]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3820,7 +3820,7 @@ func (x *AcquireLockRequest) String() string {
 func (*AcquireLockRequest) ProtoMessage() {}
 
 func (x *AcquireLockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[65]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3833,7 +3833,7 @@ func (x *AcquireLockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcquireLockRequest.ProtoReflect.Descriptor instead.
 func (*AcquireLockRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{65}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *AcquireLockRequest) GetOwner() string {
@@ -3903,7 +3903,7 @@ type AcquireLockResponse struct {
 
 func (x *AcquireLockResponse) Reset() {
 	*x = AcquireLockResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[66]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3915,7 +3915,7 @@ func (x *AcquireLockResponse) String() string {
 func (*AcquireLockResponse) ProtoMessage() {}
 
 func (x *AcquireLockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[66]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3928,7 +3928,7 @@ func (x *AcquireLockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcquireLockResponse.ProtoReflect.Descriptor instead.
 func (*AcquireLockResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{66}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *AcquireLockResponse) GetLeaseId() string {
@@ -3962,7 +3962,7 @@ type RenewLockRequest struct {
 
 func (x *RenewLockRequest) Reset() {
 	*x = RenewLockRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[67]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3974,7 +3974,7 @@ func (x *RenewLockRequest) String() string {
 func (*RenewLockRequest) ProtoMessage() {}
 
 func (x *RenewLockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[67]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3987,7 +3987,7 @@ func (x *RenewLockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewLockRequest.ProtoReflect.Descriptor instead.
 func (*RenewLockRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{67}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *RenewLockRequest) GetLeaseId() string {
@@ -4013,7 +4013,7 @@ type RenewLockResponse struct {
 
 func (x *RenewLockResponse) Reset() {
 	*x = RenewLockResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[68]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4025,7 +4025,7 @@ func (x *RenewLockResponse) String() string {
 func (*RenewLockResponse) ProtoMessage() {}
 
 func (x *RenewLockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[68]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4038,7 +4038,7 @@ func (x *RenewLockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewLockResponse.ProtoReflect.Descriptor instead.
 func (*RenewLockResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{68}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *RenewLockResponse) GetLease() *LockLease {
@@ -4058,7 +4058,7 @@ type ReleaseLockRequest struct {
 
 func (x *ReleaseLockRequest) Reset() {
 	*x = ReleaseLockRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[69]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4070,7 +4070,7 @@ func (x *ReleaseLockRequest) String() string {
 func (*ReleaseLockRequest) ProtoMessage() {}
 
 func (x *ReleaseLockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[69]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4083,7 +4083,7 @@ func (x *ReleaseLockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseLockRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseLockRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{69}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ReleaseLockRequest) GetLeaseId() string {
@@ -4113,7 +4113,7 @@ type TestLockRequest struct {
 
 func (x *TestLockRequest) Reset() {
 	*x = TestLockRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[70]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4125,7 +4125,7 @@ func (x *TestLockRequest) String() string {
 func (*TestLockRequest) ProtoMessage() {}
 
 func (x *TestLockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[70]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4138,7 +4138,7 @@ func (x *TestLockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestLockRequest.ProtoReflect.Descriptor instead.
 func (*TestLockRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{70}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *TestLockRequest) GetVolumeId() string {
@@ -4185,7 +4185,7 @@ type TestLockResponse struct {
 
 func (x *TestLockResponse) Reset() {
 	*x = TestLockResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[71]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4197,7 +4197,7 @@ func (x *TestLockResponse) String() string {
 func (*TestLockResponse) ProtoMessage() {}
 
 func (x *TestLockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[71]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4210,7 +4210,7 @@ func (x *TestLockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestLockResponse.ProtoReflect.Descriptor instead.
 func (*TestLockResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{71}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *TestLockResponse) GetConflictingLock() *LockLease {
@@ -4229,7 +4229,7 @@ type GetLockRequest struct {
 
 func (x *GetLockRequest) Reset() {
 	*x = GetLockRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[72]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4241,7 +4241,7 @@ func (x *GetLockRequest) String() string {
 func (*GetLockRequest) ProtoMessage() {}
 
 func (x *GetLockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[72]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4254,7 +4254,7 @@ func (x *GetLockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLockRequest.ProtoReflect.Descriptor instead.
 func (*GetLockRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{72}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetLockRequest) GetLeaseId() string {
@@ -4273,7 +4273,7 @@ type GetLockResponse struct {
 
 func (x *GetLockResponse) Reset() {
 	*x = GetLockResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[73]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4285,7 +4285,7 @@ func (x *GetLockResponse) String() string {
 func (*GetLockResponse) ProtoMessage() {}
 
 func (x *GetLockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[73]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4298,7 +4298,7 @@ func (x *GetLockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLockResponse.ProtoReflect.Descriptor instead.
 func (*GetLockResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{73}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *GetLockResponse) GetLease() *LockLease {
@@ -4317,7 +4317,7 @@ type ListLocksRequest struct {
 
 func (x *ListLocksRequest) Reset() {
 	*x = ListLocksRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[74]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4329,7 +4329,7 @@ func (x *ListLocksRequest) String() string {
 func (*ListLocksRequest) ProtoMessage() {}
 
 func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[74]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4342,7 +4342,7 @@ func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLocksRequest.ProtoReflect.Descriptor instead.
 func (*ListLocksRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{74}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListLocksRequest) GetVolumeId() string {
@@ -4361,7 +4361,7 @@ type ListLocksResponse struct {
 
 func (x *ListLocksResponse) Reset() {
 	*x = ListLocksResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[75]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4373,7 +4373,7 @@ func (x *ListLocksResponse) String() string {
 func (*ListLocksResponse) ProtoMessage() {}
 
 func (x *ListLocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[75]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4386,7 +4386,7 @@ func (x *ListLocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLocksResponse.ProtoReflect.Descriptor instead.
 func (*ListLocksResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{75}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ListLocksResponse) GetLocks() []*LockLease {
@@ -4405,7 +4405,7 @@ type CleanupExpiredLocksResponse struct {
 
 func (x *CleanupExpiredLocksResponse) Reset() {
 	*x = CleanupExpiredLocksResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[76]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4417,7 +4417,7 @@ func (x *CleanupExpiredLocksResponse) String() string {
 func (*CleanupExpiredLocksResponse) ProtoMessage() {}
 
 func (x *CleanupExpiredLocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[76]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4430,7 +4430,7 @@ func (x *CleanupExpiredLocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupExpiredLocksResponse.ProtoReflect.Descriptor instead.
 func (*CleanupExpiredLocksResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{76}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *CleanupExpiredLocksResponse) GetCleaned() int32 {
@@ -4449,7 +4449,7 @@ type SetVolumeOwnerRequest struct {
 
 func (x *SetVolumeOwnerRequest) Reset() {
 	*x = SetVolumeOwnerRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[77]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4461,7 +4461,7 @@ func (x *SetVolumeOwnerRequest) String() string {
 func (*SetVolumeOwnerRequest) ProtoMessage() {}
 
 func (x *SetVolumeOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[77]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4474,7 +4474,7 @@ func (x *SetVolumeOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVolumeOwnerRequest.ProtoReflect.Descriptor instead.
 func (*SetVolumeOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{77}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *SetVolumeOwnerRequest) GetOwnership() *VolumeOwnership {
@@ -4493,7 +4493,7 @@ type GetVolumeOwnerRequest struct {
 
 func (x *GetVolumeOwnerRequest) Reset() {
 	*x = GetVolumeOwnerRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[78]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4505,7 +4505,7 @@ func (x *GetVolumeOwnerRequest) String() string {
 func (*GetVolumeOwnerRequest) ProtoMessage() {}
 
 func (x *GetVolumeOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[78]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4518,7 +4518,7 @@ func (x *GetVolumeOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVolumeOwnerRequest.ProtoReflect.Descriptor instead.
 func (*GetVolumeOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{78}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetVolumeOwnerRequest) GetVolumeId() string {
@@ -4537,7 +4537,7 @@ type GetVolumeOwnerResponse struct {
 
 func (x *GetVolumeOwnerResponse) Reset() {
 	*x = GetVolumeOwnerResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[79]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4549,7 +4549,7 @@ func (x *GetVolumeOwnerResponse) String() string {
 func (*GetVolumeOwnerResponse) ProtoMessage() {}
 
 func (x *GetVolumeOwnerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[79]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4562,7 +4562,7 @@ func (x *GetVolumeOwnerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVolumeOwnerResponse.ProtoReflect.Descriptor instead.
 func (*GetVolumeOwnerResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{79}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *GetVolumeOwnerResponse) GetOwnership() *VolumeOwnership {
@@ -4582,7 +4582,7 @@ type RequestOwnershipRequest struct {
 
 func (x *RequestOwnershipRequest) Reset() {
 	*x = RequestOwnershipRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[80]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4594,7 +4594,7 @@ func (x *RequestOwnershipRequest) String() string {
 func (*RequestOwnershipRequest) ProtoMessage() {}
 
 func (x *RequestOwnershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[80]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4607,7 +4607,7 @@ func (x *RequestOwnershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestOwnershipRequest.ProtoReflect.Descriptor instead.
 func (*RequestOwnershipRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{80}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *RequestOwnershipRequest) GetVolumeId() string {
@@ -4634,7 +4634,7 @@ type RequestOwnershipResponse struct {
 
 func (x *RequestOwnershipResponse) Reset() {
 	*x = RequestOwnershipResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[81]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4646,7 +4646,7 @@ func (x *RequestOwnershipResponse) String() string {
 func (*RequestOwnershipResponse) ProtoMessage() {}
 
 func (x *RequestOwnershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[81]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4659,7 +4659,7 @@ func (x *RequestOwnershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestOwnershipResponse.ProtoReflect.Descriptor instead.
 func (*RequestOwnershipResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{81}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *RequestOwnershipResponse) GetGranted() bool {
@@ -4685,7 +4685,7 @@ type PutShardPlacementRequest struct {
 
 func (x *PutShardPlacementRequest) Reset() {
 	*x = PutShardPlacementRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[82]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4697,7 +4697,7 @@ func (x *PutShardPlacementRequest) String() string {
 func (*PutShardPlacementRequest) ProtoMessage() {}
 
 func (x *PutShardPlacementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[82]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4710,7 +4710,7 @@ func (x *PutShardPlacementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutShardPlacementRequest.ProtoReflect.Descriptor instead.
 func (*PutShardPlacementRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{82}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PutShardPlacementRequest) GetPlacement() *ShardPlacementMsg {
@@ -4729,7 +4729,7 @@ type GetShardPlacementsRequest struct {
 
 func (x *GetShardPlacementsRequest) Reset() {
 	*x = GetShardPlacementsRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[83]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4741,7 +4741,7 @@ func (x *GetShardPlacementsRequest) String() string {
 func (*GetShardPlacementsRequest) ProtoMessage() {}
 
 func (x *GetShardPlacementsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[83]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4754,7 +4754,7 @@ func (x *GetShardPlacementsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardPlacementsRequest.ProtoReflect.Descriptor instead.
 func (*GetShardPlacementsRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{83}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *GetShardPlacementsRequest) GetChunkId() string {
@@ -4773,7 +4773,7 @@ type GetShardPlacementsResponse struct {
 
 func (x *GetShardPlacementsResponse) Reset() {
 	*x = GetShardPlacementsResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[84]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4785,7 +4785,7 @@ func (x *GetShardPlacementsResponse) String() string {
 func (*GetShardPlacementsResponse) ProtoMessage() {}
 
 func (x *GetShardPlacementsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[84]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4798,7 +4798,7 @@ func (x *GetShardPlacementsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShardPlacementsResponse.ProtoReflect.Descriptor instead.
 func (*GetShardPlacementsResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{84}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *GetShardPlacementsResponse) GetPlacements() []*ShardPlacementMsg {
@@ -4818,7 +4818,7 @@ type DeleteShardPlacementRequest struct {
 
 func (x *DeleteShardPlacementRequest) Reset() {
 	*x = DeleteShardPlacementRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[85]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4830,7 +4830,7 @@ func (x *DeleteShardPlacementRequest) String() string {
 func (*DeleteShardPlacementRequest) ProtoMessage() {}
 
 func (x *DeleteShardPlacementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[85]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4843,7 +4843,7 @@ func (x *DeleteShardPlacementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteShardPlacementRequest.ProtoReflect.Descriptor instead.
 func (*DeleteShardPlacementRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{85}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *DeleteShardPlacementRequest) GetChunkId() string {
@@ -4870,7 +4870,7 @@ type JoinClusterRequest struct {
 
 func (x *JoinClusterRequest) Reset() {
 	*x = JoinClusterRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[86]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4882,7 +4882,7 @@ func (x *JoinClusterRequest) String() string {
 func (*JoinClusterRequest) ProtoMessage() {}
 
 func (x *JoinClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[86]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4895,7 +4895,7 @@ func (x *JoinClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinClusterRequest.ProtoReflect.Descriptor instead.
 func (*JoinClusterRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{86}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *JoinClusterRequest) GetNodeId() string {
@@ -4923,7 +4923,7 @@ type JoinClusterResponse struct {
 
 func (x *JoinClusterResponse) Reset() {
 	*x = JoinClusterResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[87]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4935,7 +4935,7 @@ func (x *JoinClusterResponse) String() string {
 func (*JoinClusterResponse) ProtoMessage() {}
 
 func (x *JoinClusterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[87]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4948,7 +4948,7 @@ func (x *JoinClusterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinClusterResponse.ProtoReflect.Descriptor instead.
 func (*JoinClusterResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{87}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *JoinClusterResponse) GetSuccess() bool {
@@ -4995,7 +4995,7 @@ type HealTaskMsg struct {
 
 func (x *HealTaskMsg) Reset() {
 	*x = HealTaskMsg{}
-	mi := &file_metadata_metadata_proto_msgTypes[88]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5007,7 +5007,7 @@ func (x *HealTaskMsg) String() string {
 func (*HealTaskMsg) ProtoMessage() {}
 
 func (x *HealTaskMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[88]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5020,7 +5020,7 @@ func (x *HealTaskMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealTaskMsg.ProtoReflect.Descriptor instead.
 func (*HealTaskMsg) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{88}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *HealTaskMsg) GetId() string {
@@ -5137,7 +5137,7 @@ type PutHealTaskRequest struct {
 
 func (x *PutHealTaskRequest) Reset() {
 	*x = PutHealTaskRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[89]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5149,7 +5149,7 @@ func (x *PutHealTaskRequest) String() string {
 func (*PutHealTaskRequest) ProtoMessage() {}
 
 func (x *PutHealTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[89]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5162,7 +5162,7 @@ func (x *PutHealTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutHealTaskRequest.ProtoReflect.Descriptor instead.
 func (*PutHealTaskRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{89}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *PutHealTaskRequest) GetTask() *HealTaskMsg {
@@ -5181,7 +5181,7 @@ type GetHealTaskRequest struct {
 
 func (x *GetHealTaskRequest) Reset() {
 	*x = GetHealTaskRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[90]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5193,7 +5193,7 @@ func (x *GetHealTaskRequest) String() string {
 func (*GetHealTaskRequest) ProtoMessage() {}
 
 func (x *GetHealTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[90]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5206,7 +5206,7 @@ func (x *GetHealTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHealTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetHealTaskRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{90}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *GetHealTaskRequest) GetId() string {
@@ -5225,7 +5225,7 @@ type GetHealTaskResponse struct {
 
 func (x *GetHealTaskResponse) Reset() {
 	*x = GetHealTaskResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[91]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5237,7 +5237,7 @@ func (x *GetHealTaskResponse) String() string {
 func (*GetHealTaskResponse) ProtoMessage() {}
 
 func (x *GetHealTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[91]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5250,7 +5250,7 @@ func (x *GetHealTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHealTaskResponse.ProtoReflect.Descriptor instead.
 func (*GetHealTaskResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{91}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *GetHealTaskResponse) GetTask() *HealTaskMsg {
@@ -5269,7 +5269,7 @@ type ListPendingHealTasksResponse struct {
 
 func (x *ListPendingHealTasksResponse) Reset() {
 	*x = ListPendingHealTasksResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[92]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5281,7 +5281,7 @@ func (x *ListPendingHealTasksResponse) String() string {
 func (*ListPendingHealTasksResponse) ProtoMessage() {}
 
 func (x *ListPendingHealTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[92]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5294,7 +5294,7 @@ func (x *ListPendingHealTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingHealTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListPendingHealTasksResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{92}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *ListPendingHealTasksResponse) GetTasks() []*HealTaskMsg {
@@ -5313,7 +5313,7 @@ type ListHealTasksByVolumeRequest struct {
 
 func (x *ListHealTasksByVolumeRequest) Reset() {
 	*x = ListHealTasksByVolumeRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[93]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5325,7 +5325,7 @@ func (x *ListHealTasksByVolumeRequest) String() string {
 func (*ListHealTasksByVolumeRequest) ProtoMessage() {}
 
 func (x *ListHealTasksByVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[93]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5338,7 +5338,7 @@ func (x *ListHealTasksByVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHealTasksByVolumeRequest.ProtoReflect.Descriptor instead.
 func (*ListHealTasksByVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{93}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ListHealTasksByVolumeRequest) GetVolumeId() string {
@@ -5357,7 +5357,7 @@ type ListHealTasksByVolumeResponse struct {
 
 func (x *ListHealTasksByVolumeResponse) Reset() {
 	*x = ListHealTasksByVolumeResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[94]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5369,7 +5369,7 @@ func (x *ListHealTasksByVolumeResponse) String() string {
 func (*ListHealTasksByVolumeResponse) ProtoMessage() {}
 
 func (x *ListHealTasksByVolumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[94]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5382,7 +5382,7 @@ func (x *ListHealTasksByVolumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHealTasksByVolumeResponse.ProtoReflect.Descriptor instead.
 func (*ListHealTasksByVolumeResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{94}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ListHealTasksByVolumeResponse) GetTasks() []*HealTaskMsg {
@@ -5401,7 +5401,7 @@ type DeleteHealTaskRequest struct {
 
 func (x *DeleteHealTaskRequest) Reset() {
 	*x = DeleteHealTaskRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[95]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5413,7 +5413,7 @@ func (x *DeleteHealTaskRequest) String() string {
 func (*DeleteHealTaskRequest) ProtoMessage() {}
 
 func (x *DeleteHealTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[95]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5426,7 +5426,7 @@ func (x *DeleteHealTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHealTaskRequest.ProtoReflect.Descriptor instead.
 func (*DeleteHealTaskRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{95}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *DeleteHealTaskRequest) GetId() string {
@@ -5449,7 +5449,7 @@ type QuotaSpecMsg struct {
 
 func (x *QuotaSpecMsg) Reset() {
 	*x = QuotaSpecMsg{}
-	mi := &file_metadata_metadata_proto_msgTypes[96]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5461,7 +5461,7 @@ func (x *QuotaSpecMsg) String() string {
 func (*QuotaSpecMsg) ProtoMessage() {}
 
 func (x *QuotaSpecMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[96]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5474,7 +5474,7 @@ func (x *QuotaSpecMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuotaSpecMsg.ProtoReflect.Descriptor instead.
 func (*QuotaSpecMsg) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{96}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *QuotaSpecMsg) GetKind() string {
@@ -5524,7 +5524,7 @@ type QuotaUsageMsg struct {
 
 func (x *QuotaUsageMsg) Reset() {
 	*x = QuotaUsageMsg{}
-	mi := &file_metadata_metadata_proto_msgTypes[97]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5536,7 +5536,7 @@ func (x *QuotaUsageMsg) String() string {
 func (*QuotaUsageMsg) ProtoMessage() {}
 
 func (x *QuotaUsageMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[97]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5549,7 +5549,7 @@ func (x *QuotaUsageMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuotaUsageMsg.ProtoReflect.Descriptor instead.
 func (*QuotaUsageMsg) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{97}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *QuotaUsageMsg) GetKind() string {
@@ -5589,7 +5589,7 @@ type SetQuotaRequest struct {
 
 func (x *SetQuotaRequest) Reset() {
 	*x = SetQuotaRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[98]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5601,7 +5601,7 @@ func (x *SetQuotaRequest) String() string {
 func (*SetQuotaRequest) ProtoMessage() {}
 
 func (x *SetQuotaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[98]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5614,7 +5614,7 @@ func (x *SetQuotaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetQuotaRequest.ProtoReflect.Descriptor instead.
 func (*SetQuotaRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{98}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *SetQuotaRequest) GetSpec() *QuotaSpecMsg {
@@ -5634,7 +5634,7 @@ type GetUsageRequest struct {
 
 func (x *GetUsageRequest) Reset() {
 	*x = GetUsageRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[99]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5646,7 +5646,7 @@ func (x *GetUsageRequest) String() string {
 func (*GetUsageRequest) ProtoMessage() {}
 
 func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[99]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5659,7 +5659,7 @@ func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsageRequest.ProtoReflect.Descriptor instead.
 func (*GetUsageRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{99}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *GetUsageRequest) GetKind() string {
@@ -5685,7 +5685,7 @@ type GetUsageResponse struct {
 
 func (x *GetUsageResponse) Reset() {
 	*x = GetUsageResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[100]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5697,7 +5697,7 @@ func (x *GetUsageResponse) String() string {
 func (*GetUsageResponse) ProtoMessage() {}
 
 func (x *GetUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[100]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5710,7 +5710,7 @@ func (x *GetUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsageResponse.ProtoReflect.Descriptor instead.
 func (*GetUsageResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{100}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetUsageResponse) GetUsage() *QuotaUsageMsg {
@@ -5733,7 +5733,7 @@ type FsmOp struct {
 
 func (x *FsmOp) Reset() {
 	*x = FsmOp{}
-	mi := &file_metadata_metadata_proto_msgTypes[101]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5745,7 +5745,7 @@ func (x *FsmOp) String() string {
 func (*FsmOp) ProtoMessage() {}
 
 func (x *FsmOp) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[101]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5758,7 +5758,7 @@ func (x *FsmOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsmOp.ProtoReflect.Descriptor instead.
 func (*FsmOp) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{101}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *FsmOp) GetOp() string {
@@ -5799,7 +5799,7 @@ type FsmSnapshot struct {
 
 func (x *FsmSnapshot) Reset() {
 	*x = FsmSnapshot{}
-	mi := &file_metadata_metadata_proto_msgTypes[102]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5811,7 +5811,7 @@ func (x *FsmSnapshot) String() string {
 func (*FsmSnapshot) ProtoMessage() {}
 
 func (x *FsmSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[102]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5824,7 +5824,7 @@ func (x *FsmSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsmSnapshot.ProtoReflect.Descriptor instead.
 func (*FsmSnapshot) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{102}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *FsmSnapshot) GetBuckets() map[string]*FsmBucket {
@@ -5844,7 +5844,7 @@ type FsmBucket struct {
 
 func (x *FsmBucket) Reset() {
 	*x = FsmBucket{}
-	mi := &file_metadata_metadata_proto_msgTypes[103]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5856,7 +5856,7 @@ func (x *FsmBucket) String() string {
 func (*FsmBucket) ProtoMessage() {}
 
 func (x *FsmBucket) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[103]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5869,7 +5869,7 @@ func (x *FsmBucket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsmBucket.ProtoReflect.Descriptor instead.
 func (*FsmBucket) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{103}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *FsmBucket) GetEntries() map[string][]byte {
@@ -5896,7 +5896,7 @@ type SuperblockInfo struct {
 
 func (x *SuperblockInfo) Reset() {
 	*x = SuperblockInfo{}
-	mi := &file_metadata_metadata_proto_msgTypes[104]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5908,7 +5908,7 @@ func (x *SuperblockInfo) String() string {
 func (*SuperblockInfo) ProtoMessage() {}
 
 func (x *SuperblockInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[104]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5921,7 +5921,7 @@ func (x *SuperblockInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperblockInfo.ProtoReflect.Descriptor instead.
 func (*SuperblockInfo) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{104}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *SuperblockInfo) GetDiskUuid() []byte {
@@ -5990,7 +5990,7 @@ type ReportSuperblocksRequest struct {
 
 func (x *ReportSuperblocksRequest) Reset() {
 	*x = ReportSuperblocksRequest{}
-	mi := &file_metadata_metadata_proto_msgTypes[105]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6002,7 +6002,7 @@ func (x *ReportSuperblocksRequest) String() string {
 func (*ReportSuperblocksRequest) ProtoMessage() {}
 
 func (x *ReportSuperblocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[105]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6015,7 +6015,7 @@ func (x *ReportSuperblocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportSuperblocksRequest.ProtoReflect.Descriptor instead.
 func (*ReportSuperblocksRequest) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{105}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ReportSuperblocksRequest) GetNodeId() string {
@@ -6048,7 +6048,7 @@ type ReportSuperblocksResponse struct {
 
 func (x *ReportSuperblocksResponse) Reset() {
 	*x = ReportSuperblocksResponse{}
-	mi := &file_metadata_metadata_proto_msgTypes[106]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6060,7 +6060,7 @@ func (x *ReportSuperblocksResponse) String() string {
 func (*ReportSuperblocksResponse) ProtoMessage() {}
 
 func (x *ReportSuperblocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[106]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6073,7 +6073,7 @@ func (x *ReportSuperblocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportSuperblocksResponse.ProtoReflect.Descriptor instead.
 func (*ReportSuperblocksResponse) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{106}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *ReportSuperblocksResponse) GetAcceptedCount() uint32 {
@@ -6108,7 +6108,7 @@ type BadgerSnapshotEntry struct {
 
 func (x *BadgerSnapshotEntry) Reset() {
 	*x = BadgerSnapshotEntry{}
-	mi := &file_metadata_metadata_proto_msgTypes[107]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6120,7 +6120,7 @@ func (x *BadgerSnapshotEntry) String() string {
 func (*BadgerSnapshotEntry) ProtoMessage() {}
 
 func (x *BadgerSnapshotEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_metadata_metadata_proto_msgTypes[107]
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6133,7 +6133,7 @@ func (x *BadgerSnapshotEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BadgerSnapshotEntry.ProtoReflect.Descriptor instead.
 func (*BadgerSnapshotEntry) Descriptor() ([]byte, []int) {
-	return file_metadata_metadata_proto_rawDescGZIP(), []int{107}
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *BadgerSnapshotEntry) GetKey() []byte {
@@ -6150,11 +6150,360 @@ func (x *BadgerSnapshotEntry) GetValue() []byte {
 	return nil
 }
 
-var File_metadata_metadata_proto protoreflect.FileDescriptor
+// ChunkCrypto is the encryption bookkeeping for a single chunk stored on
+// an encrypted volume. It lives in VolumeMeta so the chunk server can be
+// restarted without losing the ability to re-derive chunk keys.
+type ChunkCrypto struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// chunk_id identifies the chunk inside its volume.
+	ChunkId string `protobuf:"bytes,1,opt,name=chunk_id,json=chunkId,proto3" json:"chunk_id,omitempty"`
+	// plaintext_hash is SHA-256(plaintext) used for convergent key derivation.
+	PlaintextHash []byte `protobuf:"bytes,2,opt,name=plaintext_hash,json=plaintextHash,proto3" json:"plaintext_hash,omitempty"`
+	// auth_tag is the AES-GCM authentication tag emitted at encrypt time.
+	AuthTag []byte `protobuf:"bytes,3,opt,name=auth_tag,json=authTag,proto3" json:"auth_tag,omitempty"`
+	// dk_version is the Transit master-key version that wrapped the DK used
+	// to encrypt this chunk. Recorded so a rotate-aware read path can pick
+	// the right wrapping.
+	DkVersion     uint32 `protobuf:"varint,4,opt,name=dk_version,json=dkVersion,proto3" json:"dk_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_metadata_metadata_proto_rawDesc = "" +
+func (x *ChunkCrypto) Reset() {
+	*x = ChunkCrypto{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChunkCrypto) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChunkCrypto) ProtoMessage() {}
+
+func (x *ChunkCrypto) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChunkCrypto.ProtoReflect.Descriptor instead.
+func (*ChunkCrypto) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *ChunkCrypto) GetChunkId() string {
+	if x != nil {
+		return x.ChunkId
+	}
+	return ""
+}
+
+func (x *ChunkCrypto) GetPlaintextHash() []byte {
+	if x != nil {
+		return x.PlaintextHash
+	}
+	return nil
+}
+
+func (x *ChunkCrypto) GetAuthTag() []byte {
+	if x != nil {
+		return x.AuthTag
+	}
+	return nil
+}
+
+func (x *ChunkCrypto) GetDkVersion() uint32 {
+	if x != nil {
+		return x.DkVersion
+	}
+	return 0
+}
+
+type SetChunkCryptoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	Crypto        *ChunkCrypto           `protobuf:"bytes,2,opt,name=crypto,proto3" json:"crypto,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetChunkCryptoRequest) Reset() {
+	*x = SetChunkCryptoRequest{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetChunkCryptoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetChunkCryptoRequest) ProtoMessage() {}
+
+func (x *SetChunkCryptoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetChunkCryptoRequest.ProtoReflect.Descriptor instead.
+func (*SetChunkCryptoRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *SetChunkCryptoRequest) GetVolumeId() string {
+	if x != nil {
+		return x.VolumeId
+	}
+	return ""
+}
+
+func (x *SetChunkCryptoRequest) GetCrypto() *ChunkCrypto {
+	if x != nil {
+		return x.Crypto
+	}
+	return nil
+}
+
+type SetChunkCryptoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetChunkCryptoResponse) Reset() {
+	*x = SetChunkCryptoResponse{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetChunkCryptoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetChunkCryptoResponse) ProtoMessage() {}
+
+func (x *SetChunkCryptoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetChunkCryptoResponse.ProtoReflect.Descriptor instead.
+func (*SetChunkCryptoResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{110}
+}
+
+type GetChunkCryptoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	ChunkId       string                 `protobuf:"bytes,2,opt,name=chunk_id,json=chunkId,proto3" json:"chunk_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetChunkCryptoRequest) Reset() {
+	*x = GetChunkCryptoRequest{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetChunkCryptoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetChunkCryptoRequest) ProtoMessage() {}
+
+func (x *GetChunkCryptoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetChunkCryptoRequest.ProtoReflect.Descriptor instead.
+func (*GetChunkCryptoRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *GetChunkCryptoRequest) GetVolumeId() string {
+	if x != nil {
+		return x.VolumeId
+	}
+	return ""
+}
+
+func (x *GetChunkCryptoRequest) GetChunkId() string {
+	if x != nil {
+		return x.ChunkId
+	}
+	return ""
+}
+
+type GetChunkCryptoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Crypto        *ChunkCrypto           `protobuf:"bytes,1,opt,name=crypto,proto3" json:"crypto,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetChunkCryptoResponse) Reset() {
+	*x = GetChunkCryptoResponse{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetChunkCryptoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetChunkCryptoResponse) ProtoMessage() {}
+
+func (x *GetChunkCryptoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetChunkCryptoResponse.ProtoReflect.Descriptor instead.
+func (*GetChunkCryptoResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *GetChunkCryptoResponse) GetCrypto() *ChunkCrypto {
+	if x != nil {
+		return x.Crypto
+	}
+	return nil
+}
+
+type DeleteChunkCryptoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	ChunkId       string                 `protobuf:"bytes,2,opt,name=chunk_id,json=chunkId,proto3" json:"chunk_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteChunkCryptoRequest) Reset() {
+	*x = DeleteChunkCryptoRequest{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteChunkCryptoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteChunkCryptoRequest) ProtoMessage() {}
+
+func (x *DeleteChunkCryptoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteChunkCryptoRequest.ProtoReflect.Descriptor instead.
+func (*DeleteChunkCryptoRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *DeleteChunkCryptoRequest) GetVolumeId() string {
+	if x != nil {
+		return x.VolumeId
+	}
+	return ""
+}
+
+func (x *DeleteChunkCryptoRequest) GetChunkId() string {
+	if x != nil {
+		return x.ChunkId
+	}
+	return ""
+}
+
+type DeleteChunkCryptoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteChunkCryptoResponse) Reset() {
+	*x = DeleteChunkCryptoResponse{}
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteChunkCryptoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteChunkCryptoResponse) ProtoMessage() {}
+
+func (x *DeleteChunkCryptoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_metadata_metadata_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteChunkCryptoResponse.ProtoReflect.Descriptor instead.
+func (*DeleteChunkCryptoResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_metadata_metadata_proto_rawDescGZIP(), []int{114}
+}
+
+var File_api_proto_metadata_metadata_proto protoreflect.FileDescriptor
+
+const file_api_proto_metadata_metadata_proto_rawDesc = "" +
 	"\n" +
-	"\x17metadata/metadata.proto\x12\bmetadata\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xe4\x03\n" +
+	"!api/proto/metadata/metadata.proto\x12\bmetadata\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xe4\x03\n" +
 	"\n" +
 	"VolumeMeta\x12\x1b\n" +
 	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12\x12\n" +
@@ -6572,7 +6921,26 @@ const file_metadata_metadata_proto_rawDesc = "" +
 	"\x13metadata_disks_seen\x18\x03 \x01(\rR\x11metadataDisksSeen\"=\n" +
 	"\x13BadgerSnapshotEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value*h\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"\x89\x01\n" +
+	"\vChunkCrypto\x12\x19\n" +
+	"\bchunk_id\x18\x01 \x01(\tR\achunkId\x12%\n" +
+	"\x0eplaintext_hash\x18\x02 \x01(\fR\rplaintextHash\x12\x19\n" +
+	"\bauth_tag\x18\x03 \x01(\fR\aauthTag\x12\x1d\n" +
+	"\n" +
+	"dk_version\x18\x04 \x01(\rR\tdkVersion\"c\n" +
+	"\x15SetChunkCryptoRequest\x12\x1b\n" +
+	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12-\n" +
+	"\x06crypto\x18\x02 \x01(\v2\x15.metadata.ChunkCryptoR\x06crypto\"\x18\n" +
+	"\x16SetChunkCryptoResponse\"O\n" +
+	"\x15GetChunkCryptoRequest\x12\x1b\n" +
+	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12\x19\n" +
+	"\bchunk_id\x18\x02 \x01(\tR\achunkId\"G\n" +
+	"\x16GetChunkCryptoResponse\x12-\n" +
+	"\x06crypto\x18\x01 \x01(\v2\x15.metadata.ChunkCryptoR\x06crypto\"R\n" +
+	"\x18DeleteChunkCryptoRequest\x12\x1b\n" +
+	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12\x19\n" +
+	"\bchunk_id\x18\x02 \x01(\tR\achunkId\"\x1b\n" +
+	"\x19DeleteChunkCryptoResponse*h\n" +
 	"\tInodeType\x12\x1a\n" +
 	"\x16INODE_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fINODE_TYPE_FILE\x10\x01\x12\x12\n" +
@@ -6591,7 +6959,7 @@ const file_metadata_metadata_proto_rawDesc = "" +
 	"\x18COMPLIANCE_STATE_UNKNOWN\x10\x01\x12\x1e\n" +
 	"\x1aCOMPLIANCE_STATE_COMPLIANT\x10\x02\x12\x1d\n" +
 	"\x19COMPLIANCE_STATE_DEGRADED\x10\x03\x12\"\n" +
-	"\x1eCOMPLIANCE_STATE_NON_COMPLIANT\x10\x042\xbf#\n" +
+	"\x1eCOMPLIANCE_STATE_NON_COMPLIANT\x10\x042\xc7%\n" +
 	"\x0fMetadataService\x12G\n" +
 	"\rPutVolumeMeta\x12\x1e.metadata.PutVolumeMetaRequest\x1a\x16.google.protobuf.Empty\x12P\n" +
 	"\rGetVolumeMeta\x12\x1e.metadata.GetVolumeMetaRequest\x1a\x1f.metadata.GetVolumeMetaResponse\x12M\n" +
@@ -6649,24 +7017,27 @@ const file_metadata_metadata_proto_rawDesc = "" +
 	"\x15ListHealTasksByVolume\x12&.metadata.ListHealTasksByVolumeRequest\x1a'.metadata.ListHealTasksByVolumeResponse\x12I\n" +
 	"\x0eDeleteHealTask\x12\x1f.metadata.DeleteHealTaskRequest\x1a\x16.google.protobuf.Empty\x12=\n" +
 	"\bSetQuota\x12\x19.metadata.SetQuotaRequest\x1a\x16.google.protobuf.Empty\x12A\n" +
-	"\bGetUsage\x12\x19.metadata.GetUsageRequest\x1a\x1a.metadata.GetUsageResponse\x12\\\n" +
+	"\bGetUsage\x12\x19.metadata.GetUsageRequest\x1a\x1a.metadata.GetUsageResponse\x12S\n" +
+	"\x0eSetChunkCrypto\x12\x1f.metadata.SetChunkCryptoRequest\x1a .metadata.SetChunkCryptoResponse\x12S\n" +
+	"\x0eGetChunkCrypto\x12\x1f.metadata.GetChunkCryptoRequest\x1a .metadata.GetChunkCryptoResponse\x12\\\n" +
+	"\x11DeleteChunkCrypto\x12\".metadata.DeleteChunkCryptoRequest\x1a#.metadata.DeleteChunkCryptoResponse\x12\\\n" +
 	"\x11ReportSuperblocks\x12\".metadata.ReportSuperblocksRequest\x1a#.metadata.ReportSuperblocksResponseB8Z6github.com/azrtydxb/novanas/storage/api/proto/metadatab\x06proto3"
 
 var (
-	file_metadata_metadata_proto_rawDescOnce sync.Once
-	file_metadata_metadata_proto_rawDescData []byte
+	file_api_proto_metadata_metadata_proto_rawDescOnce sync.Once
+	file_api_proto_metadata_metadata_proto_rawDescData []byte
 )
 
-func file_metadata_metadata_proto_rawDescGZIP() []byte {
-	file_metadata_metadata_proto_rawDescOnce.Do(func() {
-		file_metadata_metadata_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_metadata_metadata_proto_rawDesc), len(file_metadata_metadata_proto_rawDesc)))
+func file_api_proto_metadata_metadata_proto_rawDescGZIP() []byte {
+	file_api_proto_metadata_metadata_proto_rawDescOnce.Do(func() {
+		file_api_proto_metadata_metadata_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_api_proto_metadata_metadata_proto_rawDesc), len(file_api_proto_metadata_metadata_proto_rawDesc)))
 	})
-	return file_metadata_metadata_proto_rawDescData
+	return file_api_proto_metadata_metadata_proto_rawDescData
 }
 
-var file_metadata_metadata_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_metadata_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 112)
-var file_metadata_metadata_proto_goTypes = []any{
+var file_api_proto_metadata_metadata_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_api_proto_metadata_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 119)
+var file_api_proto_metadata_metadata_proto_goTypes = []any{
 	(InodeType)(0),                        // 0: metadata.InodeType
 	(LockType)(0),                         // 1: metadata.LockType
 	(ProtectionMode)(0),                   // 2: metadata.ProtectionMode
@@ -6779,21 +7150,28 @@ var file_metadata_metadata_proto_goTypes = []any{
 	(*ReportSuperblocksRequest)(nil),      // 109: metadata.ReportSuperblocksRequest
 	(*ReportSuperblocksResponse)(nil),     // 110: metadata.ReportSuperblocksResponse
 	(*BadgerSnapshotEntry)(nil),           // 111: metadata.BadgerSnapshotEntry
-	nil,                                   // 112: metadata.InodeMeta.XattrsEntry
-	nil,                                   // 113: metadata.ObjectMeta.UserMetaEntry
-	nil,                                   // 114: metadata.FsmSnapshot.BucketsEntry
-	nil,                                   // 115: metadata.FsmBucket.EntriesEntry
-	(*durationpb.Duration)(nil),           // 116: google.protobuf.Duration
-	(*emptypb.Empty)(nil),                 // 117: google.protobuf.Empty
+	(*ChunkCrypto)(nil),                   // 112: metadata.ChunkCrypto
+	(*SetChunkCryptoRequest)(nil),         // 113: metadata.SetChunkCryptoRequest
+	(*SetChunkCryptoResponse)(nil),        // 114: metadata.SetChunkCryptoResponse
+	(*GetChunkCryptoRequest)(nil),         // 115: metadata.GetChunkCryptoRequest
+	(*GetChunkCryptoResponse)(nil),        // 116: metadata.GetChunkCryptoResponse
+	(*DeleteChunkCryptoRequest)(nil),      // 117: metadata.DeleteChunkCryptoRequest
+	(*DeleteChunkCryptoResponse)(nil),     // 118: metadata.DeleteChunkCryptoResponse
+	nil,                                   // 119: metadata.InodeMeta.XattrsEntry
+	nil,                                   // 120: metadata.ObjectMeta.UserMetaEntry
+	nil,                                   // 121: metadata.FsmSnapshot.BucketsEntry
+	nil,                                   // 122: metadata.FsmBucket.EntriesEntry
+	(*durationpb.Duration)(nil),           // 123: google.protobuf.Duration
+	(*emptypb.Empty)(nil),                 // 124: google.protobuf.Empty
 }
-var file_metadata_metadata_proto_depIdxs = []int32{
+var file_api_proto_metadata_metadata_proto_depIdxs = []int32{
 	18,  // 0: metadata.VolumeMeta.data_protection:type_name -> metadata.DataProtectionConfig
 	14,  // 1: metadata.VolumeMeta.protection_profile:type_name -> metadata.ProtectionProfile
 	17,  // 2: metadata.VolumeMeta.compliance_info:type_name -> metadata.ComplianceInfo
 	0,   // 3: metadata.InodeMeta.type:type_name -> metadata.InodeType
-	112, // 4: metadata.InodeMeta.xattrs:type_name -> metadata.InodeMeta.XattrsEntry
+	119, // 4: metadata.InodeMeta.xattrs:type_name -> metadata.InodeMeta.XattrsEntry
 	0,   // 5: metadata.DirEntry.type:type_name -> metadata.InodeType
-	113, // 6: metadata.ObjectMeta.user_meta:type_name -> metadata.ObjectMeta.UserMetaEntry
+	120, // 6: metadata.ObjectMeta.user_meta:type_name -> metadata.ObjectMeta.UserMetaEntry
 	12,  // 7: metadata.MultipartUpload.parts:type_name -> metadata.MultipartPart
 	2,   // 8: metadata.ProtectionProfile.mode:type_name -> metadata.ProtectionMode
 	15,  // 9: metadata.ProtectionProfile.replication:type_name -> metadata.ReplicationProfile
@@ -6830,8 +7208,8 @@ var file_metadata_metadata_proto_depIdxs = []int32{
 	6,   // 40: metadata.GetNodeMetaResponse.meta:type_name -> metadata.NodeMeta
 	6,   // 41: metadata.ListNodeMetasResponse.metas:type_name -> metadata.NodeMeta
 	1,   // 42: metadata.AcquireLockRequest.type:type_name -> metadata.LockType
-	116, // 43: metadata.AcquireLockRequest.ttl:type_name -> google.protobuf.Duration
-	116, // 44: metadata.RenewLockRequest.ttl:type_name -> google.protobuf.Duration
+	123, // 43: metadata.AcquireLockRequest.ttl:type_name -> google.protobuf.Duration
+	123, // 44: metadata.RenewLockRequest.ttl:type_name -> google.protobuf.Duration
 	19,  // 45: metadata.RenewLockResponse.lease:type_name -> metadata.LockLease
 	1,   // 46: metadata.TestLockRequest.type:type_name -> metadata.LockType
 	19,  // 47: metadata.TestLockResponse.conflicting_lock:type_name -> metadata.LockLease
@@ -6847,154 +7225,162 @@ var file_metadata_metadata_proto_depIdxs = []int32{
 	92,  // 57: metadata.ListHealTasksByVolumeResponse.tasks:type_name -> metadata.HealTaskMsg
 	100, // 58: metadata.SetQuotaRequest.spec:type_name -> metadata.QuotaSpecMsg
 	101, // 59: metadata.GetUsageResponse.usage:type_name -> metadata.QuotaUsageMsg
-	114, // 60: metadata.FsmSnapshot.buckets:type_name -> metadata.FsmSnapshot.BucketsEntry
-	115, // 61: metadata.FsmBucket.entries:type_name -> metadata.FsmBucket.EntriesEntry
+	121, // 60: metadata.FsmSnapshot.buckets:type_name -> metadata.FsmSnapshot.BucketsEntry
+	122, // 61: metadata.FsmBucket.entries:type_name -> metadata.FsmBucket.EntriesEntry
 	108, // 62: metadata.ReportSuperblocksRequest.superblocks:type_name -> metadata.SuperblockInfo
-	107, // 63: metadata.FsmSnapshot.BucketsEntry.value:type_name -> metadata.FsmBucket
-	22,  // 64: metadata.MetadataService.PutVolumeMeta:input_type -> metadata.PutVolumeMetaRequest
-	23,  // 65: metadata.MetadataService.GetVolumeMeta:input_type -> metadata.GetVolumeMetaRequest
-	25,  // 66: metadata.MetadataService.DeleteVolumeMeta:input_type -> metadata.DeleteVolumeMetaRequest
-	117, // 67: metadata.MetadataService.ListVolumesMeta:input_type -> google.protobuf.Empty
-	27,  // 68: metadata.MetadataService.PutPlacementMap:input_type -> metadata.PutPlacementMapRequest
-	28,  // 69: metadata.MetadataService.GetPlacementMap:input_type -> metadata.GetPlacementMapRequest
-	30,  // 70: metadata.MetadataService.DeletePlacementMap:input_type -> metadata.DeletePlacementMapRequest
-	117, // 71: metadata.MetadataService.ListPlacementMaps:input_type -> google.protobuf.Empty
-	32,  // 72: metadata.MetadataService.PutObjectMeta:input_type -> metadata.PutObjectMetaRequest
-	33,  // 73: metadata.MetadataService.GetObjectMeta:input_type -> metadata.GetObjectMetaRequest
-	35,  // 74: metadata.MetadataService.DeleteObjectMeta:input_type -> metadata.DeleteObjectMetaRequest
-	36,  // 75: metadata.MetadataService.ListObjectMetas:input_type -> metadata.ListObjectMetasRequest
-	38,  // 76: metadata.MetadataService.PutBucketMeta:input_type -> metadata.PutBucketMetaRequest
-	39,  // 77: metadata.MetadataService.GetBucketMeta:input_type -> metadata.GetBucketMetaRequest
-	41,  // 78: metadata.MetadataService.DeleteBucketMeta:input_type -> metadata.DeleteBucketMetaRequest
-	117, // 79: metadata.MetadataService.ListBucketMetas:input_type -> google.protobuf.Empty
-	43,  // 80: metadata.MetadataService.PutMultipartUpload:input_type -> metadata.PutMultipartUploadRequest
-	44,  // 81: metadata.MetadataService.GetMultipartUpload:input_type -> metadata.GetMultipartUploadRequest
-	46,  // 82: metadata.MetadataService.DeleteMultipartUpload:input_type -> metadata.DeleteMultipartUploadRequest
-	47,  // 83: metadata.MetadataService.PutSnapshot:input_type -> metadata.PutSnapshotRequest
-	48,  // 84: metadata.MetadataService.GetSnapshot:input_type -> metadata.GetSnapshotRequest
-	50,  // 85: metadata.MetadataService.DeleteSnapshot:input_type -> metadata.DeleteSnapshotRequest
-	117, // 86: metadata.MetadataService.ListSnapshots:input_type -> google.protobuf.Empty
-	52,  // 87: metadata.MetadataService.CreateInode:input_type -> metadata.CreateInodeRequest
-	53,  // 88: metadata.MetadataService.GetInode:input_type -> metadata.GetInodeRequest
-	55,  // 89: metadata.MetadataService.UpdateInode:input_type -> metadata.UpdateInodeRequest
-	56,  // 90: metadata.MetadataService.DeleteInode:input_type -> metadata.DeleteInodeRequest
-	117, // 91: metadata.MetadataService.AllocateIno:input_type -> google.protobuf.Empty
-	58,  // 92: metadata.MetadataService.CreateDirEntry:input_type -> metadata.CreateDirEntryRequest
-	59,  // 93: metadata.MetadataService.DeleteDirEntry:input_type -> metadata.DeleteDirEntryRequest
-	60,  // 94: metadata.MetadataService.LookupDirEntry:input_type -> metadata.LookupDirEntryRequest
-	62,  // 95: metadata.MetadataService.ListDirectory:input_type -> metadata.ListDirectoryRequest
-	64,  // 96: metadata.MetadataService.PutNodeMeta:input_type -> metadata.PutNodeMetaRequest
-	65,  // 97: metadata.MetadataService.GetNodeMeta:input_type -> metadata.GetNodeMetaRequest
-	67,  // 98: metadata.MetadataService.DeleteNodeMeta:input_type -> metadata.DeleteNodeMetaRequest
-	117, // 99: metadata.MetadataService.ListNodeMetas:input_type -> google.protobuf.Empty
-	69,  // 100: metadata.MetadataService.AcquireLock:input_type -> metadata.AcquireLockRequest
-	71,  // 101: metadata.MetadataService.RenewLock:input_type -> metadata.RenewLockRequest
-	73,  // 102: metadata.MetadataService.ReleaseLock:input_type -> metadata.ReleaseLockRequest
-	74,  // 103: metadata.MetadataService.TestLock:input_type -> metadata.TestLockRequest
-	76,  // 104: metadata.MetadataService.GetLock:input_type -> metadata.GetLockRequest
-	78,  // 105: metadata.MetadataService.ListLocks:input_type -> metadata.ListLocksRequest
-	117, // 106: metadata.MetadataService.CleanupExpiredLocks:input_type -> google.protobuf.Empty
-	81,  // 107: metadata.MetadataService.SetVolumeOwner:input_type -> metadata.SetVolumeOwnerRequest
-	82,  // 108: metadata.MetadataService.GetVolumeOwner:input_type -> metadata.GetVolumeOwnerRequest
-	84,  // 109: metadata.MetadataService.RequestOwnership:input_type -> metadata.RequestOwnershipRequest
-	86,  // 110: metadata.MetadataService.PutShardPlacement:input_type -> metadata.PutShardPlacementRequest
-	87,  // 111: metadata.MetadataService.GetShardPlacements:input_type -> metadata.GetShardPlacementsRequest
-	89,  // 112: metadata.MetadataService.DeleteShardPlacement:input_type -> metadata.DeleteShardPlacementRequest
-	90,  // 113: metadata.MetadataService.JoinCluster:input_type -> metadata.JoinClusterRequest
-	93,  // 114: metadata.MetadataService.PutHealTask:input_type -> metadata.PutHealTaskRequest
-	94,  // 115: metadata.MetadataService.GetHealTask:input_type -> metadata.GetHealTaskRequest
-	117, // 116: metadata.MetadataService.ListPendingHealTasks:input_type -> google.protobuf.Empty
-	97,  // 117: metadata.MetadataService.ListHealTasksByVolume:input_type -> metadata.ListHealTasksByVolumeRequest
-	99,  // 118: metadata.MetadataService.DeleteHealTask:input_type -> metadata.DeleteHealTaskRequest
-	102, // 119: metadata.MetadataService.SetQuota:input_type -> metadata.SetQuotaRequest
-	103, // 120: metadata.MetadataService.GetUsage:input_type -> metadata.GetUsageRequest
-	109, // 121: metadata.MetadataService.ReportSuperblocks:input_type -> metadata.ReportSuperblocksRequest
-	117, // 122: metadata.MetadataService.PutVolumeMeta:output_type -> google.protobuf.Empty
-	24,  // 123: metadata.MetadataService.GetVolumeMeta:output_type -> metadata.GetVolumeMetaResponse
-	117, // 124: metadata.MetadataService.DeleteVolumeMeta:output_type -> google.protobuf.Empty
-	26,  // 125: metadata.MetadataService.ListVolumesMeta:output_type -> metadata.ListVolumesMetaResponse
-	117, // 126: metadata.MetadataService.PutPlacementMap:output_type -> google.protobuf.Empty
-	29,  // 127: metadata.MetadataService.GetPlacementMap:output_type -> metadata.GetPlacementMapResponse
-	117, // 128: metadata.MetadataService.DeletePlacementMap:output_type -> google.protobuf.Empty
-	31,  // 129: metadata.MetadataService.ListPlacementMaps:output_type -> metadata.ListPlacementMapsResponse
-	117, // 130: metadata.MetadataService.PutObjectMeta:output_type -> google.protobuf.Empty
-	34,  // 131: metadata.MetadataService.GetObjectMeta:output_type -> metadata.GetObjectMetaResponse
-	117, // 132: metadata.MetadataService.DeleteObjectMeta:output_type -> google.protobuf.Empty
-	37,  // 133: metadata.MetadataService.ListObjectMetas:output_type -> metadata.ListObjectMetasResponse
-	117, // 134: metadata.MetadataService.PutBucketMeta:output_type -> google.protobuf.Empty
-	40,  // 135: metadata.MetadataService.GetBucketMeta:output_type -> metadata.GetBucketMetaResponse
-	117, // 136: metadata.MetadataService.DeleteBucketMeta:output_type -> google.protobuf.Empty
-	42,  // 137: metadata.MetadataService.ListBucketMetas:output_type -> metadata.ListBucketMetasResponse
-	117, // 138: metadata.MetadataService.PutMultipartUpload:output_type -> google.protobuf.Empty
-	45,  // 139: metadata.MetadataService.GetMultipartUpload:output_type -> metadata.GetMultipartUploadResponse
-	117, // 140: metadata.MetadataService.DeleteMultipartUpload:output_type -> google.protobuf.Empty
-	117, // 141: metadata.MetadataService.PutSnapshot:output_type -> google.protobuf.Empty
-	49,  // 142: metadata.MetadataService.GetSnapshot:output_type -> metadata.GetSnapshotResponse
-	117, // 143: metadata.MetadataService.DeleteSnapshot:output_type -> google.protobuf.Empty
-	51,  // 144: metadata.MetadataService.ListSnapshots:output_type -> metadata.ListSnapshotsResponse
-	117, // 145: metadata.MetadataService.CreateInode:output_type -> google.protobuf.Empty
-	54,  // 146: metadata.MetadataService.GetInode:output_type -> metadata.GetInodeResponse
-	117, // 147: metadata.MetadataService.UpdateInode:output_type -> google.protobuf.Empty
-	117, // 148: metadata.MetadataService.DeleteInode:output_type -> google.protobuf.Empty
-	57,  // 149: metadata.MetadataService.AllocateIno:output_type -> metadata.AllocateInoResponse
-	117, // 150: metadata.MetadataService.CreateDirEntry:output_type -> google.protobuf.Empty
-	117, // 151: metadata.MetadataService.DeleteDirEntry:output_type -> google.protobuf.Empty
-	61,  // 152: metadata.MetadataService.LookupDirEntry:output_type -> metadata.LookupDirEntryResponse
-	63,  // 153: metadata.MetadataService.ListDirectory:output_type -> metadata.ListDirectoryResponse
-	117, // 154: metadata.MetadataService.PutNodeMeta:output_type -> google.protobuf.Empty
-	66,  // 155: metadata.MetadataService.GetNodeMeta:output_type -> metadata.GetNodeMetaResponse
-	117, // 156: metadata.MetadataService.DeleteNodeMeta:output_type -> google.protobuf.Empty
-	68,  // 157: metadata.MetadataService.ListNodeMetas:output_type -> metadata.ListNodeMetasResponse
-	70,  // 158: metadata.MetadataService.AcquireLock:output_type -> metadata.AcquireLockResponse
-	72,  // 159: metadata.MetadataService.RenewLock:output_type -> metadata.RenewLockResponse
-	117, // 160: metadata.MetadataService.ReleaseLock:output_type -> google.protobuf.Empty
-	75,  // 161: metadata.MetadataService.TestLock:output_type -> metadata.TestLockResponse
-	77,  // 162: metadata.MetadataService.GetLock:output_type -> metadata.GetLockResponse
-	79,  // 163: metadata.MetadataService.ListLocks:output_type -> metadata.ListLocksResponse
-	80,  // 164: metadata.MetadataService.CleanupExpiredLocks:output_type -> metadata.CleanupExpiredLocksResponse
-	117, // 165: metadata.MetadataService.SetVolumeOwner:output_type -> google.protobuf.Empty
-	83,  // 166: metadata.MetadataService.GetVolumeOwner:output_type -> metadata.GetVolumeOwnerResponse
-	85,  // 167: metadata.MetadataService.RequestOwnership:output_type -> metadata.RequestOwnershipResponse
-	117, // 168: metadata.MetadataService.PutShardPlacement:output_type -> google.protobuf.Empty
-	88,  // 169: metadata.MetadataService.GetShardPlacements:output_type -> metadata.GetShardPlacementsResponse
-	117, // 170: metadata.MetadataService.DeleteShardPlacement:output_type -> google.protobuf.Empty
-	91,  // 171: metadata.MetadataService.JoinCluster:output_type -> metadata.JoinClusterResponse
-	117, // 172: metadata.MetadataService.PutHealTask:output_type -> google.protobuf.Empty
-	95,  // 173: metadata.MetadataService.GetHealTask:output_type -> metadata.GetHealTaskResponse
-	96,  // 174: metadata.MetadataService.ListPendingHealTasks:output_type -> metadata.ListPendingHealTasksResponse
-	98,  // 175: metadata.MetadataService.ListHealTasksByVolume:output_type -> metadata.ListHealTasksByVolumeResponse
-	117, // 176: metadata.MetadataService.DeleteHealTask:output_type -> google.protobuf.Empty
-	117, // 177: metadata.MetadataService.SetQuota:output_type -> google.protobuf.Empty
-	104, // 178: metadata.MetadataService.GetUsage:output_type -> metadata.GetUsageResponse
-	110, // 179: metadata.MetadataService.ReportSuperblocks:output_type -> metadata.ReportSuperblocksResponse
-	122, // [122:180] is the sub-list for method output_type
-	64,  // [64:122] is the sub-list for method input_type
-	64,  // [64:64] is the sub-list for extension type_name
-	64,  // [64:64] is the sub-list for extension extendee
-	0,   // [0:64] is the sub-list for field type_name
+	112, // 63: metadata.SetChunkCryptoRequest.crypto:type_name -> metadata.ChunkCrypto
+	112, // 64: metadata.GetChunkCryptoResponse.crypto:type_name -> metadata.ChunkCrypto
+	107, // 65: metadata.FsmSnapshot.BucketsEntry.value:type_name -> metadata.FsmBucket
+	22,  // 66: metadata.MetadataService.PutVolumeMeta:input_type -> metadata.PutVolumeMetaRequest
+	23,  // 67: metadata.MetadataService.GetVolumeMeta:input_type -> metadata.GetVolumeMetaRequest
+	25,  // 68: metadata.MetadataService.DeleteVolumeMeta:input_type -> metadata.DeleteVolumeMetaRequest
+	124, // 69: metadata.MetadataService.ListVolumesMeta:input_type -> google.protobuf.Empty
+	27,  // 70: metadata.MetadataService.PutPlacementMap:input_type -> metadata.PutPlacementMapRequest
+	28,  // 71: metadata.MetadataService.GetPlacementMap:input_type -> metadata.GetPlacementMapRequest
+	30,  // 72: metadata.MetadataService.DeletePlacementMap:input_type -> metadata.DeletePlacementMapRequest
+	124, // 73: metadata.MetadataService.ListPlacementMaps:input_type -> google.protobuf.Empty
+	32,  // 74: metadata.MetadataService.PutObjectMeta:input_type -> metadata.PutObjectMetaRequest
+	33,  // 75: metadata.MetadataService.GetObjectMeta:input_type -> metadata.GetObjectMetaRequest
+	35,  // 76: metadata.MetadataService.DeleteObjectMeta:input_type -> metadata.DeleteObjectMetaRequest
+	36,  // 77: metadata.MetadataService.ListObjectMetas:input_type -> metadata.ListObjectMetasRequest
+	38,  // 78: metadata.MetadataService.PutBucketMeta:input_type -> metadata.PutBucketMetaRequest
+	39,  // 79: metadata.MetadataService.GetBucketMeta:input_type -> metadata.GetBucketMetaRequest
+	41,  // 80: metadata.MetadataService.DeleteBucketMeta:input_type -> metadata.DeleteBucketMetaRequest
+	124, // 81: metadata.MetadataService.ListBucketMetas:input_type -> google.protobuf.Empty
+	43,  // 82: metadata.MetadataService.PutMultipartUpload:input_type -> metadata.PutMultipartUploadRequest
+	44,  // 83: metadata.MetadataService.GetMultipartUpload:input_type -> metadata.GetMultipartUploadRequest
+	46,  // 84: metadata.MetadataService.DeleteMultipartUpload:input_type -> metadata.DeleteMultipartUploadRequest
+	47,  // 85: metadata.MetadataService.PutSnapshot:input_type -> metadata.PutSnapshotRequest
+	48,  // 86: metadata.MetadataService.GetSnapshot:input_type -> metadata.GetSnapshotRequest
+	50,  // 87: metadata.MetadataService.DeleteSnapshot:input_type -> metadata.DeleteSnapshotRequest
+	124, // 88: metadata.MetadataService.ListSnapshots:input_type -> google.protobuf.Empty
+	52,  // 89: metadata.MetadataService.CreateInode:input_type -> metadata.CreateInodeRequest
+	53,  // 90: metadata.MetadataService.GetInode:input_type -> metadata.GetInodeRequest
+	55,  // 91: metadata.MetadataService.UpdateInode:input_type -> metadata.UpdateInodeRequest
+	56,  // 92: metadata.MetadataService.DeleteInode:input_type -> metadata.DeleteInodeRequest
+	124, // 93: metadata.MetadataService.AllocateIno:input_type -> google.protobuf.Empty
+	58,  // 94: metadata.MetadataService.CreateDirEntry:input_type -> metadata.CreateDirEntryRequest
+	59,  // 95: metadata.MetadataService.DeleteDirEntry:input_type -> metadata.DeleteDirEntryRequest
+	60,  // 96: metadata.MetadataService.LookupDirEntry:input_type -> metadata.LookupDirEntryRequest
+	62,  // 97: metadata.MetadataService.ListDirectory:input_type -> metadata.ListDirectoryRequest
+	64,  // 98: metadata.MetadataService.PutNodeMeta:input_type -> metadata.PutNodeMetaRequest
+	65,  // 99: metadata.MetadataService.GetNodeMeta:input_type -> metadata.GetNodeMetaRequest
+	67,  // 100: metadata.MetadataService.DeleteNodeMeta:input_type -> metadata.DeleteNodeMetaRequest
+	124, // 101: metadata.MetadataService.ListNodeMetas:input_type -> google.protobuf.Empty
+	69,  // 102: metadata.MetadataService.AcquireLock:input_type -> metadata.AcquireLockRequest
+	71,  // 103: metadata.MetadataService.RenewLock:input_type -> metadata.RenewLockRequest
+	73,  // 104: metadata.MetadataService.ReleaseLock:input_type -> metadata.ReleaseLockRequest
+	74,  // 105: metadata.MetadataService.TestLock:input_type -> metadata.TestLockRequest
+	76,  // 106: metadata.MetadataService.GetLock:input_type -> metadata.GetLockRequest
+	78,  // 107: metadata.MetadataService.ListLocks:input_type -> metadata.ListLocksRequest
+	124, // 108: metadata.MetadataService.CleanupExpiredLocks:input_type -> google.protobuf.Empty
+	81,  // 109: metadata.MetadataService.SetVolumeOwner:input_type -> metadata.SetVolumeOwnerRequest
+	82,  // 110: metadata.MetadataService.GetVolumeOwner:input_type -> metadata.GetVolumeOwnerRequest
+	84,  // 111: metadata.MetadataService.RequestOwnership:input_type -> metadata.RequestOwnershipRequest
+	86,  // 112: metadata.MetadataService.PutShardPlacement:input_type -> metadata.PutShardPlacementRequest
+	87,  // 113: metadata.MetadataService.GetShardPlacements:input_type -> metadata.GetShardPlacementsRequest
+	89,  // 114: metadata.MetadataService.DeleteShardPlacement:input_type -> metadata.DeleteShardPlacementRequest
+	90,  // 115: metadata.MetadataService.JoinCluster:input_type -> metadata.JoinClusterRequest
+	93,  // 116: metadata.MetadataService.PutHealTask:input_type -> metadata.PutHealTaskRequest
+	94,  // 117: metadata.MetadataService.GetHealTask:input_type -> metadata.GetHealTaskRequest
+	124, // 118: metadata.MetadataService.ListPendingHealTasks:input_type -> google.protobuf.Empty
+	97,  // 119: metadata.MetadataService.ListHealTasksByVolume:input_type -> metadata.ListHealTasksByVolumeRequest
+	99,  // 120: metadata.MetadataService.DeleteHealTask:input_type -> metadata.DeleteHealTaskRequest
+	102, // 121: metadata.MetadataService.SetQuota:input_type -> metadata.SetQuotaRequest
+	103, // 122: metadata.MetadataService.GetUsage:input_type -> metadata.GetUsageRequest
+	113, // 123: metadata.MetadataService.SetChunkCrypto:input_type -> metadata.SetChunkCryptoRequest
+	115, // 124: metadata.MetadataService.GetChunkCrypto:input_type -> metadata.GetChunkCryptoRequest
+	117, // 125: metadata.MetadataService.DeleteChunkCrypto:input_type -> metadata.DeleteChunkCryptoRequest
+	109, // 126: metadata.MetadataService.ReportSuperblocks:input_type -> metadata.ReportSuperblocksRequest
+	124, // 127: metadata.MetadataService.PutVolumeMeta:output_type -> google.protobuf.Empty
+	24,  // 128: metadata.MetadataService.GetVolumeMeta:output_type -> metadata.GetVolumeMetaResponse
+	124, // 129: metadata.MetadataService.DeleteVolumeMeta:output_type -> google.protobuf.Empty
+	26,  // 130: metadata.MetadataService.ListVolumesMeta:output_type -> metadata.ListVolumesMetaResponse
+	124, // 131: metadata.MetadataService.PutPlacementMap:output_type -> google.protobuf.Empty
+	29,  // 132: metadata.MetadataService.GetPlacementMap:output_type -> metadata.GetPlacementMapResponse
+	124, // 133: metadata.MetadataService.DeletePlacementMap:output_type -> google.protobuf.Empty
+	31,  // 134: metadata.MetadataService.ListPlacementMaps:output_type -> metadata.ListPlacementMapsResponse
+	124, // 135: metadata.MetadataService.PutObjectMeta:output_type -> google.protobuf.Empty
+	34,  // 136: metadata.MetadataService.GetObjectMeta:output_type -> metadata.GetObjectMetaResponse
+	124, // 137: metadata.MetadataService.DeleteObjectMeta:output_type -> google.protobuf.Empty
+	37,  // 138: metadata.MetadataService.ListObjectMetas:output_type -> metadata.ListObjectMetasResponse
+	124, // 139: metadata.MetadataService.PutBucketMeta:output_type -> google.protobuf.Empty
+	40,  // 140: metadata.MetadataService.GetBucketMeta:output_type -> metadata.GetBucketMetaResponse
+	124, // 141: metadata.MetadataService.DeleteBucketMeta:output_type -> google.protobuf.Empty
+	42,  // 142: metadata.MetadataService.ListBucketMetas:output_type -> metadata.ListBucketMetasResponse
+	124, // 143: metadata.MetadataService.PutMultipartUpload:output_type -> google.protobuf.Empty
+	45,  // 144: metadata.MetadataService.GetMultipartUpload:output_type -> metadata.GetMultipartUploadResponse
+	124, // 145: metadata.MetadataService.DeleteMultipartUpload:output_type -> google.protobuf.Empty
+	124, // 146: metadata.MetadataService.PutSnapshot:output_type -> google.protobuf.Empty
+	49,  // 147: metadata.MetadataService.GetSnapshot:output_type -> metadata.GetSnapshotResponse
+	124, // 148: metadata.MetadataService.DeleteSnapshot:output_type -> google.protobuf.Empty
+	51,  // 149: metadata.MetadataService.ListSnapshots:output_type -> metadata.ListSnapshotsResponse
+	124, // 150: metadata.MetadataService.CreateInode:output_type -> google.protobuf.Empty
+	54,  // 151: metadata.MetadataService.GetInode:output_type -> metadata.GetInodeResponse
+	124, // 152: metadata.MetadataService.UpdateInode:output_type -> google.protobuf.Empty
+	124, // 153: metadata.MetadataService.DeleteInode:output_type -> google.protobuf.Empty
+	57,  // 154: metadata.MetadataService.AllocateIno:output_type -> metadata.AllocateInoResponse
+	124, // 155: metadata.MetadataService.CreateDirEntry:output_type -> google.protobuf.Empty
+	124, // 156: metadata.MetadataService.DeleteDirEntry:output_type -> google.protobuf.Empty
+	61,  // 157: metadata.MetadataService.LookupDirEntry:output_type -> metadata.LookupDirEntryResponse
+	63,  // 158: metadata.MetadataService.ListDirectory:output_type -> metadata.ListDirectoryResponse
+	124, // 159: metadata.MetadataService.PutNodeMeta:output_type -> google.protobuf.Empty
+	66,  // 160: metadata.MetadataService.GetNodeMeta:output_type -> metadata.GetNodeMetaResponse
+	124, // 161: metadata.MetadataService.DeleteNodeMeta:output_type -> google.protobuf.Empty
+	68,  // 162: metadata.MetadataService.ListNodeMetas:output_type -> metadata.ListNodeMetasResponse
+	70,  // 163: metadata.MetadataService.AcquireLock:output_type -> metadata.AcquireLockResponse
+	72,  // 164: metadata.MetadataService.RenewLock:output_type -> metadata.RenewLockResponse
+	124, // 165: metadata.MetadataService.ReleaseLock:output_type -> google.protobuf.Empty
+	75,  // 166: metadata.MetadataService.TestLock:output_type -> metadata.TestLockResponse
+	77,  // 167: metadata.MetadataService.GetLock:output_type -> metadata.GetLockResponse
+	79,  // 168: metadata.MetadataService.ListLocks:output_type -> metadata.ListLocksResponse
+	80,  // 169: metadata.MetadataService.CleanupExpiredLocks:output_type -> metadata.CleanupExpiredLocksResponse
+	124, // 170: metadata.MetadataService.SetVolumeOwner:output_type -> google.protobuf.Empty
+	83,  // 171: metadata.MetadataService.GetVolumeOwner:output_type -> metadata.GetVolumeOwnerResponse
+	85,  // 172: metadata.MetadataService.RequestOwnership:output_type -> metadata.RequestOwnershipResponse
+	124, // 173: metadata.MetadataService.PutShardPlacement:output_type -> google.protobuf.Empty
+	88,  // 174: metadata.MetadataService.GetShardPlacements:output_type -> metadata.GetShardPlacementsResponse
+	124, // 175: metadata.MetadataService.DeleteShardPlacement:output_type -> google.protobuf.Empty
+	91,  // 176: metadata.MetadataService.JoinCluster:output_type -> metadata.JoinClusterResponse
+	124, // 177: metadata.MetadataService.PutHealTask:output_type -> google.protobuf.Empty
+	95,  // 178: metadata.MetadataService.GetHealTask:output_type -> metadata.GetHealTaskResponse
+	96,  // 179: metadata.MetadataService.ListPendingHealTasks:output_type -> metadata.ListPendingHealTasksResponse
+	98,  // 180: metadata.MetadataService.ListHealTasksByVolume:output_type -> metadata.ListHealTasksByVolumeResponse
+	124, // 181: metadata.MetadataService.DeleteHealTask:output_type -> google.protobuf.Empty
+	124, // 182: metadata.MetadataService.SetQuota:output_type -> google.protobuf.Empty
+	104, // 183: metadata.MetadataService.GetUsage:output_type -> metadata.GetUsageResponse
+	114, // 184: metadata.MetadataService.SetChunkCrypto:output_type -> metadata.SetChunkCryptoResponse
+	116, // 185: metadata.MetadataService.GetChunkCrypto:output_type -> metadata.GetChunkCryptoResponse
+	118, // 186: metadata.MetadataService.DeleteChunkCrypto:output_type -> metadata.DeleteChunkCryptoResponse
+	110, // 187: metadata.MetadataService.ReportSuperblocks:output_type -> metadata.ReportSuperblocksResponse
+	127, // [127:188] is the sub-list for method output_type
+	66,  // [66:127] is the sub-list for method input_type
+	66,  // [66:66] is the sub-list for extension type_name
+	66,  // [66:66] is the sub-list for extension extendee
+	0,   // [0:66] is the sub-list for field type_name
 }
 
-func init() { file_metadata_metadata_proto_init() }
-func file_metadata_metadata_proto_init() {
-	if File_metadata_metadata_proto != nil {
+func init() { file_api_proto_metadata_metadata_proto_init() }
+func file_api_proto_metadata_metadata_proto_init() {
+	if File_api_proto_metadata_metadata_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_metadata_metadata_proto_rawDesc), len(file_metadata_metadata_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_metadata_metadata_proto_rawDesc), len(file_api_proto_metadata_metadata_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   112,
+			NumMessages:   119,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_metadata_metadata_proto_goTypes,
-		DependencyIndexes: file_metadata_metadata_proto_depIdxs,
-		EnumInfos:         file_metadata_metadata_proto_enumTypes,
-		MessageInfos:      file_metadata_metadata_proto_msgTypes,
+		GoTypes:           file_api_proto_metadata_metadata_proto_goTypes,
+		DependencyIndexes: file_api_proto_metadata_metadata_proto_depIdxs,
+		EnumInfos:         file_api_proto_metadata_metadata_proto_enumTypes,
+		MessageInfos:      file_api_proto_metadata_metadata_proto_msgTypes,
 	}.Build()
-	File_metadata_metadata_proto = out.File
-	file_metadata_metadata_proto_goTypes = nil
-	file_metadata_metadata_proto_depIdxs = nil
+	File_api_proto_metadata_metadata_proto = out.File
+	file_api_proto_metadata_metadata_proto_goTypes = nil
+	file_api_proto_metadata_metadata_proto_depIdxs = nil
 }
