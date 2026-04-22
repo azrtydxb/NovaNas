@@ -2,13 +2,21 @@ module github.com/azrtydxb/novanas/packages/operators
 
 go 1.25.0
 
+// The operators module imports the storage module's generated proto
+// types and the metadata server for in-process bufconn-based tests.
+// Point Go at the in-tree copy so cross-module resolution works inside
+// the monorepo without needing a tagged release.
+replace github.com/azrtydxb/novanas/storage => ../../storage
+
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
+	github.com/azrtydxb/novanas/storage v0.0.0-00010101000000-000000000000
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
 	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/zap v1.27.1
 	google.golang.org/grpc v1.80.0
+	google.golang.org/protobuf v1.36.11
 	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.35.1
 	k8s.io/client-go v0.35.1
@@ -58,8 +66,7 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
