@@ -5,6 +5,8 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,6 +59,37 @@ func (r *SnapshotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	} else if added {
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// --- action-snapshot-restore annotation -------------------------
+	// Body is expected on a sibling annotation
+	// novanas.io/action-snapshot-restore-target carrying the target
+	// BlockVolume name (API already writes it when invoking restore).
+	if _, err := reconciler.HandleActionAnnotation(ctx, r.Client, &obj, "snapshot-restore",
+		func(ctx context.Context, _ client.Object) error {
+			target := obj.Annotations[reconciler.ActionAnnotationPrefix+"snapshot-restore-target"]
+			if target == "" {
+				logger.Info("snapshot-restore: no target volume annotation; skipping")
+				return nil
+			}
+			logger.Info("snapshot-restore: creating target BlockVolume", "target", target)
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonProvisioning, "snapshot restore requested")
+			gvk := schema.GroupVersionKind{Group: "novanas.io", Version: "v1alpha1", Kind: "BlockVolume"}
+			u := &unstructured.Unstructured{}
+			u.SetGroupVersionKind(gvk)
+			u.SetName(target)
+			u.SetNamespace(obj.Namespace)
+			_ = unstructured.SetNestedMap(u.Object, map[string]any{
+				"restoreFromSnapshot": obj.Name,
+			}, "spec")
+			if cErr := r.Client.Create(ctx, u); cErr != nil && !apierrors.IsAlreadyExists(cErr) {
+				return cErr
+			}
+			// TODO(operators): wire chunk-engine restore so the
+			// volume populator actually writes snapshot bytes.
+			return nil
+		}); err != nil {
+		logger.Error(err, "snapshot-restore handler failed")
 	}
 
 	var st reconciler.StorageOpStatus

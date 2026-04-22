@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,8 +18,12 @@ import (
 
 const finalizerGpuDevice = reconciler.FinalizerPrefix + "gpudevice"
 
-// GpuDeviceReconciler is a status-only observer of a GPU device.
-// Future work: project into a kubevirt passthrough device plugin CR.
+// GpuDeviceReconciler is a status-only observer of a GPU device that
+// also enforces passthrough assignment: when spec.assignedTo =
+// {namespace,name} is set, the controller records the assignment on
+// status and emits an event. Reassignment of a device already bound
+// to a different Vm is refused — the caller must first clear
+// spec.assignedTo.
 type GpuDeviceReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -44,14 +51,83 @@ func (r *GpuDeviceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	logger.V(1).Info("gpu device observed")
-	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "gpu observed")
-	obj.Status.Phase = "Observed"
+	// --- assignedTo reconciliation ----------------------------------
+	desiredNs, desiredName := readGpuAssignment(ctx, r.Client, obj.Name)
+	currentNs := obj.Annotations[reconciler.ActionAnnotationPrefix+"assigned-namespace"]
+	currentName := obj.Annotations[reconciler.ActionAnnotationPrefix+"assigned-name"]
+
+	phase := "Observed"
+	message := "gpu observed"
+	if desiredName != "" {
+		if currentName != "" && (currentName != desiredName || currentNs != desiredNs) {
+			// Refuse reassignment — the caller must null out
+			// spec.assignedTo first.
+			logger.Info("gpu already assigned; refusing reassignment",
+				"current", currentNs+"/"+currentName, "desired", desiredNs+"/"+desiredName)
+			obj.Status.Phase = "Conflict"
+			obj.Status.Conditions = reconciler.MarkFailed(
+				obj.Status.Conditions, obj.Generation,
+				"AlreadyAssigned",
+				"gpu already assigned to "+currentNs+"/"+currentName+
+					"; clear spec.assignedTo before reassigning",
+			)
+			if err := statusUpdate(ctx, r.Client, &obj); err != nil {
+				return ctrl.Result{}, err
+			}
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonFailed, "reassignment blocked")
+			return ctrl.Result{RequeueAfter: defaultRequeuePart2}, nil
+		}
+		// Record the assignment on the CR so subsequent reconciles
+		// can detect reassignment attempts.
+		patched := obj.DeepCopy()
+		if patched.Annotations == nil {
+			patched.Annotations = map[string]string{}
+		}
+		patched.Annotations[reconciler.ActionAnnotationPrefix+"assigned-namespace"] = desiredNs
+		patched.Annotations[reconciler.ActionAnnotationPrefix+"assigned-name"] = desiredName
+		if err := r.Client.Patch(ctx, patched, client.MergeFrom(&obj)); err != nil {
+			logger.V(1).Info("assignment annotation write failed", "error", err.Error())
+		} else {
+			obj = *patched
+		}
+		phase = "Assigned"
+		message = "assigned to " + desiredNs + "/" + desiredName
+		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonExternalSync, "gpu "+message)
+	} else if currentName != "" {
+		// spec.assignedTo cleared — release the device.
+		logger.Info("gpu released", "previous", currentNs+"/"+currentName)
+		patched := obj.DeepCopy()
+		delete(patched.Annotations, reconciler.ActionAnnotationPrefix+"assigned-namespace")
+		delete(patched.Annotations, reconciler.ActionAnnotationPrefix+"assigned-name")
+		if err := r.Client.Patch(ctx, patched, client.MergeFrom(&obj)); err != nil {
+			logger.V(1).Info("assignment clear failed", "error", err.Error())
+		} else {
+			obj = *patched
+		}
+		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonExternalSync, "gpu released")
+	}
+
+	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, message)
+	obj.Status.Phase = phase
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}
-	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonReady, "GpuDevice observed")
+	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonReady, "GpuDevice "+phase)
 	return ctrl.Result{RequeueAfter: defaultRequeuePart2}, nil
+}
+
+// readGpuAssignment returns spec.assignedTo.namespace and .name off
+// the GpuDevice CR via unstructured. Empty strings when unset.
+func readGpuAssignment(ctx context.Context, c client.Client, name string) (string, string) {
+	gvk := schema.GroupVersionKind{Group: "novanas.io", Version: "v1alpha1", Kind: "GpuDevice"}
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	if err := c.Get(ctx, types.NamespacedName{Name: name}, u); err != nil {
+		return "", ""
+	}
+	ns, _, _ := unstructured.NestedString(u.Object, "spec", "assignedTo", "namespace")
+	n, _, _ := unstructured.NestedString(u.Object, "spec", "assignedTo", "name")
+	return ns, n
 }
 
 // SetupWithManager registers the controller with the manager.

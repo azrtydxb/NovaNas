@@ -71,6 +71,14 @@ type VmEngine interface {
 	EnsureVM(ctx context.Context, namespace, name string, spec map[string]interface{}) (phase string, err error)
 	// DeleteVM tears down the backing VM. Absent VMs are not an error.
 	DeleteVM(ctx context.Context, namespace, name string) error
+	// SetPowerState drives the backing VM to the requested power
+	// state. Valid targets are "Running", "Stopped", "Paused". It is
+	// idempotent: re-asserting the current state is a no-op.
+	SetPowerState(ctx context.Context, namespace, name, state string) error
+	// Restart performs a hard-reset on the backing VM's running
+	// instance (equivalent to KubeVirt's VirtualMachineInstance
+	// restart subresource). No-op if the VM is not running.
+	Restart(ctx context.Context, namespace, name string) error
 }
 
 // NoopVmEngine keeps every VM in a deterministic "Pending" state so the
@@ -84,3 +92,11 @@ func (NoopVmEngine) EnsureVM(_ context.Context, _ string, _ string, _ map[string
 
 // DeleteVM is a no-op.
 func (NoopVmEngine) DeleteVM(_ context.Context, _ string, _ string) error { return nil }
+
+// SetPowerState is a no-op; the noop engine has no real VM to drive.
+func (NoopVmEngine) SetPowerState(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
+// Restart is a no-op on the noop engine.
+func (NoopVmEngine) Restart(_ context.Context, _ string, _ string) error { return nil }

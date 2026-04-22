@@ -138,4 +138,63 @@ func isCRDMissing(err error) bool {
 		strings.Contains(msg, "failed to get API group resources")
 }
 
+// SetPowerState patches the backing VirtualMachine's spec.running
+// (and runStrategy for Paused) to match the requested state. When
+// KubeVirt isn't installed this returns nil so callers can surface
+// "engine unavailable" via conditions without erroring the
+// reconcile.
+func (e *KubeVirtEngine) SetPowerState(ctx context.Context, namespace, name, state string) error {
+	if e == nil || e.Client == nil {
+		return errors.New("kubevirt engine: client not configured")
+	}
+	existing := &unstructured.Unstructured{}
+	existing.SetGroupVersionKind(kubevirtVMGVK)
+	if err := e.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, existing); err != nil {
+		if apierrors.IsNotFound(err) || isCRDMissing(err) {
+			return nil
+		}
+		return fmt.Errorf("kubevirt: get VM for power state: %w", err)
+	}
+	patched := existing.DeepCopy()
+	switch strings.ToLower(state) {
+	case "running":
+		_ = unstructured.SetNestedField(patched.Object, true, "spec", "running")
+		unstructured.RemoveNestedField(patched.Object, "spec", "runStrategy")
+	case "stopped", "off":
+		_ = unstructured.SetNestedField(patched.Object, false, "spec", "running")
+		unstructured.RemoveNestedField(patched.Object, "spec", "runStrategy")
+	case "paused":
+		// KubeVirt exposes pause via a subresource; mirror the intent
+		// on the VM via runStrategy=Manual so the desired state is at
+		// least recorded. A dedicated subresource caller would then
+		// invoke VMI.Pause(); left as TODO.
+		_ = unstructured.SetNestedField(patched.Object, "Manual", "spec", "runStrategy")
+		unstructured.RemoveNestedField(patched.Object, "spec", "running")
+	default:
+		return fmt.Errorf("kubevirt: unknown power state %q", state)
+	}
+	if err := e.Client.Patch(ctx, patched, client.MergeFrom(existing)); err != nil {
+		if isCRDMissing(err) {
+			return nil
+		}
+		return fmt.Errorf("kubevirt: patch VM power state: %w", err)
+	}
+	return nil
+}
+
+// Restart requests a hard reset of the VM's running instance. The
+// real KubeVirt restart subresource (POST on
+// virtualmachines/{name}/restart) isn't reachable via the
+// controller-runtime client, so we fall back to a stop/start cycle by
+// flipping spec.running. A dedicated subresource client can replace
+// this later.
+// TODO(operators): switch to KubeVirt subresource client for a true
+// hard-reset (VMI.Restart).
+func (e *KubeVirtEngine) Restart(ctx context.Context, namespace, name string) error {
+	if err := e.SetPowerState(ctx, namespace, name, "Stopped"); err != nil {
+		return err
+	}
+	return e.SetPowerState(ctx, namespace, name, "Running")
+}
+
 var _ VmEngine = (*KubeVirtEngine)(nil)

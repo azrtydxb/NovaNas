@@ -65,11 +65,33 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// --- action-renew annotation ------------------------------------
+	// When E1 stamps novanas.io/action-renew on the Certificate, we
+	// force a re-issuance even if the child Secret already exists.
+	renewRequested := false
+	if _, err := reconciler.HandleActionAnnotation(ctx, r.Client, &obj, "renew",
+		func(ctx context.Context, _ client.Object) error {
+			logger.Info("action-renew: forcing re-issuance")
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonProvisioning, "certificate renewal requested")
+			renewRequested = true
+			return nil
+		}); err != nil {
+		logger.Error(err, "renew handler failed")
+	}
+
 	// Ensure the Secret holding the issued material. Skip issuance if it
 	// already exists and appears valid.
 	secretName := obj.Name + "-tls"
 	var sec corev1.Secret
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: obj.Namespace, Name: secretName}, &sec)
+	if renewRequested && err == nil {
+		// Force re-issue: delete the existing secret so the next
+		// branch re-issues and recreates.
+		if dErr := r.Client.Delete(ctx, &sec); dErr != nil && !apierrors.IsNotFound(dErr) {
+			logger.Error(dErr, "renew: delete existing secret failed")
+		}
+		err = apierrors.NewNotFound(corev1.Resource("secrets"), secretName)
+	}
 	if apierrors.IsNotFound(err) {
 		bundle, ierr := iss.Issue(ctx, reconciler.CertificateRequest{Name: obj.Name, CommonName: obj.Name})
 		if ierr != nil {

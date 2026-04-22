@@ -12,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -185,6 +186,22 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 	return ec
 }
 
+// jobConsumerRunnable adapts a *JobConsumer to controller-runtime's
+// manager.Runnable interface so the consumer's poll goroutines start
+// when the manager starts and stop when ctx is cancelled.
+type jobConsumerRunnable struct {
+	consumer *reconciler.JobConsumer
+}
+
+// Start launches the consumer's poll goroutines and blocks on ctx.
+func (j jobConsumerRunnable) Start(ctx context.Context) error {
+	if err := j.consumer.Start(ctx); err != nil {
+		return err
+	}
+	<-ctx.Done()
+	return nil
+}
+
 func envDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -249,6 +266,23 @@ func main() {
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	// --- JobConsumer: system-level jobs from E1 -----------------------
+	// The jobs backend is left as a NoopJobsBackend in this pass —
+	// the operator is ready to consume jobs, but the bridge to the
+	// NovaFlow API jobs table is a follow-up (F3). Handlers below
+	// are still wired so the dispatch table compiles and so a future
+	// backend swap flips the feature on with zero controller
+	// changes.
+	jobConsumer := reconciler.NewJobConsumer(reconciler.NoopJobsBackend{}, ctrl.Log.WithName("jobconsumer"))
+	jobConsumer.Register(reconciler.JobKindCheckUpdate, reconciler.CheckUpdateHandler(mgr.GetClient(), ctrl.Log.WithName("checkupdate"), nil))
+	jobConsumer.Register(reconciler.JobKindSupportBundle, reconciler.SupportBundleHandler(ctrl.Log.WithName("supportbundle")))
+	jobConsumer.Register(reconciler.JobKindSystemReset, reconciler.SystemResetHandler(ctrl.Log.WithName("systemreset")))
+	jobConsumer.Register(reconciler.JobKindSnapshotRestore, reconciler.SnapshotRestoreHandler(mgr.GetClient(), ctrl.Log.WithName("snapshotrestore")))
+	if err := mgr.Add(jobConsumerRunnable{consumer: jobConsumer}); err != nil {
+		setupLog.Error(err, "unable to add job consumer to manager")
 		os.Exit(1)
 	}
 

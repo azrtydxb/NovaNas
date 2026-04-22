@@ -60,6 +60,39 @@ func (r *ReplicationJobReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// --- action-run-now annotation: force immediate re-run ----------
+	if _, err := reconciler.HandleActionAnnotation(ctx, r.Client, &obj, "run-now",
+		func(ctx context.Context, _ client.Object) error {
+			logger.Info("action-run-now: restarting replication job")
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonProvisioning, "replication run-now requested")
+			obj.Status.Phase = "Pending"
+			return nil
+		}); err != nil {
+		logger.Error(err, "run-now handler failed")
+	}
+
+	// --- action-cancel annotation: stop the running job -------------
+	if _, err := reconciler.HandleActionAnnotation(ctx, r.Client, &obj, "cancel",
+		func(ctx context.Context, _ client.Object) error {
+			logger.Info("action-cancel: cancelling replication job")
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonDeleted, "replication cancel requested")
+			if cErr := sc.CancelReplication(ctx, string(obj.UID)); cErr != nil {
+				return cErr
+			}
+			obj.Status.Phase = "Cancelled"
+			return nil
+		}); err != nil {
+		logger.Error(err, "cancel handler failed")
+	}
+	if obj.Status.Phase == "Cancelled" {
+		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "cancelled by action annotation")
+		if err := r.Client.Status().Update(ctx, &obj); err != nil && !apierrors.IsConflict(err) {
+			result = "error"
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
 	var st reconciler.StorageOpStatus
 	var err error
 	if obj.Status.Phase == "" || obj.Status.Phase == "Pending" {
