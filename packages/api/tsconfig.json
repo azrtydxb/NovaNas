@@ -8,10 +8,12 @@
     "types": ["node"],
     "paths": {
       "@novanas/schemas": ["../schemas/dist/index.d.ts"],
-      "@novanas/schemas/*": ["../schemas/dist/*"]
+      "@novanas/schemas/*": ["../schemas/dist/*"],
+      "@novanas/db": ["../db/dist/index.d.ts"],
+      "@novanas/db/*": ["../db/dist/*"]
     }
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules"],
-  "references": [{ "path": "../schemas" }]
+  "references": [{ "path": "../schemas" }, { "path": "../db" }]
 }

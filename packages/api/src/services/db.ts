@@ -1,18 +1,16 @@
+import type { NovaNasDb } from '@novanas/db';
+import { createDb } from '@novanas/db';
 import type { Env } from '../env.js';
 
 /**
- * Drizzle client factory. The real typed client lives in `@novanas/db`;
- * this file is the API-side adapter. Wave 2 coordinator wires the actual
- * export once `@novanas/db` exposes `createDb(connectionString)`.
+ * The API-side handle on the typed Drizzle client from `@novanas/db`.
+ *
+ * We export the `NovaNasDb` type directly so callers can pass the client
+ * through to services. In tests, `db` is `null` and services silently
+ * skip DB work.
  */
-export interface DbClient {
-  /** Placeholder — real shape is the Drizzle client from @novanas/db. */
-  readonly url: string;
-}
+export type DbClient = NovaNasDb;
 
 export async function createDbClient(env: Env): Promise<DbClient> {
-  // TODO(wave-3): swap for `import { createDb } from '@novanas/db'` once
-  // A2-DB exports a factory. Keeping as a narrow stub so the app boots
-  // during scaffold.
-  return { url: env.DATABASE_URL };
+  return createDb(env.DATABASE_URL);
 }

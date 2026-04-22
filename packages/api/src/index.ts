@@ -2,8 +2,11 @@
 import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
+import { startKubeWatch } from './plugins/kube-watch.js';
+import { createDbClient } from './services/db.js';
 import { createKeycloakClient } from './services/keycloak.js';
 import { createKubeClients } from './services/kube.js';
+import { createPromClient } from './services/prom.js';
 import { createRedisClient } from './services/redis.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 
@@ -21,6 +24,11 @@ async function main(): Promise<void> {
   const redisSub = createRedisClient(env);
   const keycloak = await createKeycloakClient(env);
   const kube = createKubeClients(env);
+  const db = await createDbClient(env).catch((err) => {
+    logger.error({ err }, 'novanas-api.db.connect_failed');
+    return null;
+  });
+  const prom = createPromClient(env, { redis });
 
   const { app, pubsub } = await buildApp({
     env,
@@ -29,12 +37,17 @@ async function main(): Promise<void> {
     redisSub,
     keycloak,
     kubeCustom: kube.custom,
+    db,
+    prom,
   });
+
+  const watch = startKubeWatch({ config: kube.config, redis, logger });
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'novanas-api.shutdown');
     try {
       await app.close();
+      await watch.stop();
       await pubsub?.stop();
       redis.disconnect();
       redisSub.disconnect();

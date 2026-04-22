@@ -13,7 +13,10 @@ import { registerRateLimit } from './plugins/rate-limit.js';
 import { registerSwagger } from './plugins/swagger.js';
 import { registerWebsocket } from './plugins/websocket.js';
 import { registerRoutes } from './routes/index.js';
+import type { DbClient } from './services/db.js';
+import { JobsService } from './services/jobs.js';
 import type { KeycloakClient } from './services/keycloak.js';
+import type { PromClient } from './services/prom.js';
 import { WsHub } from './ws/hub.js';
 import { PubSub } from './ws/pubsub.js';
 
@@ -30,6 +33,10 @@ export interface BuildAppOptions {
   disablePubSub?: boolean;
   /** Custom metrics registry (default: new Registry per app). */
   metricsRegistry?: Registry;
+  /** Drizzle client for audit / jobs. Optional; routes degrade to 503 when absent. */
+  db?: DbClient | null;
+  /** Prometheus client for metrics gateway. Optional. */
+  prom?: PromClient | null;
 }
 
 export interface BuiltApp {
@@ -38,6 +45,7 @@ export interface BuiltApp {
   sessions: SessionStore;
   pubsub?: PubSub;
   metricsRegistry: Registry;
+  jobs?: JobsService | null;
 }
 
 /**
@@ -93,6 +101,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     return metricsRegistry.metrics();
   });
 
+  // jobs service (only when db is provided)
+  const jobsService = opts.db ? new JobsService(opts.db, redis) : null;
+
   // routes
   await registerRoutes(app, {
     env,
@@ -101,6 +112,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     sessions,
     hub,
     kubeCustom: opts.kubeCustom,
+    db: opts.db ?? null,
+    jobs: jobsService,
+    prom: opts.prom ?? null,
   });
 
   // 404 fallthrough
@@ -118,5 +132,5 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     });
   });
 
-  return { app, hub, sessions, pubsub, metricsRegistry };
+  return { app, hub, sessions, pubsub, metricsRegistry, jobs: jobsService };
 }
