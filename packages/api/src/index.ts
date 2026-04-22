@@ -3,6 +3,7 @@ import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
 import { createKeycloakClient } from './services/keycloak.js';
+import { createKubeClients } from './services/kube.js';
 import { createRedisClient } from './services/redis.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 
@@ -19,8 +20,16 @@ async function main(): Promise<void> {
   const redis = createRedisClient(env);
   const redisSub = createRedisClient(env);
   const keycloak = await createKeycloakClient(env);
+  const kube = createKubeClients(env);
 
-  const { app, pubsub } = await buildApp({ env, logger, redis, redisSub, keycloak });
+  const { app, pubsub } = await buildApp({
+    env,
+    logger,
+    redis,
+    redisSub,
+    keycloak,
+    kubeCustom: kube.custom,
+  });
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'novanas-api.shutdown');

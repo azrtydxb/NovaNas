@@ -1,3 +1,4 @@
+import type { CustomObjectsApi } from '@kubernetes/client-node';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
@@ -22,6 +23,8 @@ export interface BuildAppOptions {
   redis: Redis;
   redisSub?: Redis; // optional dedicated sub connection
   keycloak: KeycloakClient;
+  /** Kubernetes CustomObjects client for CRUD routes. Optional in tests. */
+  kubeCustom?: CustomObjectsApi;
   /** Disable optional subsystems in tests. */
   disableSwagger?: boolean;
   disablePubSub?: boolean;
@@ -91,7 +94,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
   });
 
   // routes
-  await registerRoutes(app, { env, redis, keycloak, sessions, hub });
+  await registerRoutes(app, {
+    env,
+    redis,
+    keycloak,
+    sessions,
+    hub,
+    kubeCustom: opts.kubeCustom,
+  });
 
   // 404 fallthrough
   app.setNotFoundHandler((_req, reply) => {

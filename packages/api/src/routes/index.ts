@@ -1,3 +1,4 @@
+import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { SessionStore } from '../auth/session.js';
@@ -26,6 +27,8 @@ export interface RouteDeps {
   keycloak: KeycloakClient;
   sessions: SessionStore;
   hub: WsHub;
+  /** Kubernetes custom-objects client. Required for the 8 CRUD routes. */
+  kubeCustom?: CustomObjectsApi;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
@@ -43,16 +46,19 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     })
   );
 
-  // domain stubs (all require session)
-  await app.register(poolRoutes);
-  await app.register(datasetRoutes);
-  await app.register(bucketRoutes);
-  await app.register(shareRoutes);
-  await app.register(diskRoutes);
-  await app.register(snapshotRoutes);
-  await app.register(appRoutes);
+  // domain routes (all require session). The 8 CRUD modules use kubeCustom
+  // when available; otherwise they fall back to 503 stubs so the app still
+  // boots in test environments without a kubeconfig.
+  await app.register(async (s) => poolRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => datasetRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => bucketRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => diskRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => userRoutes(s, deps.kubeCustom));
+  // TODO(wave-10): VM + system remain stubbed in this slice
   await app.register(vmRoutes);
-  await app.register(userRoutes);
   await app.register(systemRoutes);
 
   // websocket

@@ -5,8 +5,13 @@
     "rootDir": "./src",
     "declaration": true,
     "composite": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@novanas/schemas": ["../schemas/dist/index.d.ts"],
+      "@novanas/schemas/*": ["../schemas/dist/*"]
+    }
   },
   "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules"],
+  "references": [{ "path": "../schemas" }]
 }

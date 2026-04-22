@@ -6,6 +6,10 @@ export interface AuditEvent {
   action: string;
   resource?: string;
   resourceId?: string;
+  /** Kind of the resource (e.g. 'Dataset'). */
+  kind?: string;
+  /** Namespace of the resource, if any. */
+  namespace?: string;
   tenant?: string;
   outcome: 'success' | 'failure';
   ip?: string;
@@ -19,7 +23,7 @@ export interface AuditEvent {
  * `@novanas/db` exposes the typed table.
  */
 export async function writeAudit(
-  _db: DbClient,
+  _db: DbClient | null | undefined,
   logger: FastifyBaseLogger,
   event: AuditEvent
 ): Promise<void> {

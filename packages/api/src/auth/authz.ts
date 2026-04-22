@@ -1,0 +1,115 @@
+import type { AuthenticatedUser } from '../types.js';
+
+/**
+ * Edge authorization helpers. Real enforcement still happens inside the
+ * Kubernetes API server via RBAC + operators; these checks short-circuit
+ * forbidden requests at the Fastify layer.
+ *
+ * Roles (Keycloak realm roles):
+ *   - `novanas:admin`       — full access to all resources, any namespace
+ *   - `novanas:user`        — CRUD in their own namespace only
+ *   - `novanas:viewer`      — read-only, all namespaces
+ *   - `novanas:share-only`  — no API access (share clients)
+ *
+ * Group claim (`groups`) is used to scope the user to a namespace. The
+ * user's "own namespace" is `user-<username>` by convention.
+ */
+
+export const AuthzRole = {
+  Admin: 'novanas:admin',
+  User: 'novanas:user',
+  Viewer: 'novanas:viewer',
+  ShareOnly: 'novanas:share-only',
+} as const;
+export type AuthzRole = (typeof AuthzRole)[keyof typeof AuthzRole];
+
+export type Action = 'read' | 'write' | 'delete';
+
+/** Resource kinds gate-kept by authz. */
+export type Kind =
+  | 'StoragePool'
+  | 'Dataset'
+  | 'Bucket'
+  | 'Share'
+  | 'Disk'
+  | 'Snapshot'
+  | 'User'
+  | 'AppInstance';
+
+/** Kinds that are cluster-scoped per our design. */
+const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
+  'StoragePool',
+  'Dataset',
+  'Bucket',
+  'Disk',
+  'Snapshot',
+  'User',
+]);
+
+/** Kinds that only admins may mutate. */
+const ADMIN_ONLY_WRITE: ReadonlySet<Kind> = new Set(['StoragePool', 'Disk', 'User']);
+
+export function ownNamespace(user: AuthenticatedUser): string {
+  return `user-${user.username}`;
+}
+
+export function isCluster(kind: Kind): boolean {
+  return CLUSTER_SCOPED.has(kind);
+}
+
+function hasAnyRole(user: AuthenticatedUser, roles: readonly string[]): boolean {
+  for (const r of roles) if (user.roles.includes(r)) return true;
+  return false;
+}
+
+export function isShareOnly(user: AuthenticatedUser): boolean {
+  return (
+    hasAnyRole(user, [AuthzRole.ShareOnly]) &&
+    !hasAnyRole(user, [AuthzRole.Admin, AuthzRole.User, AuthzRole.Viewer])
+  );
+}
+
+function canAccess(
+  user: AuthenticatedUser,
+  action: Action,
+  kind: Kind,
+  namespace?: string
+): boolean {
+  if (!user || isShareOnly(user)) return false;
+
+  const admin = hasAnyRole(user, [AuthzRole.Admin]);
+  const regular = hasAnyRole(user, [AuthzRole.User]);
+  const viewer = hasAnyRole(user, [AuthzRole.Viewer]);
+
+  if (admin) return true;
+
+  if (action === 'read') {
+    if (viewer || regular) return true;
+    return false;
+  }
+
+  // write or delete
+  if (!regular) return false;
+  if (ADMIN_ONLY_WRITE.has(kind)) return false;
+  if (isCluster(kind)) {
+    // cluster-scoped kinds the user CAN touch (Dataset, Bucket, Snapshot)
+    // are only writable in their own labelled scope; we can't express that
+    // purely with authz at the edge, so accept and let Kubernetes RBAC enforce.
+    return true;
+  }
+  // namespaced kind (AppInstance) — must match the user's own namespace
+  if (!namespace) return false;
+  return namespace === ownNamespace(user);
+}
+
+export function canRead(user: AuthenticatedUser, kind: Kind, namespace?: string): boolean {
+  return canAccess(user, 'read', kind, namespace);
+}
+
+export function canWrite(user: AuthenticatedUser, kind: Kind, namespace?: string): boolean {
+  return canAccess(user, 'write', kind, namespace);
+}
+
+export function canDelete(user: AuthenticatedUser, kind: Kind, namespace?: string): boolean {
+  return canAccess(user, 'delete', kind, namespace);
+}
