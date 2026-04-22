@@ -6,14 +6,23 @@ import type { Env } from '../env.js';
 import type { KeycloakClient } from '../services/keycloak.js';
 import type { WsHub } from '../ws/hub.js';
 
+import { appCatalogRoutes } from './app-catalogs.js';
+import { appsAvailableRoutes } from './apps-available.js';
 import { appRoutes } from './apps.js';
 import { authRoutes } from './auth.js';
+import { bucketUserRoutes } from './bucket-users.js';
 import { bucketRoutes } from './buckets.js';
 import { datasetRoutes } from './datasets.js';
 import { diskRoutes } from './disks.js';
 import { healthRoutes } from './health.js';
+import { iscsiTargetRoutes } from './iscsi-targets.js';
+import { isoLibraryRoutes } from './iso-libraries.js';
+import { nfsServerRoutes } from './nfs-servers.js';
+import { nvmeofTargetRoutes } from './nvmeof-targets.js';
+import { objectStoreRoutes } from './object-stores.js';
 import { poolRoutes } from './pools.js';
 import { shareRoutes } from './shares.js';
+import { smbServerRoutes } from './smb-servers.js';
 import { snapshotRoutes } from './snapshots.js';
 import { systemRoutes } from './system.js';
 import { userRoutes } from './users.js';
@@ -57,8 +66,19 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
   await app.register(async (s) => userRoutes(s, deps.kubeCustom));
-  // TODO(wave-10): VM + system remain stubbed in this slice
-  await app.register(vmRoutes);
+
+  // A10-API-More: 10 additional CRUD resources
+  await app.register(async (s) => objectStoreRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => bucketUserRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => smbServerRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => nfsServerRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => iscsiTargetRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => nvmeofTargetRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appCatalogRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => isoLibraryRoutes(s, deps.kubeCustom));
+
   await app.register(systemRoutes);
 
   // websocket

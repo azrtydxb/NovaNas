@@ -34,7 +34,17 @@ export type Kind =
   | 'Disk'
   | 'Snapshot'
   | 'User'
-  | 'AppInstance';
+  | 'AppInstance'
+  | 'ObjectStore'
+  | 'BucketUser'
+  | 'SmbServer'
+  | 'NfsServer'
+  | 'IscsiTarget'
+  | 'NvmeofTarget'
+  | 'AppCatalog'
+  | 'App'
+  | 'Vm'
+  | 'IsoLibrary';
 
 /** Kinds that are cluster-scoped per our design. */
 const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
@@ -44,10 +54,30 @@ const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
   'Disk',
   'Snapshot',
   'User',
+  'ObjectStore',
+  'BucketUser',
+  'SmbServer',
+  'NfsServer',
+  'IscsiTarget',
+  'NvmeofTarget',
+  'AppCatalog',
+  'App',
+  'IsoLibrary',
 ]);
 
 /** Kinds that only admins may mutate. */
-const ADMIN_ONLY_WRITE: ReadonlySet<Kind> = new Set(['StoragePool', 'Disk', 'User']);
+const ADMIN_ONLY_WRITE: ReadonlySet<Kind> = new Set([
+  'StoragePool',
+  'Disk',
+  'User',
+  'SmbServer',
+  'NfsServer',
+  'IscsiTarget',
+  'NvmeofTarget',
+  'AppCatalog',
+  'App',
+  'IsoLibrary',
+]);
 
 export function ownNamespace(user: AuthenticatedUser): string {
   return `user-${user.username}`;
