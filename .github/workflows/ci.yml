@@ -55,6 +55,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
       - name: Check for Cargo workspace members
         id: detect
         run: |

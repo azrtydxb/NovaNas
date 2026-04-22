@@ -1,5 +1,14 @@
 # NovaNas
 
+[![CI](https://github.com/azrtydxb/NovaNas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/azrtydxb/NovaNas/actions/workflows/ci.yml)
+[![storage-spdk](https://github.com/azrtydxb/NovaNas/actions/workflows/storage-spdk.yml/badge.svg?branch=main)](https://github.com/azrtydxb/NovaNas/actions/workflows/storage-spdk.yml)
+[![os-build](https://github.com/azrtydxb/NovaNas/actions/workflows/os-build.yml/badge.svg?branch=main)](https://github.com/azrtydxb/NovaNas/actions/workflows/os-build.yml)
+[![publish-charts](https://github.com/azrtydxb/NovaNas/actions/workflows/publish-charts.yml/badge.svg?branch=main)](https://github.com/azrtydxb/NovaNas/actions/workflows/publish-charts.yml)
+[![s3-compat-nightly](https://github.com/azrtydxb/NovaNas/actions/workflows/s3-compat-nightly.yml/badge.svg)](https://github.com/azrtydxb/NovaNas/actions/workflows/s3-compat-nightly.yml)
+[![perf-nightly](https://github.com/azrtydxb/NovaNas/actions/workflows/perf-nightly.yml/badge.svg)](https://github.com/azrtydxb/NovaNas/actions/workflows/perf-nightly.yml)
+
+Developer CI reference: [`docs/developer/ci.md`](docs/developer/ci.md).
+
 ## Quick local dev
 
 ```bash

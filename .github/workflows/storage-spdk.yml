@@ -1,0 +1,107 @@
+name: storage-spdk
+
+# PR-time: cargo fmt + clippy + build + unit tests against the Rust
+# dataplane with the Malloc/AIO bdev backends (no SPDK linking).
+# Nightly: full SPDK-linked integration on an ubuntu-24.04 runner with
+# KVM enabled — exercises the Malloc and AIO bdevs end-to-end.
+
+on:
+  pull_request:
+    paths:
+      - "storage/dataplane/**"
+      - "storage/internal/chunk/**"
+      - ".github/workflows/storage-spdk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "storage/dataplane/**"
+      - ".github/workflows/storage-spdk.yml"
+  schedule:
+    # 03:00 UTC nightly — full SPDK integration
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: storage-spdk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dataplane-build:
+    name: Rust build + unit tests (Malloc bdev)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libaio-dev libnuma-dev libssl-dev libuuid1 uuid-dev \
+            libisal-dev meson ninja-build pkg-config nasm yasm \
+            libcunit1-dev libcmocka-dev
+
+      - name: Configure hugepages
+        run: |
+          echo 1024 | sudo tee /proc/sys/vm/nr_hugepages
+          sudo mkdir -p /mnt/huge
+          sudo mount -t hugetlbfs nodev /mnt/huge || true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: storage/dataplane
+
+      - name: cargo fmt
+        run: cd storage/dataplane && cargo fmt --check
+
+      - name: cargo clippy
+        run: cd storage/dataplane && cargo clippy --no-default-features --all-targets -- -D warnings
+
+      - name: cargo build (no default features — no SPDK linking)
+        run: cd storage/dataplane && cargo build --no-default-features
+
+      - name: cargo test (Malloc bdev, no SPDK linking)
+        run: cd storage/dataplane && cargo test --no-default-features
+
+  dataplane-integration:
+    name: SPDK-linked integration (Malloc + AIO bdev)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SPDK + KVM deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libaio-dev libnuma-dev libssl-dev libuuid1 uuid-dev \
+            libisal-dev meson ninja-build pkg-config nasm yasm \
+            libcunit1-dev libcmocka-dev qemu-kvm
+
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm || true
+
+      - name: Configure hugepages
+        run: |
+          echo 2048 | sudo tee /proc/sys/vm/nr_hugepages
+          sudo mkdir -p /mnt/huge
+          sudo mount -t hugetlbfs nodev /mnt/huge || true
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: storage/dataplane
+
+      - name: Full SPDK-linked build
+        run: make -C storage/dataplane ci-integration
+
+      - name: Run SPDK-backed integration tests (Malloc + AIO bdev)
+        run: make -C storage/dataplane test-integration

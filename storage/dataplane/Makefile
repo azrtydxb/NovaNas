@@ -94,6 +94,24 @@ test-real-nvme: build ## Run real NVMe tests (requires hugepages + privileged + 
 		-c '/usr/local/bin/entrypoint.sh --reactor-mask 0x1 --mem-size 512 & sleep 5 && /usr/local/bin/test_real_nvme.sh; rc=$$?; kill %1 2>/dev/null; exit $$rc'
 
 # ---------------------------------------------------------------------------
+# CI integration targets (used by .github/workflows/storage-spdk.yml)
+#
+# ci-integration    = full SPDK-linked cargo build (default features).
+#                     Assumes hugepages + SPDK apt deps are installed on
+#                     the GitHub-hosted ubuntu-24.04 runner.
+# test-integration  = run the full test suite against the vendored SPDK
+#                     (Malloc + AIO bdev backends).
+# ---------------------------------------------------------------------------
+
+.PHONY: ci-integration
+ci-integration: ## CI: full SPDK-linked build (GitHub-hosted runner)
+	cargo build --release --all-features
+
+.PHONY: test-integration
+test-integration: ## CI: SPDK-backed integration tests (Malloc + AIO)
+	cargo test --release --all-features -- --include-ignored --test-threads=1
+
+# ---------------------------------------------------------------------------
 # Development helpers
 # ---------------------------------------------------------------------------
 

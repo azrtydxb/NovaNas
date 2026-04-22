@@ -1,0 +1,101 @@
+name: publish-charts
+
+# Package & push every app chart (and the umbrella helm/) to the GHCR
+# OCI registry at ghcr.io/azrtydxb/novanas-apps (and ghcr.io/azrtydxb/
+# charts for the umbrella), then cosign-sign each published artifact.
+#
+# Uses GHCR_TOKEN secret if present; otherwise falls back to the
+# default GITHUB_TOKEN (which has packages:write on this repo).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/*/chart/**"
+      - "helm/**"
+      - "apps/scripts/**"
+      - ".github/workflows/publish-charts.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: publish-charts-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write  # cosign keyless OIDC
+
+jobs:
+  publish-apps:
+    name: Publish app charts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.1
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TOKEN="${GHCR_TOKEN:-$GITHUB_TOKEN}"
+          echo "$TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Package + push app charts
+        run: ./apps/scripts/publish-all.sh
+        env:
+          REGISTRY: ghcr.io/azrtydxb/novanas-apps
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign published chart artifacts
+        run: ./apps/scripts/sign-all.sh
+        env:
+          REGISTRY: ghcr.io/azrtydxb/novanas-apps
+          COSIGN_EXPERIMENTAL: "true"
+
+  publish-umbrella:
+    name: Publish umbrella helm chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.1
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TOKEN="${GHCR_TOKEN:-$GITHUB_TOKEN}"
+          echo "$TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Package umbrella chart
+        id: pkg
+        run: |
+          helm dependency update ./helm || true
+          helm package ./helm -d /tmp/helm-pkg
+          TGZ=$(ls /tmp/helm-pkg/*.tgz | head -1)
+          echo "tgz=$TGZ" >> "$GITHUB_OUTPUT"
+          NAME=$(awk '/^name:/ {print $2; exit}' ./helm/Chart.yaml)
+          VERSION=$(awk '/^version:/ {print $2; exit}' ./helm/Chart.yaml)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Push umbrella chart
+        run: helm push "${{ steps.pkg.outputs.tgz }}" oci://ghcr.io/azrtydxb/charts
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Cosign sign umbrella chart
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: cosign sign --yes "ghcr.io/azrtydxb/charts/${{ steps.pkg.outputs.name }}:${{ steps.pkg.outputs.version }}"
