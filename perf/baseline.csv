@@ -1,0 +1,26 @@
+# NovaNas performance baseline.
+#
+# This file seeds the perf-regression gate with plausible initial targets
+# for a single-node NVMe appliance. The FIRST real nightly run replaces
+# these numbers via a PR carrying the `perf-regression-ok` label (see
+# perf/README.md). Units:
+#   bs              — block size (e.g. 4k, 64k, 1m)
+#   iops            — I/O operations per second (higher is better)
+#   bandwidth_mbps  — MB/s throughput (higher is better)
+#   latency_ms_p99  — 99th-percentile latency in ms (LOWER is better)
+#
+# Metrics with the sentinel value 0 are ignored by compare.py for the
+# row (not every test produces every metric).
+test,mode,bs,iops,bandwidth_mbps,latency_ms_p99
+fio,seqread,1m,2000,2000,2.0
+fio,seqread,64k,30000,1875,1.5
+fio,seqwrite,1m,1600,1600,2.5
+fio,seqwrite,64k,22000,1375,2.0
+fio,randread,4k,200000,780,0.5
+fio,randread,64k,25000,1560,1.0
+fio,randwrite,4k,150000,585,0.7
+fio,randwrite,64k,18000,1125,1.2
+nfs,read,1m,0,1000,3.0
+nfs,write,1m,0,900,3.5
+smb,read,1m,0,700,4.0
+smb,write,1m,0,650,4.5

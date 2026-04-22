@@ -269,6 +269,30 @@ keycloak:
     existingSecretPasswordKey: keycloak-db-password
   production: true
   proxy: edge
+  # Mount the novanas-keycloak-theme ConfigMap (rendered from
+  # templates/keycloak-setup/theme-configmap.yaml) into the Bitnami
+  # Keycloak pod so the `novanas` login theme is available at runtime.
+  # subPath values MUST match the ConfigMap keys exactly.
+  extraVolumes:
+    - name: novanas-theme
+      configMap:
+        name: novanas-keycloak-theme
+  extraVolumeMounts:
+    - name: novanas-theme
+      mountPath: /opt/keycloak/themes/novanas/login/theme.properties
+      subPath: login__theme.properties
+    - name: novanas-theme
+      mountPath: /opt/keycloak/themes/novanas/login/resources/css/novanas.css
+      subPath: login__resources__css__novanas.css
+    - name: novanas-theme
+      mountPath: /opt/keycloak/themes/novanas/login/messages/messages_en.properties
+      subPath: login__messages__messages_en.properties
+    - name: novanas-theme
+      mountPath: /opt/keycloak/themes/novanas/login/login.ftl
+      subPath: login__login.ftl
+    - name: novanas-theme
+      mountPath: /opt/keycloak/themes/novanas/login/error.ftl
+      subPath: login__error.ftl
   resources:
     requests: { cpu: "250m", memory: "512Mi" }
     limits:   { cpu: "2",    memory: "2Gi" }

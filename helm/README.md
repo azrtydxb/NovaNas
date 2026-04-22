@@ -199,3 +199,10 @@ The login, error, and message overrides live in the
 
 The theme is intentionally minimal: everything else falls back to the
 stock `keycloak` theme, so upgrades don't require theme-wide edits.
+
+The theme ConfigMap is mounted into the Bitnami Keycloak pod by default
+via `keycloak.extraVolumes` / `keycloak.extraVolumeMounts` in
+`values.yaml`. Each mount uses a `subPath` equal to the ConfigMap key
+so the mount reproduces the `/opt/keycloak/themes/novanas/...`
+directory layout. Channel overlays under `helm/values/` inherit these
+mounts unless they replace the entire `keycloak:` block.

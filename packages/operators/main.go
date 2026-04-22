@@ -55,6 +55,7 @@ type externalClients struct {
 	updater    reconciler.UpdateClient
 	vmEngine   reconciler.VmEngine
 	keyProv    reconciler.VolumeKeyProvisioner
+	openbao    reconciler.OpenBaoClient
 }
 
 func buildExternalClients(mgr ctrl.Manager) externalClients {
@@ -66,6 +67,7 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 		updater:    reconciler.NoopUpdateClient{},
 		vmEngine:   reconciler.NoopVmEngine{},
 		keyProv:    reconciler.NoopKeyProvisioner{},
+		openbao:    reconciler.NoopOpenBaoClient{},
 	}
 
 	// --- Keycloak ---
@@ -157,6 +159,27 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 		}
 	} else {
 		setupLog.Info("OPENBAO_ADDR not set; using no-op key provisioner (dev mode)")
+	}
+
+	// --- OpenBao admin client (policies + kubernetes-auth roles) ---
+	if addr := os.Getenv("OPENBAO_ADDR"); addr != "" {
+		token := os.Getenv("OPENBAO_TOKEN")
+		if token == "" {
+			// Best-effort: let the client read OPENBAO_TOKEN_PATH on each call.
+			// If neither is set the constructor will return an error.
+			if tp := envDefault("OPENBAO_TOKEN_PATH", ""); tp == "" {
+				setupLog.Info("OPENBAO_TOKEN and OPENBAO_TOKEN_PATH not set; using no-op openbao admin client")
+			}
+		}
+		obc, err := reconciler.NewHTTPOpenBaoClient(addr, token)
+		if err != nil {
+			setupLog.Error(err, "openbao admin client init failed; falling back to no-op")
+		} else {
+			setupLog.Info("openbao admin client wired", "addr", addr)
+			ec.openbao = obc
+		}
+	} else {
+		setupLog.Info("OPENBAO_ADDR not set; using no-op openbao admin client (dev mode)")
 	}
 
 	return ec
@@ -260,7 +283,7 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 		&controllers.NvmeofTargetReconciler{},
 		&controllers.ObjectStoreReconciler{},
 		&controllers.BucketUserReconciler{},
-		&controllers.UserReconciler{Keycloak: ec.keycloak},
+		&controllers.UserReconciler{Keycloak: ec.keycloak, OpenBao: ec.openbao},
 		&controllers.GroupReconciler{Keycloak: ec.keycloak},
 		&controllers.KeycloakRealmReconciler{Keycloak: ec.keycloak},
 		&controllers.ApiTokenReconciler{},
