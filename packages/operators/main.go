@@ -1,7 +1,14 @@
 // Command manager is the NovaNas controller-manager entrypoint. It boots
-// controller-runtime, registers the NovaNas API types with the scheme, and
-// wires a no-op reconciler for every CRD kind. Real reconcile logic is
-// implemented in Wave 4+.
+// controller-runtime, registers the NovaNas API types with the scheme,
+// and wires every reconciler with the production implementations of
+// the pluggable client interfaces (Keycloak, storage, certificate
+// issuer, network, updater, VM engine, volume-key provisioner).
+//
+// Each real client is constructed from environment variables. If
+// construction fails (missing config, unreachable service) the wiring
+// falls back to the corresponding NoopXxx with a loud warning so the
+// operator still starts — controllers keep running and will surface
+// the degraded state via conditions on individual CRs.
 package main
 
 import (
@@ -9,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -22,6 +30,7 @@ import (
 	"github.com/azrtydxb/novanas/packages/operators/internal/controllers"
 	"github.com/azrtydxb/novanas/packages/operators/internal/logging"
 	_ "github.com/azrtydxb/novanas/packages/operators/internal/metrics"
+	"github.com/azrtydxb/novanas/packages/operators/internal/reconciler"
 )
 
 var (
@@ -32,6 +41,132 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(novanasv1alpha1.AddToScheme(scheme))
+}
+
+// externalClients aggregates the production client implementations
+// injected into reconcilers. Each field is guaranteed non-nil — failed
+// constructions fall back to their NoopXxx counterparts so reconcilers
+// never panic on a nil dependency.
+type externalClients struct {
+	keycloak   reconciler.KeycloakClient
+	storage    reconciler.StorageClient
+	certIssuer reconciler.CertificateIssuer
+	network    reconciler.NetworkClient
+	updater    reconciler.UpdateClient
+	vmEngine   reconciler.VmEngine
+	keyProv    reconciler.VolumeKeyProvisioner
+}
+
+func buildExternalClients(mgr ctrl.Manager) externalClients {
+	ec := externalClients{
+		keycloak:   reconciler.NoopKeycloakClient{},
+		storage:    reconciler.NoopStorageClient{},
+		certIssuer: reconciler.NoopCertificateIssuer{},
+		network:    reconciler.NoopNetworkClient{},
+		updater:    reconciler.NoopUpdateClient{},
+		vmEngine:   reconciler.NoopVmEngine{},
+		keyProv:    reconciler.NoopKeyProvisioner{},
+	}
+
+	// --- Keycloak ---
+	if addr := os.Getenv("KEYCLOAK_URL"); addr != "" {
+		kc, err := reconciler.NewGocloakClient(reconciler.GocloakConfig{
+			BaseURL:      addr,
+			AdminRealm:   envDefault("KEYCLOAK_ADMIN_REALM", "master"),
+			ClientID:     os.Getenv("KEYCLOAK_ADMIN_CLIENT_ID"),
+			ClientSecret: os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET"),
+		})
+		if err != nil {
+			setupLog.Error(err, "keycloak client init failed; falling back to no-op")
+		} else {
+			setupLog.Info("keycloak client wired", "addr", addr)
+			ec.keycloak = kc
+		}
+	} else {
+		setupLog.Info("KEYCLOAK_URL not set; using no-op keycloak client (dev mode)")
+	}
+
+	// --- Storage gRPC client ---
+	{
+		addr := envDefault("STORAGE_META_ADDR", "novanas-storage-meta.novanas-system.svc:7001")
+		sc, err := reconciler.NewGRPCStorageClient(reconciler.GRPCStorageClientConfig{
+			Address:     addr,
+			CAFile:      os.Getenv("STORAGE_TLS_CA"),
+			CertFile:    os.Getenv("STORAGE_TLS_CERT"),
+			KeyFile:     os.Getenv("STORAGE_TLS_KEY"),
+			ServerName:  os.Getenv("STORAGE_TLS_SERVER_NAME"),
+			DialTimeout: 10 * time.Second,
+			CallTimeout: 15 * time.Second,
+		})
+		if err != nil {
+			setupLog.Error(err, "storage client init failed; falling back to no-op", "addr", addr)
+		} else {
+			setupLog.Info("storage gRPC client wired", "addr", addr)
+			ec.storage = sc
+		}
+	}
+
+	// --- Certificate issuer (OpenBao PKI) ---
+	if addr := os.Getenv("OPENBAO_ADDR"); addr != "" {
+		issuer, err := reconciler.NewOpenBaoPKIIssuer(reconciler.OpenBaoPKIConfig{
+			Addr:      addr,
+			Token:     os.Getenv("OPENBAO_TOKEN"),
+			TokenPath: envDefault("OPENBAO_TOKEN_PATH", "/var/run/secrets/openbao/token"),
+			Namespace: os.Getenv("OPENBAO_NAMESPACE"),
+			MountPath: envDefault("OPENBAO_PKI_PATH", "pki"),
+			Role:      envDefault("OPENBAO_PKI_ROLE", "novanas"),
+		})
+		if err != nil {
+			setupLog.Error(err, "openbao PKI issuer init failed; falling back to no-op")
+		} else {
+			setupLog.Info("openbao PKI issuer wired", "addr", addr)
+			ec.certIssuer = issuer
+		}
+	} else {
+		setupLog.Info("OPENBAO_ADDR not set; using no-op certificate issuer (dev mode)")
+	}
+
+	// --- Network client (ConfigMap projection) ---
+	ns := envDefault("OPERATOR_NAMESPACE", "novanas-system")
+	ec.network = reconciler.NewConfigMapNetworkClient(mgr.GetClient(), ns)
+	setupLog.Info("network client wired (ConfigMap projection)", "namespace", ns)
+
+	// --- Update client (ConfigMap-driven host updater) ---
+	ec.updater = reconciler.NewConfigMapUpdateClient(mgr.GetClient(), ns)
+	setupLog.Info("update client wired (ConfigMap host-updater bridge)", "namespace", ns)
+
+	// --- VM engine (KubeVirt via unstructured) ---
+	ec.vmEngine = reconciler.NewKubeVirtEngine(mgr.GetClient())
+	setupLog.Info("kubevirt engine wired (unstructured VirtualMachine client)")
+
+	// --- Volume-key provisioner ---
+	if os.Getenv("OPENBAO_ADDR") != "" {
+		tp, err := reconciler.NewTransitKeyProvisioner(reconciler.TransitKeyProvisionerConfig{
+			Addr:          os.Getenv("OPENBAO_ADDR"),
+			Token:         os.Getenv("OPENBAO_TOKEN"),
+			TokenPath:     envDefault("OPENBAO_TOKEN_PATH", "/var/run/secrets/openbao/token"),
+			Namespace:     os.Getenv("OPENBAO_NAMESPACE"),
+			MountPath:     envDefault("OPENBAO_TRANSIT_PATH", "transit"),
+			MasterKeyName: envDefault("OPENBAO_MASTER_KEY", "novanas/chunk-master"),
+		})
+		if err != nil {
+			setupLog.Error(err, "transit key provisioner init failed; falling back to no-op")
+		} else {
+			setupLog.Info("transit key provisioner wired (OpenBao Transit)")
+			ec.keyProv = tp
+		}
+	} else {
+		setupLog.Info("OPENBAO_ADDR not set; using no-op key provisioner (dev mode)")
+	}
+
+	return ec
+}
+
+func envDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 func main() {
@@ -78,7 +213,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupAllControllers(mgr); err != nil {
+	clients := buildExternalClients(mgr)
+
+	if err := setupAllControllers(mgr, clients); err != nil {
 		setupLog.Error(err, "unable to set up controllers")
 		os.Exit(1)
 	}
@@ -103,17 +240,18 @@ func main() {
 	}
 }
 
-// setupAllControllers wires every NovaNas reconciler into the manager.
-func setupAllControllers(mgr ctrl.Manager) error {
+// setupAllControllers wires every NovaNas reconciler into the manager,
+// injecting the external clients into reconcilers that need them.
+func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 	type setup interface {
 		SetupWithManager(mgr ctrl.Manager) error
 	}
 
 	reconcilers := []setup{
 		&controllers.StoragePoolReconciler{},
-		&controllers.BlockVolumeReconciler{},
-		&controllers.DatasetReconciler{},
-		&controllers.BucketReconciler{},
+		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
+		&controllers.DatasetReconciler{KeyProvisioner: ec.keyProv},
+		&controllers.BucketReconciler{KeyProvisioner: ec.keyProv},
 		&controllers.DiskReconciler{},
 		&controllers.ShareReconciler{},
 		&controllers.SmbServerReconciler{},
@@ -122,22 +260,22 @@ func setupAllControllers(mgr ctrl.Manager) error {
 		&controllers.NvmeofTargetReconciler{},
 		&controllers.ObjectStoreReconciler{},
 		&controllers.BucketUserReconciler{},
-		&controllers.UserReconciler{},
-		&controllers.GroupReconciler{},
-		&controllers.KeycloakRealmReconciler{},
+		&controllers.UserReconciler{Keycloak: ec.keycloak},
+		&controllers.GroupReconciler{Keycloak: ec.keycloak},
+		&controllers.KeycloakRealmReconciler{Keycloak: ec.keycloak},
 		&controllers.ApiTokenReconciler{},
 		&controllers.SshKeyReconciler{},
-		&controllers.SnapshotReconciler{},
+		&controllers.SnapshotReconciler{Storage: ec.storage},
 		&controllers.SnapshotScheduleReconciler{},
-		&controllers.ReplicationTargetReconciler{},
-		&controllers.ReplicationJobReconciler{},
+		&controllers.ReplicationTargetReconciler{Storage: ec.storage},
+		&controllers.ReplicationJobReconciler{Storage: ec.storage},
 		&controllers.CloudBackupTargetReconciler{},
-		&controllers.CloudBackupJobReconciler{},
-		&controllers.ScrubScheduleReconciler{},
-		&controllers.PhysicalInterfaceReconciler{},
-		&controllers.BondReconciler{},
-		&controllers.VlanReconciler{},
-		&controllers.HostInterfaceReconciler{},
+		&controllers.CloudBackupJobReconciler{Storage: ec.storage},
+		&controllers.ScrubScheduleReconciler{Storage: ec.storage},
+		&controllers.PhysicalInterfaceReconciler{Network: ec.network},
+		&controllers.BondReconciler{Network: ec.network},
+		&controllers.VlanReconciler{Network: ec.network},
+		&controllers.HostInterfaceReconciler{Network: ec.network},
 		&controllers.ClusterNetworkReconciler{},
 		&controllers.VipPoolReconciler{},
 		&controllers.IngressReconciler{},
@@ -148,12 +286,12 @@ func setupAllControllers(mgr ctrl.Manager) error {
 		&controllers.AppCatalogReconciler{},
 		&controllers.AppReconciler{},
 		&controllers.AppInstanceReconciler{},
-		&controllers.VmReconciler{},
+		&controllers.VmReconciler{Engine: ec.vmEngine},
 		&controllers.IsoLibraryReconciler{},
 		&controllers.GpuDeviceReconciler{},
 		&controllers.EncryptionPolicyReconciler{},
-		&controllers.KmsKeyReconciler{},
-		&controllers.CertificateReconciler{},
+		&controllers.KmsKeyReconciler{KeyProvisioner: ec.keyProv},
+		&controllers.CertificateReconciler{Issuer: ec.certIssuer},
 		&controllers.SmartPolicyReconciler{},
 		&controllers.AlertChannelReconciler{},
 		&controllers.AlertPolicyReconciler{},
@@ -162,7 +300,7 @@ func setupAllControllers(mgr ctrl.Manager) error {
 		&controllers.UpsPolicyReconciler{},
 		&controllers.ConfigBackupPolicyReconciler{},
 		&controllers.SystemSettingsReconciler{},
-		&controllers.UpdatePolicyReconciler{},
+		&controllers.UpdatePolicyReconciler{Updater: ec.updater},
 		&controllers.ServicePolicyReconciler{},
 	}
 

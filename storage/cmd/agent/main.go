@@ -40,12 +40,14 @@ import (
 	"github.com/azrtydxb/novanas/storage/internal/agent"
 	"github.com/azrtydxb/novanas/storage/internal/agent/device"
 	"github.com/azrtydxb/novanas/storage/internal/agent/failover"
+	"github.com/azrtydxb/novanas/storage/internal/crypto"
 	"github.com/azrtydxb/novanas/storage/internal/dataplane"
 	"github.com/azrtydxb/novanas/storage/internal/disk"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
 	"github.com/azrtydxb/novanas/storage/internal/observability"
+	"github.com/azrtydxb/novanas/storage/internal/openbao"
 	"github.com/azrtydxb/novanas/storage/internal/transport"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -319,9 +321,6 @@ func main() {
 	openbaoTokenPath := flag.String("openbao-token-path", "/var/run/secrets/openbao/token", "Path to OpenBao token file")
 	masterKeyName := flag.String("master-key-name", "novanas/chunk-master", "OpenBao Transit master-key name used to wrap Dataset Keys")
 	encryptionMode := flag.String("encryption-mode", "off", "Encryption mode: off | mandatory (default off in v1; opt-in per volume via CRD)")
-	_ = openbaoAddr
-	_ = openbaoTokenPath
-	_ = masterKeyName
 	_ = encryptionMode
 	flag.Parse()
 
@@ -670,6 +669,32 @@ func main() {
 	// Register ChunkService server — bridges S3/Filer gRPC chunk I/O
 	// to the Rust SPDK data-plane via gRPC.
 	chunkServer := agent.NewChunkServer(dpClient, *spdkBaseBdev)
+
+	// A4-Encryption: when OpenBao Transit is configured, build a real
+	// crypto.VolumeKeyManager + openbao HTTP client and wire it into the
+	// chunk server so PutChunk / GetChunk can transparently wrap and
+	// unwrap per-volume Dataset Keys on the hot path.
+	if *openbaoAddr != "" {
+		tc, obErr := openbao.NewHTTPClient(openbao.Config{
+			Addr:      *openbaoAddr,
+			TokenPath: *openbaoTokenPath,
+			MountPath: "transit",
+			Timeout:   10 * time.Second,
+		})
+		if obErr != nil {
+			logging.L.Warn("openbao transit client init failed; encryption disabled",
+				zap.Error(obErr))
+		} else {
+			vmgr := crypto.NewVolumeKeyManager(tc, *masterKeyName)
+			chunkServer.WithVolumeKeys(agent.NewVolumeKeyProvider(vmgr))
+			logging.L.Info("chunk server wired with VolumeKeyManager (transit-backed encryption)",
+				zap.String("openbao", *openbaoAddr),
+				zap.String("masterKey", *masterKeyName))
+		}
+	} else {
+		logging.L.Info("chunk server running without encryption (--openbao-addr not set)")
+	}
+
 	chunkServer.Register(srv)
 	logging.L.Info("chunk service registered (routes I/O to SPDK dataplane via gRPC)")
 

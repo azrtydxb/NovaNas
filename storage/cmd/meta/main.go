@@ -107,12 +107,17 @@ func main() {
 		store *metadata.RaftStore
 		err   error
 	)
+	// Shared SuperblockRegistry: ingests agent-reported superblocks via the
+	// ReportSuperblocks RPC on the gRPC server and exposes them as a
+	// SuperblockSource for the chunk-backed bootstrap path. Wiring both
+	// sides to the same instance resolves the chicken-and-egg problem
+	// between "agents report disks" and "meta needs disks to bootstrap".
+	sbRegistry := metadata.NewSuperblockRegistry()
+
 	if *chunkBacked {
 		log.Printf("chunk-backed metadata enabled (bootstrap-timeout=%s, min-metadata-disks=%d, mount-path=%s)",
 			*bootstrapTimeout, *minMetaDisks, *metaMountPath)
 		log.Printf("TODO(integration): chunk-mount + BadgerDB-on-mount path not yet wired; falling back to --data-dir=%s", *dataDir)
-		// TODO(integration): replace noopSuperblockSource with a gRPC-backed
-		// source that pulls superblock reports from agent heartbeats.
 		bootCtx, bootCancel := context.WithTimeout(context.Background(), *bootstrapTimeout)
 		_, report, bootErr := metadata.NewRaftStoreChunkBacked(bootCtx, *nodeID, metadata.BootstrapConfig{
 			LocalDataDir:       *dataDir,
@@ -120,7 +125,7 @@ func main() {
 			MetaMountPath:      *metaMountPath,
 			BootstrapTimeout:   *bootstrapTimeout,
 			MinMetadataDisks:   *minMetaDisks,
-		}, &noopSuperblockSource{})
+		}, sbRegistry)
 		bootCancel()
 		if bootErr != nil {
 			log.Printf("chunk-backed bootstrap did not succeed (%v); continuing with --data-dir fallback", bootErr)
@@ -168,8 +173,9 @@ func main() {
 	// Create and register the gRPC metadata server.
 	serverOpts = append(serverOpts, grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	grpcServer := grpc.NewServer(serverOpts...)
-	metaServer := metadata.NewGRPCServer(store)
+	metaServer := metadata.NewGRPCServer(store).WithSuperblockRegistry(sbRegistry, *minMetaDisks)
 	metaServer.Register(grpcServer)
+	log.Printf("SuperblockRegistry wired (min-metadata-disks=%d)", *minMetaDisks)
 
 	// Start gRPC listener.
 	lc := net.ListenConfig{}

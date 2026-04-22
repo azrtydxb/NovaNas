@@ -21,6 +21,7 @@ import (
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
+	"github.com/azrtydxb/novanas/storage/internal/openbao"
 	s3gw "github.com/azrtydxb/novanas/storage/internal/s3"
 	"github.com/azrtydxb/novanas/storage/internal/transport"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -48,6 +49,10 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "Path to client certificate for mTLS")
 	tlsKey := flag.String("tls-key", "", "Path to client key for mTLS")
 	tlsRotationInterval := flag.Duration("tls-rotation-interval", 5*time.Minute, "Interval for TLS certificate rotation checks")
+	openbaoAddr := flag.String("openbao-addr", "", "OpenBao base URL for SSE-KMS unwrap (e.g. https://openbao:8200). Empty disables KMS lookups.")
+	openbaoTokenPath := flag.String("openbao-token-path", "/var/run/secrets/openbao/token", "Path to OpenBao token file")
+	openbaoMount := flag.String("openbao-transit-mount", "transit", "OpenBao Transit mount path")
+	masterKeyName := flag.String("master-key-name", "novanas/chunk-master", "OpenBao Transit master-key used to unwrap per-key DKs for SSE-KMS")
 	flag.Parse()
 
 	log.Printf("novanas-storage-s3gw %s (commit: %s, built: %s)", version, commit, date)
@@ -98,6 +103,40 @@ func main() {
 
 	// Wire the S3 gateway with real dependencies.
 	gateway := s3gw.NewGateway(adapter, adapter, chunkStore, adapter, nil, *accessKey, *secretKey)
+
+	// Wire SSE-KMS resolver: when OpenBao is configured, connect a Transit
+	// client and install a KmsKeyLookup closure that treats the S3 keyID
+	// as the Transit ciphertext (or — future — looks it up in a metadata
+	// cache). Real production deployments resolve keyID → wrapped-blob via
+	// the KmsKey CR (managed by the operator) and call UnwrapDK.
+	if *openbaoAddr != "" {
+		tc, obErr := openbao.NewHTTPClient(openbao.Config{
+			Addr:      *openbaoAddr,
+			TokenPath: *openbaoTokenPath,
+			MountPath: *openbaoMount,
+			Timeout:   10 * time.Second,
+		})
+		if obErr != nil {
+			log.Printf("warn: openbao transit client init failed: %v; SSE-KMS lookups will fail-closed", obErr)
+		} else {
+			gateway.WithKMSKeyLookup(func(keyID string) ([]byte, bool) {
+				if keyID == "" {
+					return nil, false
+				}
+				lookupCtx, lookupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer lookupCancel()
+				raw, err := tc.UnwrapDK(lookupCtx, *masterKeyName, []byte(keyID))
+				if err != nil || len(raw) == 0 {
+					return nil, false
+				}
+				return raw, true
+			})
+			log.Printf("SSE-KMS resolver wired (openbao=%s, mount=%s, master-key=%s)",
+				*openbaoAddr, *openbaoMount, *masterKeyName)
+		}
+	} else {
+		log.Printf("SSE-KMS: --openbao-addr not set; SSE-KMS requests will fail-closed")
+	}
 
 	// Create a handler that serves both S3 API and metrics.
 	mux := http.NewServeMux()
