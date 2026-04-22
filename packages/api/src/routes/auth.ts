@@ -155,6 +155,139 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
     }
   );
 
+  // -- POST /api/v1/auth/device-code ------------------------------------
+  // Initiates an OIDC device authorization flow for CLI clients. The
+  // Keycloak server handles the flow; we proxy the request so the CLI
+  // doesn't need to know the Keycloak endpoint directly.
+  app.post(
+    '/api/v1/auth/device-code',
+    {
+      schema: {
+        description: 'Start an OIDC device authorization flow (for CLI).',
+        tags: ['auth'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              device_code: { type: 'string' },
+              user_code: { type: 'string' },
+              verification_uri: { type: 'string' },
+              verification_uri_complete: { type: 'string' },
+              expires_in: { type: 'number' },
+              interval: { type: 'number' },
+            },
+            required: ['device_code', 'user_code', 'verification_uri', 'expires_in'],
+          },
+        },
+      },
+    },
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      const url = new URL(
+        `${env.KEYCLOAK_ISSUER_URL.replace(/\/$/, '')}/protocol/openid-connect/auth/device`
+      );
+      try {
+        const body = new URLSearchParams({
+          client_id: env.KEYCLOAK_CLIENT_ID,
+          scope: 'openid profile email',
+        });
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+        });
+        if (!res.ok) {
+          return reply
+            .code(502)
+            .send({ error: 'upstream_error', message: `device flow init failed: ${res.status}` });
+        }
+        const json = (await res.json()) as Record<string, unknown>;
+        return reply.send(json);
+      } catch (err) {
+        return reply.code(502).send({
+          error: 'upstream_error',
+          message: (err as Error).message ?? 'device flow unreachable',
+        });
+      }
+    }
+  );
+
+  // -- POST /api/v1/auth/token ------------------------------------------
+  // CLI polls this endpoint with { device_code } until the user finishes
+  // authenticating in the browser. We proxy to Keycloak's token endpoint.
+  app.post<{ Body: { device_code?: string; grant_type?: string } }>(
+    '/api/v1/auth/token',
+    {
+      schema: {
+        description: 'Exchange a device_code for tokens (CLI polling endpoint).',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          properties: {
+            device_code: { type: 'string' },
+            grant_type: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const deviceCode = req.body?.device_code;
+      if (!deviceCode) {
+        return reply.code(400).send({ error: 'invalid_body', message: 'device_code required' });
+      }
+      const url = new URL(
+        `${env.KEYCLOAK_ISSUER_URL.replace(/\/$/, '')}/protocol/openid-connect/token`
+      );
+      const body = new URLSearchParams({
+        grant_type: req.body?.grant_type ?? 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: deviceCode,
+        client_id: env.KEYCLOAK_CLIENT_ID,
+      });
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+        });
+        const json = (await res.json()) as Record<string, unknown>;
+        // Keycloak returns 400 with {error: "authorization_pending"} while
+        // the user hasn't completed the flow yet — forward verbatim so the
+        // CLI can back off.
+        return reply.code(res.status).send(json);
+      } catch (err) {
+        return reply.code(502).send({
+          error: 'upstream_error',
+          message: (err as Error).message ?? 'token endpoint unreachable',
+        });
+      }
+    }
+  );
+
+  // -- GET /api/v1/auth/me (alias for /api/v1/me) -----------------------
+  app.get(
+    '/api/v1/auth/me',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description: 'Return the current authenticated user (CLI-facing alias).',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const u = req.user;
+      if (!u) return reply.code(401).send({ error: 'unauthorized' });
+      return reply.send({
+        sub: u.sub,
+        username: u.username,
+        email: u.email,
+        name: u.name,
+        roles: u.roles,
+        groups: u.groups,
+        tenant: u.tenant,
+      });
+    }
+  );
+
   // -- GET /api/v1/me ---------------------------------------------------
   app.get(
     '/api/v1/me',

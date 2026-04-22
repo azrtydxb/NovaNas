@@ -249,3 +249,30 @@ export function canWrite(user: AuthenticatedUser, kind: Kind, namespace?: string
 export function canDelete(user: AuthenticatedUser, kind: Kind, namespace?: string): boolean {
   return canAccess(user, 'delete', kind, namespace);
 }
+
+/**
+ * Action-level authorization check used by E1-API-Actions.
+ *
+ * Model:
+ *  - Admin: any action on any resource.
+ *  - User: actions on resources within their own namespace (namespaced kinds),
+ *    or any action on user-writable cluster-scoped kinds.
+ *  - Viewer / share-only: 403 on all actions.
+ *
+ * Destructive actions (`delete`) additionally require canDelete() to pass.
+ */
+export function canAction(
+  user: AuthenticatedUser,
+  kind: Kind,
+  action: string,
+  namespace?: string
+): boolean {
+  if (!user || isShareOnly(user)) return false;
+  if (hasAnyRole(user, [AuthzRole.Admin])) return true;
+  if (hasAnyRole(user, [AuthzRole.Viewer]) && !hasAnyRole(user, [AuthzRole.User])) return false;
+  // destructive actions require delete rights
+  if (action === 'delete' || action === 'destroy') {
+    return canDelete(user, kind, namespace);
+  }
+  return canWrite(user, kind, namespace);
+}

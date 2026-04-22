@@ -113,7 +113,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => bucketRoutes(s, deps.kubeCustom));
   await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
   await app.register(async (s) => diskRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom, { jobs: deps.jobs ?? null }));
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
   await app.register(async (s) => userRoutes(s, deps.kubeCustom));
 
@@ -178,7 +178,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     searchRoutes(s, { kubeCustom: deps.kubeCustom, redis: deps.redis })
   );
 
-  await app.register(systemRoutes);
+  await app.register(async (s) => systemRoutes(s, { jobs: deps.jobs ?? null }));
 
   // infra routes (audit, jobs, metrics) — A10-API-Infra
   await app.register(async (s) => auditRoutes(s, { db: deps.db ?? null }));
