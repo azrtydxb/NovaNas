@@ -1,10 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuthzRole } from '../auth/authz.js';
-import {
-  type TestAppHandle,
-  buildTestApp,
-  cookieFor,
-} from '../resources/_test-helpers.js';
+import { type TestAppHandle, buildTestApp, cookieFor } from '../resources/_test-helpers.js';
 
 describe('search route', () => {
   let h: TestAppHandle;

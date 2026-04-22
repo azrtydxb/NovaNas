@@ -1,4 +1,13 @@
-import { index, jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 
 export const auditActorType = pgEnum('audit_actor_type', [
@@ -13,11 +22,19 @@ export const auditOutcome = pgEnum('audit_outcome', ['success', 'failure', 'deni
 /**
  * Append-only audit log. Every mutating API call, operator reconcile, and
  * security event produces one row. See docs/12-observability.md.
+ *
+ * Physical layout: range-partitioned by `timestamp` on a monthly cadence.
+ * The composite primary key `(id, timestamp)` is a Postgres requirement for
+ * partitioned tables — the partition key must appear in the PK. See
+ * `packages/db/migrations/0001_audit_partitioning.sql` for the DDL and the
+ * `novanas_create_audit_partition(month_start)` helper that the API's
+ * `audit-partition-gc` service uses to keep 3 months of partitions ahead
+ * and drop partitions older than the configured retention window.
  */
 export const auditLog = pgTable(
   'audit_log',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: uuid('id').defaultRandom().notNull(),
     timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
     actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
     actorType: auditActorType('actor_type').notNull(),
@@ -31,6 +48,7 @@ export const auditLog = pgTable(
     details: jsonb('details').$type<Record<string, unknown>>(),
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.id, table.timestamp] }),
     timestampActorIdx: index('audit_log_timestamp_actor_idx').on(table.timestamp, table.actorId),
     resourceIdx: index('audit_log_resource_idx').on(table.resourceKind, table.resourceName),
     timestampIdx: index('audit_log_timestamp_idx').on(table.timestamp),
