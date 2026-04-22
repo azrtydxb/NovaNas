@@ -3,7 +3,7 @@ import { canWrite, ownNamespace } from '../auth/authz.js';
 import { userFromClaims } from '../auth/rbac.js';
 import type { SessionStore } from '../auth/session.js';
 import type { Env } from '../env.js';
-import { createSpiceProxy } from '../services/spice-proxy.js';
+import { createVncProxy } from '../services/vnc-proxy.js';
 
 export interface VmConsoleDeps {
   env: Env;
@@ -43,7 +43,7 @@ export async function vmConsoleRoutes(app: FastifyInstance, deps: VmConsoleDeps)
       const user = userFromClaims(session.claims);
 
       const { namespace, name } = (req.params ?? {}) as { namespace: string; name: string };
-      const type = ((req.query ?? {}) as { type?: 'spice' | 'vnc' }).type ?? 'spice';
+      const type = ((req.query ?? {}) as { type?: 'spice' | 'vnc' }).type ?? 'vnc';
 
       // Mutation-level permission on VMs in that namespace.
       if (!canWrite(user, 'Vm', namespace)) {
@@ -61,11 +61,11 @@ export async function vmConsoleRoutes(app: FastifyInstance, deps: VmConsoleDeps)
 
       req.log.info({ namespace, name, type, user: user.username }, 'vm.console.open');
 
-      createSpiceProxy({
+      createVncProxy({
         vmNamespace: namespace,
         vmName: name,
         type,
-        clientWs: socket as unknown as Parameters<typeof createSpiceProxy>[0]['clientWs'],
+        clientWs: socket as unknown as Parameters<typeof createVncProxy>[0]['clientWs'],
         apiServerUrl,
         apiServerToken,
         logger: req.log,

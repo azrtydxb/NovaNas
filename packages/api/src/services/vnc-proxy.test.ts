@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { type ClientSocketLike, createSpiceProxy } from './spice-proxy.js';
+import { type ClientSocketLike, createVncProxy } from './vnc-proxy.js';
 
 class FakeSocket extends EventEmitter {
   public readyState = 1;
@@ -17,19 +17,19 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-describe('spice-proxy', () => {
+describe('vnc-proxy', () => {
   it('forwards bytes client <-> upstream', async () => {
     const client = new FakeSocket();
     const upstream = new FakeSocket();
 
-    createSpiceProxy({
+    createVncProxy({
       vmNamespace: 'user-a',
       vmName: 'vm-1',
       clientWs: client as unknown as ClientSocketLike,
       apiServerUrl: 'https://api.example',
       upstreamFactory: () =>
         upstream as unknown as ReturnType<
-          NonNullable<Parameters<typeof createSpiceProxy>[0]['upstreamFactory']>
+          NonNullable<Parameters<typeof createVncProxy>[0]['upstreamFactory']>
         >,
       reconnectWindowMs: 0,
     });
@@ -48,14 +48,14 @@ describe('spice-proxy', () => {
   it('cleans up on client close', async () => {
     const client = new FakeSocket();
     const upstream = new FakeSocket();
-    const handle = createSpiceProxy({
+    const handle = createVncProxy({
       vmNamespace: 'user-a',
       vmName: 'vm-2',
       clientWs: client as unknown as ClientSocketLike,
       apiServerUrl: 'https://api.example',
       upstreamFactory: () =>
         upstream as unknown as ReturnType<
-          NonNullable<Parameters<typeof createSpiceProxy>[0]['upstreamFactory']>
+          NonNullable<Parameters<typeof createVncProxy>[0]['upstreamFactory']>
         >,
       reconnectWindowMs: 0,
     });
@@ -67,18 +67,40 @@ describe('spice-proxy', () => {
   it('closes client on unrecoverable upstream disconnect', async () => {
     const client = new FakeSocket();
     const upstream = new FakeSocket();
-    createSpiceProxy({
+    createVncProxy({
       vmNamespace: 'user-a',
       vmName: 'vm-3',
       clientWs: client as unknown as ClientSocketLike,
       apiServerUrl: 'https://api.example',
       upstreamFactory: () =>
         upstream as unknown as ReturnType<
-          NonNullable<Parameters<typeof createSpiceProxy>[0]['upstreamFactory']>
+          NonNullable<Parameters<typeof createVncProxy>[0]['upstreamFactory']>
         >,
       reconnectWindowMs: 0, // no reconnect allowed
     });
     upstream.emit('close', 1006, Buffer.from('abnormal'));
     expect(client.closedWith?.code).toBe(1011);
+  });
+
+  it('targets the KubeVirt vnc subresource URL', async () => {
+    const client = new FakeSocket();
+    const upstream = new FakeSocket();
+    let capturedUrl = '';
+    createVncProxy({
+      vmNamespace: 'user-a',
+      vmName: 'vm-url',
+      clientWs: client as unknown as ClientSocketLike,
+      apiServerUrl: 'https://api.example',
+      upstreamFactory: (u) => {
+        capturedUrl = u;
+        return upstream as unknown as ReturnType<
+          NonNullable<Parameters<typeof createVncProxy>[0]['upstreamFactory']>
+        >;
+      },
+      reconnectWindowMs: 0,
+    });
+    expect(capturedUrl).toBe(
+      'wss://api.example/apis/subresources.kubevirt.io/v1/namespaces/user-a/virtualmachineinstances/vm-url/vnc'
+    );
   });
 });

@@ -1,3 +1,4 @@
+// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDatasets } from '@/api/datasets';
 import { useIsoLibraries } from '@/api/iso-libraries';
 import { type VmCreateBody, useCreateVm, useDeleteVm, useVmAction, useVms } from '@/api/vms';
@@ -34,7 +35,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SpiceConsole } from '@/components/vm/spice-console';
+import { VncConsole } from '@/components/vm/vnc-console';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { Vm, VmDisk, VmOsType, VmSpec } from '@novanas/schemas';
@@ -58,7 +59,7 @@ function VmsPage() {
     <>
       <PageHeader
         title='Virtual Machines'
-        subtitle='KubeVirt-backed VMs with SPICE console, ISO library and GPU passthrough.'
+        subtitle='KubeVirt-backed VMs with VNC console, ISO library and GPU passthrough.'
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
@@ -595,7 +596,7 @@ function VmDetailDrawer({ vm, onClose }: { vm: Vm | null; onClose: () => void })
           </div>
           <div>
             <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Console</div>
-            {vm ? <SpiceConsole vm={vm} /> : null}
+            {vm ? <VncConsole vm={vm} /> : null}
           </div>
         </div>
         <DialogFooter>
