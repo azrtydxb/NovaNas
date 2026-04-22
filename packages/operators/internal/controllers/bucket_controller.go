@@ -4,7 +4,10 @@ import (
 	"context"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	novanasv1alpha1 "github.com/azrtydxb/novanas/packages/operators/api/v1alpha1"
@@ -13,19 +16,61 @@ import (
 
 // BucketReconciler reconciles a Bucket object.
 //
-// TODO(wave-4): implement real logic. This currently logs and exits so that
-// the manager can be wired end-to-end against a real K8s API server without
-// touching any downstream subsystems (chunk engine, Keycloak, OpenBao, etc).
+// Wave 6 scope: key-provisioning on create when spec.encryption.enabled.
+// S3 object-store bucket creation + user/policy wiring remains TODO.
 type BucketReconciler struct {
 	reconciler.BaseReconciler
+	KeyProvisioner reconciler.VolumeKeyProvisioner
 }
 
-// Reconcile is the no-op reconciler entry point.
+// Reconcile wires encryption provisioning for Bucket.
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	start := time.Now()
 	logger := log.FromContext(ctx).WithValues("controller", "Bucket", "key", req.NamespacedName)
-	logger.V(1).Info("reconciling Bucket (no-op)")
-	defer r.ObserveReconcile(start, "noop")
+	defer r.ObserveReconcile(start, "ok")
+
+	var b novanasv1alpha1.Bucket
+	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if b.Spec.Encryption == nil || !b.Spec.Encryption.Enabled {
+		return ctrl.Result{}, nil
+	}
+	if b.Status.Encryption != nil && b.Status.Encryption.Provisioned {
+		return ctrl.Result{}, nil
+	}
+
+	kp := r.KeyProvisioner
+	if kp == nil {
+		logger.Info("Bucket: no KeyProvisioner wired -- using noop (dev only)")
+		kp = reconciler.NoopKeyProvisioner{}
+	}
+
+	volumeID := string(b.UID)
+	if volumeID == "" {
+		volumeID = b.Name
+	}
+
+	wrapped, version, err := kp.ProvisionVolume(ctx, volumeID)
+	if err != nil {
+		logger.Error(err, "ProvisionVolume failed")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+	}
+
+	now := metav1.NewTime(time.Now())
+	b.Status.Encryption = &novanasv1alpha1.EncryptionStatus{
+		Provisioned:   true,
+		WrappedDK:     wrapped,
+		KeyVersion:    version,
+		ProvisionedAt: &now,
+	}
+	if err := r.Client.Status().Update(ctx, &b); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

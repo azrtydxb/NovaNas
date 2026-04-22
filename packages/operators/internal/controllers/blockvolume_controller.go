@@ -4,7 +4,10 @@ import (
 	"context"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	novanasv1alpha1 "github.com/azrtydxb/novanas/packages/operators/api/v1alpha1"
@@ -13,19 +16,72 @@ import (
 
 // BlockVolumeReconciler reconciles a BlockVolume object.
 //
-// TODO(wave-4): implement real logic. This currently logs and exits so that
-// the manager can be wired end-to-end against a real K8s API server without
-// touching any downstream subsystems (chunk engine, Keycloak, OpenBao, etc).
+// Wave 6 scope: if spec.encryption.enabled is true and the volume has not
+// yet been key-provisioned, call VolumeKeyProvisioner.ProvisionVolume to
+// generate + wrap a Dataset Key and persist it in status.encryption. All
+// other lifecycle logic (chunk engine provisioning, NVMe-oF target
+// creation, etc.) remains TODO for later waves.
 type BlockVolumeReconciler struct {
 	reconciler.BaseReconciler
+	// KeyProvisioner is injected at wire-up time. If nil the controller
+	// uses a no-op provisioner and logs a warning.
+	KeyProvisioner reconciler.VolumeKeyProvisioner
 }
 
-// Reconcile is the no-op reconciler entry point.
+// Reconcile wires the encryption path for BlockVolume.
 func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	start := time.Now()
 	logger := log.FromContext(ctx).WithValues("controller", "BlockVolume", "key", req.NamespacedName)
-	logger.V(1).Info("reconciling BlockVolume (no-op)")
-	defer r.ObserveReconcile(start, "noop")
+	defer r.ObserveReconcile(start, "ok")
+
+	var bv novanasv1alpha1.BlockVolume
+	if err := r.Client.Get(ctx, req.NamespacedName, &bv); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Encryption provisioning is idempotent: skip if already provisioned
+	// or if encryption is not requested.
+	if bv.Spec.Encryption == nil || !bv.Spec.Encryption.Enabled {
+		logger.V(1).Info("BlockVolume unencrypted, skipping key provisioning")
+		return ctrl.Result{}, nil
+	}
+	if bv.Status.Encryption != nil && bv.Status.Encryption.Provisioned {
+		return ctrl.Result{}, nil
+	}
+
+	kp := r.KeyProvisioner
+	if kp == nil {
+		logger.Info("BlockVolume: no KeyProvisioner wired -- using noop (dev only)")
+		kp = reconciler.NoopKeyProvisioner{}
+	}
+
+	volumeID := string(bv.UID)
+	if volumeID == "" {
+		volumeID = bv.Name
+	}
+
+	wrapped, version, err := kp.ProvisionVolume(ctx, volumeID)
+	if err != nil {
+		logger.Error(err, "ProvisionVolume failed")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+	}
+
+	now := metav1.NewTime(time.Now())
+	bv.Status.Encryption = &novanasv1alpha1.EncryptionStatus{
+		Provisioned:   true,
+		WrappedDK:     wrapped,
+		KeyVersion:    version,
+		ProvisionedAt: &now,
+	}
+	if bv.Status.Phase == "" {
+		bv.Status.Phase = "Encrypted"
+	}
+	if err := r.Client.Status().Update(ctx, &bv); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

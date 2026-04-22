@@ -39,6 +39,31 @@ type VolumeMeta struct {
 	SizeBytes uint64   `json:"sizeBytes"`
 	ChunkIDs  []string `json:"chunkIDs"`
 
+	// ChunkPlaintextHashes maps chunk id -> SHA-256(plaintext) for each
+	// encrypted chunk in the volume. This is required on the read path
+	// to re-derive the convergent chunk key (see
+	// storage/internal/crypto/crypto.go, "Plaintext hash storage"). A
+	// chunk id absent from this map indicates an unencrypted chunk and
+	// is treated as a pass-through on read.
+	//
+	// Migration: chunks written before this field existed have no entry
+	// and are therefore treated as unencrypted. This preserves backward
+	// compatibility with pre-Wave-6 volumes.
+	ChunkPlaintextHashes map[string][]byte `json:"chunkPlaintextHashes,omitempty"`
+
+	// EncryptionEnabled indicates whether new chunks for this volume
+	// should be encrypted. False (default) means unencrypted.
+	EncryptionEnabled bool `json:"encryptionEnabled,omitempty"`
+
+	// WrappedDK is the OpenBao Transit-wrapped Dataset Key for this
+	// volume, stored in wrapped form. Empty when EncryptionEnabled is
+	// false.
+	WrappedDK []byte `json:"wrappedDK,omitempty"`
+
+	// KeyVersion is the Transit master-key version that produced
+	// WrappedDK. Callers must pass it back to VolumeKeyManager.Mount.
+	KeyVersion uint64 `json:"keyVersion,omitempty"`
+
 	// DataProtection specifies how the volume's data is protected.
 	DataProtection *DataProtectionConfig `json:"dataProtection,omitempty"`
 
@@ -53,6 +78,29 @@ type VolumeMeta struct {
 
 	// ComplianceInfo tracks the current compliance state of this volume.
 	ComplianceInfo *ComplianceInfo `json:"complianceInfo,omitempty"`
+}
+
+// SetChunkPlaintextHash records the plaintext hash for the given chunk
+// id, allocating the map if needed. Safe to call on a nil receiver only
+// for reads.
+func (v *VolumeMeta) SetChunkPlaintextHash(chunkID string, plaintextHash []byte) {
+	if v.ChunkPlaintextHashes == nil {
+		v.ChunkPlaintextHashes = make(map[string][]byte)
+	}
+	b := make([]byte, len(plaintextHash))
+	copy(b, plaintextHash)
+	v.ChunkPlaintextHashes[chunkID] = b
+}
+
+// ChunkPlaintextHash returns the SHA-256(plaintext) recorded for
+// chunkID, or (nil, false) if the chunk was stored unencrypted (or
+// predates Wave 6).
+func (v *VolumeMeta) ChunkPlaintextHash(chunkID string) ([]byte, bool) {
+	if v == nil || v.ChunkPlaintextHashes == nil {
+		return nil, false
+	}
+	h, ok := v.ChunkPlaintextHashes[chunkID]
+	return h, ok
 }
 
 // PlacementMap records which nodes store replicas of a chunk.

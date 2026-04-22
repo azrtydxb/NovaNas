@@ -35,6 +35,9 @@ type DatasetStatus struct {
 	Conditions  []metav1.Condition `json:"conditions,omitempty"`
 	UsedBytes   int64              `json:"usedBytes,omitempty"`
 	MountPath   string             `json:"mountPath,omitempty"`
+
+	// Encryption carries the wrapped DK produced at provision time.
+	Encryption *EncryptionStatus `json:"encryption,omitempty"`
 }
 
 // +kubebuilder:object:root=true

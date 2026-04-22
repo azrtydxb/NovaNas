@@ -43,6 +43,24 @@ type BlockVolumeStatus struct {
 	Phase      string             `json:"phase,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	UsedBytes  int64              `json:"usedBytes,omitempty"`
+
+	// Encryption carries the wrapped DK and Transit key version written
+	// by the controller at provision time when spec.encryption.enabled.
+	Encryption *EncryptionStatus `json:"encryption,omitempty"`
+}
+
+// EncryptionStatus is the observed state of a volume's Dataset Key.
+// Populated by the controller on first successful ProvisionVolume call.
+type EncryptionStatus struct {
+	// Provisioned is true once the DK has been generated and wrapped.
+	Provisioned bool `json:"provisioned,omitempty"`
+	// WrappedDK is the OpenBao Transit-wrapped Dataset Key, base64-encoded
+	// by the JSON marshaller.
+	WrappedDK []byte `json:"wrappedDK,omitempty"`
+	// KeyVersion is the Transit master-key version used to wrap the DK.
+	KeyVersion uint64 `json:"keyVersion,omitempty"`
+	// ProvisionedAt records when the DK was created.
+	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
 }
 
 // +kubebuilder:object:root=true

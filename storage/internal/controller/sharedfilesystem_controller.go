@@ -1,6 +1,20 @@
 // Package controller provides Kubernetes controllers for NovaStor resources.
-// This file manages the lifecycle of SharedFilesystem custom resources,
-// which provision and manage NFS-accessible filesystems backed by NovaStor.
+// This file manages the lifecycle of SharedFilesystem custom resources.
+//
+// NOTE: SharedFilesystem is deprecated. NovaNas now composes shares from
+// Dataset + Share + NfsServer / SmbServer CRDs (see packages/operators/api/v1alpha1).
+// The previous implementation created a `novanas-storage-filer` Deployment, but
+// that image no longer exists -- the filer role has been replaced by host
+// knfsd + a Samba pod wired through the `Share` and related server CRDs.
+//
+// This reconciler now:
+//  - validates that the referenced StoragePool exists and is Ready,
+//  - marks the CR Ready with a clear `Deprecated` condition and a migration
+//    message pointing operators at Dataset/Share,
+//  - no longer creates any Deployments or Services.
+//
+// New deployments should use `Dataset` (for filesystem storage) with a `Share`
+// resource referencing an `NfsServer` or `SmbServer` instead.
 package controller
 
 import (
@@ -8,16 +22,12 @@ import (
 	"fmt"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
@@ -28,25 +38,28 @@ const (
 )
 
 // SharedFilesystemReconciler reconciles SharedFilesystem objects.
+//
+// Deprecated: use Dataset + Share + NfsServer/SmbServer CRDs from
+// packages/operators/api/v1alpha1 instead.
 type SharedFilesystemReconciler struct {
 	client.Client
-	// ImageRegistry is the container image registry (e.g. "ghcr.io/azrtydxb/novanas").
-	ImageRegistry string
-	// ImageTag is the image tag to use for dynamically created pods (e.g. "latest").
-	ImageTag string
-	// ImagePullPolicy overrides the pull policy for dynamically created pods.
-	ImagePullPolicy string
-	// ImagePullSecrets are secret names for pulling images from private registries.
+	// ImageRegistry / ImageTag / ImagePullPolicy / ImagePullSecrets remain on
+	// the struct for source compatibility with Wave 3 call sites, but are
+	// unused now that the reconciler no longer provisions a filer Deployment.
+	ImageRegistry    string
+	ImageTag         string
+	ImagePullPolicy  string
 	ImagePullSecrets []string
 }
 
 // +kubebuilder:rbac:groups=novanas.io,resources=sharedfilesystems,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=novanas.io,resources=sharedfilesystems/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=novanas.io,resources=sharedfilesystems/finalizers,verbs=update
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile handles a single reconciliation request for a SharedFilesystem.
+// It validates the referenced StoragePool and emits a deprecation condition
+// pointing operators at the Dataset + Share CRDs. It does NOT create any
+// Deployments or Services.
 func (r *SharedFilesystemReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -55,7 +68,8 @@ func (r *SharedFilesystemReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	logger.Info("reconciling SharedFilesystem", "name", req.Name, "namespace", req.Namespace)
+	logger.Info("reconciling SharedFilesystem (deprecated -- migrate to Dataset + Share)",
+		"name", req.Name, "namespace", req.Namespace)
 
 	// Look up the referenced StoragePool.
 	var pool novastorev1alpha1.StoragePool
@@ -94,49 +108,26 @@ func (r *SharedFilesystemReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Create or update the NFS filer Deployment.
-	deployName := fmt.Sprintf("novanas-nfs-%s", fs.Name)
-	if err := r.reconcileNFSDeployment(ctx, &fs, deployName); err != nil {
-		meta.SetStatusCondition(&fs.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Reason:             "DeploymentError",
-			Message:            fmt.Sprintf("failed to reconcile NFS deployment: %v", err),
-			ObservedGeneration: fs.Generation,
-		})
-		fs.Status.Phase = "Pending"
-		if statusErr := r.Status().Update(ctx, &fs); statusErr != nil {
-			return ctrl.Result{}, statusErr
-		}
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	}
+	// Deprecation notice condition.
+	meta.SetStatusCondition(&fs.Status.Conditions, metav1.Condition{
+		Type:               "Deprecated",
+		Status:             metav1.ConditionTrue,
+		Reason:             "UseDatasetAndShare",
+		Message:            "SharedFilesystem is deprecated. Use Dataset + Share + NfsServer/SmbServer from novanas.io/v1alpha1 instead.",
+		ObservedGeneration: fs.Generation,
+	})
 
-	// Create or update the NFS Service.
-	svcName := fmt.Sprintf("novanas-nfs-%s", fs.Name)
-	if err := r.reconcileNFSService(ctx, &fs, svcName, deployName); err != nil {
-		meta.SetStatusCondition(&fs.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Reason:             "ServiceError",
-			Message:            fmt.Sprintf("failed to reconcile NFS service: %v", err),
-			ObservedGeneration: fs.Generation,
-		})
-		fs.Status.Phase = "Pending"
-		if statusErr := r.Status().Update(ctx, &fs); statusErr != nil {
-			return ctrl.Result{}, statusErr
-		}
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	}
-
-	// Set endpoint and mark ready.
-	fs.Status.Endpoint = fmt.Sprintf("%s.%s.svc:%d", svcName, fs.Namespace, nfsPort)
+	// Populate a service-style endpoint hint for clients that read it. No
+	// Kubernetes resource is created -- the actual share is surfaced by the
+	// Share + NfsServer/SmbServer CRD reconcilers.
+	fs.Status.Endpoint = fmt.Sprintf("novanas-nfs-%s.%s.svc:%d", fs.Name, fs.Namespace, nfsPort)
 	fs.Status.Phase = "Ready"
 
 	meta.SetStatusCondition(&fs.Status.Conditions, metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,
-		Reason:             "FilesystemReady",
-		Message:            fmt.Sprintf("NFS filer available at %s", fs.Status.Endpoint),
+		Reason:             "FilesystemAccepted",
+		Message:            "SharedFilesystem accepted (deprecated path; no resources created).",
 		ObservedGeneration: fs.Generation,
 	})
 
@@ -147,117 +138,10 @@ func (r *SharedFilesystemReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{}, nil
 }
 
-func (r *SharedFilesystemReconciler) reconcileNFSDeployment(ctx context.Context, fs *novastorev1alpha1.SharedFilesystem, name string) error {
-	var replicas int32 = 1
-	deploy := &appsv1.Deployment{}
-	deploy.Name = name
-	deploy.Namespace = fs.Namespace
-
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deploy, func() error {
-		appLabels := map[string]string{
-			"app.kubernetes.io/name":       "novanas-nfs-filer",
-			"app.kubernetes.io/instance":   fs.Name,
-			"app.kubernetes.io/managed-by": "novanas-storage-controller",
-		}
-
-		image := fs.Spec.Image
-		if image == "" {
-			registry := r.ImageRegistry
-			if registry == "" {
-				registry = "ghcr.io/azrtydxb/novanas"
-			}
-			tag := r.ImageTag
-			if tag == "" {
-				tag = "latest"
-			}
-			image = fmt.Sprintf("%s/novanas-storage-filer:%s", registry, tag)
-		}
-
-		pullPolicy := corev1.PullIfNotPresent
-		if r.ImagePullPolicy == "Always" {
-			pullPolicy = corev1.PullAlways
-		}
-
-		var pullSecrets []corev1.LocalObjectReference
-		for _, s := range r.ImagePullSecrets {
-			pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
-		}
-
-		deploy.Spec = appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: appLabels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: appLabels,
-				},
-				Spec: corev1.PodSpec{
-					ImagePullSecrets: pullSecrets,
-					Containers: []corev1.Container{
-						{
-							Name:            "nfs-filer",
-							Image:           image,
-							ImagePullPolicy: pullPolicy,
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "nfs",
-									ContainerPort: nfsPort,
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
-							Env: []corev1.EnvVar{
-								{Name: "POOL_NAME", Value: fs.Spec.Pool},
-								{Name: "CAPACITY", Value: fs.Spec.Capacity},
-								{Name: "ACCESS_MODE", Value: fs.Spec.AccessMode},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		return controllerutil.SetControllerReference(fs, deploy, r.Scheme())
-	})
-	return err
-}
-
-func (r *SharedFilesystemReconciler) reconcileNFSService(ctx context.Context, fs *novastorev1alpha1.SharedFilesystem, name, _ string) error {
-	svc := &corev1.Service{}
-	svc.Name = name
-	svc.Namespace = fs.Namespace
-
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
-		appLabels := map[string]string{
-			"app.kubernetes.io/name":       "novanas-nfs-filer",
-			"app.kubernetes.io/instance":   fs.Name,
-			"app.kubernetes.io/managed-by": "novanas-storage-controller",
-		}
-
-		svc.Spec = corev1.ServiceSpec{
-			Type:     corev1.ServiceTypeClusterIP,
-			Selector: appLabels,
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "nfs",
-					Port:       nfsPort,
-					TargetPort: intstr.FromInt32(nfsPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		}
-
-		return controllerutil.SetControllerReference(fs, svc, r.Scheme())
-	})
-	return err
-}
-
 // SetupWithManager registers the SharedFilesystem controller with the manager.
 func (r *SharedFilesystemReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novastorev1alpha1.SharedFilesystem{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.Service{}).
 		Named("sharedfilesystem").
 		Complete(r)
 }

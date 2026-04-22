@@ -154,6 +154,42 @@ IMAGE_TAG ?= latest
 docker-build: ## Build all docker images.
 	$(foreach comp,controller agent meta csi s3gw scheduler webhook,$(DOCKER) build -t novanas-storage-$(comp):latest -f build/Dockerfile.$(comp) .;)
 
+# Per-binary docker build targets that use the co-located storage/cmd/<name>/Dockerfile.
+# Usage:  make docker-build-agent VERSION=v0.6.0
+#         make docker-build-all   VERSION=v0.6.0
+VERSION ?= $(IMAGE_TAG)
+
+.PHONY: docker-build-agent
+docker-build-agent: ## Build the storage agent image (co-located Dockerfile).
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-agent:$(VERSION) -f storage/cmd/agent/Dockerfile ..
+
+.PHONY: docker-build-meta
+docker-build-meta: ## Build the storage meta image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-meta:$(VERSION) -f storage/cmd/meta/Dockerfile ..
+
+.PHONY: docker-build-csi
+docker-build-csi: ## Build the storage CSI image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-csi:$(VERSION) -f storage/cmd/csi/Dockerfile ..
+
+.PHONY: docker-build-webhook
+docker-build-webhook: ## Build the storage webhook image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-webhook:$(VERSION) -f storage/cmd/webhook/Dockerfile ..
+
+.PHONY: docker-build-scheduler
+docker-build-scheduler: ## Build the storage scheduler image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-scheduler:$(VERSION) -f storage/cmd/scheduler/Dockerfile ..
+
+.PHONY: docker-build-s3gw
+docker-build-s3gw: ## Build the storage s3gw image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-s3gw:$(VERSION) -f storage/cmd/s3gw/Dockerfile ..
+
+.PHONY: docker-build-controller
+docker-build-controller: ## Build the storage controller image.
+	$(DOCKER) build -t $(REGISTRY)/novanas-storage-controller:$(VERSION) -f storage/cmd/controller/Dockerfile ..
+
+.PHONY: docker-build-all
+docker-build-all: docker-build-agent docker-build-meta docker-build-csi docker-build-webhook docker-build-scheduler docker-build-s3gw docker-build-controller ## Build all per-binary Docker images from co-located Dockerfiles.
+
 .PHONY: docker-build-dataplane
 docker-build-dataplane: ## Build the data-plane docker image (stub mode).
 	$(DOCKER) build -t novanas-dataplane:latest -f deploy/docker/Dockerfile.dataplane .

@@ -269,7 +269,7 @@ func TestBlockVolumeReconciler_PoolNotFound(t *testing.T) {
 	}
 }
 
-func TestSharedFilesystemReconciler_CreatesDeploymentAndService(t *testing.T) {
+func TestSharedFilesystemReconciler_MarksDeprecatedReady(t *testing.T) {
 	scheme := testScheme()
 
 	pool := &novastorev1alpha1.StoragePool{
@@ -313,7 +313,6 @@ func TestSharedFilesystemReconciler_CreatesDeploymentAndService(t *testing.T) {
 		t.Fatalf("expected no requeue, got RequeueAfter=%v", result.RequeueAfter)
 	}
 
-	// Verify status.
 	var updated novastorev1alpha1.SharedFilesystem
 	if err := fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-fs", Namespace: "default"}, &updated); err != nil {
 		t.Fatalf("failed to get updated fs: %v", err)
@@ -327,34 +326,29 @@ func TestSharedFilesystemReconciler_CreatesDeploymentAndService(t *testing.T) {
 		t.Errorf("expected endpoint %q, got %q", expectedEndpoint, updated.Status.Endpoint)
 	}
 
-	// Verify Deployment was created.
+	// Verify NO Deployment / Service were created -- SharedFilesystem is
+	// deprecated and reconciliation is status-only.
 	var deploy appsv1.Deployment
 	deployKey := types.NamespacedName{Name: "novanas-nfs-test-fs", Namespace: "default"}
-	if err := fakeClient.Get(context.Background(), deployKey, &deploy); err != nil {
-		t.Fatalf("Deployment not found: %v", err)
+	if err := fakeClient.Get(context.Background(), deployKey, &deploy); err == nil {
+		t.Errorf("expected no Deployment to be created for deprecated SharedFilesystem, got one")
 	}
-	if *deploy.Spec.Replicas != 1 {
-		t.Errorf("expected 1 replica, got %d", *deploy.Spec.Replicas)
-	}
-	if len(deploy.Spec.Template.Spec.Containers) != 1 {
-		t.Fatalf("expected 1 container, got %d", len(deploy.Spec.Template.Spec.Containers))
-	}
-	expectedImage := "ghcr.io/azrtydxb/novanas/novanas-storage-filer:latest"
-	if deploy.Spec.Template.Spec.Containers[0].Image != expectedImage {
-		t.Errorf("expected image %q, got %q", expectedImage, deploy.Spec.Template.Spec.Containers[0].Image)
-	}
-
-	// Verify Service was created.
 	var svc corev1.Service
 	svcKey := types.NamespacedName{Name: "novanas-nfs-test-fs", Namespace: "default"}
-	if err := fakeClient.Get(context.Background(), svcKey, &svc); err != nil {
-		t.Fatalf("Service not found: %v", err)
+	if err := fakeClient.Get(context.Background(), svcKey, &svc); err == nil {
+		t.Errorf("expected no Service to be created for deprecated SharedFilesystem, got one")
 	}
-	if svc.Spec.Type != corev1.ServiceTypeClusterIP {
-		t.Errorf("expected ClusterIP service, got %s", svc.Spec.Type)
+
+	// Verify Deprecated condition is present and True.
+	var foundDep bool
+	for _, c := range updated.Status.Conditions {
+		if c.Type == "Deprecated" && c.Status == metav1.ConditionTrue {
+			foundDep = true
+			break
+		}
 	}
-	if len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0].Port != nfsPort {
-		t.Errorf("expected port %d, got %v", nfsPort, svc.Spec.Ports)
+	if !foundDep {
+		t.Errorf("expected Deprecated=True condition, got %+v", updated.Status.Conditions)
 	}
 }
 

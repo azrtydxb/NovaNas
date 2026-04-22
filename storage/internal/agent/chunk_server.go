@@ -11,32 +11,141 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/chunk"
+	"github.com/azrtydxb/novanas/storage/internal/crypto"
 	"github.com/azrtydxb/novanas/storage/internal/dataplane"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 )
 
+// VolumeKeyProvider is the minimal slice of crypto.VolumeKeyManager that the
+// chunk server needs: given a volume id, return the cached DK raw bytes if
+// the volume is encrypted-and-mounted, or (nil, false) for unencrypted or
+// unmounted volumes. It is exposed as an interface so tests can fake it.
+type VolumeKeyProvider interface {
+	// DatasetKey returns the raw 32-byte Dataset Key for volumeID, or
+	// (nil, false) if the volume is unencrypted or not mounted.
+	DatasetKey(volumeID string) ([]byte, bool)
+}
+
+// volumeKeyAdapter wraps a *crypto.VolumeKeyManager to satisfy VolumeKeyProvider.
+type volumeKeyAdapter struct{ m *crypto.VolumeKeyManager }
+
+// DatasetKey returns the raw DK bytes for volumeID, or (nil, false) if
+// the volume is not encrypted / not mounted.
+func (a volumeKeyAdapter) DatasetKey(volumeID string) ([]byte, bool) {
+	if a.m == nil {
+		return nil, false
+	}
+	dk, ok := a.m.Get(volumeID)
+	if !ok || dk == nil {
+		return nil, false
+	}
+	raw, err := dk.Bytes()
+	if err != nil {
+		return nil, false
+	}
+	return raw, true
+}
+
+// NewVolumeKeyProvider adapts a *crypto.VolumeKeyManager to VolumeKeyProvider.
+// A nil manager yields a provider that reports every volume as unencrypted.
+func NewVolumeKeyProvider(m *crypto.VolumeKeyManager) VolumeKeyProvider {
+	return volumeKeyAdapter{m: m}
+}
+
 // ChunkServer implements the ChunkService gRPC server by bridging calls to the
 // Rust SPDK data-plane via gRPC. This ensures all chunk I/O (from S3, Filer,
 // or any other access layer) flows through the Rust dataplane, never through Go.
+//
+// When a VolumeKeyProvider is wired in, PutChunk / GetChunk transparently
+// encrypt and decrypt using crypto.EncryptChunk / crypto.DecryptChunk based
+// on the per-request VolumeId. Requests that either (a) do not carry a
+// VolumeId, or (b) target a volume that has no DK cached, fall through to
+// the unencrypted path unchanged -- preserving the existing scaffolding
+// test surface.
 type ChunkServer struct {
 	pb.UnimplementedChunkServiceServer
 
 	dpClient *dataplane.Client
 	bdevName string
+	// keys may be nil, in which case every chunk flows unencrypted.
+	keys VolumeKeyProvider
+	// plaintextHashes is an in-memory map from chunk id -> plaintext hash
+	// for encrypted chunks. In production this must be persisted in the
+	// volume's chunk index (see storage/internal/metadata.ChunkEntry);
+	// the map is a local fallback for tests.
+	//
+	// TODO(wave-7): wire chunk_server to the metadata service so read paths
+	// fetch the persisted PlaintextHash rather than relying on this cache.
+	plaintextHashes map[string][]byte
 }
 
 // NewChunkServer creates a ChunkServer that routes chunk operations to the SPDK
 // data-plane via gRPC. bdevName is the chunk store bdev (same as used by SPDKTargetServer).
 func NewChunkServer(dpClient *dataplane.Client, bdevName string) *ChunkServer {
 	return &ChunkServer{
-		dpClient: dpClient,
-		bdevName: bdevName,
+		dpClient:        dpClient,
+		bdevName:        bdevName,
+		plaintextHashes: make(map[string][]byte),
 	}
+}
+
+// WithVolumeKeys returns the ChunkServer configured with the given key
+// provider, enabling on-the-fly encryption / decryption for volumes that
+// have a DK cached. Pass (nil) to disable encryption entirely.
+func (s *ChunkServer) WithVolumeKeys(keys VolumeKeyProvider) *ChunkServer {
+	s.keys = keys
+	return s
 }
 
 // Register adds the ChunkService to the given gRPC server.
 func (s *ChunkServer) Register(srv *grpc.Server) {
 	pb.RegisterChunkServiceServer(srv, s)
+}
+
+// maybeEncrypt runs plaintext through crypto.EncryptChunk if the server has
+// a key for volumeID, otherwise returns the plaintext unchanged. Returns
+// (payload, plaintextHash, authTag, encrypted).
+//
+// When encrypted == true the returned payload is the AES-GCM ciphertext and
+// the caller must persist plaintextHash + authTag alongside the stored
+// chunk id. When encrypted == false plaintextHash and authTag are zero.
+func (s *ChunkServer) maybeEncrypt(volumeID string, plaintext []byte) ([]byte, []byte, [crypto.AuthTagSize]byte, bool) {
+	var zeroTag [crypto.AuthTagSize]byte
+	if s.keys == nil || volumeID == "" {
+		return plaintext, nil, zeroTag, false
+	}
+	dk, ok := s.keys.DatasetKey(volumeID)
+	if !ok {
+		return plaintext, nil, zeroTag, false
+	}
+	enc, err := crypto.EncryptChunk(dk, plaintext)
+	if err != nil {
+		logging.L.Error("chunk_server: encrypt failed, storing plaintext",
+			zap.String("volumeID", volumeID), zap.Error(err))
+		return plaintext, nil, zeroTag, false
+	}
+	return enc.Ciphertext, enc.PlaintextHash[:], enc.AuthTag, true
+}
+
+// maybeDecrypt reverses maybeEncrypt. If the chunk was stored encrypted
+// (indicated by a non-nil plaintextHash in the server's local map or
+// passed in by the caller) it decrypts; otherwise returns the stored
+// payload unchanged.
+func (s *ChunkServer) maybeDecrypt(volumeID, chunkID string, payload []byte, authTag [crypto.AuthTagSize]byte) ([]byte, error) {
+	if s.keys == nil || volumeID == "" {
+		return payload, nil
+	}
+	dk, ok := s.keys.DatasetKey(volumeID)
+	if !ok {
+		return payload, nil
+	}
+	ph, found := s.plaintextHashes[chunkID]
+	if !found || len(ph) == 0 {
+		// Unencrypted chunk written before encryption was enabled, or
+		// chunk stored by a path that didn't record a plaintext hash.
+		return payload, nil
+	}
+	return crypto.DecryptChunk(dk, payload, authTag, ph)
 }
 
 // PutChunk receives a stream of chunk data fragments, assembles them, and writes

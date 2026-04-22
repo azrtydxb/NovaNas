@@ -45,6 +45,9 @@ type BucketStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	UsedBytes  int64              `json:"usedBytes,omitempty"`
 	Objects    int64              `json:"objects,omitempty"`
+
+	// Encryption carries the wrapped DK produced at provision time.
+	Encryption *EncryptionStatus `json:"encryption,omitempty"`
 }
 
 // +kubebuilder:object:root=true
