@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Env } from '../env.js';
-import type { SessionStore } from '../auth/session.js';
 import { userFromClaims } from '../auth/rbac.js';
+import type { SessionStore } from '../auth/session.js';
+import type { Env } from '../env.js';
 import { isValidChannel } from '../ws/channels.js';
 import type { WsHub } from '../ws/hub.js';
 
@@ -43,7 +43,7 @@ export async function wsRoutes(app: FastifyInstance, deps: WsRouteDeps): Promise
     hub.register({ id, socket, user, channels: new Set() });
     req.log.info({ wsId: id, user: user.username }, 'ws.client.connect');
 
-    socket.on('message', (raw) => {
+    socket.on('message', (raw: Buffer) => {
       let frame: ClientFrame;
       try {
         frame = JSON.parse(raw.toString()) as ClientFrame;

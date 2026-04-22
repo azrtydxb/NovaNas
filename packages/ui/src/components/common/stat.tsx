@@ -13,7 +13,17 @@ export interface StatProps {
   className?: string;
 }
 
-export function Stat({ label, value, unit, delta, up, down, data, color = 'var(--accent)', className }: StatProps) {
+export function Stat({
+  label,
+  value,
+  unit,
+  delta,
+  up,
+  down,
+  data,
+  color = 'var(--accent)',
+  className,
+}: StatProps) {
   return (
     <div
       className={cn(

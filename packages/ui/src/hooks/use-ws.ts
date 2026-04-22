@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import { getWsClient } from '@/lib/ws';
+import { useEffect, useRef, useState } from 'react';
 
 export function useWsChannel<T = unknown>(
   channel: string | null,

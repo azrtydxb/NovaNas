@@ -1,16 +1,4 @@
 import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type RowData,
-  type SortingState,
-} from '@tanstack/react-table';
-import { useState } from 'react';
-import {
   Table,
   TableBody,
   TableCell,
@@ -18,6 +6,18 @@ import {
   TableHeaderCell,
   TableRow,
 } from '@/components/ui/table';
+import {
+  type ColumnDef,
+  type RowData,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import { useState } from 'react';
 
 export interface DataTableProps<TData extends RowData> {
   data: TData[];
@@ -51,9 +51,7 @@ export function DataTable<TData extends RowData>({
           <tr key={hg.id}>
             {hg.headers.map((h) => (
               <TableHeaderCell key={h.id} colSpan={h.colSpan}>
-                {h.isPlaceholder
-                  ? null
-                  : flexRender(h.column.columnDef.header, h.getContext())}
+                {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
               </TableHeaderCell>
             ))}
           </tr>

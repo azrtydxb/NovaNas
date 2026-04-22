@@ -7,22 +7,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: [
-          'Geist',
-          'Inter',
-          'system-ui',
-          '-apple-system',
-          'Segoe UI',
-          'Roboto',
-          'sans-serif',
-        ],
-        mono: [
-          'Geist Mono',
-          'JetBrains Mono',
-          'ui-monospace',
-          'Menlo',
-          'monospace',
-        ],
+        sans: ['Geist', 'Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['Geist Mono', 'JetBrains Mono', 'ui-monospace', 'Menlo', 'monospace'],
       },
       fontSize: {
         // Compact dashboard scale

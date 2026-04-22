@@ -1,4 +1,4 @@
-@import './tokens.css';
+@import "./tokens.css";
 
 @tailwind base;
 @tailwind components;
@@ -15,12 +15,12 @@
   }
   body {
     margin: 0;
-    font-family: theme('fontFamily.sans');
+    font-family: theme("fontFamily.sans");
     font-size: var(--fs-body);
     color: var(--fg-1);
     background: var(--bg-0);
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: 'ss01', 'cv11';
+    font-feature-settings: "ss01", "cv11";
     letter-spacing: -0.005em;
   }
   ::selection {
@@ -49,8 +49,8 @@
 
 @layer components {
   .mono {
-    font-family: theme('fontFamily.mono');
-    font-feature-settings: 'tnum' 1, 'ss02' 1;
+    font-family: theme("fontFamily.mono");
+    font-feature-settings: "tnum" 1, "ss02" 1;
   }
   .tnum {
     font-variant-numeric: tabular-nums;

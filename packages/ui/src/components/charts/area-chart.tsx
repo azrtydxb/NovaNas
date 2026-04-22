@@ -1,4 +1,11 @@
-import { Area, AreaChart as ReAreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart as ReAreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 export interface AreaChartProps {
   data: Array<Record<string, number | string>>;

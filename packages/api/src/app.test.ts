@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Redis } from 'ioredis';
-import { buildApp, type BuiltApp } from './app.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { type BuiltApp, buildApp } from './app.js';
 import type { Env } from './env.js';
 import type { KeycloakClient } from './services/keycloak.js';
 

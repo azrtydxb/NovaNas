@@ -1,6 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { Activity, BarChart3, Plus, RefreshCw, Shield } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { CapacityBar } from '@/components/common/capacity-bar';
 import { PageHeader } from '@/components/common/page-header';
 import { Stat } from '@/components/common/stat';
@@ -25,6 +22,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatBytes } from '@/lib/format';
+import { createFileRoute } from '@tanstack/react-router';
+import { Activity, BarChart3, Plus, RefreshCw, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export const Route = createFileRoute('/_auth/dashboard')({
   component: DashboardPage,
@@ -35,26 +35,99 @@ export const Route = createFileRoute('/_auth/dashboard')({
 // -----------------------------------------------------------------------------
 
 const POOLS = [
-  { name: 'fast', tier: 'hot', protection: 'rep×2', disks: 8, device: 'NVMe', used: 4.9e12, total: 7.6e12, r: 1420, w: 680 },
-  { name: 'bulk', tier: 'warm', protection: 'EC 6+2', disks: 10, device: 'HDD', used: 23.1e12, total: 60e12, r: 340, w: 210 },
-  { name: 'archive', tier: 'cold', protection: 'EC 4+2', disks: 6, device: 'HDD', used: 14e12, total: 30e12, r: 120, w: 80 },
-  { name: 'meta', tier: 'hot', protection: 'rep×3', disks: 3, device: 'NVMe', used: 12e9, total: 500e9, r: 60, w: 30 },
+  {
+    name: 'fast',
+    tier: 'hot',
+    protection: 'rep×2',
+    disks: 8,
+    device: 'NVMe',
+    used: 4.9e12,
+    total: 7.6e12,
+    r: 1420,
+    w: 680,
+  },
+  {
+    name: 'bulk',
+    tier: 'warm',
+    protection: 'EC 6+2',
+    disks: 10,
+    device: 'HDD',
+    used: 23.1e12,
+    total: 60e12,
+    r: 340,
+    w: 210,
+  },
+  {
+    name: 'archive',
+    tier: 'cold',
+    protection: 'EC 4+2',
+    disks: 6,
+    device: 'HDD',
+    used: 14e12,
+    total: 30e12,
+    r: 120,
+    w: 80,
+  },
+  {
+    name: 'meta',
+    tier: 'hot',
+    protection: 'rep×3',
+    disks: 3,
+    device: 'NVMe',
+    used: 12e9,
+    total: 500e9,
+    r: 60,
+    w: 30,
+  },
 ];
 
-const ACTIVITY: Array<{ tone: 'ok' | 'warn' | 'err' | 'info'; text: React.ReactNode; t: string }> = [
-  { tone: 'ok', text: <>Snapshot <b>family-media@auto-14:58</b> taken (1.4 GB).</>, t: '14:58' },
-  { tone: 'info', text: <>Replication <b>photos → offsite</b> started.</>, t: '14:47' },
-  { tone: 'warn', text: <>Disk in slot 13 reports 5 reallocated sectors.</>, t: '13:12' },
-  { tone: 'ok', text: <>Scrub on pool <b>bulk</b> progressing (18%).</>, t: '12:40' },
-  { tone: 'ok', text: <>Config backup <b>14:00</b> uploaded to S3.</>, t: '14:00' },
-];
+const ACTIVITY: Array<{ tone: 'ok' | 'warn' | 'err' | 'info'; text: React.ReactNode; t: string }> =
+  [
+    {
+      tone: 'ok',
+      text: (
+        <>
+          Snapshot <b>family-media@auto-14:58</b> taken (1.4 GB).
+        </>
+      ),
+      t: '14:58',
+    },
+    {
+      tone: 'info',
+      text: (
+        <>
+          Replication <b>photos → offsite</b> started.
+        </>
+      ),
+      t: '14:47',
+    },
+    { tone: 'warn', text: <>Disk in slot 13 reports 5 reallocated sectors.</>, t: '13:12' },
+    {
+      tone: 'ok',
+      text: (
+        <>
+          Scrub on pool <b>bulk</b> progressing (18%).
+        </>
+      ),
+      t: '12:40',
+    },
+    {
+      tone: 'ok',
+      text: (
+        <>
+          Config backup <b>14:00</b> uploaded to S3.
+        </>
+      ),
+      t: '14:00',
+    },
+  ];
 
 // Build a deterministic sparkline series once at mount and nudge it occasionally.
 function useSparkSeries(length: number, baseline: number, volatility: number, seed: number) {
   const [series, setSeries] = useState<number[]>(() =>
     Array.from({ length }, (_, i) => {
       const v = Math.sin((seed * 9301 + i * 49297) % 233280) * 43758.5453;
-      return baseline + ((v - Math.floor(v)) - 0.5) * volatility * 2;
+      return baseline + (v - Math.floor(v) - 0.5) * volatility * 2;
     })
   );
   useEffect(() => {
@@ -166,10 +239,41 @@ function DashboardPage() {
 
       {/* Metric cards */}
       <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3'>
-        <Stat label='Read' value={readNow} unit='MB/s' delta='+4.2%' up data={readSeries} color='var(--accent)' />
-        <Stat label='Write' value={writeNow} unit='MB/s' delta='-1.1%' down data={writeSeries} color='oklch(0.72 0.14 320)' />
-        <Stat label='IOPS' value={iopsNow.toLocaleString()} delta='+7.8%' up data={iopsSeries} color='oklch(0.78 0.14 160)' />
-        <Stat label='Network' value={netNow} unit='Gb/s' delta='+0.4%' up data={netSeries} color='oklch(0.82 0.14 60)' />
+        <Stat
+          label='Read'
+          value={readNow}
+          unit='MB/s'
+          delta='+4.2%'
+          up
+          data={readSeries}
+          color='var(--accent)'
+        />
+        <Stat
+          label='Write'
+          value={writeNow}
+          unit='MB/s'
+          delta='-1.1%'
+          down
+          data={writeSeries}
+          color='oklch(0.72 0.14 320)'
+        />
+        <Stat
+          label='IOPS'
+          value={iopsNow.toLocaleString()}
+          delta='+7.8%'
+          up
+          data={iopsSeries}
+          color='oklch(0.78 0.14 160)'
+        />
+        <Stat
+          label='Network'
+          value={netNow}
+          unit='Gb/s'
+          delta='+0.4%'
+          up
+          data={netSeries}
+          color='oklch(0.82 0.14 60)'
+        />
       </div>
 
       {/* Pools + activity */}
@@ -254,7 +358,12 @@ function DashboardPage() {
             <CardDescription>3 running</CardDescription>
           </CardHeader>
           <CardBody className='flex flex-col gap-3'>
-            <JobRow title='Scrub · pool bulk' sub='4.2 TB / 23 TB · 18% · 2h 40m' pct={18} tone='accent' />
+            <JobRow
+              title='Scrub · pool bulk'
+              sub='4.2 TB / 23 TB · 18% · 2h 40m'
+              pct={18}
+              tone='accent'
+            />
             <JobRow
               title='Replication · photos → offsite'
               sub='612 MB / 1.4 GB · 43% · 2m'

@@ -43,7 +43,7 @@ export const jobs = pgTable(
     stateKindIdx: index('jobs_state_kind_idx').on(table.state, table.kind),
     ownerIdx: index('jobs_owner_idx').on(table.ownerId),
     createdIdx: index('jobs_created_idx').on(table.createdAt),
-  }),
+  })
 );
 
 export type Job = typeof jobs.$inferSelect;

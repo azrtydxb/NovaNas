@@ -1,4 +1,4 @@
-import { KubeConfig, CoreV1Api, CustomObjectsApi } from '@kubernetes/client-node';
+import { CoreV1Api, CustomObjectsApi, KubeConfig } from '@kubernetes/client-node';
 import type { Env } from '../env.js';
 
 export interface KubeClients {

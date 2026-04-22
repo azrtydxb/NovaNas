@@ -7,6 +7,9 @@ export async function registerRateLimit(app: FastifyInstance): Promise<void> {
     timeWindow: '1 minute',
     // Don't rate-limit health/metrics probes
     allowList: (req) =>
-      req.url === '/health' || req.url === '/livez' || req.url === '/readyz' || req.url === '/metrics',
+      req.url === '/health' ||
+      req.url === '/livez' ||
+      req.url === '/readyz' ||
+      req.url === '/metrics',
   });
 }

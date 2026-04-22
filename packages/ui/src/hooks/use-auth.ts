@@ -1,8 +1,8 @@
+import { ApiError, api } from '@/lib/api';
+import { getUserManager } from '@/lib/auth';
+import { type AuthUser, useAuthStore } from '@/stores/auth';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { getUserManager } from '@/lib/auth';
-import { useAuthStore, type AuthUser } from '@/stores/auth';
 
 export function useAuth() {
   const user = useAuthStore((s) => s.user);
@@ -47,14 +47,8 @@ export function useAuth() {
     }
   }, []);
 
-  const hasPermission = useCallback(
-    (perm: string) => !!user?.permissions.includes(perm),
-    [user]
-  );
-  const hasRole = useCallback(
-    (role: string) => !!user?.roles.includes(role),
-    [user]
-  );
+  const hasPermission = useCallback((perm: string) => !!user?.permissions.includes(perm), [user]);
+  const hasRole = useCallback((role: string) => !!user?.roles.includes(role), [user]);
 
   return {
     user,

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { SessionStore } from '../auth/session.js';
-import { userFromClaims } from '../auth/rbac.js';
 import { registerAuthDecorators } from '../auth/decorators.js';
+import { userFromClaims } from '../auth/rbac.js';
+import type { SessionStore } from '../auth/session.js';
 import type { Env } from '../env.js';
 
 /**

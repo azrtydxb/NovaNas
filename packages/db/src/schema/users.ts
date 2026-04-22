@@ -29,7 +29,7 @@ export const users = pgTable(
   (table) => ({
     keycloakIdIdx: uniqueIndex('users_keycloak_id_idx').on(table.keycloakId),
     usernameIdx: uniqueIndex('users_username_idx').on(table.username),
-  }),
+  })
 );
 
 export const groups = pgTable(
@@ -44,7 +44,7 @@ export const groups = pgTable(
   (table) => ({
     keycloakIdIdx: uniqueIndex('groups_keycloak_id_idx').on(table.keycloakId),
     nameIdx: index('groups_name_idx').on(table.name),
-  }),
+  })
 );
 
 export const userGroups = pgTable(
@@ -62,7 +62,7 @@ export const userGroups = pgTable(
     pk: primaryKey({ columns: [table.userId, table.groupId] }),
     userIdx: index('user_groups_user_idx').on(table.userId),
     groupIdx: index('user_groups_group_idx').on(table.groupId),
-  }),
+  })
 );
 
 export const usersRelations = relations(users, ({ many }) => ({

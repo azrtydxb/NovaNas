@@ -1,5 +1,5 @@
-import type { StatusTone } from '@/types';
 import { cn } from '@/lib/cn';
+import type { StatusTone } from '@/types';
 
 const TONES: Record<StatusTone, string> = {
   ok: 'bg-success shadow-[0_0_0_2px_var(--bg-2),0_0_10px_var(--ok)]',

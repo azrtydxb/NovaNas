@@ -1,10 +1,10 @@
+import { type RequestOptions, api } from '@/lib/api';
 import {
-  useMutation,
-  useQuery,
   type UseMutationOptions,
   type UseQueryOptions,
+  useMutation,
+  useQuery,
 } from '@tanstack/react-query';
-import { api, type RequestOptions } from '@/lib/api';
 
 export function useApiQuery<T>(
   key: readonly unknown[],

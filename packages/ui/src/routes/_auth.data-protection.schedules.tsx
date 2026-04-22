@@ -1,7 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { CalendarClock, Plus } from 'lucide-react';
 import { ShellScreen } from '@/components/common/shell-screen';
 import { Button } from '@/components/ui/button';
+import { createFileRoute } from '@tanstack/react-router';
+import { CalendarClock, Plus } from 'lucide-react';
 
 export const Route = createFileRoute('/_auth/data-protection/schedules')({
   component: SchedulesPage,

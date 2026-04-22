@@ -1,5 +1,5 @@
-import type { Redis } from 'ioredis';
 import type { FastifyBaseLogger } from 'fastify';
+import type { Redis } from 'ioredis';
 import type { WsHub } from './hub.js';
 
 /**
@@ -32,10 +32,7 @@ export class PubSub {
   }
 
   async publish(channel: string, event: string, payload: unknown): Promise<void> {
-    await this.pub.publish(
-      `${CHANNEL_PREFIX}${channel}`,
-      JSON.stringify({ event, payload })
-    );
+    await this.pub.publish(`${CHANNEL_PREFIX}${channel}`, JSON.stringify({ event, payload }));
   }
 
   async stop(): Promise<void> {

@@ -1,7 +1,7 @@
+import { cn } from '@/lib/cn';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import { Check } from 'lucide-react';
 import { forwardRef } from 'react';
-import { cn } from '@/lib/cn';
 
 export const Checkbox = forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,

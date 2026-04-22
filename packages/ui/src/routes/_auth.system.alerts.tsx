@@ -1,6 +1,6 @@
+import { ShellScreen } from '@/components/common/shell-screen';
 import { createFileRoute } from '@tanstack/react-router';
 import { BellRing } from 'lucide-react';
-import { ShellScreen } from '@/components/common/shell-screen';
 
 export const Route = createFileRoute('/_auth/system/alerts')({
   component: AlertsPage,

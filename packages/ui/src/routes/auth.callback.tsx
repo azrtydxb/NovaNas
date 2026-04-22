@@ -1,7 +1,7 @@
+import { ApiError, api } from '@/lib/api';
+import { getUserManager } from '@/lib/auth';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { getUserManager } from '@/lib/auth';
 
 export const Route = createFileRoute('/auth/callback')({
   component: AuthCallback,
@@ -50,10 +50,7 @@ function AuthCallback() {
           <>
             <div className='text-danger font-medium'>Sign-in failed</div>
             <div className='text-sm text-foreground-muted'>{error}</div>
-            <a
-              href='/login'
-              className='text-accent underline underline-offset-2 text-sm'
-            >
+            <a href='/login' className='text-accent underline underline-offset-2 text-sm'>
               Back to login
             </a>
           </>

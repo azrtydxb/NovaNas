@@ -1,7 +1,3 @@
-import { Bell, ChevronDown, LogOut, Search, Settings, User as UserIcon } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
-import { cn } from '@/lib/cn';
-import { Brand } from './brand';
 import { HealthPill } from '@/components/common/health-pill';
 import {
   Avatar,
@@ -15,6 +11,10 @@ import {
   DropdownMenuTrigger,
   Input,
 } from '@/components/ui';
+import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/cn';
+import { Bell, ChevronDown, LogOut, Search, Settings, User as UserIcon } from 'lucide-react';
+import { Brand } from './brand';
 
 export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
   const { user, logout } = useAuth();
@@ -32,10 +32,12 @@ export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
 
       <div className='flex-1' />
 
-      <div className={cn(
-        'hidden md:flex items-center gap-2 h-[30px] px-2.5 w-[320px]',
-        'bg-surface border border-border rounded-md text-foreground-muted'
-      )}>
+      <div
+        className={cn(
+          'hidden md:flex items-center gap-2 h-[30px] px-2.5 w-[320px]',
+          'bg-surface border border-border rounded-md text-foreground-muted'
+        )}
+      >
         <Search size={13} />
         <Input
           className='flex-1 h-auto border-0 bg-transparent focus:ring-0 px-0 text-xs'

@@ -1,7 +1,7 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
 import { Chrome } from '@/components/chrome/chrome';
-import { api, ApiError } from '@/lib/api';
-import { useAuthStore, type AuthUser } from '@/stores/auth';
+import { ApiError, api } from '@/lib/api';
+import { type AuthUser, useAuthStore } from '@/stores/auth';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_auth')({
   beforeLoad: async () => {

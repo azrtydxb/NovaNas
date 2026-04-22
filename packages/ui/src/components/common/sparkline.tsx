@@ -53,13 +53,7 @@ export function Sparkline({
           <path d={dFill} fill={`url(#g-${uid})`} stroke='none' />
         </>
       )}
-      <path
-        d={d}
-        fill='none'
-        stroke={color}
-        strokeWidth='1.5'
-        vectorEffect='non-scaling-stroke'
-      />
+      <path d={d} fill='none' stroke={color} strokeWidth='1.5' vectorEffect='non-scaling-stroke' />
     </svg>
   );
 }

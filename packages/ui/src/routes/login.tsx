@@ -1,10 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { LogIn } from 'lucide-react';
-import { useState } from 'react';
 import { Brand } from '@/components/chrome/brand';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
 import { getUserManager } from '@/lib/auth';
+import { createFileRoute } from '@tanstack/react-router';
+import { LogIn } from 'lucide-react';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -49,9 +49,7 @@ function LoginPage() {
             </Button>
 
             {err && (
-              <div className='text-xs text-danger bg-danger-soft rounded-md px-3 py-2'>
-                {err}
-              </div>
+              <div className='text-xs text-danger bg-danger-soft rounded-md px-3 py-2'>{err}</div>
             )}
 
             <div className='text-xs text-foreground-subtle text-center'>

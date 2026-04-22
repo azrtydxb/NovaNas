@@ -1,12 +1,4 @@
-import {
-  index,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { index, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 
 export const notificationSeverity = pgEnum('notification_severity', [
@@ -32,7 +24,7 @@ export const notifications = pgTable(
   (table) => ({
     userReadIdx: index('notifications_user_read_idx').on(table.userId, table.readAt),
     createdIdx: index('notifications_created_idx').on(table.createdAt),
-  }),
+  })
 );
 
 export type Notification = typeof notifications.$inferSelect;

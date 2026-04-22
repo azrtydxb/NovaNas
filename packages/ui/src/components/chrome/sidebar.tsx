@@ -1,3 +1,6 @@
+import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/cn';
+import type { NavItem } from '@/types';
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
   AppWindow,
@@ -12,9 +15,6 @@ import {
   Users,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useAuth } from '@/hooks/use-auth';
-import { cn } from '@/lib/cn';
-import type { NavItem } from '@/types';
 import { ADMIN_NAV, USER_NAV } from './nav';
 
 const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>> = {

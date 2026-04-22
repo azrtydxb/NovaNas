@@ -1,6 +1,6 @@
+import { cn } from '@/lib/cn';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { forwardRef } from 'react';
-import { cn } from '@/lib/cn';
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 export const Tooltip = TooltipPrimitive.Root;

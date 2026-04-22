@@ -1,27 +1,28 @@
-import { forwardRef, type HTMLAttributes, type TdHTMLAttributes, type ThHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
+import {
+  type HTMLAttributes,
+  type TdHTMLAttributes,
+  type ThHTMLAttributes,
+  forwardRef,
+} from 'react';
 
 export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <table
-      ref={ref}
-      className={cn('w-full border-collapse text-sm', className)}
-      {...props}
-    />
+    <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...props} />
   )
 );
 Table.displayName = 'Table';
 
-export const TableHead = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <thead ref={ref} className={cn('', className)} {...props} />
-  )
-);
+export const TableHead = forwardRef<
+  HTMLTableSectionElement,
+  HTMLAttributes<HTMLTableSectionElement>
+>(({ className, ...props }, ref) => <thead ref={ref} className={cn('', className)} {...props} />);
 TableHead.displayName = 'TableHead';
 
-export const TableBody = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <tbody ref={ref} className={className} {...props} />
-);
+export const TableBody = forwardRef<
+  HTMLTableSectionElement,
+  HTMLAttributes<HTMLTableSectionElement>
+>(({ className, ...props }, ref) => <tbody ref={ref} className={className} {...props} />);
 TableBody.displayName = 'TableBody';
 
 export const TableRow = forwardRef<HTMLTableRowElement, HTMLAttributes<HTMLTableRowElement>>(

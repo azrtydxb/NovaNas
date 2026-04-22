@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import type { ReactNode } from 'react';
 
 export interface EmptyStateProps {
   title: string;
@@ -20,7 +20,9 @@ export function EmptyState({ title, description, icon, action, className }: Empt
     >
       {icon && <div className='text-foreground-subtle'>{icon}</div>}
       <div className='text-md font-medium text-foreground'>{title}</div>
-      {description && <div className='text-sm text-foreground-muted max-w-prose'>{description}</div>}
+      {description && (
+        <div className='text-sm text-foreground-muted max-w-prose'>{description}</div>
+      )}
       {action}
     </div>
   );

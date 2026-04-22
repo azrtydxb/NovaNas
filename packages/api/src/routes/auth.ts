@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { requireAuth } from '../auth/decorators.js';
+import { userFromClaims } from '../auth/rbac.js';
+import { SESSION_TTL_SECONDS, type SessionStore } from '../auth/session.js';
 import type { Env } from '../env.js';
 import type { KeycloakClient } from '../services/keycloak.js';
-import { SESSION_TTL_SECONDS, SessionStore } from '../auth/session.js';
-import { userFromClaims } from '../auth/rbac.js';
-import { requireAuth } from '../auth/decorators.js';
 import type { SessionRecord } from '../types.js';
 
 const OIDC_STATE_PREFIX = 'oidc:state:';

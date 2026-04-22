@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { initTelemetry, shutdownTelemetry } from './telemetry.js';
+import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
-import { createRedisClient } from './services/redis.js';
 import { createKeycloakClient } from './services/keycloak.js';
-import { buildApp } from './app.js';
+import { createRedisClient } from './services/redis.js';
+import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();

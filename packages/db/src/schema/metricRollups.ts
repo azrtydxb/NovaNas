@@ -1,11 +1,4 @@
-import {
-  index,
-  jsonb,
-  pgTable,
-  timestamp,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export interface MetricAggregation {
   min?: number;
@@ -41,10 +34,10 @@ export const metricRollups = pgTable(
       table.metricName,
       table.resourceKind,
       table.resourceName,
-      table.windowStart,
+      table.windowStart
     ),
     windowIdx: index('metric_rollups_window_idx').on(table.windowStart, table.windowEnd),
-  }),
+  })
 );
 
 export type MetricRollup = typeof metricRollups.$inferSelect;

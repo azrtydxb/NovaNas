@@ -1,12 +1,4 @@
-import {
-  index,
-  jsonb,
-  pgTable,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 
 /**
@@ -33,7 +25,7 @@ export const apiTokens = pgTable(
     tokenHashIdx: uniqueIndex('api_tokens_token_hash_idx').on(table.tokenHash),
     userIdx: index('api_tokens_user_idx').on(table.userId),
     expiresIdx: index('api_tokens_expires_idx').on(table.expiresAt),
-  }),
+  })
 );
 
 export type ApiToken = typeof apiTokens.$inferSelect;

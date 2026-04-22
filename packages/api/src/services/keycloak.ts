@@ -25,11 +25,7 @@ export interface KeycloakClient {
 
 export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
   const issuer = new URL(env.KEYCLOAK_ISSUER_URL);
-  const config = await client.discovery(
-    issuer,
-    env.KEYCLOAK_CLIENT_ID,
-    env.KEYCLOAK_CLIENT_SECRET
-  );
+  const config = await client.discovery(issuer, env.KEYCLOAK_CLIENT_ID, env.KEYCLOAK_CLIENT_SECRET);
 
   return {
     config,
@@ -39,12 +35,12 @@ export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
       const state = client.randomState();
       const nonce = client.randomNonce();
       const codeVerifier = client.randomPKCECodeVerifier();
-      // Synchronous in openid-client v6 when using random helpers
-      const codeChallenge = client.calculatePKCECodeChallenge
-        ? // v6 API: returns a string synchronously via helper; fall back to base64url
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (client as any).calculatePKCECodeChallenge?.(codeVerifier) ?? codeVerifier
-        : codeVerifier;
+      // openid-client v6 exposes calculatePKCECodeChallenge as an async helper.
+      // The value is awaited by the caller of buildAuthUrl via Promise.resolve.
+      const calc = (client as unknown as Record<string, unknown>).calculatePKCECodeChallenge as
+        | ((v: string) => string | Promise<string>)
+        | undefined;
+      const codeChallenge = calc ? calc(codeVerifier) : codeVerifier;
       const params: Record<string, string> = {
         redirect_uri: redirectUri,
         scope: 'openid profile email',

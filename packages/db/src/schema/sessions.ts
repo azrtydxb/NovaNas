@@ -24,7 +24,7 @@ export const sessions = pgTable(
     userIdx: index('sessions_user_idx').on(table.userId),
     tokenHashIdx: index('sessions_token_hash_idx').on(table.tokenHash),
     expiresIdx: index('sessions_expires_idx').on(table.expiresAt),
-  }),
+  })
 );
 
 export type Session = typeof sessions.$inferSelect;

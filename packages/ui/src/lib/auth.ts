@@ -11,7 +11,7 @@
  *      the Keycloak end_session_endpoint.
  */
 
-import { UserManager, WebStorageStateStore, type UserManagerSettings } from 'oidc-client-ts';
+import { UserManager, type UserManagerSettings, WebStorageStateStore } from 'oidc-client-ts';
 
 export interface OidcConfig {
   issuer: string;
@@ -30,8 +30,7 @@ export function resolveOidcConfig(): OidcConfig {
       (env.VITE_OIDC_REDIRECT_URI as string | undefined) ??
       `${window.location.origin}/auth/callback`,
     postLogoutRedirectUri:
-      (env.VITE_OIDC_POST_LOGOUT_URI as string | undefined) ??
-      `${window.location.origin}/login`,
+      (env.VITE_OIDC_POST_LOGOUT_URI as string | undefined) ?? `${window.location.origin}/login`,
     scope: (env.VITE_OIDC_SCOPE as string | undefined) ?? 'openid profile email',
   };
 }

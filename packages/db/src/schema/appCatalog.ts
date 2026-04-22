@@ -46,11 +46,11 @@ export const appCatalogCache = pgTable(
     catalogAppVersionIdx: uniqueIndex('app_catalog_cache_catalog_app_version_idx').on(
       table.catalogName,
       table.appName,
-      table.version,
+      table.version
     ),
     appIdx: index('app_catalog_cache_app_idx').on(table.appName),
     fetchedIdx: index('app_catalog_cache_fetched_idx').on(table.fetchedAt),
-  }),
+  })
 );
 
 export type AppCatalogEntry = typeof appCatalogCache.$inferSelect;

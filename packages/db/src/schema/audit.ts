@@ -1,12 +1,4 @@
-import {
-  index,
-  jsonb,
-  pgEnum,
-  pgTable,
-  timestamp,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { index, jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 
 export const auditActorType = pgEnum('audit_actor_type', [
@@ -43,7 +35,7 @@ export const auditLog = pgTable(
     resourceIdx: index('audit_log_resource_idx').on(table.resourceKind, table.resourceName),
     timestampIdx: index('audit_log_timestamp_idx').on(table.timestamp),
     actionIdx: index('audit_log_action_idx').on(table.action),
-  }),
+  })
 );
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;

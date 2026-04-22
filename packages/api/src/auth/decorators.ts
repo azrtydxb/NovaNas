@@ -19,7 +19,7 @@ export function requireAuth(
 }
 
 export function requireRole(role: string) {
-  return function (req: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void): void {
+  return (req: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void): void => {
     if (!req.user) {
       reply.code(401).send({ error: 'unauthorized' });
       return;

@@ -1,6 +1,6 @@
+import { ShellScreen } from '@/components/common/shell-screen';
 import { createFileRoute } from '@tanstack/react-router';
 import { Cloud } from 'lucide-react';
-import { ShellScreen } from '@/components/common/shell-screen';
 
 export const Route = createFileRoute('/_auth/sharing/s3')({
   component: S3Page,
