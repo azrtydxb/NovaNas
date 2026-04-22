@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/raft"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
@@ -28,11 +27,7 @@ func (m *mockLockStore) applyOp(op *fsmOp) error {
 	if err != nil {
 		return err
 	}
-	// Directly apply to FSM using the internal applyLog representation.
-	log := raft.Log{
-		Data: data,
-	}
-	result := m.fsm.Apply(&log)
+	result := m.fsm.Apply(data)
 	if result != nil {
 		if err, ok := result.(error); ok {
 			return err

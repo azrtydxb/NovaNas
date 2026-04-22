@@ -1,23 +1,19 @@
 package metadata
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
-	"github.com/hashicorp/raft"
-	"google.golang.org/protobuf/proto"
-
-	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
-	"github.com/azrtydxb/novanas/storage/internal/metrics"
 )
 
 // BadgerFSM is a persistent implementation of MetadataFSM backed by BadgerDB.
 // Keys are stored as composite "bucket:key" strings to partition data into
 // logical buckets while keeping a single key-value namespace.
+//
+// Durability is provided by BadgerDB's native WAL + fsync — NovaNas is
+// single-node by design (docs/14 S12) and does not need Raft consensus.
 type BadgerFSM struct {
 	db *badger.DB
 }
@@ -26,7 +22,7 @@ type BadgerFSM struct {
 var _ MetadataFSM = (*BadgerFSM)(nil)
 
 // NewBadgerFSM opens (or creates) a BadgerDB database at the given directory
-// path and returns a BadgerFSM ready for use as a Raft FSM.
+// path and returns a BadgerFSM ready for use.
 func NewBadgerFSM(dir string) (*BadgerFSM, error) {
 	opts := badger.DefaultOptions(dir).
 		WithLogger(nil) // Suppress BadgerDB's internal logging.
@@ -47,23 +43,13 @@ func bucketPrefix(bucket string) []byte {
 	return []byte(bucket + ":")
 }
 
-// Apply handles a single Raft log entry by executing the encoded put or delete
-// operation against BadgerDB. It returns nil on success or an error.
-func (f *BadgerFSM) Apply(log *raft.Log) interface{} {
-	start := time.Now()
-	defer func() {
-		metrics.RaftApplyLatency.Observe(time.Since(start).Seconds())
-	}()
-
-	var op fsmOp
-	var pbOp pb.FsmOp
-	if err := proto.Unmarshal(log.Data, &pbOp); err != nil {
-		// Fall back to JSON for backward compatibility with pre-protobuf log entries.
-		if jsonErr := json.Unmarshal(log.Data, &op); jsonErr != nil {
-			return fmt.Errorf("unmarshaling fsm op: %w", err)
-		}
-	} else {
-		op = fsmOp{Op: pbOp.Op, Bucket: pbOp.Bucket, Key: pbOp.Key, Value: pbOp.Value}
+// Apply decodes an encoded fsmOp payload and executes it against BadgerDB.
+// Returns nil on success, a non-error response (e.g. allocated inode), or
+// an error.
+func (f *BadgerFSM) Apply(data []byte) interface{} {
+	op, err := decodeFsmOp(data)
+	if err != nil {
+		return err
 	}
 
 	switch op.Op {
@@ -82,7 +68,6 @@ func (f *BadgerFSM) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("badger delete: %w", err)
 		}
 	case opAddQuota:
-		// AddQu atomically adds a delta to a usage counter.
 		err := f.db.Update(func(txn *badger.Txn) error {
 			var delta int64
 			if err := json.Unmarshal(op.Value, &delta); err != nil {
@@ -109,7 +94,6 @@ func (f *BadgerFSM) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("badger add quota: %w", err)
 		}
 	case opSubQuota:
-		// SubQu atomically subtracts a delta from a usage counter.
 		err := f.db.Update(func(txn *badger.Txn) error {
 			var delta int64
 			if err := json.Unmarshal(op.Value, &delta); err != nil {
@@ -136,7 +120,6 @@ func (f *BadgerFSM) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("badger sub quota: %w", err)
 		}
 	case opAllocateIno:
-		// Atomically increment the inode counter and return the new value.
 		var next uint64
 		err := f.db.Update(func(txn *badger.Txn) error {
 			current := uint64(2) // Default start value.
@@ -200,7 +183,6 @@ func (f *BadgerFSM) GetAll(bucket string) (map[string][]byte, error) {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
-			// Strip the "bucket:" prefix to get the original key.
 			originalKey := string(k[prefixLen:])
 			val, err := item.ValueCopy(nil)
 			if err != nil {
@@ -219,118 +201,24 @@ func (f *BadgerFSM) GetAll(bucket string) (map[string][]byte, error) {
 	return result, nil
 }
 
-// badgerSnapshotEntry represents a single key-value pair in the snapshot stream.
-type badgerSnapshotEntry struct {
-	Key   []byte `json:"k"`
-	Value []byte `json:"v"`
+// Backup writes a consistent snapshot of the database to w. Since is the
+// last version seen by a previous backup (0 for a full backup). Returns the
+// last version included in the stream, suitable for incremental follow-ups.
+//
+// This replaces the former Raft snapshot mechanism: operators use Backup for
+// disaster-recovery dumps (see Wave 7 ConfigBackupPolicy) and Restore to
+// reload from such a dump.
+func (f *BadgerFSM) Backup(w io.Writer, since uint64) (uint64, error) {
+	return f.db.Backup(w, since)
 }
 
-// Snapshot creates a point-in-time snapshot of the BadgerDB state. The snapshot
-// streams entries rather than loading everything into memory, using a length-
-// prefixed binary format for each JSON-encoded entry.
-func (f *BadgerFSM) Snapshot() (raft.FSMSnapshot, error) {
-	// Collect all key-value pairs. BadgerDB transactions provide a consistent
-	// view, so we iterate within a single read transaction.
-	var entries []badgerSnapshotEntry
-	err := f.db.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			key := item.KeyCopy(nil)
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return fmt.Errorf("reading value during snapshot: %w", err)
-			}
-			entries = append(entries, badgerSnapshotEntry{Key: key, Value: val})
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating badger snapshot: %w", err)
-	}
-	return &badgerFSMSnapshot{entries: entries}, nil
-}
-
-// Restore replaces the entire BadgerDB state with data from the snapshot reader.
-// All existing data is dropped before loading the snapshot.
-func (f *BadgerFSM) Restore(rc io.ReadCloser) error {
-	defer rc.Close()
-
-	// Drop all existing data.
-	if err := f.db.DropAll(); err != nil {
-		return fmt.Errorf("dropping badger data before restore: %w", err)
-	}
-
-	// Read length-prefixed entries from the stream.
-	var lenBuf [4]byte
-	for {
-		if _, err := io.ReadFull(rc, lenBuf[:]); err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
-			}
-			return fmt.Errorf("reading entry length: %w", err)
-		}
-		entryLen := binary.BigEndian.Uint32(lenBuf[:])
-		entryBuf := make([]byte, entryLen)
-		if _, err := io.ReadFull(rc, entryBuf); err != nil {
-			return fmt.Errorf("reading entry data: %w", err)
-		}
-		var key, value []byte
-		var pbEntry pb.BadgerSnapshotEntry
-		if err := proto.Unmarshal(entryBuf, &pbEntry); err != nil {
-			// Fall back to JSON for backward compatibility with pre-protobuf snapshots.
-			var jsonEntry badgerSnapshotEntry
-			if jsonErr := json.Unmarshal(entryBuf, &jsonEntry); jsonErr != nil {
-				return fmt.Errorf("unmarshaling snapshot entry: %w (json fallback: %v)", err, jsonErr)
-			}
-			key, value = jsonEntry.Key, jsonEntry.Value
-		} else {
-			key, value = pbEntry.Key, pbEntry.Value
-		}
-		if err := f.db.Update(func(txn *badger.Txn) error {
-			return txn.Set(key, value)
-		}); err != nil {
-			return fmt.Errorf("restoring entry: %w", err)
-		}
-	}
-	return nil
+// Restore loads a backup stream produced by Backup, replacing the current
+// database contents. Existing keys are overwritten by entries in the stream.
+func (f *BadgerFSM) Restore(r io.Reader) error {
+	return f.db.Load(r, 16)
 }
 
 // Close closes the underlying BadgerDB database, releasing all resources.
 func (f *BadgerFSM) Close() error {
 	return f.db.Close()
 }
-
-// badgerFSMSnapshot holds snapshot data for streaming to a raft.SnapshotSink.
-type badgerFSMSnapshot struct {
-	entries []badgerSnapshotEntry
-}
-
-// Persist writes all snapshot entries to the sink using a length-prefixed
-// binary format: [4-byte big-endian length][protobuf-encoded entry] per record.
-func (s *badgerFSMSnapshot) Persist(sink raft.SnapshotSink) error {
-	for _, entry := range s.entries {
-		data, err := proto.Marshal(&pb.BadgerSnapshotEntry{Key: entry.Key, Value: entry.Value})
-		if err != nil {
-			sink.Cancel()
-			return fmt.Errorf("marshaling snapshot entry: %w", err)
-		}
-		var lenBuf [4]byte
-		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(data)))
-		if _, err := sink.Write(lenBuf[:]); err != nil {
-			sink.Cancel()
-			return fmt.Errorf("writing entry length: %w", err)
-		}
-		if _, err := sink.Write(data); err != nil {
-			sink.Cancel()
-			return fmt.Errorf("writing entry data: %w", err)
-		}
-	}
-	return sink.Close()
-}
-
-// Release is a no-op; snapshot data is garbage-collected normally.
-func (s *badgerFSMSnapshot) Release() {}

@@ -2,11 +2,9 @@ package metadata
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"testing"
 
-	"github.com/hashicorp/raft"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
@@ -35,7 +33,7 @@ func applyOp(t *testing.T, f MetadataFSM, op *fsmOp) {
 	if err != nil {
 		t.Fatalf("marshal fsmOp: %v", err)
 	}
-	resp := f.Apply(&raft.Log{Data: data})
+	resp := f.Apply(data)
 	if resp != nil {
 		if e, ok := resp.(error); ok {
 			t.Fatalf("Apply returned error: %v", e)
@@ -183,7 +181,9 @@ func TestBadgerFSM_MultipleBuckets(t *testing.T) {
 	}
 }
 
-func TestBadgerFSM_SnapshotAndRestore(t *testing.T) {
+// TestBadgerFSM_BackupAndRestore exercises the native Badger backup/restore
+// flow that replaced the former Raft snapshot mechanism (docs/14 S12).
+func TestBadgerFSM_BackupAndRestore(t *testing.T) {
 	f1, cleanup1 := newTestBadgerFSM(t)
 	defer cleanup1()
 
@@ -198,28 +198,17 @@ func TestBadgerFSM_SnapshotAndRestore(t *testing.T) {
 		applyOp(t, f1, &entries[i])
 	}
 
-	// Take a snapshot.
-	snap, err := f1.Snapshot()
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-
-	// Write snapshot to a buffer.
+	// Take a full backup.
 	var buf bytes.Buffer
-	sink := &testSnapshotSink{buf: &buf}
-	if err := snap.Persist(sink); err != nil {
-		t.Fatalf("Persist: %v", err)
+	if _, err := f1.Backup(&buf, 0); err != nil {
+		t.Fatalf("Backup: %v", err)
 	}
 
-	// Create a new BadgerFSM and restore.
+	// Create a new BadgerFSM and restore the backup into it.
 	f2, cleanup2 := newTestBadgerFSM(t)
 	defer cleanup2()
 
-	// Add some data that should be wiped by restore.
-	applyOp(t, f2, &fsmOp{Op: opPut, Bucket: "stale", Key: "old", Value: []byte("gone")})
-
-	rc := io.NopCloser(bytes.NewReader(buf.Bytes()))
-	if err := f2.Restore(rc); err != nil {
+	if err := f2.Restore(bytes.NewReader(buf.Bytes())); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 
@@ -234,12 +223,6 @@ func TestBadgerFSM_SnapshotAndRestore(t *testing.T) {
 			t.Errorf("Get(%s, %s) = %q, want %q", e.Bucket, e.Key, got, e.Value)
 		}
 	}
-
-	// Verify stale data was wiped.
-	_, err = f2.Get("stale", "old")
-	if err == nil {
-		t.Error("stale data should have been dropped during restore")
-	}
 }
 
 func TestBadgerFSM_UnknownOp(t *testing.T) {
@@ -247,7 +230,7 @@ func TestBadgerFSM_UnknownOp(t *testing.T) {
 	defer cleanup()
 
 	data, _ := proto.Marshal(&pb.FsmOp{Op: "invalid", Bucket: "b", Key: "k"})
-	resp := f.Apply(&raft.Log{Data: data})
+	resp := f.Apply(data)
 	if resp == nil {
 		t.Fatal("expected error for unknown op")
 	}
@@ -260,34 +243,11 @@ func TestBadgerFSM_InvalidLogData(t *testing.T) {
 	f, cleanup := newTestBadgerFSM(t)
 	defer cleanup()
 
-	resp := f.Apply(&raft.Log{Data: []byte("not protobuf")})
+	resp := f.Apply([]byte("not protobuf"))
 	if resp == nil {
 		t.Fatal("expected error for invalid protobuf")
 	}
 	if _, ok := resp.(error); !ok {
 		t.Fatalf("expected error, got %T", resp)
 	}
-}
-
-// testSnapshotSink implements raft.SnapshotSink for testing.
-type testSnapshotSink struct {
-	buf      *bytes.Buffer
-	canceled bool
-}
-
-func (s *testSnapshotSink) Write(p []byte) (int, error) {
-	return s.buf.Write(p)
-}
-
-func (s *testSnapshotSink) Close() error {
-	return nil
-}
-
-func (s *testSnapshotSink) ID() string {
-	return "test-snapshot"
-}
-
-func (s *testSnapshotSink) Cancel() error {
-	s.canceled = true
-	return nil
 }

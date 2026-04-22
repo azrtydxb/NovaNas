@@ -10,7 +10,6 @@ fn main() {
             &[
                 "proto/chunk_service.proto",
                 "proto/dataplane_service.proto",
-                "proto/raft_service.proto",
             ],
             &["proto/"],
         )

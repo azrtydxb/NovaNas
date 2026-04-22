@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -17,7 +16,7 @@ func applyFSMOp(t *testing.T, fsm *FSM, op string, bucket, key string, value []b
 	t.Helper()
 	opData, err := proto.Marshal(&pb.FsmOp{Op: op, Bucket: bucket, Key: key, Value: value})
 	require.NoError(t, err)
-	result := fsm.Apply(&raft.Log{Data: opData})
+	result := fsm.Apply(opData)
 	// FSM.Apply returns nil on success or an error
 	if result != nil {
 		if err, ok := result.(error); ok && err != nil {

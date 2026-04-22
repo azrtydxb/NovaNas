@@ -1,6 +1,11 @@
-// Package main provides the NovaStor metadata service binary.
-// The metadata service maintains cluster metadata using Raft consensus,
-// storing information about volumes, files, objects, and placement maps.
+// Package main provides the NovaNas metadata service binary.
+//
+// NovaNas is single-node by design (docs/14 S12): the metadata service
+// maintains cluster metadata in a local BadgerDB store with durability
+// provided by Badger's WAL + fsync. Raft consensus was removed because
+// it added operational complexity without value on a single-node
+// deployment. The gRPC service interface is unchanged so upstream
+// clients (operators, CSI, s3gw) continue to work as before.
 package main
 
 import (
@@ -17,7 +22,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
@@ -33,21 +37,14 @@ var (
 )
 
 func main() {
-	nodeID := flag.String("node-id", "", "Raft node ID (defaults to hostname when empty)")
-	dataDir := flag.String("data-dir", "/var/lib/novanas/meta", "Raft data directory")
-	raftAddr := flag.String("raft-addr", ":7000", "Raft consensus transport listen address")
+	nodeID := flag.String("node-id", "", "Metadata node ID (defaults to hostname when empty)")
+	dataDir := flag.String("data-dir", "/var/lib/novanas/meta", "Metadata data directory (BadgerDB files are stored under <data-dir>/badger)")
 	grpcAddr := flag.String("grpc-addr", ":7001", "gRPC client API listen address")
-	raftAdvertise := flag.String("raft-advertise", "", "Address advertised to Raft peers (e.g. pod-0.headless.ns.svc.cluster.local:7000). Overrides auto-detected pod IP. Use stable DNS names to survive pod restarts.")
-	join := flag.String("join", "", "Comma-separated list of existing Raft peer addresses to join (e.g. peer1:7000,peer2:7000). When empty, bootstraps as a single-node cluster.")
-	bootstrapExpect := flag.Int("bootstrap-expect", 0, "Number of nodes expected for initial cluster. When > 0 and join fails, the node bootstraps and lets others join.")
 	metricsAddr := flag.String("metrics-addr", ":7002", "Prometheus metrics listen address")
 	tlsCA := flag.String("tls-ca", "", "Path to CA certificate for mTLS")
 	tlsCert := flag.String("tls-cert", "", "Path to server certificate for mTLS")
 	tlsKey := flag.String("tls-key", "", "Path to server key for mTLS")
-	tlsClientCert := flag.String("tls-client-cert", "", "Path to client certificate for mTLS (used for cluster join)")
-	tlsClientKey := flag.String("tls-client-key", "", "Path to client key for mTLS (used for cluster join)")
 	tlsRotationInterval := flag.Duration("tls-rotation-interval", 5*time.Minute, "Interval for TLS certificate rotation checks")
-	grpcJoinAddr := flag.String("grpc-join", "", "gRPC address of existing cluster peer for join; defaults to --join host with port 7001")
 	gcInterval := flag.Duration("gc-interval", 1*time.Hour, "Interval between metadata garbage collection runs")
 	gcNodeTTL := flag.Duration("gc-node-ttl", 24*time.Hour, "Time after which a node with no heartbeat is considered stale for GC")
 	flag.Parse()
@@ -73,52 +70,19 @@ func main() {
 	// Register Prometheus metrics.
 	metrics.Register()
 
-	// Build gRPC dial options for the join RPC (used when joining an existing cluster).
-	// Uses client cert/key (with ExtKeyUsageClientAuth) rather than server cert/key,
-	// because the peer's gRPC server enforces RequireAndVerifyClientCert.
-	var grpcDialOpts []grpc.DialOption
-	if *tlsCA != "" && *tlsClientCert != "" && *tlsClientKey != "" {
-		tlsDialOpt, tlsDialErr := transport.NewClientTLS(transport.TLSConfig{
-			CACertPath: *tlsCA,
-			CertPath:   *tlsClientCert,
-			KeyPath:    *tlsClientKey,
-		})
-		if tlsDialErr != nil {
-			log.Fatalf("Failed to configure TLS for cluster join: %v", tlsDialErr)
-		}
-		grpcDialOpts = []grpc.DialOption{tlsDialOpt}
-	} else {
-		grpcDialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	}
-
-	// --grpc-join overrides the gRPC peer address for join (defaults to --join host:7001).
-	// Currently unused in code since joinCluster derives port 7001 from --join addresses,
-	// but the flag allows Helm templates to specify an explicit gRPC address.
-	if *grpcJoinAddr != "" {
-		log.Printf("--grpc-join specified: %s (override for cluster join gRPC address)", *grpcJoinAddr)
-	}
-
-	// Create the Raft-backed metadata store.
+	// Create the metadata store (direct BadgerDB; no Raft — docs/14 S12).
 	store, err := metadata.NewRaftStore(metadata.RaftConfig{
-		NodeID:          *nodeID,
-		DataDir:         *dataDir,
-		RaftAddr:        *raftAddr,
-		RaftAdvertise:   *raftAdvertise,
-		JoinAddrs:       *join,
-		BootstrapExpect: *bootstrapExpect,
-		GRPCDialOpts:    grpcDialOpts,
+		NodeID:  *nodeID,
+		DataDir: *dataDir,
 	})
 	if err != nil {
-		log.Fatalf("Failed to create Raft store: %v", err)
+		log.Fatalf("Failed to create metadata store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
 
 	// Main context for the metadata service lifetime.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Start Raft metrics monitoring (updates every 5 seconds).
-	store.StartMetricsMonitor(ctx, 5*time.Second)
 
 	// Start the garbage collector for orphan chunks and stale metadata.
 	gc := metadata.NewGarbageCollector(store, *gcInterval, *gcNodeTTL)
@@ -156,8 +120,8 @@ func main() {
 		log.Fatalf("Failed to listen on %s: %v", *grpcAddr, err)
 	}
 
-	log.Printf("Metadata gRPC server listening on %s (Raft addr: %s, node: %s, join: %q)",
-		*grpcAddr, *raftAddr, *nodeID, *join)
+	log.Printf("Metadata gRPC server listening on %s (node: %s, single-node mode)",
+		*grpcAddr, *nodeID)
 
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil {

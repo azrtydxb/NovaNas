@@ -1,18 +1,28 @@
+// Package metadata: single-node design (docs/14 S12).
+//
+// NovaNas is single-node by design. Metadata writes go directly to the
+// underlying store (BadgerDB) with durability provided by Badger's WAL +
+// fsync. Raft consensus was removed because it added operational
+// complexity without value on a single-node deployment.
+//
+// The FSM type retains its name for historical continuity; it is no
+// longer a raft.FSM and no longer participates in log replication. It
+// is a plain key-value state machine that decodes an encoded fsmOp
+// payload and applies it synchronously.
+//
+// Future multi-node would reintroduce consensus or move to
+// metadata-as-chunks (S11), deferred.
 package metadata
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
-	"time"
 
-	"github.com/hashicorp/raft"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
-	"github.com/azrtydxb/novanas/storage/internal/metrics"
 )
 
 const (
@@ -47,10 +57,12 @@ var (
 )
 
 // MetadataFSM defines the interface that both the in-memory FSM and the
-// BadgerDB-backed FSM implement. It extends raft.FSM with typed read
-// accessors and a Close method for resource cleanup.
+// BadgerDB-backed FSM implement. It provides synchronous Apply and
+// typed read accessors plus a Close method for resource cleanup.
 type MetadataFSM interface {
-	raft.FSM
+	// Apply decodes and applies an encoded fsmOp payload. Returns a
+	// response value (e.g. allocated inode) or an error.
+	Apply(data []byte) interface{}
 	Get(bucket, key string) ([]byte, error)
 	GetAll(bucket string) (map[string][]byte, error)
 	Close() error
@@ -63,9 +75,23 @@ type fsmOp struct {
 	Value  []byte `json:"value,omitempty"`
 }
 
+// decodeFsmOp decodes a protobuf-encoded fsmOp, falling back to JSON
+// for backward compatibility with legacy payloads.
+func decodeFsmOp(data []byte) (fsmOp, error) {
+	var op fsmOp
+	var pbOp pb.FsmOp
+	if err := proto.Unmarshal(data, &pbOp); err != nil {
+		if jsonErr := json.Unmarshal(data, &op); jsonErr != nil {
+			return op, fmt.Errorf("unmarshaling fsm op: %w", err)
+		}
+		return op, nil
+	}
+	return fsmOp{Op: pbOp.Op, Bucket: pbOp.Bucket, Key: pbOp.Key, Value: pbOp.Value}, nil
+}
+
 // FSM is the in-memory implementation of MetadataFSM. It stores all metadata
 // in nested maps protected by a read-write mutex. Suitable for testing and
-// small deployments where persistence is handled entirely by Raft snapshots.
+// small deployments where persistence is not required.
 type FSM struct {
 	mu      sync.RWMutex
 	buckets map[string]map[string][]byte
@@ -99,22 +125,11 @@ func NewFSM() *FSM {
 	}
 }
 
-// Apply applies a Raft log entry to the FSM, modifying the in-memory state.
-func (f *FSM) Apply(log *raft.Log) interface{} {
-	start := time.Now()
-	defer func() {
-		metrics.RaftApplyLatency.Observe(time.Since(start).Seconds())
-	}()
-
-	var op fsmOp
-	var pbOp pb.FsmOp
-	if err := proto.Unmarshal(log.Data, &pbOp); err != nil {
-		// Fall back to JSON for backward compatibility with pre-protobuf log entries.
-		if jsonErr := json.Unmarshal(log.Data, &op); jsonErr != nil {
-			return fmt.Errorf("unmarshaling fsm op: %w", err)
-		}
-	} else {
-		op = fsmOp{Op: pbOp.Op, Bucket: pbOp.Bucket, Key: pbOp.Key, Value: pbOp.Value}
+// Apply decodes and applies an encoded fsmOp payload against the in-memory state.
+func (f *FSM) Apply(data []byte) interface{} {
+	op, err := decodeFsmOp(data)
+	if err != nil {
+		return err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -129,8 +144,6 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	case opDelete:
 		delete(bucket, op.Key)
 	case opAddQuota:
-		// AddQu atomically adds a delta to a usage counter.
-		// The value is the delta to add (may be negative for subtraction).
 		var delta int64
 		if err := json.Unmarshal(op.Value, &delta); err != nil {
 			return fmt.Errorf("unmarshaling quota delta: %w", err)
@@ -142,15 +155,12 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 			}
 		}
 		newVal := current + delta
-		// Prevent underflow
 		if newVal < 0 {
 			newVal = 0
 		}
 		updated, _ := json.Marshal(newVal)
 		bucket[op.Key] = updated
 	case opSubQuota:
-		// SubQu atomically subtracts a delta from a usage counter.
-		// This is an alias for AddQuota with a negative delta for clarity.
 		var delta int64
 		if err := json.Unmarshal(op.Value, &delta); err != nil {
 			return fmt.Errorf("unmarshaling quota delta: %w", err)
@@ -162,14 +172,12 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 			}
 		}
 		newVal := current - delta
-		// Prevent underflow
 		if newVal < 0 {
 			newVal = 0
 		}
 		updated, _ := json.Marshal(newVal)
 		bucket[op.Key] = updated
 	case opAllocateIno:
-		// Atomically increment the inode counter and return the new value.
 		current := uint64(2) // Default start value (1 is reserved for root).
 		if existing, ok := bucket[op.Key]; ok {
 			if err := json.Unmarshal(existing, &current); err != nil {
@@ -217,83 +225,6 @@ func (f *FSM) GetAll(bucket string) (map[string][]byte, error) {
 	}
 	return cp, nil
 }
-
-type fsmSnapshot struct {
-	data map[string]map[string][]byte
-}
-
-// Snapshot creates a point-in-time snapshot of the FSM state.
-func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	cp := make(map[string]map[string][]byte)
-	for bk, bv := range f.buckets {
-		bucket := make(map[string][]byte)
-		for k, v := range bv {
-			val := make([]byte, len(v))
-			copy(val, v)
-			bucket[k] = val
-		}
-		cp[bk] = bucket
-	}
-	return &fsmSnapshot{data: cp}, nil
-}
-
-// Restore restores the FSM state from a snapshot.
-func (f *FSM) Restore(rc io.ReadCloser) error {
-	defer rc.Close()
-	raw, err := io.ReadAll(rc)
-	if err != nil {
-		return fmt.Errorf("reading snapshot: %w", err)
-	}
-	var data map[string]map[string][]byte
-	var snap pb.FsmSnapshot
-	if err := proto.Unmarshal(raw, &snap); err != nil {
-		// Fall back to JSON for backward compatibility with pre-protobuf snapshots.
-		if jsonErr := json.Unmarshal(raw, &data); jsonErr != nil {
-			return fmt.Errorf("decoding snapshot: %w (json fallback: %v)", err, jsonErr)
-		}
-	} else {
-		data = make(map[string]map[string][]byte, len(snap.Buckets))
-		for bk, bv := range snap.Buckets {
-			bucket := make(map[string][]byte, len(bv.Entries))
-			for k, v := range bv.Entries {
-				// Copy byte slices to avoid retaining references to the
-				// protobuf unmarshal buffer.
-				val := make([]byte, len(v))
-				copy(val, v)
-				bucket[k] = val
-			}
-			data[bk] = bucket
-		}
-	}
-	f.mu.Lock()
-	f.buckets = data
-	f.mu.Unlock()
-	return nil
-}
-
-// Persist writes the snapshot data to the sink.
-func (s *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	// Convert map[string]map[string][]byte → pb.FsmSnapshot.
-	pbBuckets := make(map[string]*pb.FsmBucket, len(s.data))
-	for bk, bv := range s.data {
-		pbBuckets[bk] = &pb.FsmBucket{Entries: bv}
-	}
-	data, err := proto.Marshal(&pb.FsmSnapshot{Buckets: pbBuckets})
-	if err != nil {
-		sink.Cancel()
-		return fmt.Errorf("marshaling snapshot: %w", err)
-	}
-	if _, err := sink.Write(data); err != nil {
-		sink.Cancel()
-		return fmt.Errorf("writing snapshot: %w", err)
-	}
-	return sink.Close()
-}
-
-// Release releases resources associated with the snapshot.
-func (s *fsmSnapshot) Release() {}
 
 // Close is a no-op for the in-memory FSM since there are no resources to release.
 func (f *FSM) Close() error {

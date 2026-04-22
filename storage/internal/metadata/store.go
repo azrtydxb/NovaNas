@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
-	"net"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/raft"
-	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
@@ -65,97 +61,56 @@ type PlacementMap struct {
 	Nodes   []string `json:"nodes"`
 }
 
-// RaftStore provides a Raft-consistent distributed metadata store.
+// RaftStore is the NovaNas metadata store.
+//
+// The name is retained for historical continuity and to avoid churn at
+// every call site; as of docs/14 decision S12, NovaNas is single-node by
+// design and this store no longer uses Raft consensus. Operations are
+// applied directly and synchronously to the underlying BadgerDB-backed
+// FSM (or the in-memory FSM for tests), with durability provided by
+// Badger's WAL + fsync.
+//
+// Future multi-node would reintroduce consensus (or move to
+// metadata-as-chunks per S11), deferred.
 type RaftStore struct {
-	raft *raft.Raft
-	fsm  MetadataFSM
+	fsm MetadataFSM
 }
 
-// RaftConfig holds all configuration needed to create a RaftStore.
+// RaftConfig holds configuration for constructing a RaftStore.
+//
+// The Raft-specific fields (RaftAddr, RaftAdvertise, JoinAddrs,
+// BootstrapExpect, GRPCDialOpts) are retained for API compatibility
+// with existing callers but are ignored. They will be removed in a
+// future cleanup pass.
 type RaftConfig struct {
-	// NodeID is the unique identifier for this Raft node.
+	// NodeID is a human-readable identifier for this metadata node.
+	// Recorded in logs and metrics.
 	NodeID string
-	// DataDir is the directory where Raft log and snapshot data is persisted.
+	// DataDir is the directory where persistent state (BadgerDB files)
+	// is stored.
 	DataDir string
-	// RaftAddr is the TCP address this node listens on for Raft consensus traffic (e.g. ":7000").
-	RaftAddr string
-	// RaftAdvertise is the address advertised to other Raft peers. When set,
-	// this overrides the automatic IP detection. Use a stable DNS name (e.g.
-	// the StatefulSet pod FQDN) to survive pod restarts that change pod IPs.
-	RaftAdvertise string
-	// JoinAddrs is a comma-separated list of existing Raft peer addresses to join.
-	// When empty, the node bootstraps as a single-node cluster.
-	JoinAddrs string
-	// BootstrapExpect is the number of nodes expected to form the initial cluster.
-	// When > 0 and no existing Raft state exists, the first node to start will
-	// bootstrap and others will join. When 0, uses legacy behavior.
-	BootstrapExpect int
-	// Backend selects the FSM storage backend. Valid values are "memory" and
-	// "badger". When empty, defaults to "badger" for persistent storage.
+	// Backend selects the FSM storage backend. Valid values are "memory"
+	// and "badger". When empty, defaults to "badger".
 	Backend string
-	// GRPCDialOpts are gRPC dial options for connecting to peers during join.
-	// When nil, insecure credentials are used.
+
+	// Deprecated: Raft has been removed (docs/14 S12). Retained for
+	// source compatibility with existing callers.
+	RaftAddr string
+	// Deprecated: Raft has been removed (docs/14 S12).
+	RaftAdvertise string
+	// Deprecated: Raft has been removed (docs/14 S12).
+	JoinAddrs string
+	// Deprecated: Raft has been removed (docs/14 S12).
+	BootstrapExpect int
+	// Deprecated: Raft has been removed (docs/14 S12).
 	GRPCDialOpts []grpc.DialOption
 }
 
-// NewRaftStore creates a Raft-backed metadata store.
-//
-// If cfg.JoinAddrs is empty the node bootstraps a single-node cluster (the
-// original behaviour preserved for backwards compatibility).  When cfg.JoinAddrs
-// contains one or more comma-separated peer addresses the node skips bootstrap
-// and instead dials each peer in turn until one accepts the AddVoter RPC,
-// joining the existing cluster.
+// NewRaftStore creates a metadata store. Despite the historical name,
+// this constructor no longer configures Raft consensus — NovaNas is
+// single-node (docs/14 S12) and metadata is persisted directly via the
+// selected FSM backend.
 func NewRaftStore(cfg RaftConfig) (*RaftStore, error) {
-	raftCfg := raft.DefaultConfig()
-	raftCfg.LocalID = raft.ServerID(cfg.NodeID)
-	raftCfg.SnapshotInterval = 30 * time.Second
-	raftCfg.SnapshotThreshold = 1024
-
-	addr, err := net.ResolveTCPAddr("tcp", cfg.RaftAddr)
-	if err != nil {
-		return nil, fmt.Errorf("resolving bind address: %w", err)
-	}
-
-	// Raft requires an advertisable address; 0.0.0.0 is not valid.
-	// When RaftAdvertise is set (e.g. a stable DNS name from a StatefulSet),
-	// use it directly. Otherwise fall back to finding a non-loopback IP.
-	advertise := addr
-	if cfg.RaftAdvertise != "" {
-		advAddr, advErr := net.ResolveTCPAddr("tcp", cfg.RaftAdvertise)
-		if advErr != nil {
-			return nil, fmt.Errorf("resolving advertise address %q: %w", cfg.RaftAdvertise, advErr)
-		}
-		advertise = advAddr
-	} else if addr.IP.IsUnspecified() {
-		if ifaces, ifErr := net.InterfaceAddrs(); ifErr == nil {
-			for _, a := range ifaces {
-				if ipNet, ok := a.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
-					advertise = &net.TCPAddr{IP: ipNet.IP, Port: addr.Port}
-					break
-				}
-			}
-		}
-		if advertise.IP.IsUnspecified() {
-			return nil, fmt.Errorf("resolving advertise address: no non-loopback IPv4 address found")
-		}
-	}
-
-	transport, err := raft.NewTCPTransport(addr.String(), advertise, 3, 10*time.Second, os.Stderr)
-	if err != nil {
-		return nil, fmt.Errorf("creating transport: %w", err)
-	}
-
-	snapshotStore, err := raft.NewFileSnapshotStore(cfg.DataDir, 2, os.Stderr)
-	if err != nil {
-		return nil, fmt.Errorf("creating snapshot store: %w", err)
-	}
-
-	logStorePath := filepath.Join(cfg.DataDir, "raft-log.db")
-	logStore, err := raftboltdb.NewBoltStore(logStorePath)
-	if err != nil {
-		return nil, fmt.Errorf("creating log store: %w", err)
-	}
-
 	var fsm MetadataFSM
 	switch cfg.Backend {
 	case "memory":
@@ -174,194 +129,54 @@ func NewRaftStore(cfg RaftConfig) (*RaftStore, error) {
 		return nil, fmt.Errorf("unknown backend %q: valid values are \"memory\" and \"badger\"", cfg.Backend)
 	}
 
-	r, err := raft.NewRaft(raftCfg, fsm, logStore, logStore, snapshotStore, transport)
-	if err != nil {
-		return nil, fmt.Errorf("creating raft: %w", err)
-	}
-
-	store := &RaftStore{raft: r, fsm: fsm}
-
-	if cfg.JoinAddrs == "" {
-		// Bootstrap as a single-node cluster.
-		bootstrapCfg := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					ID:      raft.ServerID(cfg.NodeID),
-					Address: transport.LocalAddr(),
-				},
-			},
-		}
-		r.BootstrapCluster(bootstrapCfg)
-		return store, nil
-	}
-
-	// Join an existing cluster by calling AddVoter on each peer until one succeeds.
-	// Filter out our own address from the peer list to avoid self-join deadlock.
-	peers := splitAndTrim(cfg.JoinAddrs)
-	var filteredPeers []string
-	ownAddr := advertise.String()
-	for _, p := range peers {
-		// Resolve the peer address to see if it's us.
-		resolved, resolveErr := net.ResolveTCPAddr("tcp", p)
-		if resolveErr != nil || resolved.String() != ownAddr {
-			filteredPeers = append(filteredPeers, p)
-		}
-	}
-
-	if len(filteredPeers) == 0 {
-		// All join addresses pointed at ourselves — bootstrap.
-		bootstrapCfg := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					ID:      raft.ServerID(cfg.NodeID),
-					Address: transport.LocalAddr(),
-				},
-			},
-		}
-		r.BootstrapCluster(bootstrapCfg)
-		return store, nil
-	}
-
-	maxJoinAttempts := 30
-	if cfg.BootstrapExpect > 0 {
-		maxJoinAttempts = 5 // Reduced: will fall back to bootstrap.
-	}
-	if err := store.joinCluster(cfg.NodeID, ownAddr, filteredPeers, cfg.GRPCDialOpts, maxJoinAttempts); err != nil {
-		if cfg.BootstrapExpect > 0 {
-			bootstrapCfg := raft.Configuration{
-				Servers: []raft.Server{
-					{
-						ID:      raft.ServerID(cfg.NodeID),
-						Address: transport.LocalAddr(),
-					},
-				},
-			}
-			if future := r.BootstrapCluster(bootstrapCfg); future.Error() != nil {
-				return nil, fmt.Errorf("bootstrap after failed join: %w", future.Error())
-			}
-			return store, nil
-		}
-		return nil, fmt.Errorf("joining raft cluster: %w", err)
-	}
-
-	return store, nil
+	return &RaftStore{fsm: fsm}, nil
 }
 
-// joinCluster attempts to add this node as a voter to an existing Raft cluster
-// by calling the JoinCluster gRPC RPC on each peer.  Only the Raft leader can
-// execute AddVoter, so the joining node must ask a remote peer (the leader) to
-// add it.  It retries with a small back-off to tolerate a brief window where
-// no leader is available (e.g. immediately after all peers start simultaneously).
-func (s *RaftStore) joinCluster(nodeID, raftAddr string, peers []string, grpcDialOpts []grpc.DialOption, maxAttempts int) error {
-	const retryDelay = 2 * time.Second
-
-	// Convert Raft peer addresses (port 7000) to gRPC addresses (port 7001).
-	grpcPeers := make([]string, 0, len(peers))
-	for _, p := range peers {
-		host, _, err := net.SplitHostPort(p)
-		if err != nil {
-			// If the address doesn't have a port, skip it.
-			continue
-		}
-		grpcPeers = append(grpcPeers, net.JoinHostPort(host, "7001"))
-	}
-
-	if len(grpcDialOpts) == 0 {
-		grpcDialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	}
-
-	log.Printf("joinCluster: node %s attempting to join via gRPC peers %v", nodeID, grpcPeers)
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		for _, addr := range grpcPeers {
-			conn, err := grpc.NewClient(addr, grpcDialOpts...)
-			if err != nil {
-				log.Printf("joinCluster: attempt %d: dial %s failed: %v", attempt, addr, err)
-				continue
-			}
-			client := pb.NewMetadataServiceClient(conn)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			resp, err := client.JoinCluster(ctx, &pb.JoinClusterRequest{
-				NodeId:      nodeID,
-				RaftAddress: raftAddr,
-			})
-			cancel()
-			conn.Close()
-
-			if err != nil {
-				log.Printf("joinCluster: attempt %d: JoinCluster RPC to %s failed: %v", attempt, addr, err)
-				continue
-			}
-			if resp.Success {
-				log.Printf("joinCluster: successfully joined cluster via %s", addr)
-				return nil
-			}
-			// If the peer returned a leader address, try it directly.
-			log.Printf("joinCluster: attempt %d: peer %s returned: success=%v error=%q leader=%q",
-				attempt, addr, resp.Success, resp.ErrorMessage, resp.LeaderAddr)
-			if resp.LeaderAddr != "" {
-				if leaderResp := s.tryJoinViaLeader(resp.LeaderAddr, nodeID, raftAddr, grpcDialOpts); leaderResp {
-					return nil
-				}
-			}
-		}
-		time.Sleep(retryDelay)
-	}
-
-	return fmt.Errorf("failed to join cluster after %d attempts via gRPC peers %v", maxAttempts, grpcPeers)
-}
-
-// tryJoinViaLeader dials the leader's gRPC address directly and attempts JoinCluster.
-func (s *RaftStore) tryJoinViaLeader(leaderRaftAddr, nodeID, raftAddr string, grpcDialOpts []grpc.DialOption) bool {
-	// Convert the Raft leader address to gRPC port.
-	host, _, err := net.SplitHostPort(leaderRaftAddr)
-	if err != nil {
-		return false
-	}
-	leaderGRPC := net.JoinHostPort(host, "7001")
-
-	conn, err := grpc.NewClient(leaderGRPC, grpcDialOpts...)
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	client := pb.NewMetadataServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	resp, err := client.JoinCluster(ctx, &pb.JoinClusterRequest{
-		NodeId:      nodeID,
-		RaftAddress: raftAddr,
-	})
-	return err == nil && resp.Success
-}
-
-// IsLeader returns true if this node is the Raft leader.
+// IsLeader always returns true on a single-node deployment. Retained for
+// callers (e.g. the GC loop) that historically gated work on leadership.
 func (s *RaftStore) IsLeader() bool {
-	return s.raft.State() == raft.Leader
+	return true
 }
 
-// Close shuts down the Raft instance and closes the FSM.
+// Close closes the underlying FSM, releasing resources.
 func (s *RaftStore) Close() error {
-	raftErr := s.raft.Shutdown().Error()
-	fsmErr := s.fsm.Close()
-	if raftErr != nil {
-		return raftErr
-	}
-	return fsmErr
+	return s.fsm.Close()
 }
 
+// Backup writes a consistent snapshot of the metadata store to w. Since
+// is the last version seen by a previous backup (0 for a full backup).
+// Returns the last version included in the stream.
+//
+// Only the BadgerDB backend supports backup; the memory backend returns
+// an error.
+func (s *RaftStore) Backup(w io.Writer, since uint64) (uint64, error) {
+	b, ok := s.fsm.(*BadgerFSM)
+	if !ok {
+		return 0, errors.New("backup is only supported on the badger backend")
+	}
+	return b.Backup(w, since)
+}
+
+// Restore replaces the metadata store contents with a previously
+// produced Backup stream. Only the BadgerDB backend supports restore.
+func (s *RaftStore) Restore(r io.Reader) error {
+	b, ok := s.fsm.(*BadgerFSM)
+	if !ok {
+		return errors.New("restore is only supported on the badger backend")
+	}
+	return b.Restore(r)
+}
+
+// apply encodes op as a protobuf fsmOp and dispatches it directly to the
+// FSM. Operations are synchronous and run on the caller's goroutine.
 func (s *RaftStore) apply(op *fsmOp) error {
+	metrics.MetadataOpsTotal.WithLabelValues("apply_" + op.Op).Inc()
 	data, err := proto.Marshal(&pb.FsmOp{Op: op.Op, Bucket: op.Bucket, Key: op.Key, Value: op.Value})
 	if err != nil {
 		return fmt.Errorf("marshaling operation: %w", err)
 	}
-	f := s.raft.Apply(data, 5*time.Second)
-	if err := f.Error(); err != nil {
-		return fmt.Errorf("applying raft log: %w", err)
-	}
-	if resp := f.Response(); resp != nil {
+	resp := s.fsm.Apply(data)
+	if resp != nil {
 		if e, ok := resp.(error); ok {
 			return e
 		}
@@ -369,27 +184,24 @@ func (s *RaftStore) apply(op *fsmOp) error {
 	return nil
 }
 
-// applyWithResponse applies a Raft operation and returns both the FSM response
+// applyWithResponse applies an operation and returns both the FSM response
 // and any error. This is used for operations like AllocateIno that need to
 // return a value from the FSM.
 func (s *RaftStore) applyWithResponse(op *fsmOp) (interface{}, error) {
+	metrics.MetadataOpsTotal.WithLabelValues("apply_" + op.Op).Inc()
 	data, err := proto.Marshal(&pb.FsmOp{Op: op.Op, Bucket: op.Bucket, Key: op.Key, Value: op.Value})
 	if err != nil {
 		return nil, fmt.Errorf("marshaling operation: %w", err)
 	}
-	f := s.raft.Apply(data, 5*time.Second)
-	if err := f.Error(); err != nil {
-		return nil, fmt.Errorf("applying raft log: %w", err)
-	}
-	resp := f.Response()
+	resp := s.fsm.Apply(data)
 	if e, ok := resp.(error); ok {
 		return nil, e
 	}
 	return resp, nil
 }
 
-// AllocateIno atomically allocates the next available inode number via the
-// Raft consensus log, ensuring uniqueness across restarts and cluster members.
+// AllocateIno atomically allocates the next available inode number,
+// ensuring uniqueness across restarts via the persistent counter bucket.
 func (s *RaftStore) AllocateIno(_ context.Context) (uint64, error) {
 	resp, err := s.applyWithResponse(&fsmOp{Op: opAllocateIno, Bucket: bucketCounters, Key: "nextIno"})
 	if err != nil {
@@ -403,7 +215,7 @@ func (s *RaftStore) AllocateIno(_ context.Context) (uint64, error) {
 }
 
 // GetNextIno reads the current inode counter value from the FSM without
-// going through Raft consensus. Used at startup to seed the counter.
+// incrementing it. Used at startup to seed the counter.
 func (s *RaftStore) GetNextIno(_ context.Context) (uint64, error) {
 	data, err := s.fsm.Get(bucketCounters, "nextIno")
 	if err != nil {
@@ -420,7 +232,7 @@ func (s *RaftStore) GetNextIno(_ context.Context) (uint64, error) {
 	return val, nil
 }
 
-// PutVolumeMeta stores volume metadata in the Raft store.
+// PutVolumeMeta stores volume metadata in the store.
 func (s *RaftStore) PutVolumeMeta(_ context.Context, meta *VolumeMeta) error {
 	data, err := json.Marshal(meta)
 	if err != nil {
@@ -848,6 +660,8 @@ func (s *RaftStore) removeLockFromIndex(_ context.Context, ino uint64, leaseID s
 }
 
 // splitAndTrim splits a comma-separated list of addresses and trims whitespace.
+// Retained for backward compatibility with tests; no longer used internally
+// now that cluster joining is a no-op on a single-node deployment.
 func splitAndTrim(s string) []string {
 	parts := strings.Split(s, ",")
 	result := make([]string, 0, len(parts))
@@ -860,33 +674,11 @@ func splitAndTrim(s string) []string {
 	return result
 }
 
-// StartMetricsMonitor starts a background goroutine to periodically update
-// Raft state metrics. Call once after creating the RaftStore.
-func (s *RaftStore) StartMetricsMonitor(ctx context.Context, interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				state := s.raft.State()
-				switch state {
-				case raft.Follower:
-					metrics.RaftState.Set(0)
-				case raft.Candidate:
-					metrics.RaftState.Set(1)
-				case raft.Leader:
-					metrics.RaftState.Set(2)
-				default:
-					metrics.RaftState.Set(-1)
-				}
-
-				lastIndex := s.raft.LastIndex()
-				metrics.RaftCommitIndex.Set(float64(lastIndex))
-			}
-		}
-	}()
+// StartMetricsMonitor is retained for API compatibility. Previously it
+// reported Raft-specific state; on a single-node deployment there is
+// nothing dynamic to report, so this is now a no-op that respects the
+// caller-provided context for cancellation.
+func (s *RaftStore) StartMetricsMonitor(_ context.Context, _ time.Duration) {
+	// No-op: NovaNas is single-node (docs/14 S12); the former Raft state
+	// metrics (leader/follower, commit index) are no longer meaningful.
 }

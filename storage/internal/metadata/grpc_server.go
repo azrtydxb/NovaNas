@@ -3,9 +3,6 @@ package metadata
 import (
 	"context"
 	"errors"
-	"time"
-
-	"github.com/hashicorp/raft"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
@@ -41,9 +38,6 @@ func storeErr(err error) error {
 	}
 	if errors.Is(err, ErrBucketNotFound) {
 		return status.Error(codes.NotFound, err.Error())
-	}
-	if errors.Is(err, raft.ErrNotLeader) {
-		return status.Error(codes.Unavailable, err.Error())
 	}
 	return status.Error(codes.Internal, err.Error())
 }
@@ -663,51 +657,14 @@ func (s *GRPCServer) GetUsage(ctx context.Context, req *pb.GetUsageRequest) (*pb
 
 // ---- Cluster management operations ----
 
+// JoinCluster is retained for gRPC API compatibility but is now a no-op:
+// NovaNas is single-node by design (docs/14 S12), so there is no cluster
+// to join. The request is validated and acknowledged so that existing
+// clients (operators, CSI, s3gw) continue to work without modification.
 func (s *GRPCServer) JoinCluster(_ context.Context, req *pb.JoinClusterRequest) (*pb.JoinClusterResponse, error) {
 	metrics.MetadataOpsTotal.WithLabelValues("JoinCluster").Inc()
 	if req.NodeId == "" || req.RaftAddress == "" {
 		return nil, status.Error(codes.InvalidArgument, "node_id and raft_address required")
 	}
-
-	// Check if the node is already a cluster member. If it exists at the
-	// same address, return immediately. If the address changed (pod restart
-	// with a new IP), fall through to AddVoter to update it.
-	configFuture := s.store.raft.GetConfiguration()
-	if err := configFuture.Error(); err == nil {
-		for _, srv := range configFuture.Configuration().Servers {
-			if string(srv.ID) == req.NodeId {
-				if string(srv.Address) == req.RaftAddress {
-					return &pb.JoinClusterResponse{Success: true}, nil
-				}
-				// Address changed — fall through to AddVoter which updates it.
-				break
-			}
-		}
-	}
-
-	// If this node is not the Raft leader, return the leader address so
-	// the caller can retry against the actual leader.
-	if s.store.raft.State() != raft.Leader {
-		leaderAddr, _ := s.store.raft.LeaderWithID()
-		return &pb.JoinClusterResponse{
-			Success:      false,
-			ErrorMessage: "not leader",
-			LeaderAddr:   string(leaderAddr),
-		}, nil
-	}
-
-	// We are the leader — add the requesting node as a voter.
-	future := s.store.raft.AddVoter(
-		raft.ServerID(req.NodeId),
-		raft.ServerAddress(req.RaftAddress),
-		0,
-		10*time.Second,
-	)
-	resp := &pb.JoinClusterResponse{Success: true}
-	if futureErr := future.Error(); futureErr != nil {
-		resp.Success = false
-		resp.ErrorMessage = futureErr.Error()
-	}
-
-	return resp, nil
+	return &pb.JoinClusterResponse{Success: true}, nil
 }
