@@ -38,6 +38,7 @@
     "openid-client": "~6.0.0",
     "pino": "~9.0.0",
     "prom-client": "~15.0.0",
+    "ws": "~8.18.0",
     "zod": "~3.23.0"
   },
   "devDependencies": {

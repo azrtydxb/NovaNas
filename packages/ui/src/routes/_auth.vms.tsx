@@ -34,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SpiceConsole } from '@/components/vm/spice-console';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { Vm, VmDisk, VmOsType, VmSpec } from '@novanas/schemas';
@@ -594,20 +595,7 @@ function VmDetailDrawer({ vm, onClose }: { vm: Vm | null; onClose: () => void })
           </div>
           <div>
             <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Console</div>
-            {vm?.status?.consoleUrl ? (
-              <a
-                href={vm.status.consoleUrl}
-                className='mono text-accent'
-                rel='noreferrer'
-                target='_blank'
-              >
-                {vm.status.consoleUrl}
-              </a>
-            ) : (
-              <div className='text-foreground-subtle'>
-                Console coming soon — SPICE wire-up TODO(wave-11).
-              </div>
-            )}
+            {vm ? <SpiceConsole vm={vm} /> : null}
           </div>
         </div>
         <DialogFooter>

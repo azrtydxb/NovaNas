@@ -16,6 +16,7 @@ import { auditRoutes } from './audit.js';
 import { authRoutes } from './auth.js';
 import { bucketUserRoutes } from './bucket-users.js';
 import { bucketRoutes } from './buckets.js';
+import { compositeRoutes } from './composite.js';
 import { datasetRoutes } from './datasets.js';
 import { diskRoutes } from './disks.js';
 import { healthRoutes } from './health.js';
@@ -33,6 +34,7 @@ import { snapshotRoutes } from './snapshots.js';
 import { systemRoutes } from './system.js';
 import { userRoutes } from './users.js';
 import { versionRoutes } from './version.js';
+import { vmConsoleRoutes } from './vm-console.js';
 import { vmRoutes } from './vms.js';
 import { wsRoutes } from './ws.js';
 
@@ -97,6 +99,16 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => auditRoutes(s, { db: deps.db ?? null }));
   await app.register(async (s) => jobsRoutes(s, { jobs: deps.jobs ?? null }));
   await app.register(async (s) => metricsRoutes(s, { prom: deps.prom ?? null }));
+
+  // A11-Composite-SPICE: multi-CRD composite ops + VM console WS proxy
+  await app.register(async (s) =>
+    compositeRoutes(s, {
+      kubeCustom: deps.kubeCustom,
+      db: deps.db ?? null,
+      jobs: deps.jobs ?? null,
+    })
+  );
+  await app.register(async (s) => vmConsoleRoutes(s, { env: deps.env, sessions: deps.sessions }));
 
   // websocket
   await app.register(async (s) =>
