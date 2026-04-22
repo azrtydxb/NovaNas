@@ -1,3 +1,3 @@
-export * from './service-policy';
-export * from './system-settings';
-export * from './update-policy';
+export * from './service-policy.js';
+export * from './system-settings.js';
+export * from './update-policy.js';

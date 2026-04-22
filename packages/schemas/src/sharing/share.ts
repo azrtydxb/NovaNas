@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { AccessModeSchema, ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
+import { ConditionSchema } from '../common/condition.js';
+import { AccessModeSchema, ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
 
 export const SmbShareConfigSchema = z.object({
   server: z.string(),

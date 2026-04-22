@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
 
 export const EncryptionCipherSchema = z.enum(['AES256-GCM', 'AES128-GCM', 'XChaCha20-Poly1305']);
 export type EncryptionCipher = z.infer<typeof EncryptionCipherSchema>;

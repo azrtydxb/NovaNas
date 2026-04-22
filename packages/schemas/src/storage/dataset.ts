@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
+import { ConditionSchema } from '../common/condition.js';
 import {
   AclModeSchema,
   ApiVersionSchema,
   CompressionSchema,
   FilesystemTypeSchema,
-} from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BytesQuantitySchema, DurationSchema } from '../common/quantity';
-import { ProtectionPolicySchema } from './protection';
+} from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BytesQuantitySchema, DurationSchema } from '../common/quantity.js';
+import { ProtectionPolicySchema } from './protection.js';
 
 export const DatasetEncryptionSchema = z.object({
   enabled: z.boolean(),

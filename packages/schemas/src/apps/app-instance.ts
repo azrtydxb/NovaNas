@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema, ExposureModeSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BytesQuantitySchema } from '../common/quantity';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema, ExposureModeSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BytesQuantitySchema } from '../common/quantity.js';
 
 export const AppInstanceStorageModeSchema = z.enum(['ReadWrite', 'ReadOnly']);
 export type AppInstanceStorageMode = z.infer<typeof AppInstanceStorageModeSchema>;

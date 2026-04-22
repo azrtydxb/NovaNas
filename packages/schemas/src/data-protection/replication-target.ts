@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BandwidthSchema } from '../common/quantity';
-import { SecretReferenceSchema } from '../common/references';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BandwidthSchema } from '../common/quantity.js';
+import { SecretReferenceSchema } from '../common/references.js';
 
 export const ReplicationTransportSchema = z.object({
   compression: z.enum(['none', 'zstd', 'lz4']).optional(),

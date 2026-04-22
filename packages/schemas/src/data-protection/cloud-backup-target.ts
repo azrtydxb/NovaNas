@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { SecretReferenceSchema } from '../common/references';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { SecretReferenceSchema } from '../common/references.js';
 
 export const CloudBackupProviderSchema = z.enum(['s3', 'b2', 'azure', 'gcs', 'swift']);
 export type CloudBackupProvider = z.infer<typeof CloudBackupProviderSchema>;

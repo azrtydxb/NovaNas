@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
 
 export const DiskRoleSchema = z.enum(['data', 'spare']);
 export type DiskRole = z.infer<typeof DiskRoleSchema>;

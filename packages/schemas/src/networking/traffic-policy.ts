@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BandwidthSchema, CronSchema } from '../common/quantity';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BandwidthSchema, CronSchema } from '../common/quantity.js';
 
 export const TrafficPolicyScopeKindSchema = z.enum([
   'HostInterface',

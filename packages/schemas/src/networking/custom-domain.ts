@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { ResourceReferenceSchema } from '../common/references';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { ResourceReferenceSchema } from '../common/references.js';
 
 export const CustomDomainTlsProviderSchema = z.enum(['letsencrypt', 'internal', 'upload']);
 export type CustomDomainTlsProvider = z.infer<typeof CustomDomainTlsProviderSchema>;

@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BytesQuantitySchema } from '../common/quantity';
-import { ProtectionPolicySchema } from './protection';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BytesQuantitySchema } from '../common/quantity.js';
+import { ProtectionPolicySchema } from './protection.js';
 
 export const BlockVolumeEncryptionSchema = z.object({
   enabled: z.boolean(),

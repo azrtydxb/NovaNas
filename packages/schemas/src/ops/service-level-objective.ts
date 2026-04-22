@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { DurationSchema } from '../common/quantity';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { DurationSchema } from '../common/quantity.js';
 
 export const SloIndicatorSchema = z.object({
   goodQuery: z.string(),

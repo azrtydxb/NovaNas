@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { CronSchema } from '../common/quantity';
-import { VolumeSourceRefSchema } from '../common/references';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { CronSchema } from '../common/quantity.js';
+import { VolumeSourceRefSchema } from '../common/references.js';
 
 export const RetentionPolicySchema = z
   .object({

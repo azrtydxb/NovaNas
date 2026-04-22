@@ -1,3 +1,3 @@
-export * from './certificate';
-export * from './encryption-policy';
-export * from './kms-key';
+export * from './certificate.js';
+export * from './encryption-policy.js';
+export * from './kms-key.js';

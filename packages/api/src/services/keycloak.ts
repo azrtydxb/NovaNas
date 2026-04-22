@@ -25,7 +25,17 @@ export interface KeycloakClient {
 
 export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
   const issuer = new URL(env.KEYCLOAK_ISSUER_URL);
-  const config = await client.discovery(issuer, env.KEYCLOAK_CLIENT_ID, env.KEYCLOAK_CLIENT_SECRET);
+  // Allow http:// Keycloak endpoints for in-cluster service URLs and local dev.
+  // Production deployments use the novaedge-fronted https endpoint via Ingress.
+  const discoveryOptions =
+    issuer.protocol === 'http:' ? { execute: [client.allowInsecureRequests] } : undefined;
+  const config = await client.discovery(
+    issuer,
+    env.KEYCLOAK_CLIENT_ID,
+    env.KEYCLOAK_CLIENT_SECRET,
+    undefined,
+    discoveryOptions
+  );
 
   return {
     config,

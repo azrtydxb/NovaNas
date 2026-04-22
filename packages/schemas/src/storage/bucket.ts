@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
-import { ApiVersionSchema, ObjectLockModeSchema, VersioningSchema } from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BytesQuantitySchema, DurationSchema } from '../common/quantity';
-import { ProtectionPolicySchema } from './protection';
+import { ConditionSchema } from '../common/condition.js';
+import { ApiVersionSchema, ObjectLockModeSchema, VersioningSchema } from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BytesQuantitySchema, DurationSchema } from '../common/quantity.js';
+import { ProtectionPolicySchema } from './protection.js';
 
 export const BucketEncryptionSchema = z.object({
   enabled: z.boolean(),

@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import { ConditionSchema } from '../common/condition';
+import { ConditionSchema } from '../common/condition.js';
 import {
   ApiVersionSchema,
   DeviceClassSchema,
   PoolTierSchema,
   RebalanceOnAddSchema,
   RecoveryRateSchema,
-} from '../common/enums';
-import { ObjectMetaSchema } from '../common/metadata';
-import { BytesQuantitySchema } from '../common/quantity';
+} from '../common/enums.js';
+import { ObjectMetaSchema } from '../common/metadata.js';
+import { BytesQuantitySchema } from '../common/quantity.js';
 
 export const DeviceFilterSchema = z.object({
   preferredClass: DeviceClassSchema.optional(),
