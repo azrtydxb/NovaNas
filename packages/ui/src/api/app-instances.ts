@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { AppInstance, AppInstanceSpec } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type AppInstanceCreateBody = {
@@ -15,20 +16,24 @@ export const appInstancesKey = () => ['app-instances'] as const;
 export const appInstanceKey = (name: string) => ['app-instance', name] as const;
 
 export function useAppInstances() {
-  return useQuery<AppInstance[]>({
-    queryKey: appInstancesKey(),
-    queryFn: async () => unwrapList<AppInstance>(await api.get('/apps')),
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<AppInstance[]>(
+    appInstancesKey(),
+    async () => unwrapList<AppInstance>(await api.get('/apps')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'appinstance:*' }
+  );
 }
 
 export function useAppInstance(name: string | undefined) {
-  return useQuery<AppInstance>({
-    queryKey: appInstanceKey(name ?? ''),
-    queryFn: () => api.get<AppInstance>(`/apps/${encodeURIComponent(name!)}`),
-    enabled: !!name,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<AppInstance>(
+    appInstanceKey(name ?? ''),
+    () => api.get<AppInstance>(`/apps/${encodeURIComponent(name!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!name,
+      wsChannel: name ? `appinstance:${name}` : null,
+    }
+  );
 }
 
 export function useCreateAppInstance() {

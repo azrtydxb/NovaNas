@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { Snapshot, SnapshotSpec, VolumeSourceRef } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type SnapshotCreateBody = {
@@ -22,23 +23,27 @@ function sourceSearchParams(source?: VolumeSourceRef) {
 }
 
 export function useSnapshots(source?: VolumeSourceRef) {
-  return useQuery<Snapshot[]>({
-    queryKey: snapshotsBySourceKey(source),
-    queryFn: async () =>
+  return useLiveQuery<Snapshot[]>(
+    snapshotsBySourceKey(source),
+    async () =>
       unwrapList<Snapshot>(
         await api.get('/snapshots', { searchParams: sourceSearchParams(source) })
       ),
-    ...QUERY_DEFAULTS,
-  });
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'snapshot:*' }
+  );
 }
 
 export function useSnapshot(name: string | undefined) {
-  return useQuery<Snapshot>({
-    queryKey: snapshotKey(name ?? ''),
-    queryFn: () => api.get<Snapshot>(`/snapshots/${encodeURIComponent(name!)}`),
-    enabled: !!name,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Snapshot>(
+    snapshotKey(name ?? ''),
+    () => api.get<Snapshot>(`/snapshots/${encodeURIComponent(name!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!name,
+      wsChannel: name ? `snapshot:${name}` : null,
+    }
+  );
 }
 
 export function useCreateSnapshot() {

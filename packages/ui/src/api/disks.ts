@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { Disk, DiskSpec } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type DiskUpdateBody = {
@@ -10,33 +11,36 @@ export const disksKey = () => ['disks'] as const;
 export const diskKey = (wwn: string) => ['disk', wwn] as const;
 
 export function useDisks() {
-  return useQuery<Disk[]>({
-    queryKey: disksKey(),
-    queryFn: async () => unwrapList<Disk>(await api.get('/disks')),
+  return useLiveQuery<Disk[]>(disksKey(), async () => unwrapList<Disk>(await api.get('/disks')), {
     ...QUERY_DEFAULTS,
+    staleTime: 60_000,
+    wsChannel: 'disk:*',
   });
 }
 
 /**
- * Status watcher: polls more aggressively so SMART/state changes surface quickly.
+ * Status watcher: WS-driven invalidation surfaces SMART/state changes
+ * promptly without aggressive polling.
  */
 export function useDisksLive() {
-  return useQuery<Disk[]>({
-    queryKey: [...disksKey(), 'live'],
-    queryFn: async () => unwrapList<Disk>(await api.get('/disks')),
-    ...QUERY_DEFAULTS,
-    refetchInterval: 15_000,
-    staleTime: 5_000,
-  });
+  return useLiveQuery<Disk[]>(
+    [...disksKey(), 'live'],
+    async () => unwrapList<Disk>(await api.get('/disks')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'disk:*' }
+  );
 }
 
 export function useDisk(wwn: string | undefined) {
-  return useQuery<Disk>({
-    queryKey: diskKey(wwn ?? ''),
-    queryFn: () => api.get<Disk>(`/disks/${encodeURIComponent(wwn!)}`),
-    enabled: !!wwn,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Disk>(
+    diskKey(wwn ?? ''),
+    () => api.get<Disk>(`/disks/${encodeURIComponent(wwn!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!wwn,
+      wsChannel: wwn ? `disk:${wwn}` : null,
+    }
+  );
 }
 
 export function useUpdateDisk(wwn: string) {

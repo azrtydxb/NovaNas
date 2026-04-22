@@ -1,5 +1,5 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { App } from '@novanas/schemas';
-import { useQuery } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export const appsAvailableKey = () => ['apps-available'] as const;
@@ -9,9 +9,9 @@ export const appsAvailableKey = () => ['apps-available'] as const;
  * Route: /apps-available (distinct from /apps which is AppInstance CRUD).
  */
 export function useAppsAvailable() {
-  return useQuery<App[]>({
-    queryKey: appsAvailableKey(),
-    queryFn: async () => unwrapList<App>(await api.get('/apps-available')),
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<App[]>(
+    appsAvailableKey(),
+    async () => unwrapList<App>(await api.get('/apps-available')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'appcatalog:*' }
+  );
 }

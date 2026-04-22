@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { Dataset, DatasetSpec } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type DatasetCreateBody = {
@@ -15,20 +16,24 @@ export const datasetsKey = () => ['datasets'] as const;
 export const datasetKey = (name: string) => ['dataset', name] as const;
 
 export function useDatasets() {
-  return useQuery<Dataset[]>({
-    queryKey: datasetsKey(),
-    queryFn: async () => unwrapList<Dataset>(await api.get('/datasets')),
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Dataset[]>(
+    datasetsKey(),
+    async () => unwrapList<Dataset>(await api.get('/datasets')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'dataset:*' }
+  );
 }
 
 export function useDataset(name: string | undefined) {
-  return useQuery<Dataset>({
-    queryKey: datasetKey(name ?? ''),
-    queryFn: () => api.get<Dataset>(`/datasets/${encodeURIComponent(name!)}`),
-    enabled: !!name,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Dataset>(
+    datasetKey(name ?? ''),
+    () => api.get<Dataset>(`/datasets/${encodeURIComponent(name!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!name,
+      wsChannel: name ? `dataset:${name}` : null,
+    }
+  );
 }
 
 export function useCreateDataset() {

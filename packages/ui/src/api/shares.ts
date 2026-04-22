@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { Share, ShareSpec } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type ShareCreateBody = {
@@ -15,20 +16,24 @@ export const sharesKey = () => ['shares'] as const;
 export const shareKey = (name: string) => ['share', name] as const;
 
 export function useShares() {
-  return useQuery<Share[]>({
-    queryKey: sharesKey(),
-    queryFn: async () => unwrapList<Share>(await api.get('/shares')),
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Share[]>(
+    sharesKey(),
+    async () => unwrapList<Share>(await api.get('/shares')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'share:*' }
+  );
 }
 
 export function useShare(name: string | undefined) {
-  return useQuery<Share>({
-    queryKey: shareKey(name ?? ''),
-    queryFn: () => api.get<Share>(`/shares/${encodeURIComponent(name!)}`),
-    enabled: !!name,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Share>(
+    shareKey(name ?? ''),
+    () => api.get<Share>(`/shares/${encodeURIComponent(name!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!name,
+      wsChannel: name ? `share:${name}` : null,
+    }
+  );
 }
 
 export function useCreateShare() {

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { QUERY_DEFAULTS, api } from './client';
 
 export type HealthStatus = 'ok' | 'warn' | 'err';
@@ -26,19 +26,23 @@ export interface SystemInfo {
 }
 
 export function useSystemHealth() {
-  return useQuery<SystemHealth>({
-    queryKey: ['system', 'health'],
-    queryFn: () => api.get<SystemHealth>('/system/health'),
-    ...QUERY_DEFAULTS,
-    refetchInterval: 30_000,
-  });
+  return useLiveQuery<SystemHealth>(
+    ['system', 'health'],
+    () => api.get<SystemHealth>('/system/health'),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      // Keep a slow background poll as a safety net; WS handles the fast path.
+      refetchInterval: 60_000,
+      wsChannel: 'system:*',
+    }
+  );
 }
 
 export function useSystemInfo() {
-  return useQuery<SystemInfo>({
-    queryKey: ['system', 'info'],
-    queryFn: () => api.get<SystemInfo>('/system/info'),
+  return useLiveQuery<SystemInfo>(['system', 'info'], () => api.get<SystemInfo>('/system/info'), {
     ...QUERY_DEFAULTS,
     staleTime: 5 * 60_000,
+    wsChannel: 'system:*',
   });
 }

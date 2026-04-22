@@ -1,5 +1,6 @@
+import { useLiveQuery } from '@/hooks/use-live-query';
 import type { Bucket, BucketSpec } from '@novanas/schemas';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_DEFAULTS, api, unwrapList } from './client';
 
 export type BucketCreateBody = {
@@ -15,20 +16,24 @@ export const bucketsKey = () => ['buckets'] as const;
 export const bucketKey = (name: string) => ['bucket', name] as const;
 
 export function useBuckets() {
-  return useQuery<Bucket[]>({
-    queryKey: bucketsKey(),
-    queryFn: async () => unwrapList<Bucket>(await api.get('/buckets')),
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Bucket[]>(
+    bucketsKey(),
+    async () => unwrapList<Bucket>(await api.get('/buckets')),
+    { ...QUERY_DEFAULTS, staleTime: 60_000, wsChannel: 'bucket:*' }
+  );
 }
 
 export function useBucket(name: string | undefined) {
-  return useQuery<Bucket>({
-    queryKey: bucketKey(name ?? ''),
-    queryFn: () => api.get<Bucket>(`/buckets/${encodeURIComponent(name!)}`),
-    enabled: !!name,
-    ...QUERY_DEFAULTS,
-  });
+  return useLiveQuery<Bucket>(
+    bucketKey(name ?? ''),
+    () => api.get<Bucket>(`/buckets/${encodeURIComponent(name!)}`),
+    {
+      ...QUERY_DEFAULTS,
+      staleTime: 60_000,
+      enabled: !!name,
+      wsChannel: name ? `bucket:${name}` : null,
+    }
+  );
 }
 
 export function useCreateBucket() {
