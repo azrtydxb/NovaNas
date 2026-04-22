@@ -15,15 +15,15 @@
   "ssoSessionMaxLifespan": 36000,
   "roles": {
     "realm": [
-      { "name": "admin",  "description": "NovaNas administrator" },
-      { "name": "user",   "description": "NovaNas end user" },
+      { "name": "admin", "description": "NovaNas administrator" },
+      { "name": "user", "description": "NovaNas end user" },
       { "name": "viewer", "description": "Read-only access" }
     ]
   },
   "defaultRole": { "name": "user", "composite": false, "clientRole": false },
   "groups": [
-    { "name": "admins",  "path": "/admins",  "realmRoles": ["admin"] },
-    { "name": "users",   "path": "/users",   "realmRoles": ["user"] },
+    { "name": "admins", "path": "/admins", "realmRoles": ["admin"] },
+    { "name": "users", "path": "/users", "realmRoles": ["user"] },
     { "name": "viewers", "path": "/viewers", "realmRoles": ["viewer"] }
   ],
   "defaultGroups": ["/users"],

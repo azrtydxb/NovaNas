@@ -21,7 +21,11 @@
       "title": "HTTP request rate",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
-      "targets": [{ "expr": "sum by (method, status_code)(rate(http_requests_total{job=\"novanas-api\"}[1m]))" }]
+      "targets": [
+        {
+          "expr": "sum by (method, status_code)(rate(http_requests_total{job=\"novanas-api\"}[1m]))"
+        }
+      ]
     },
     {
       "id": 3,
