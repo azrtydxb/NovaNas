@@ -1,11 +1,19 @@
 // Package main provides the NovaNas metadata service binary.
 //
 // NovaNas is single-node by design (docs/14 S12): the metadata service
-// maintains cluster metadata in a local BadgerDB store with durability
-// provided by Badger's WAL + fsync. Raft consensus was removed because
-// it added operational complexity without value on a single-node
-// deployment. The gRPC service interface is unchanged so upstream
-// clients (operators, CSI, s3gw) continue to work as before.
+// maintains cluster metadata in a BadgerDB store with durability provided
+// by Badger's WAL + fsync. Raft consensus was removed because it added
+// operational complexity without value on a single-node deployment.
+//
+// Post-A4-Metadata-As-Chunks (docs/14 S11/S13/S14): the metadata store
+// now lives on the chunk engine itself — BadgerDB's files are held on a
+// chunk-backed BlockVolume that is reconstructed at startup from the
+// per-disk superblocks reported by agents. The --data-dir flag is
+// retained for backward compatibility but deprecated; it is honoured only
+// when --chunk-backed=false (local-disk fallback).
+//
+// The gRPC service interface is unchanged so upstream clients (operators,
+// CSI, s3gw) continue to work as before.
 package main
 
 import (
@@ -23,6 +31,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 
+	"github.com/azrtydxb/novanas/storage/internal/disk"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
@@ -38,7 +47,11 @@ var (
 
 func main() {
 	nodeID := flag.String("node-id", "", "Metadata node ID (defaults to hostname when empty)")
-	dataDir := flag.String("data-dir", "/var/lib/novanas/meta", "Metadata data directory (BadgerDB files are stored under <data-dir>/badger)")
+	dataDir := flag.String("data-dir", "/var/lib/novanas/meta", "DEPRECATED: legacy local BadgerDB directory. Used only when --chunk-backed=false. In chunk-backed mode BadgerDB lives on a chunk-backed BlockVolume mounted at --meta-mount-path.")
+	chunkBacked := flag.Bool("chunk-backed", false, "Enable chunk-backed metadata (A4-Metadata-As-Chunks). When true, bootstrap via superblocks and mount the metadata BlockVolume before opening BadgerDB. Currently scaffolded: falls back to --data-dir until NBD export is wired in the data-plane (TODO(integration)).")
+	metaMountPath := flag.String("meta-mount-path", "/var/lib/novanas/meta-mount", "Mount path for the chunk-backed metadata BlockVolume when --chunk-backed=true.")
+	bootstrapTimeout := flag.Duration("bootstrap-timeout", 30*time.Second, "How long to wait for agents to report metadata-role superblocks before failing startup (chunk-backed mode only).")
+	minMetaDisks := flag.Int("min-metadata-disks", 1, "Minimum number of metadata-role disks that must report a superblock before bootstrap proceeds.")
 	grpcAddr := flag.String("grpc-addr", ":7001", "gRPC client API listen address")
 	metricsAddr := flag.String("metrics-addr", ":7002", "Prometheus metrics listen address")
 	tlsCA := flag.String("tls-ca", "", "Path to CA certificate for mTLS")
@@ -70,11 +83,46 @@ func main() {
 	// Register Prometheus metrics.
 	metrics.Register()
 
-	// Create the metadata store (direct BadgerDB; no Raft — docs/14 S12).
-	store, err := metadata.NewRaftStore(metadata.RaftConfig{
-		NodeID:  *nodeID,
-		DataDir: *dataDir,
-	})
+	// Create the metadata store.
+	//
+	// Chunk-backed path (A4-Metadata-As-Chunks, docs/14 S14): bootstrap by
+	// gathering metadata-role superblocks from agents, verifying CRUSH
+	// agreement, and (TODO(integration)) mounting the chunk-backed
+	// BlockVolume before opening BadgerDB. For now, the bootstrap step
+	// runs in "report-only" mode: it proves the locator flow and then
+	// opens BadgerDB at --data-dir as a safe fallback.
+	//
+	// Local-disk path (legacy): open BadgerDB at --data-dir directly.
+	var (
+		store *metadata.RaftStore
+		err   error
+	)
+	if *chunkBacked {
+		log.Printf("chunk-backed metadata enabled (bootstrap-timeout=%s, min-metadata-disks=%d, mount-path=%s)",
+			*bootstrapTimeout, *minMetaDisks, *metaMountPath)
+		log.Printf("TODO(integration): chunk-mount + BadgerDB-on-mount path not yet wired; falling back to --data-dir=%s", *dataDir)
+		// TODO(integration): replace noopSuperblockSource with a gRPC-backed
+		// source that pulls superblock reports from agent heartbeats.
+		bootCtx, bootCancel := context.WithTimeout(context.Background(), *bootstrapTimeout)
+		_, report, bootErr := metadata.NewRaftStoreChunkBacked(bootCtx, *nodeID, metadata.BootstrapConfig{
+			LocalDataDir:       *dataDir,
+			ChunkBackedEnabled: true,
+			MetaMountPath:      *metaMountPath,
+			BootstrapTimeout:   *bootstrapTimeout,
+			MinMetadataDisks:   *minMetaDisks,
+		}, &noopSuperblockSource{})
+		bootCancel()
+		if bootErr != nil {
+			log.Printf("chunk-backed bootstrap did not succeed (%v); continuing with --data-dir fallback", bootErr)
+		} else if report != nil {
+			log.Printf("chunk-backed bootstrap report: disks=%d meta-volume=%s root=%s ver=%d",
+				report.MetadataDisks, report.MetadataVolumeName, report.MetadataVolumeRoot, report.MetadataVolumeVer)
+		}
+		store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})
+	} else {
+		log.Printf("--data-dir=%s (legacy local-disk mode; --chunk-backed=false)", *dataDir)
+		store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})
+	}
 	if err != nil {
 		log.Fatalf("Failed to create metadata store: %v", err)
 	}
@@ -157,4 +205,21 @@ func main() {
 	defer shutdownCancel()
 	_ = metricsServer.Shutdown(shutdownCtx)
 	log.Println("Metadata service stopped")
+}
+
+// noopSuperblockSource is a placeholder metadata.SuperblockSource used
+// until the agent-to-meta superblock-report channel is wired. It always
+// returns an empty slice, which deliberately causes
+// BootstrapChunkBacked to fail with ErrBootstrapTimeout; the main()
+// call-site then logs and falls back to --data-dir. This keeps the
+// chunk-backed startup path exercised end-to-end in code without
+// requiring a live cluster.
+//
+// TODO(integration): replace with a real source that subscribes to
+// agent heartbeats and accumulates disk.ScanResult from their reports.
+type noopSuperblockSource struct{}
+
+func (*noopSuperblockSource) GatherMetadataSuperblocks(ctx context.Context, min int) ([]disk.ScanResult, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
 }

@@ -36,6 +36,76 @@ service ChunkService {
 
   // Stat returns metadata for a chunk without transferring its data.
   rpc Stat(StatChunkRequest) returns (StatChunkResponse);
+
+  // ========== Open-chunk lifecycle (A4-Metadata-As-Chunks) ==========
+  //
+  // Open-chunks are mutable, append-only, UUID-identified chunks that
+  // exist to provide WAL-style low-latency semantics on top of the
+  // 4 MiB content-addressed chunk substrate. They are used by the
+  // metadata service (BadgerDB value-log), and may be used by other
+  // append-heavy paths in the future.
+  //
+  // Lifecycle: Open -> (Append, Append, ...) -> (Full || Timeout) -> Seal.
+  // After sealing, the chunk is immutable and addressable by its
+  // content-hash ChunkId. The OpenChunkId is retired.
+
+  // OpenChunk allocates a new mutable open-chunk in the given pool and
+  // returns its UUID. The caller uses AppendChunk to write data, then
+  // SealChunk to finalise it into a content-addressed chunk.
+  rpc OpenChunk(OpenChunkRequest) returns (OpenChunkResponse);
+
+  // AppendChunk appends data to an open-chunk at the given offset.
+  // offset MUST equal the current length (strict append-only).
+  rpc AppendChunk(AppendChunkRequest) returns (AppendChunkResponse);
+
+  // SealChunk transitions the open-chunk to immutable and returns the
+  // resulting content-addressed ChunkId (SHA-256 of the final data).
+  rpc SealChunk(SealChunkRequest) returns (SealChunkResponse);
+}
+
+message OpenChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  // pool_id selects the CRUSH pool for replica placement.
+  string pool_id = 2;
+  // capacity_bytes is the maximum byte length this open-chunk will grow
+  // to before being sealed. Must be > 0 and <= 4 MiB.
+  uint64 capacity_bytes = 3;
+}
+
+message OpenChunkResponse {
+  // open_chunk_id is an opaque UUID identifying this open-chunk. It is
+  // NOT the eventual content-addressed ChunkId.
+  string open_chunk_id = 1;
+  // durable_replicas is how many replicas have acknowledged the open.
+  uint32 durable_replicas = 2;
+}
+
+message AppendChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string open_chunk_id = 2;
+  // offset MUST equal the open-chunk's current length.
+  uint64 offset = 3;
+  bytes data = 4;
+}
+
+message AppendChunkResponse {
+  // length_after is the new total byte length of the open-chunk after
+  // this append. When length_after == capacity, the chunk is ready to
+  // be sealed.
+  uint64 length_after = 1;
+  uint32 durable_replicas = 2;
+}
+
+message SealChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string open_chunk_id = 2;
+}
+
+message SealChunkResponse {
+  // sealed_id is the content-addressed ChunkId of the now-immutable
+  // chunk. The open_chunk_id is retired after this RPC.
+  ChunkId sealed_id = 1;
+  uint64 size_bytes = 2;
 }
 
 message PutChunkRequest {

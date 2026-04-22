@@ -41,6 +41,7 @@ import (
 	"github.com/azrtydxb/novanas/storage/internal/agent/device"
 	"github.com/azrtydxb/novanas/storage/internal/agent/failover"
 	"github.com/azrtydxb/novanas/storage/internal/dataplane"
+	"github.com/azrtydxb/novanas/storage/internal/disk"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
@@ -363,6 +364,52 @@ func main() {
 			zap.Int("total", hpInfo.TotalPages),
 			zap.Int("free", hpInfo.FreePages),
 			zap.Uint64("totalBytes", hpInfo.TotalBytes),
+		)
+	}
+
+	// Superblock scan (A4-Metadata-As-Chunks): enumerate local disks,
+	// read each disk's superblock, and classify as ACTIVE / IDENTIFIED /
+	// ERROR. ACTIVE disks participate in their declared pool; IDENTIFIED
+	// disks await admin assignment. Results are logged and cached for
+	// inclusion in the next heartbeat to the metadata service.
+	//
+	// TODO(integration): once the agent-to-meta heartbeat is extended to
+	// carry ScanResult entries, surface them over that RPC so meta's
+	// chunk-backed bootstrap can gather quorum.
+	if devices, discErr := diskDiscoverForSuperblockScan(); discErr != nil {
+		logging.L.Warn("disk discovery for superblock scan failed", zap.Error(discErr))
+	} else {
+		scan := diskScanSuperblocks(devices)
+		active, identified, errored := 0, 0, 0
+		for _, r := range scan {
+			switch r.Status {
+			case diskStatusActive():
+				active++
+				logging.L.Info("disk superblock ACTIVE",
+					zap.String("device", r.Device.Path),
+					zap.String("pool", r.Superblock.PoolID),
+					zap.Uint32("role", uint32(r.Superblock.Role)),
+					zap.String("meta-volume", r.Superblock.MetaVolumeName),
+					zap.Uint64("meta-volume-version", r.Superblock.MetaVolumeVersion),
+				)
+			case diskStatusIdentified():
+				identified++
+				logging.L.Warn("disk IDENTIFIED (no valid superblock) — admin must assign",
+					zap.String("device", r.Device.Path),
+					zap.Error(r.Err),
+				)
+			default:
+				errored++
+				logging.L.Warn("disk superblock read error",
+					zap.String("device", r.Device.Path),
+					zap.Error(r.Err),
+				)
+			}
+		}
+		logging.L.Info("superblock scan complete",
+			zap.Int("active", active),
+			zap.Int("identified", identified),
+			zap.Int("error", errored),
 		)
 	}
 
@@ -746,3 +793,21 @@ func main() {
 	}
 	logging.L.Info("agent stopped")
 }
+
+// diskDiscoverForSuperblockScan is a thin wrapper over disk.DiscoverDevices
+// kept here to isolate main.go from direct package imports when the
+// surrounding code does not yet need them. See storage/internal/disk.
+func diskDiscoverForSuperblockScan() ([]disk.DeviceInfo, error) {
+	return disk.DiscoverDevices()
+}
+
+// diskScanSuperblocks reads each device's superblock and classifies it.
+func diskScanSuperblocks(infos []disk.DeviceInfo) []disk.ScanResult {
+	return disk.ScanSuperblocks(infos)
+}
+
+// diskStatusActive / diskStatusIdentified are tiny helpers to avoid
+// exposing disk.DiskStatus enum values directly in switch-case (keeps the
+// main.go readable even for readers not familiar with the enum).
+func diskStatusActive() disk.DiskStatus     { return disk.DiskActive }
+func diskStatusIdentified() disk.DiskStatus { return disk.DiskIdentified }

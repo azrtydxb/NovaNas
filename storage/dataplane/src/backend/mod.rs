@@ -13,4 +13,5 @@ pub mod file_store;
 pub mod lvm;
 #[cfg(feature = "spdk-sys")]
 pub mod raw_disk;
+pub mod superblock;
 pub mod traits;

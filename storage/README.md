@@ -22,13 +22,55 @@ The storage engine follows a strict four-layer architecture:
 
 See `docs/02-storage-architecture.md` for details.
 
+## Bootstrap sequence (A4-Metadata-As-Chunks)
+
+NovaNas enforces an "everything is chunks" invariant: the metadata service
+itself stores its BadgerDB files on a chunk-backed BlockVolume, not on a
+local filesystem. To resolve the chicken-and-egg bootstrap problem, each
+disk carries a 4 KiB **superblock** at byte offset 0 — the only non-chunk
+data on any NovaNas disk.
+
+Startup flow:
+
+1. **Agent** (`cmd/agent/`) boots, enumerates local block devices,
+   reads each device's superblock, and classifies it:
+   - `ACTIVE`   — valid superblock; disk participates in its declared pool
+   - `IDENTIFIED` — device present but superblock missing or corrupt; admin
+     must assign (write a superblock) before use
+   - `ERROR`   — I/O failure reading the device
+   Each ACTIVE superblock carries: disk UUID, pool ID, role
+   (data / metadata / both), CRUSH-map digest, and the metadata-volume
+   locator (name, root chunk ID, version).
+2. **Agent** reports its superblocks to **Meta** via heartbeat (TODO
+   (integration): ReportSuperblocks RPC — proto defined in
+   `proto/novanas/metadata/v1/metadata_service.proto`).
+3. **Meta** (`cmd/meta/`) waits for at least `--min-metadata-disks`
+   metadata-role superblocks (up to `--bootstrap-timeout`), then:
+   - verifies all reporting disks agree on a single CRUSH-map digest;
+   - selects the highest `meta_volume_version` locator as authoritative;
+   - (TODO(integration)) assembles the metadata BlockVolume, exposes
+     it as a local block device via the NBD bdev, formats with xfs on
+     first boot, and mounts at `--meta-mount-path`;
+   - opens BadgerDB on the mount.
+4. **Meta** serves gRPC as normal.
+
+Two chunk states support this: the classic immutable content-addressed
+`SealedChunk`, and the new mutable, append-only, UUID-identified
+`OpenChunk`. Open chunks provide WAL-style low-latency semantics for
+BadgerDB's value log; once full (or after an idle timeout) they seal
+into content-addressed chunks. See `storage/internal/chunk/open_chunk.go`
+and `storage/dataplane/src/chunk/open_chunk.rs`.
+
+The `--data-dir` flag on `cmd/meta` is **deprecated**. It is retained as
+a fallback while the chunk-mount step is being wired.
+
 ## Components
 
 | Binary                         | Package               | Role                              |
 |--------------------------------|-----------------------|-----------------------------------|
 | `novanas-storage-controller`   | `cmd/controller/`     | Kubernetes operator               |
 | `novanas-storage-agent`        | `cmd/agent/`          | Node DaemonSet agent              |
-| `novanas-storage-meta`         | `cmd/meta/`           | Metadata service (Raft)           |
+| `novanas-storage-meta`         | `cmd/meta/`           | Metadata service (chunk-backed)   |
 | `novanas-storage-csi`          | `cmd/csi/`            | CSI driver                        |
 | `novanas-storage-s3gw`         | `cmd/s3gw/`           | S3 gateway                        |
 | `novanas-storage-scheduler`    | `cmd/scheduler/`      | Data-locality scheduler           |

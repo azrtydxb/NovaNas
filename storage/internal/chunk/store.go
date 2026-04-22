@@ -49,3 +49,23 @@ type HealthCheckStore interface {
 	Store
 	HealthCheck(ctx context.Context) error
 }
+
+// OpenChunkStore is an optional extension for backends that implement the
+// open-chunk lifecycle (mutable, append-only, UUID-identified chunks that
+// seal to a content-addressed ChunkID). See open_chunk.go for the
+// architectural rationale.
+type OpenChunkStore interface {
+	Store
+
+	// OpenChunk allocates a new mutable chunk with the given capacity and
+	// returns its UUID. poolID selects the CRUSH pool for placement.
+	OpenChunk(ctx context.Context, poolID string, capacity int) (OpenChunkID, error)
+
+	// AppendChunk appends data to an open chunk at the given offset.
+	// offset MUST equal the chunk's current length (strict append-only).
+	AppendChunk(ctx context.Context, id OpenChunkID, offset int, data []byte) error
+
+	// SealChunk transitions the open chunk to immutable content-addressed
+	// state and returns the resulting ChunkID (SHA-256 of the final data).
+	SealChunk(ctx context.Context, id OpenChunkID) (ChunkID, error)
+}

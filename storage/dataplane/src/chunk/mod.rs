@@ -2,6 +2,7 @@
 
 pub mod engine;
 pub mod ndp_pool;
+pub mod open_chunk;
 #[cfg(feature = "spdk-sys")]
 pub mod reactor_ndp;
 pub mod sync;
