@@ -1,0 +1,16 @@
+apiVersion: v2
+name: duplicati
+description: Duplicati — Free backup client with encryption.
+type: application
+version: 0.1.0
+appVersion: "2.0.8"
+icon: file://../icon.svg
+home: https://www.duplicati.com
+sources:
+  - https://www.duplicati.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - backup
+  - duplicati

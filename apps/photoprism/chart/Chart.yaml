@@ -1,0 +1,16 @@
+apiVersion: v2
+name: photoprism
+description: PhotoPrism — AI-powered app for browsing and sharing photos.
+type: application
+version: 0.1.0
+appVersion: "240915"
+icon: file://../icon.svg
+home: https://photoprism.app
+sources:
+  - https://photoprism.app
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - photos
+  - photoprism

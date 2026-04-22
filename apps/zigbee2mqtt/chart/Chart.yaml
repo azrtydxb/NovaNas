@@ -1,0 +1,16 @@
+apiVersion: v2
+name: zigbee2mqtt
+description: Zigbee2MQTT — Zigbee to MQTT bridge.
+type: application
+version: 0.1.0
+appVersion: "1.41.0"
+icon: file://../icon.svg
+home: https://www.zigbee2mqtt.io
+sources:
+  - https://www.zigbee2mqtt.io
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - home
+  - zigbee2mqtt

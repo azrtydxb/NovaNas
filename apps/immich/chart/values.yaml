@@ -1,0 +1,64 @@
+image:
+  repository: ghcr.io/immich-app/immich-server
+  tag: "v1.119.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 2283
+
+persistence:
+  config:
+    enabled: true
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  data:
+    enabled: false
+    size: 50Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 2048Mi
+  limits:
+    memory: 4096Mi
+
+ingress:
+  enabled: true
+  className: novaedge
+  host: immich.nas.local
+  tls:
+    enabled: true
+    secretName: immich-tls
+
+env: {}
+envFrom: []
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+podSecurityContext: {}
+
+probes:
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

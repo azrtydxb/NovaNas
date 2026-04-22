@@ -1,0 +1,16 @@
+apiVersion: v2
+name: paperless-ngx
+description: Paperless-ngx — Document management system.
+type: application
+version: 0.1.0
+appVersion: "2.12.1"
+icon: file://../icon.svg
+home: https://docs.paperless-ngx.com
+sources:
+  - https://docs.paperless-ngx.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - utility
+  - paperless-ngx

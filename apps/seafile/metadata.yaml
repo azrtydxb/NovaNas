@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: seafile
+displayName: Seafile
+version: 12.0.1
+appVersion: 12.0.1
+category: files
+description: "Enterprise file sync and share platform."
+longDescription: |
+  Seafile — Enterprise file sync and share platform.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://www.seafile.com
+source:
+  - https://www.seafile.com
+license: AGPL-3.0
+requirements:
+  minRamMB: 1024
+  minCpu: 1
+  requiresGpu: false
+  ports: [80]
+tags: [files]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "12.0.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "seafile.nas.local"

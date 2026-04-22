@@ -1,0 +1,16 @@
+apiVersion: v2
+name: code-server
+description: code-server — VS Code in the browser.
+type: application
+version: 0.1.0
+appVersion: "4.93.1"
+icon: file://../icon.svg
+home: https://github.com/coder/code-server
+sources:
+  - https://github.com/coder/code-server
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - dev
+  - code-server

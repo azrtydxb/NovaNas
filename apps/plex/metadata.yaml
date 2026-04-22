@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: plex
+displayName: Plex Media Server
+version: 1.40.3.8555
+appVersion: 1.40.3.8555
+category: media
+description: "Streams your media collection to any device."
+longDescription: |
+  Plex Media Server — Streams your media collection to any device.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://www.plex.tv
+source:
+  - https://www.plex.tv
+license: Proprietary
+requirements:
+  minRamMB: 2048
+  minCpu: 1
+  requiresGpu: false
+  ports: [32400]
+tags: [media]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "1.40.3.8555"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "plex.nas.local"

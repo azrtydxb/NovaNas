@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: readarr
+displayName: Readarr
+version: 0.4.5
+appVersion: 0.4.5
+category: arr
+description: "Book manager and automation tool."
+longDescription: |
+  Readarr — Book manager and automation tool.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://readarr.com
+source:
+  - https://readarr.com
+license: GPL-3.0
+requirements:
+  minRamMB: 512
+  minCpu: 1
+  requiresGpu: false
+  ports: [8787]
+tags: [arr]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "0.4.5"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "readarr.nas.local"

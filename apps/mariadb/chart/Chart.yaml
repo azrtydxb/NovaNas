@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mariadb
+description: MariaDB — Community fork of MySQL.
+type: application
+version: 0.1.0
+appVersion: "11.5.2"
+icon: file://../icon.svg
+home: https://mariadb.org
+sources:
+  - https://mariadb.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - database
+  - mariadb

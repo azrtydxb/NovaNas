@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: duplicati
+displayName: Duplicati
+version: 2.0.8
+appVersion: 2.0.8
+category: backup
+description: "Free backup client with encryption."
+longDescription: |
+  Duplicati — Free backup client with encryption.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://www.duplicati.com
+source:
+  - https://www.duplicati.com
+license: LGPL-2.1
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [8200]
+tags: [backup]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "2.0.8"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "duplicati.nas.local"

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mysql
+description: MySQL — Popular open-source relational database.
+type: application
+version: 0.1.0
+appVersion: "8.4.2"
+icon: file://../icon.svg
+home: https://www.mysql.com
+sources:
+  - https://www.mysql.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - database
+  - mysql

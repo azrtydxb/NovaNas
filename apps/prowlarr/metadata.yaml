@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: prowlarr
+displayName: Prowlarr
+version: 1.24.3
+appVersion: 1.24.3
+category: arr
+description: "Indexer manager/proxy for *arr stack."
+longDescription: |
+  Prowlarr — Indexer manager/proxy for *arr stack.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://prowlarr.com
+source:
+  - https://prowlarr.com
+license: GPL-3.0
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [9696]
+tags: [arr]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "1.24.3"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "prowlarr.nas.local"

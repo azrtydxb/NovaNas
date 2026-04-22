@@ -1,0 +1,16 @@
+apiVersion: v2
+name: home-assistant
+description: Home Assistant — Open source home automation.
+type: application
+version: 0.1.0
+appVersion: "2024.10.3"
+icon: file://../icon.svg
+home: https://www.home-assistant.io
+sources:
+  - https://www.home-assistant.io
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - home
+  - home-assistant

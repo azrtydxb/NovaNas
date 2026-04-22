@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mongodb
+description: MongoDB — Document-oriented NoSQL database.
+type: application
+version: 0.1.0
+appVersion: "7.0.14"
+icon: file://../icon.svg
+home: https://www.mongodb.com
+sources:
+  - https://www.mongodb.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - database
+  - mongodb

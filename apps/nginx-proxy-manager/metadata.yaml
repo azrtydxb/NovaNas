@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: nginx-proxy-manager
+displayName: Nginx Proxy Manager
+version: 2.12.1
+appVersion: 2.12.1
+category: networking
+description: "Docker container for managing Nginx proxy hosts."
+longDescription: |
+  Nginx Proxy Manager — Docker container for managing Nginx proxy hosts.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://nginxproxymanager.com
+source:
+  - https://nginxproxymanager.com
+license: MIT
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [81]
+tags: [networking]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "2.12.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "nginx-proxy-manager.nas.local"

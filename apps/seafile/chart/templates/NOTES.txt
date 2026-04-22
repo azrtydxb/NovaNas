@@ -1,0 +1,14 @@
+Seafile has been installed.
+
+1. Wait for the pod to become ready:
+   kubectl get pods -l app.kubernetes.io/name={{ include "app.name" . }} -n {{ .Release.Namespace }} -w
+
+2. Access the service:
+{{- if .Values.ingress.enabled }}
+   https://{{ .Values.ingress.host }}
+{{- else }}
+   kubectl port-forward svc/{{ include "app.fullname" . }} 80:80 -n {{ .Release.Namespace }}
+   Then open http://127.0.0.1:80
+{{- end }}
+
+3. Docs: https://www.seafile.com

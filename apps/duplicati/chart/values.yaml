@@ -1,0 +1,64 @@
+image:
+  repository: linuxserver/duplicati
+  tag: "2.0.8"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8200
+
+persistence:
+  config:
+    enabled: true
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  data:
+    enabled: false
+    size: 50Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: novaedge
+  host: duplicati.nas.local
+  tls:
+    enabled: true
+    secretName: duplicati-tls
+
+env: {}
+envFrom: []
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+podSecurityContext: {}
+
+probes:
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

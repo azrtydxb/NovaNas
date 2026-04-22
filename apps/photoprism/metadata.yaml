@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: photoprism
+displayName: PhotoPrism
+version: 240915
+appVersion: 240915
+category: photos
+description: "AI-powered app for browsing and sharing photos."
+longDescription: |
+  PhotoPrism — AI-powered app for browsing and sharing photos.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://photoprism.app
+source:
+  - https://photoprism.app
+license: AGPL-3.0
+requirements:
+  minRamMB: 2048
+  minCpu: 2
+  requiresGpu: false
+  ports: [2342]
+tags: [photos]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "240915"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "photoprism.nas.local"

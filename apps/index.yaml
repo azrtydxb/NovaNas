@@ -1,0 +1,328 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppCatalogIndex
+generated: "2026-04-22T00:00:00Z"
+apps:
+  - name: plex
+    version: 1.40.3.8555
+    category: media
+    displayName: Plex Media Server
+    description: "Streams your media collection to any device."
+    icon: plex/icon.svg
+    chartPath: plex/chart
+    metadataPath: plex/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/plex
+  - name: jellyfin
+    version: 10.9.7
+    category: media
+    displayName: Jellyfin
+    description: "Free software media system, a fork of Emby."
+    icon: jellyfin/icon.svg
+    chartPath: jellyfin/chart
+    metadataPath: jellyfin/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/jellyfin
+  - name: emby
+    version: 4.8.8.0
+    category: media
+    displayName: Emby Server
+    description: "Personal media server with apps on just about every device."
+    icon: emby/icon.svg
+    chartPath: emby/chart
+    metadataPath: emby/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/emby
+  - name: sonarr
+    version: 4.0.9
+    category: arr
+    displayName: Sonarr
+    description: "Smart PVR for newsgroup and bittorrent users."
+    icon: sonarr/icon.svg
+    chartPath: sonarr/chart
+    metadataPath: sonarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/sonarr
+  - name: radarr
+    version: 5.11.0
+    category: arr
+    displayName: Radarr
+    description: "A fork of Sonarr to work with movies."
+    icon: radarr/icon.svg
+    chartPath: radarr/chart
+    metadataPath: radarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/radarr
+  - name: prowlarr
+    version: 1.24.3
+    category: arr
+    displayName: Prowlarr
+    description: "Indexer manager/proxy for *arr stack."
+    icon: prowlarr/icon.svg
+    chartPath: prowlarr/chart
+    metadataPath: prowlarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/prowlarr
+  - name: lidarr
+    version: 2.4.3
+    category: arr
+    displayName: Lidarr
+    description: "Looks and smells like Sonarr but made for music."
+    icon: lidarr/icon.svg
+    chartPath: lidarr/chart
+    metadataPath: lidarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/lidarr
+  - name: readarr
+    version: 0.4.5
+    category: arr
+    displayName: Readarr
+    description: "Book manager and automation tool."
+    icon: readarr/icon.svg
+    chartPath: readarr/chart
+    metadataPath: readarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/readarr
+  - name: bazarr
+    version: 1.4.3
+    category: arr
+    displayName: Bazarr
+    description: "Companion to Sonarr and Radarr for subtitle management."
+    icon: bazarr/icon.svg
+    chartPath: bazarr/chart
+    metadataPath: bazarr/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/bazarr
+  - name: qbittorrent
+    version: 5.0.1
+    category: arr
+    displayName: qBittorrent
+    description: "Open-source BitTorrent client with web UI."
+    icon: qbittorrent/icon.svg
+    chartPath: qbittorrent/chart
+    metadataPath: qbittorrent/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/qbittorrent
+  - name: immich
+    version: v1.119.0
+    category: photos
+    displayName: Immich
+    description: "Self-hosted photo and video backup with ML."
+    icon: immich/icon.svg
+    chartPath: immich/chart
+    metadataPath: immich/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/immich
+  - name: photoprism
+    version: 240915
+    category: photos
+    displayName: PhotoPrism
+    description: "AI-powered app for browsing and sharing photos."
+    icon: photoprism/icon.svg
+    chartPath: photoprism/chart
+    metadataPath: photoprism/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/photoprism
+  - name: nextcloud
+    version: 30.0.1
+    category: files
+    displayName: Nextcloud
+    description: "Self-hosted productivity platform for file sync and share."
+    icon: nextcloud/icon.svg
+    chartPath: nextcloud/chart
+    metadataPath: nextcloud/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/nextcloud
+  - name: seafile
+    version: 12.0.1
+    category: files
+    displayName: Seafile
+    description: "Enterprise file sync and share platform."
+    icon: seafile/icon.svg
+    chartPath: seafile/chart
+    metadataPath: seafile/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/seafile
+  - name: filebrowser
+    version: v2.31.2
+    category: files
+    displayName: File Browser
+    description: "Web file browser with markdown editor."
+    icon: filebrowser/icon.svg
+    chartPath: filebrowser/chart
+    metadataPath: filebrowser/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/filebrowser
+  - name: home-assistant
+    version: 2024.10.3
+    category: home
+    displayName: Home Assistant
+    description: "Open source home automation."
+    icon: home-assistant/icon.svg
+    chartPath: home-assistant/chart
+    metadataPath: home-assistant/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/home-assistant
+  - name: frigate
+    version: 0.14.1
+    category: home
+    displayName: Frigate NVR
+    description: "NVR with real-time local object detection."
+    icon: frigate/icon.svg
+    chartPath: frigate/chart
+    metadataPath: frigate/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/frigate
+  - name: zigbee2mqtt
+    version: 1.41.0
+    category: home
+    displayName: Zigbee2MQTT
+    description: "Zigbee to MQTT bridge."
+    icon: zigbee2mqtt/icon.svg
+    chartPath: zigbee2mqtt/chart
+    metadataPath: zigbee2mqtt/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/zigbee2mqtt
+  - name: gitea
+    version: 1.22.3
+    category: dev
+    displayName: Gitea
+    description: "Self-hosted Git service."
+    icon: gitea/icon.svg
+    chartPath: gitea/chart
+    metadataPath: gitea/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/gitea
+  - name: woodpecker
+    version: v2.7.3
+    category: dev
+    displayName: Woodpecker CI
+    description: "Community-driven CI engine."
+    icon: woodpecker/icon.svg
+    chartPath: woodpecker/chart
+    metadataPath: woodpecker/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/woodpecker
+  - name: code-server
+    version: 4.93.1
+    category: dev
+    displayName: code-server
+    description: "VS Code in the browser."
+    icon: code-server/icon.svg
+    chartPath: code-server/chart
+    metadataPath: code-server/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/code-server
+  - name: postgres
+    version: 16.4
+    category: database
+    displayName: PostgreSQL
+    description: "Powerful open-source relational database."
+    icon: postgres/icon.svg
+    chartPath: postgres/chart
+    metadataPath: postgres/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/postgres
+  - name: mysql
+    version: 8.4.2
+    category: database
+    displayName: MySQL
+    description: "Popular open-source relational database."
+    icon: mysql/icon.svg
+    chartPath: mysql/chart
+    metadataPath: mysql/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/mysql
+  - name: mariadb
+    version: 11.5.2
+    category: database
+    displayName: MariaDB
+    description: "Community fork of MySQL."
+    icon: mariadb/icon.svg
+    chartPath: mariadb/chart
+    metadataPath: mariadb/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/mariadb
+  - name: redis
+    version: 7.4.1
+    category: database
+    displayName: Redis
+    description: "In-memory data structure store."
+    icon: redis/icon.svg
+    chartPath: redis/chart
+    metadataPath: redis/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/redis
+  - name: mongodb
+    version: 7.0.14
+    category: database
+    displayName: MongoDB
+    description: "Document-oriented NoSQL database."
+    icon: mongodb/icon.svg
+    chartPath: mongodb/chart
+    metadataPath: mongodb/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/mongodb
+  - name: prometheus
+    version: v2.54.1
+    category: observability
+    displayName: Prometheus
+    description: "Monitoring system and time-series database."
+    icon: prometheus/icon.svg
+    chartPath: prometheus/chart
+    metadataPath: prometheus/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/prometheus
+  - name: grafana
+    version: 11.2.2
+    category: observability
+    displayName: Grafana
+    description: "Open observability platform."
+    icon: grafana/icon.svg
+    chartPath: grafana/chart
+    metadataPath: grafana/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/grafana
+  - name: loki
+    version: 3.2.1
+    category: observability
+    displayName: Loki
+    description: "Horizontally-scalable log aggregation system."
+    icon: loki/icon.svg
+    chartPath: loki/chart
+    metadataPath: loki/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/loki
+  - name: vaultwarden
+    version: 1.32.1
+    category: utility
+    displayName: Vaultwarden
+    description: "Unofficial Bitwarden compatible server."
+    icon: vaultwarden/icon.svg
+    chartPath: vaultwarden/chart
+    metadataPath: vaultwarden/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/vaultwarden
+  - name: paperless-ngx
+    version: 2.12.1
+    category: utility
+    displayName: Paperless-ngx
+    description: "Document management system."
+    icon: paperless-ngx/icon.svg
+    chartPath: paperless-ngx/chart
+    metadataPath: paperless-ngx/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/paperless-ngx
+  - name: adguard-home
+    version: v0.107.54
+    category: networking
+    displayName: AdGuard Home
+    description: "Network-wide ads and trackers blocker."
+    icon: adguard-home/icon.svg
+    chartPath: adguard-home/chart
+    metadataPath: adguard-home/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/adguard-home
+  - name: pihole
+    version: 2024.07.0
+    category: networking
+    displayName: Pi-hole
+    description: "Network-wide ad blocker."
+    icon: pihole/icon.svg
+    chartPath: pihole/chart
+    metadataPath: pihole/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/pihole
+  - name: nginx-proxy-manager
+    version: 2.12.1
+    category: networking
+    displayName: Nginx Proxy Manager
+    description: "Docker container for managing Nginx proxy hosts."
+    icon: nginx-proxy-manager/icon.svg
+    chartPath: nginx-proxy-manager/chart
+    metadataPath: nginx-proxy-manager/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/nginx-proxy-manager
+  - name: duplicati
+    version: 2.0.8
+    category: backup
+    displayName: Duplicati
+    description: "Free backup client with encryption."
+    icon: duplicati/icon.svg
+    chartPath: duplicati/chart
+    metadataPath: duplicati/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/duplicati
+  - name: kopia
+    version: 0.17.0
+    category: backup
+    displayName: Kopia
+    description: "Fast and secure open-source backup tool."
+    icon: kopia/icon.svg
+    chartPath: kopia/chart
+    metadataPath: kopia/metadata.yaml
+    ociRef: oci://ghcr.io/azrtydxb/novanas-apps/kopia

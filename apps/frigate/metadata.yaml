@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: frigate
+displayName: Frigate NVR
+version: 0.14.1
+appVersion: 0.14.1
+category: home
+description: "NVR with real-time local object detection."
+longDescription: |
+  Frigate NVR — NVR with real-time local object detection.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://frigate.video
+source:
+  - https://frigate.video
+license: MIT
+requirements:
+  minRamMB: 2048
+  minCpu: 2
+  requiresGpu: false
+  ports: [5000]
+tags: [home]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "0.14.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "frigate.nas.local"

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: nextcloud
+description: Nextcloud — Self-hosted productivity platform for file sync and share.
+type: application
+version: 0.1.0
+appVersion: "30.0.1"
+icon: file://../icon.svg
+home: https://nextcloud.com
+sources:
+  - https://nextcloud.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - files
+  - nextcloud

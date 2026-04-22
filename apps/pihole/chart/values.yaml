@@ -1,0 +1,64 @@
+image:
+  repository: pihole/pihole
+  tag: "2024.07.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 80
+
+persistence:
+  config:
+    enabled: true
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+  data:
+    enabled: false
+    size: 50Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: novaedge
+  host: pihole.nas.local
+  tls:
+    enabled: true
+    secretName: pihole-tls
+
+env: {}
+envFrom: []
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+podSecurityContext: {}
+
+probes:
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

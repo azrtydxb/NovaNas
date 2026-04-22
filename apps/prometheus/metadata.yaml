@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: prometheus
+displayName: Prometheus
+version: v2.54.1
+appVersion: v2.54.1
+category: observability
+description: "Monitoring system and time-series database."
+longDescription: |
+  Prometheus — Monitoring system and time-series database.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://prometheus.io
+source:
+  - https://prometheus.io
+license: Apache-2.0
+requirements:
+  minRamMB: 512
+  minCpu: 1
+  requiresGpu: false
+  ports: [9090]
+tags: [observability]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "v2.54.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "prometheus.nas.local"

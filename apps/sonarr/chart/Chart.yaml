@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sonarr
+description: Sonarr — Smart PVR for newsgroup and bittorrent users.
+type: application
+version: 0.1.0
+appVersion: "4.0.9"
+icon: file://../icon.svg
+home: https://sonarr.tv
+sources:
+  - https://sonarr.tv
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - sonarr

@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: adguard-home
+displayName: AdGuard Home
+version: v0.107.54
+appVersion: v0.107.54
+category: networking
+description: "Network-wide ads and trackers blocker."
+longDescription: |
+  AdGuard Home — Network-wide ads and trackers blocker.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://adguard.com/adguard-home.html
+source:
+  - https://adguard.com/adguard-home.html
+license: GPL-3.0
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [3000]
+tags: [networking]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "v0.107.54"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "adguard-home.nas.local"

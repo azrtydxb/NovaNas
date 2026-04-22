@@ -1,0 +1,16 @@
+apiVersion: v2
+name: postgres
+description: PostgreSQL — Powerful open-source relational database.
+type: application
+version: 0.1.0
+appVersion: "16.4"
+icon: file://../icon.svg
+home: https://www.postgresql.org
+sources:
+  - https://www.postgresql.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - database
+  - postgres

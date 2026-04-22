@@ -1,0 +1,16 @@
+apiVersion: v2
+name: plex
+description: Plex Media Server — Streams your media collection to any device.
+type: application
+version: 0.1.0
+appVersion: "1.40.3.8555"
+icon: file://../icon.svg
+home: https://www.plex.tv
+sources:
+  - https://www.plex.tv
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - media
+  - plex

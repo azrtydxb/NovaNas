@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: woodpecker
+displayName: Woodpecker CI
+version: v2.7.3
+appVersion: v2.7.3
+category: dev
+description: "Community-driven CI engine."
+longDescription: |
+  Woodpecker CI — Community-driven CI engine.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://woodpecker-ci.org
+source:
+  - https://woodpecker-ci.org
+license: Apache-2.0
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [8000]
+tags: [dev]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "v2.7.3"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "woodpecker.nas.local"

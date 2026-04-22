@@ -1,0 +1,16 @@
+apiVersion: v2
+name: immich
+description: Immich — Self-hosted photo and video backup with ML.
+type: application
+version: 0.1.0
+appVersion: "v1.119.0"
+icon: file://../icon.svg
+home: https://immich.app
+sources:
+  - https://immich.app
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - photos
+  - immich

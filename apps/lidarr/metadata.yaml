@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: lidarr
+displayName: Lidarr
+version: 2.4.3
+appVersion: 2.4.3
+category: arr
+description: "Looks and smells like Sonarr but made for music."
+longDescription: |
+  Lidarr — Looks and smells like Sonarr but made for music.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://lidarr.audio
+source:
+  - https://lidarr.audio
+license: GPL-3.0
+requirements:
+  minRamMB: 512
+  minCpu: 1
+  requiresGpu: false
+  ports: [8686]
+tags: [arr]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "2.4.3"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "lidarr.nas.local"

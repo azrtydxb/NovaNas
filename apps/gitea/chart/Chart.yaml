@@ -1,0 +1,16 @@
+apiVersion: v2
+name: gitea
+description: Gitea — Self-hosted Git service.
+type: application
+version: 0.1.0
+appVersion: "1.22.3"
+icon: file://../icon.svg
+home: https://gitea.io
+sources:
+  - https://gitea.io
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - dev
+  - gitea

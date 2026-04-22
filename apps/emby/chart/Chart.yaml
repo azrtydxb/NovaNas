@@ -1,0 +1,16 @@
+apiVersion: v2
+name: emby
+description: Emby Server — Personal media server with apps on just about every device.
+type: application
+version: 0.1.0
+appVersion: "4.8.8.0"
+icon: file://../icon.svg
+home: https://emby.media
+sources:
+  - https://emby.media
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - media
+  - emby

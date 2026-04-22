@@ -1,0 +1,16 @@
+apiVersion: v2
+name: filebrowser
+description: File Browser — Web file browser with markdown editor.
+type: application
+version: 0.1.0
+appVersion: "v2.31.2"
+icon: file://../icon.svg
+home: https://filebrowser.org
+sources:
+  - https://filebrowser.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - files
+  - filebrowser

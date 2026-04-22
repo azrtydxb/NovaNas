@@ -1,0 +1,16 @@
+apiVersion: v2
+name: grafana
+description: Grafana — Open observability platform.
+type: application
+version: 0.1.0
+appVersion: "11.2.2"
+icon: file://../icon.svg
+home: https://grafana.com
+sources:
+  - https://grafana.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - observability
+  - grafana

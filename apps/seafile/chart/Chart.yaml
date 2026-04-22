@@ -1,0 +1,16 @@
+apiVersion: v2
+name: seafile
+description: Seafile — Enterprise file sync and share platform.
+type: application
+version: 0.1.0
+appVersion: "12.0.1"
+icon: file://../icon.svg
+home: https://www.seafile.com
+sources:
+  - https://www.seafile.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - files
+  - seafile

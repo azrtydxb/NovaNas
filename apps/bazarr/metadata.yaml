@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: bazarr
+displayName: Bazarr
+version: 1.4.3
+appVersion: 1.4.3
+category: arr
+description: "Companion to Sonarr and Radarr for subtitle management."
+longDescription: |
+  Bazarr — Companion to Sonarr and Radarr for subtitle management.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://www.bazarr.media
+source:
+  - https://www.bazarr.media
+license: GPL-3.0
+requirements:
+  minRamMB: 256
+  minCpu: 1
+  requiresGpu: false
+  ports: [6767]
+tags: [arr]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "1.4.3"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "bazarr.nas.local"

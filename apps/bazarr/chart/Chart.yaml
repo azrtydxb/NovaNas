@@ -1,0 +1,16 @@
+apiVersion: v2
+name: bazarr
+description: Bazarr — Companion to Sonarr and Radarr for subtitle management.
+type: application
+version: 0.1.0
+appVersion: "1.4.3"
+icon: file://../icon.svg
+home: https://www.bazarr.media
+sources:
+  - https://www.bazarr.media
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - bazarr

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: qbittorrent
+description: qBittorrent — Open-source BitTorrent client with web UI.
+type: application
+version: 0.1.0
+appVersion: "5.0.1"
+icon: file://../icon.svg
+home: https://www.qbittorrent.org
+sources:
+  - https://www.qbittorrent.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - qbittorrent

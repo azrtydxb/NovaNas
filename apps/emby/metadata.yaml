@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: emby
+displayName: Emby Server
+version: 4.8.8.0
+appVersion: 4.8.8.0
+category: media
+description: "Personal media server with apps on just about every device."
+longDescription: |
+  Emby Server — Personal media server with apps on just about every device.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://emby.media
+source:
+  - https://emby.media
+license: Proprietary
+requirements:
+  minRamMB: 1024
+  minCpu: 1
+  requiresGpu: false
+  ports: [8096]
+tags: [media]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "4.8.8.0"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "emby.nas.local"

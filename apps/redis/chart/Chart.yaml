@@ -1,0 +1,16 @@
+apiVersion: v2
+name: redis
+description: Redis — In-memory data structure store.
+type: application
+version: 0.1.0
+appVersion: "7.4.1"
+icon: file://../icon.svg
+home: https://redis.io
+sources:
+  - https://redis.io
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - database
+  - redis

@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: immich
+displayName: Immich
+version: v1.119.0
+appVersion: v1.119.0
+category: photos
+description: "Self-hosted photo and video backup with ML."
+longDescription: |
+  Immich — Self-hosted photo and video backup with ML.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://immich.app
+source:
+  - https://immich.app
+license: AGPL-3.0
+requirements:
+  minRamMB: 2048
+  minCpu: 2
+  requiresGpu: false
+  ports: [2283]
+tags: [photos]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "v1.119.0"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "immich.nas.local"

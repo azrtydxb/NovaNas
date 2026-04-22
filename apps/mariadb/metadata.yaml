@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: mariadb
+displayName: MariaDB
+version: 11.5.2
+appVersion: 11.5.2
+category: database
+description: "Community fork of MySQL."
+longDescription: |
+  MariaDB — Community fork of MySQL.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://mariadb.org
+source:
+  - https://mariadb.org
+license: GPL-2.0
+requirements:
+  minRamMB: 512
+  minCpu: 1
+  requiresGpu: false
+  ports: [3306]
+tags: [database]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "11.5.2"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "mariadb.nas.local"

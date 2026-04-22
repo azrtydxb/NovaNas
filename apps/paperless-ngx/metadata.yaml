@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: paperless-ngx
+displayName: Paperless-ngx
+version: 2.12.1
+appVersion: 2.12.1
+category: utility
+description: "Document management system."
+longDescription: |
+  Paperless-ngx — Document management system.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://docs.paperless-ngx.com
+source:
+  - https://docs.paperless-ngx.com
+license: GPL-3.0
+requirements:
+  minRamMB: 512
+  minCpu: 1
+  requiresGpu: false
+  ports: [8000]
+tags: [utility]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "2.12.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "paperless-ngx.nas.local"

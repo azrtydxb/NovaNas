@@ -1,0 +1,16 @@
+apiVersion: v2
+name: lidarr
+description: Lidarr — Looks and smells like Sonarr but made for music.
+type: application
+version: 0.1.0
+appVersion: "2.4.3"
+icon: file://../icon.svg
+home: https://lidarr.audio
+sources:
+  - https://lidarr.audio
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - lidarr

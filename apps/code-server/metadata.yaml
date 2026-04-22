@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: code-server
+displayName: code-server
+version: 4.93.1
+appVersion: 4.93.1
+category: dev
+description: "VS Code in the browser."
+longDescription: |
+  code-server — VS Code in the browser.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://github.com/coder/code-server
+source:
+  - https://github.com/coder/code-server
+license: MIT
+requirements:
+  minRamMB: 1024
+  minCpu: 1
+  requiresGpu: false
+  ports: [8080]
+tags: [dev]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "4.93.1"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "code-server.nas.local"

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: radarr
+description: Radarr — A fork of Sonarr to work with movies.
+type: application
+version: 0.1.0
+appVersion: "5.11.0"
+icon: file://../icon.svg
+home: https://radarr.video
+sources:
+  - https://radarr.video
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - radarr

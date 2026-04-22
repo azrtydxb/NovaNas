@@ -1,0 +1,16 @@
+apiVersion: v2
+name: jellyfin
+description: Jellyfin — Free software media system, a fork of Emby.
+type: application
+version: 0.1.0
+appVersion: "10.9.7"
+icon: file://../icon.svg
+home: https://jellyfin.org
+sources:
+  - https://jellyfin.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - media
+  - jellyfin

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: woodpecker
+description: Woodpecker CI — Community-driven CI engine.
+type: application
+version: 0.1.0
+appVersion: "v2.7.3"
+icon: file://../icon.svg
+home: https://woodpecker-ci.org
+sources:
+  - https://woodpecker-ci.org
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - dev
+  - woodpecker

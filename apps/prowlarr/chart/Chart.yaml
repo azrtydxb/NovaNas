@@ -1,0 +1,16 @@
+apiVersion: v2
+name: prowlarr
+description: Prowlarr — Indexer manager/proxy for *arr stack.
+type: application
+version: 0.1.0
+appVersion: "1.24.3"
+icon: file://../icon.svg
+home: https://prowlarr.com
+sources:
+  - https://prowlarr.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - prowlarr

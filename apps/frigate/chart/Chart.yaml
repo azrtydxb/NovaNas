@@ -1,0 +1,16 @@
+apiVersion: v2
+name: frigate
+description: Frigate NVR — NVR with real-time local object detection.
+type: application
+version: 0.1.0
+appVersion: "0.14.1"
+icon: file://../icon.svg
+home: https://frigate.video
+sources:
+  - https://frigate.video
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - home
+  - frigate

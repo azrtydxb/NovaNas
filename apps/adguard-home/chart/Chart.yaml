@@ -1,0 +1,16 @@
+apiVersion: v2
+name: adguard-home
+description: AdGuard Home — Network-wide ads and trackers blocker.
+type: application
+version: 0.1.0
+appVersion: "v0.107.54"
+icon: file://../icon.svg
+home: https://adguard.com/adguard-home.html
+sources:
+  - https://adguard.com/adguard-home.html
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - networking
+  - adguard-home

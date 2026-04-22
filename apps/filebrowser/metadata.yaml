@@ -1,0 +1,55 @@
+apiVersion: novanas.io/v1alpha1
+kind: AppMetadata
+name: filebrowser
+displayName: File Browser
+version: v2.31.2
+appVersion: v2.31.2
+category: files
+description: "Web file browser with markdown editor."
+longDescription: |
+  File Browser — Web file browser with markdown editor.
+  Packaged for NovaNas by the NovaNas team. See upstream project for full
+  documentation and support channels.
+icon: icon.svg
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+website: https://filebrowser.org
+source:
+  - https://filebrowser.org
+license: Apache-2.0
+requirements:
+  minRamMB: 128
+  minCpu: 1
+  requiresGpu: false
+  ports: [80]
+tags: [files]
+schema:
+  type: object
+  properties:
+    image:
+      type: object
+      properties:
+        tag:
+          type: string
+          default: "v2.31.2"
+          title: "Image tag"
+    persistence:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            size:
+              type: string
+              default: "5Gi"
+              title: "Config volume size"
+    ingress:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        host:
+          type: string
+          default: "filebrowser.nas.local"

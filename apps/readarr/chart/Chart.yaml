@@ -1,0 +1,16 @@
+apiVersion: v2
+name: readarr
+description: Readarr — Book manager and automation tool.
+type: application
+version: 0.1.0
+appVersion: "0.4.5"
+icon: file://../icon.svg
+home: https://readarr.com
+sources:
+  - https://readarr.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - arr
+  - readarr

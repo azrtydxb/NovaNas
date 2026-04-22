@@ -1,0 +1,16 @@
+apiVersion: v2
+name: nginx-proxy-manager
+description: Nginx Proxy Manager — Docker container for managing Nginx proxy hosts.
+type: application
+version: 0.1.0
+appVersion: "2.12.1"
+icon: file://../icon.svg
+home: https://nginxproxymanager.com
+sources:
+  - https://nginxproxymanager.com
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - networking
+  - nginx-proxy-manager

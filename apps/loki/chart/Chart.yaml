@@ -1,0 +1,16 @@
+apiVersion: v2
+name: loki
+description: Loki — Horizontally-scalable log aggregation system.
+type: application
+version: 0.1.0
+appVersion: "3.2.1"
+icon: file://../icon.svg
+home: https://grafana.com/oss/loki
+sources:
+  - https://grafana.com/oss/loki
+maintainers:
+  - name: NovaNas
+    url: https://github.com/azrtydxb/novanas
+keywords:
+  - observability
+  - loki
