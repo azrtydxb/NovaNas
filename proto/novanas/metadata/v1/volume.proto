@@ -1,0 +1,79 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.metadata.v1;
+
+import "google/protobuf/timestamp.proto";
+import "novanas/metadata/v1/protection.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/metadata/v1;metadatav1";
+
+// VolumeKind discriminates between the storage surfaces NovaNas exposes.
+enum VolumeKind {
+  VOLUME_KIND_UNSPECIFIED = 0;
+  // Block volume (NVMe-oF / iSCSI target).
+  VOLUME_KIND_BLOCK = 1;
+  // Filesystem dataset (NFS / SMB export).
+  VOLUME_KIND_DATASET = 2;
+  // Object bucket (S3 endpoint).
+  VOLUME_KIND_BUCKET = 3;
+}
+
+// VolumeState describes the lifecycle state of a volume.
+enum VolumeState {
+  VOLUME_STATE_UNSPECIFIED = 0;
+  VOLUME_STATE_PROVISIONING = 1;
+  VOLUME_STATE_READY = 2;
+  VOLUME_STATE_DEGRADED = 3;
+  VOLUME_STATE_OFFLINE = 4;
+  VOLUME_STATE_DELETING = 5;
+}
+
+// VolumeId is the stable identifier of a volume within a tenant.
+message VolumeId {
+  // uid is a globally-unique opaque id (UUIDv7 in practice).
+  string uid = 1;
+  // name is the human-readable name, unique per (tenant, kind).
+  string name = 2;
+  // tenant scopes the volume. Empty for cluster-scoped volumes.
+  string tenant = 3;
+}
+
+// VolumeMeta is the canonical description of a volume.
+message VolumeMeta {
+  VolumeId id = 1;
+  VolumeKind kind = 2;
+  VolumeState state = 3;
+
+  // pool names the placement pool the volume was provisioned on.
+  string pool = 4;
+
+  // requested_size_bytes is the logical capacity exposed to tenants.
+  uint64 requested_size_bytes = 5;
+
+  // allocated_size_bytes is the physical capacity currently consumed
+  // (post-dedup, post-compression).
+  uint64 allocated_size_bytes = 6;
+
+  // protection describes how the volume is protected (replication or EC).
+  ProtectionPolicy protection = 7;
+
+  // labels are operator-supplied key/value annotations.
+  map<string, string> labels = 8;
+
+  google.protobuf.Timestamp created_at = 20;
+  google.protobuf.Timestamp updated_at = 21;
+
+  // generation is incremented on every spec change; used for optimistic
+  // concurrency control.
+  uint64 generation = 30;
+}
+
+// VolumeRange identifies a byte-range within a volume, used by MapChunks.
+message VolumeRange {
+  VolumeId volume_id = 1;
+  uint64 offset = 2;
+  uint64 length = 3;
+}

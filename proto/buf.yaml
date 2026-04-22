@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: .
+    name: buf.build/novanas/proto
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX

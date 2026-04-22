@@ -1,0 +1,90 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.metadata.v1;
+
+import "google/protobuf/timestamp.proto";
+import "novanas/metadata/v1/protection.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/metadata/v1;metadatav1";
+
+// DeviceClass is a coarse quality-of-service tier for a physical device.
+enum DeviceClass {
+  DEVICE_CLASS_UNSPECIFIED = 0;
+  DEVICE_CLASS_NVME = 1;
+  DEVICE_CLASS_SSD = 2;
+  DEVICE_CLASS_HDD = 3;
+  DEVICE_CLASS_OPTANE = 4;
+}
+
+// DeviceState is the admin / health state of a device.
+enum DeviceState {
+  DEVICE_STATE_UNSPECIFIED = 0;
+  DEVICE_STATE_ONLINE = 1;
+  DEVICE_STATE_DRAINING = 2;
+  DEVICE_STATE_OFFLINE = 3;
+  DEVICE_STATE_FAILED = 4;
+}
+
+// Device is a single backing device registered with the cluster.
+message Device {
+  // id is the globally-unique device id (typically "<node>/<bdev>").
+  string id = 1;
+  string node_id = 2;
+  string bdev_name = 3;
+  DeviceClass class = 4;
+  DeviceState state = 5;
+  uint64 capacity_bytes = 6;
+  uint64 used_bytes = 7;
+  // weight biases the placement engine; 0 excludes the device.
+  uint32 weight = 8;
+
+  // Topology keys for failure-domain-aware placement.
+  string rack = 20;
+  string zone = 21;
+  string region = 22;
+}
+
+// CrushBucket is a hierarchical grouping in the CRUSH-style placement map.
+message CrushBucket {
+  string name = 1;
+  // kind is "root", "region", "zone", "rack", "host", etc.
+  string kind = 2;
+  repeated string child_names = 3;
+  // weight is the sum of contained device weights.
+  uint64 weight = 4;
+}
+
+// CrushRule is a named placement strategy.
+message CrushRule {
+  string name = 1;
+  // root_bucket is the top of the subtree this rule selects from.
+  string root_bucket = 2;
+  // failure_domain is the bucket kind across which placements must spread.
+  string failure_domain = 3;
+  // device_class, if set, constrains selection to that tier.
+  DeviceClass device_class = 4;
+}
+
+// CrushMap is the full placement topology.
+message CrushMap {
+  uint64 generation = 1;
+  repeated Device devices = 2;
+  repeated CrushBucket buckets = 3;
+  repeated CrushRule rules = 4;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// PoolSpec describes a named placement pool usable by volumes.
+message PoolSpec {
+  string name = 1;
+  // rule_name references a CrushRule in the current CrushMap.
+  string rule_name = 2;
+  DeviceClass device_class = 3;
+  // default_protection is the protection policy applied to new volumes
+  // unless the caller overrides it.
+  ProtectionPolicy default_protection = 4;
+  map<string, string> labels = 5;
+}

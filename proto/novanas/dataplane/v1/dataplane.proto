@@ -1,0 +1,68 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.dataplane.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/dataplane/v1;dataplanev1";
+
+// BdevKind enumerates the supported SPDK bdev backends NovaNas knows how
+// to attach. The underlying storage engine (NovaStor) supports more
+// backends internally; this list reflects the ones operators can
+// express through the narrow NovaNas contract.
+enum BdevKind {
+  BDEV_KIND_UNSPECIFIED = 0;
+  BDEV_KIND_AIO = 1;
+  BDEV_KIND_MALLOC = 2;
+  BDEV_KIND_LVOL = 3;
+  BDEV_KIND_NVME = 4;
+  BDEV_KIND_REPLICA = 5;
+}
+
+// BdevRef identifies a bdev on a specific node.
+message BdevRef {
+  string node_id = 1;
+  string name = 2;
+  BdevKind kind = 3;
+}
+
+// BdevSpec is the declarative description of a bdev to create.
+message BdevSpec {
+  string node_id = 1;
+  string name = 2;
+  BdevKind kind = 3;
+  uint32 block_size = 4;
+  // size_bytes applies to malloc / lvol bdevs.
+  uint64 size_bytes = 5;
+  // device_path applies to aio / nvme bdevs.
+  string device_path = 6;
+  // lvol_store, when kind == BDEV_KIND_LVOL, selects the backing store.
+  string lvol_store = 7;
+  bool thin_provision = 8;
+}
+
+// BdevInfo describes a live bdev.
+message BdevInfo {
+  BdevRef ref = 1;
+  uint32 block_size = 2;
+  uint64 num_blocks = 3;
+  uint64 size_bytes = 4;
+  string status = 5;
+  google.protobuf.Timestamp attached_at = 10;
+}
+
+// IoStats are point-in-time counters for a bdev or subsystem.
+message IoStats {
+  BdevRef ref = 1;
+  uint64 read_ops = 2;
+  uint64 write_ops = 3;
+  uint64 read_bytes = 4;
+  uint64 write_bytes = 5;
+  uint64 read_latency_ns = 6;
+  uint64 write_latency_ns = 7;
+  uint64 queue_depth = 8;
+  google.protobuf.Timestamp sampled_at = 20;
+}

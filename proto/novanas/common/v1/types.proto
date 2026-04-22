@@ -1,0 +1,80 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.common.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/common/v1;commonv1";
+
+// RequestContext carries cross-cutting request metadata. Every top-level
+// RPC request should embed a RequestContext for tracing, tenancy and
+// deadline propagation.
+message RequestContext {
+  // trace_id is a W3C-compatible trace identifier used to correlate logs,
+  // metrics and spans across service boundaries.
+  string trace_id = 1;
+
+  // tenant_id scopes the request to a specific NovaNas tenant. Empty
+  // means the operator / cluster-scoped context.
+  string tenant_id = 2;
+
+  // actor identifies the principal making the request (user, service
+  // account, system component). Free-form; format depends on the
+  // identity provider.
+  string actor = 3;
+
+  // deadline is an optional wall-clock deadline for the request. Servers
+  // should abort processing once the deadline has passed.
+  google.protobuf.Timestamp deadline = 10;
+}
+
+// Page is a generic cursor-based pagination request fragment.
+message Page {
+  // page_size is the maximum number of entries the server should return.
+  // A value of 0 means "server default".
+  int32 page_size = 1;
+
+  // page_token is an opaque cursor returned by a previous list call. An
+  // empty token requests the first page.
+  string page_token = 2;
+}
+
+// PageInfo is returned alongside a paginated list response.
+message PageInfo {
+  // next_page_token is the cursor for the next page, empty when exhausted.
+  string next_page_token = 1;
+
+  // total_size is a best-effort total count; may be -1 when unknown.
+  int64 total_size = 2;
+}
+
+// Checksum identifies a content integrity hash.
+message Checksum {
+  enum Algorithm {
+    ALGORITHM_UNSPECIFIED = 0;
+    ALGORITHM_CRC32C = 1;
+    ALGORITHM_SHA256 = 2;
+    ALGORITHM_BLAKE3 = 3;
+  }
+
+  Algorithm algorithm = 1;
+  bytes value = 2;
+}
+
+// TimeWindow is an inclusive-exclusive half-open interval.
+message TimeWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+// RetryPolicy describes retry behaviour for a long-running or streaming op.
+message RetryPolicy {
+  int32 max_attempts = 1;
+  google.protobuf.Duration initial_backoff = 2;
+  google.protobuf.Duration max_backoff = 3;
+  double backoff_multiplier = 4;
+}

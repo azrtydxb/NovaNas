@@ -1,0 +1,135 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.agent.v1;
+
+import "google/protobuf/timestamp.proto";
+import "novanas/chunk/v1/chunk.proto";
+import "novanas/common/v1/types.proto";
+import "novanas/dataplane/v1/dataplane.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/agent/v1;agentv1";
+
+// AgentHealth describes the overall state of a node agent.
+enum AgentHealth {
+  AGENT_HEALTH_UNSPECIFIED = 0;
+  AGENT_HEALTH_HEALTHY = 1;
+  AGENT_HEALTH_DEGRADED = 2;
+  AGENT_HEALTH_UNHEALTHY = 3;
+  AGENT_HEALTH_FENCED = 4;
+}
+
+// DiskHealth is per-device SMART-like state.
+message DiskHealth {
+  string device_id = 1;
+  string state = 2;  // "online" / "draining" / "failed" / ...
+  uint64 capacity_bytes = 3;
+  uint64 used_bytes = 4;
+  // temperature_c, wear_percent etc. populated when available.
+  int32 temperature_c = 5;
+  int32 wear_percent = 6;
+  uint64 reallocated_sectors = 7;
+}
+
+// HealthReport is a point-in-time snapshot of an agent's condition.
+message HealthReport {
+  string node_id = 1;
+  AgentHealth health = 2;
+  string version = 3;
+  string commit = 4;
+  // fenced is true when the dataplane has fenced itself against writes.
+  bool fenced = 5;
+  repeated DiskHealth disks = 6;
+  repeated novanas.dataplane.v1.BdevRef attached_bdevs = 7;
+  google.protobuf.Timestamp sampled_at = 20;
+}
+
+// AgentService runs on every storage node. It exposes a thin contract:
+// health reporting plus a handful of locally-scoped chunk operations
+// used when the main ChunkService routes directly to the node holding
+// the data.
+service AgentService {
+  // ReportHealth is called by the node agent to push a health snapshot
+  // to the operator. The operator may also pull it on demand.
+  rpc ReportHealth(ReportHealthRequest) returns (ReportHealthResponse);
+
+  // GetHealth returns the latest cached HealthReport.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+
+  // WatchHealth streams health updates.
+  rpc WatchHealth(WatchHealthRequest) returns (stream HealthReport);
+
+  // ---- Local chunk ops ----
+  // These are the same verbs as ChunkService but scoped strictly to the
+  // devices local to this agent. The main ChunkService will forward to
+  // this endpoint when it resolves a read/write to a local placement.
+
+  rpc LocalPutChunk(stream LocalPutChunkRequest) returns (LocalPutChunkResponse);
+  rpc LocalGetChunk(LocalGetChunkRequest) returns (stream novanas.chunk.v1.ChunkData);
+  rpc LocalDeleteChunk(LocalDeleteChunkRequest) returns (LocalDeleteChunkResponse);
+  rpc LocalHasChunk(LocalHasChunkRequest) returns (LocalHasChunkResponse);
+}
+
+message ReportHealthRequest {
+  novanas.common.v1.RequestContext context = 1;
+  HealthReport report = 2;
+}
+
+message ReportHealthResponse {
+  // fence_directive, if true, instructs the agent to fence itself.
+  bool fence_directive = 1;
+}
+
+message GetHealthRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string node_id = 2;
+}
+
+message GetHealthResponse {
+  HealthReport report = 1;
+}
+
+message WatchHealthRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string node_id = 2;
+}
+
+message LocalPutChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  // device_id selects which local device the chunk should land on.
+  // Empty means "pick any local device that satisfies the policy".
+  string device_id = 2;
+  novanas.chunk.v1.ChunkData data = 3;
+}
+
+message LocalPutChunkResponse {
+  novanas.chunk.v1.ChunkId id = 1;
+  string device_id = 2;
+  uint64 bytes_written = 3;
+}
+
+message LocalGetChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.chunk.v1.ChunkId id = 2;
+  uint64 offset = 3;
+  uint64 length = 4;
+}
+
+message LocalDeleteChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.chunk.v1.ChunkId id = 2;
+}
+
+message LocalDeleteChunkResponse {}
+
+message LocalHasChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.chunk.v1.ChunkId id = 2;
+}
+
+message LocalHasChunkResponse {
+  bool exists = 1;
+  string device_id = 2;
+}

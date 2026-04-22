@@ -1,0 +1,82 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.common.v1;
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/common/v1;commonv1";
+
+// ErrorCode enumerates the NovaNas-specific error domain. These complement
+// — but do not replace — gRPC status codes. When returning errors, servers
+// SHOULD set a gRPC status code and attach an ErrorDetail in status.details.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+
+  // ERROR_CODE_NOT_FOUND: the addressed resource does not exist.
+  ERROR_CODE_NOT_FOUND = 1;
+  // ERROR_CODE_ALREADY_EXISTS: cannot create; resource already present.
+  ERROR_CODE_ALREADY_EXISTS = 2;
+  // ERROR_CODE_INVALID_ARGUMENT: caller sent malformed or illegal input.
+  ERROR_CODE_INVALID_ARGUMENT = 3;
+  // ERROR_CODE_PERMISSION_DENIED: caller lacks authorization.
+  ERROR_CODE_PERMISSION_DENIED = 4;
+  // ERROR_CODE_FAILED_PRECONDITION: system state rejects the operation.
+  ERROR_CODE_FAILED_PRECONDITION = 5;
+  // ERROR_CODE_RESOURCE_EXHAUSTED: quota / capacity exceeded.
+  ERROR_CODE_RESOURCE_EXHAUSTED = 6;
+  // ERROR_CODE_UNAVAILABLE: transient; retry with backoff.
+  ERROR_CODE_UNAVAILABLE = 7;
+  // ERROR_CODE_INTERNAL: unexpected server-side failure.
+  ERROR_CODE_INTERNAL = 8;
+  // ERROR_CODE_DATA_LOSS: durable state has been corrupted or lost.
+  ERROR_CODE_DATA_LOSS = 9;
+  // ERROR_CODE_CHECKSUM_MISMATCH: content integrity verification failed.
+  ERROR_CODE_CHECKSUM_MISMATCH = 20;
+  // ERROR_CODE_QUORUM_LOST: write rejected because replica quorum is
+  // unreachable.
+  ERROR_CODE_QUORUM_LOST = 21;
+  // ERROR_CODE_FENCED: the caller or a peer has been fenced and must
+  // stop issuing writes.
+  ERROR_CODE_FENCED = 22;
+}
+
+// ErrorDetail is the canonical shape carried in google.rpc.Status details.
+message ErrorDetail {
+  ErrorCode code = 1;
+
+  // message is a human-readable description (English; callers are
+  // expected to localise at the edge if needed).
+  string message = 2;
+
+  // domain identifies the subsystem (e.g. "chunk", "metadata",
+  // "replication") so that code + domain uniquely resolves the fault.
+  string domain = 3;
+
+  // resource is the fully-qualified identifier of the offending resource,
+  // when applicable (e.g. "volumes/vol-abc", "chunks/c-123").
+  string resource = 4;
+
+  // metadata carries additional structured context such as request IDs,
+  // replica health, quorum counts, etc.
+  map<string, string> metadata = 5;
+}
+
+// Conflict describes a concurrent modification that caused the caller's
+// write to be rejected. Used with ERROR_CODE_FAILED_PRECONDITION.
+message Conflict {
+  string resource = 1;
+  string observed_version = 2;
+  string expected_version = 3;
+}
+
+// QuotaFailure is attached to ERROR_CODE_RESOURCE_EXHAUSTED responses.
+message QuotaFailure {
+  message Violation {
+    string subject = 1;
+    string description = 2;
+    int64 limit = 3;
+    int64 usage = 4;
+  }
+  repeated Violation violations = 1;
+}

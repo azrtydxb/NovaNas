@@ -1,0 +1,70 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.replication.v1;
+
+import "google/protobuf/timestamp.proto";
+import "novanas/chunk/v1/chunk.proto";
+import "novanas/metadata/v1/volume.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/replication/v1;replicationv1";
+
+// ReplicationJobState enumerates the lifecycle of a replication job.
+enum ReplicationJobState {
+  REPLICATION_JOB_STATE_UNSPECIFIED = 0;
+  REPLICATION_JOB_STATE_PENDING = 1;
+  REPLICATION_JOB_STATE_RUNNING = 2;
+  REPLICATION_JOB_STATE_PAUSED = 3;
+  REPLICATION_JOB_STATE_SUCCEEDED = 4;
+  REPLICATION_JOB_STATE_FAILED = 5;
+  REPLICATION_JOB_STATE_CANCELLED = 6;
+}
+
+// ReplicationMode is the cadence / semantics of the job.
+enum ReplicationMode {
+  REPLICATION_MODE_UNSPECIFIED = 0;
+  // One-shot copy of the current state.
+  REPLICATION_MODE_SNAPSHOT = 1;
+  // Continuous delta stream between source and destination.
+  REPLICATION_MODE_CONTINUOUS = 2;
+  // Periodic incremental sync (scheduler-driven).
+  REPLICATION_MODE_PERIODIC = 3;
+}
+
+// ClusterRef identifies a peer cluster in a federated topology. For
+// intra-cluster replication the endpoint is populated but cluster_id is
+// empty.
+message ClusterRef {
+  string cluster_id = 1;
+  string endpoint = 2;
+}
+
+// ReplicationJob is the persistent record describing a src -> dst copy.
+message ReplicationJob {
+  string job_id = 1;
+  novanas.metadata.v1.VolumeId source_volume = 2;
+  novanas.metadata.v1.VolumeId destination_volume = 3;
+  ClusterRef destination_cluster = 4;
+  ReplicationMode mode = 5;
+  ReplicationJobState state = 6;
+
+  // progress is between 0.0 and 1.0. -1 means unknown.
+  double progress = 10;
+  uint64 bytes_transferred = 11;
+  uint64 chunks_transferred = 12;
+  string last_error = 13;
+
+  google.protobuf.Timestamp created_at = 20;
+  google.protobuf.Timestamp updated_at = 21;
+  google.protobuf.Timestamp last_succeeded_at = 22;
+}
+
+// ChunkRef is a lightweight reference to a chunk, used on the wire for
+// diff and bulk transfer.
+message ChunkRef {
+  novanas.chunk.v1.ChunkId id = 1;
+  uint64 size_bytes = 2;
+  uint64 chunk_index = 3;
+}

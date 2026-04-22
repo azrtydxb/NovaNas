@@ -1,0 +1,98 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.chunk.v1;
+
+import "novanas/chunk/v1/chunk.proto";
+import "novanas/common/v1/types.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/chunk/v1;chunkv1";
+
+// ChunkService is the content-addressed blob API exposed by the storage
+// engine. Callers upload, fetch, verify and remove chunks by id.
+//
+// This surface is derived from NovaStor's chunk ChunkService and
+// dataplane chunk RPCs. It intentionally exposes a narrower, coarser
+// contract: detailed bdev / store selection is an internal concern of
+// the storage engine and lives under DataplaneService.
+service ChunkService {
+  // Put uploads a chunk. The caller streams data frames; the server
+  // returns once the chunk is durably committed (quorum per the volume's
+  // protection policy).
+  rpc Put(stream PutChunkRequest) returns (PutChunkResponse);
+
+  // Get streams a chunk back to the caller. The first response frame
+  // carries id and total_size; subsequent frames carry payload.
+  rpc Get(GetChunkRequest) returns (stream ChunkData);
+
+  // Delete removes a chunk or decrements its reference count.
+  rpc Delete(DeleteChunkRequest) returns (DeleteChunkResponse);
+
+  // Verify recomputes the chunk's checksum on at least one replica and
+  // returns whether the stored content matches the declared id.
+  rpc Verify(VerifyChunkRequest) returns (VerifyChunkResponse);
+
+  // Stat returns metadata for a chunk without transferring its data.
+  rpc Stat(StatChunkRequest) returns (StatChunkResponse);
+}
+
+message PutChunkRequest {
+  // context is carried only on the first frame of the stream.
+  novanas.common.v1.RequestContext context = 1;
+  // data frame. The first frame MUST set id and total_size.
+  ChunkData data = 2;
+}
+
+message PutChunkResponse {
+  ChunkId id = 1;
+  uint64 bytes_written = 2;
+  // durable_replicas is how many replicas acknowledged the write.
+  uint32 durable_replicas = 3;
+}
+
+message GetChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  ChunkId id = 2;
+  // offset / length allow ranged reads; length == 0 means "to end".
+  uint64 offset = 3;
+  uint64 length = 4;
+}
+
+message DeleteChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  ChunkId id = 2;
+  // If force is false, the server only decrements the reference count;
+  // when it reaches zero the chunk is queued for GC.
+  bool force = 3;
+}
+
+message DeleteChunkResponse {
+  uint64 reference_count_after = 1;
+}
+
+message VerifyChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  ChunkId id = 2;
+  // deep performs a byte-by-byte cross-replica comparison in addition to
+  // per-replica checksum verification.
+  bool deep = 3;
+}
+
+message VerifyChunkResponse {
+  bool ok = 1;
+  novanas.common.v1.Checksum observed = 2;
+  // divergent_placements lists device ids whose stored content does not
+  // match the declared checksum (empty when ok is true).
+  repeated string divergent_placements = 3;
+}
+
+message StatChunkRequest {
+  novanas.common.v1.RequestContext context = 1;
+  ChunkId id = 2;
+}
+
+message StatChunkResponse {
+  ChunkMetadata metadata = 1;
+}

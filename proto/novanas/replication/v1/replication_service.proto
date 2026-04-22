@@ -1,0 +1,113 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.replication.v1;
+
+import "novanas/chunk/v1/chunk.proto";
+import "novanas/common/v1/types.proto";
+import "novanas/metadata/v1/volume.proto";
+import "novanas/replication/v1/replication.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/replication/v1;replicationv1";
+
+// ReplicationService orchestrates snapshot and continuous replication
+// between volumes and between peer clusters.
+service ReplicationService {
+  // ---- Job CRUD ----
+  rpc CreateJob(CreateJobRequest) returns (CreateJobResponse);
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc WatchJob(WatchJobRequest) returns (stream ReplicationJob);
+
+  // ---- Data plane primitives ----
+
+  // DiffSnapshots streams the set of chunks present on the source
+  // snapshot but missing (or divergent) on the destination. Used by the
+  // replicator to compute the minimal transfer set.
+  rpc DiffSnapshots(DiffSnapshotsRequest) returns (stream ChunkRef);
+
+  // PushChunks sends chunks from the caller (source side) to the server
+  // (destination side). Each frame carries ChunkData; the first frame of
+  // each chunk MUST populate id and total_size.
+  rpc PushChunks(stream PushChunkFrame) returns (PushChunksResponse);
+
+  // PullChunks streams chunks from the server (holding side) to the
+  // caller (receiving side). Selection is driven by PullChunksRequest.
+  rpc PullChunks(PullChunksRequest) returns (stream novanas.chunk.v1.ChunkData);
+}
+
+message CreateJobRequest {
+  novanas.common.v1.RequestContext context = 1;
+  ReplicationJob spec = 2;
+}
+
+message CreateJobResponse {
+  ReplicationJob job = 1;
+}
+
+message GetJobRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string job_id = 2;
+}
+
+message GetJobResponse {
+  ReplicationJob job = 1;
+}
+
+message CancelJobRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string job_id = 2;
+}
+
+message CancelJobResponse {
+  ReplicationJob job = 1;
+}
+
+message ListJobsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.common.v1.Page page = 2;
+  novanas.metadata.v1.VolumeId source_volume = 10;
+  ReplicationJobState state = 11;
+}
+
+message ListJobsResponse {
+  repeated ReplicationJob jobs = 1;
+  novanas.common.v1.PageInfo page_info = 2;
+}
+
+message WatchJobRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string job_id = 2;
+}
+
+message DiffSnapshotsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  // source and destination snapshot ids (opaque; resolved by the engine).
+  string source_snapshot_id = 2;
+  string destination_snapshot_id = 3;
+  // optional scoping to a volume range.
+  novanas.metadata.v1.VolumeRange range = 4;
+}
+
+message PushChunkFrame {
+  // context is carried only on the first frame of the stream.
+  novanas.common.v1.RequestContext context = 1;
+  string job_id = 2;
+  novanas.chunk.v1.ChunkData data = 3;
+}
+
+message PushChunksResponse {
+  uint64 bytes_received = 1;
+  uint64 chunks_received = 2;
+}
+
+message PullChunksRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string job_id = 2;
+  // chunk_ids selects the chunks to stream. If empty, the server streams
+  // every chunk belonging to the job's current diff set.
+  repeated novanas.chunk.v1.ChunkId chunk_ids = 3;
+}

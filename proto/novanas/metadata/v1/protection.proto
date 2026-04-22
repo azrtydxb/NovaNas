@@ -1,0 +1,71 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.metadata.v1;
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/metadata/v1;metadatav1";
+
+// ReplicationPolicy describes N-way synchronous replication.
+message ReplicationPolicy {
+  // factor is the total number of replicas (e.g. 3 = triple replication).
+  uint32 factor = 1;
+
+  // write_quorum is the minimum number of replicas that must acknowledge
+  // a write before the client receives success. Must be <= factor.
+  uint32 write_quorum = 2;
+
+  // read_quorum is the minimum number of replicas consulted on reads. For
+  // strongly consistent reads, read_quorum + write_quorum > factor.
+  uint32 read_quorum = 3;
+}
+
+// ErasureCodingPolicy describes (k, m) Reed-Solomon style encoding.
+message ErasureCodingPolicy {
+  // data_shards is the number of data fragments (k).
+  uint32 data_shards = 1;
+
+  // parity_shards is the number of parity fragments (m).
+  uint32 parity_shards = 2;
+
+  // stripe_size_bytes is the width of a single EC stripe.
+  uint64 stripe_size_bytes = 3;
+}
+
+// ProtectionPolicy is the discriminated union describing how a volume or
+// chunk is protected against device loss.
+message ProtectionPolicy {
+  oneof policy {
+    ReplicationPolicy replication = 1;
+    ErasureCodingPolicy erasure_coding = 2;
+  }
+
+  // min_failure_domains is the minimum number of independent failure
+  // domains (rack, host, zone) placements must span. Used by the
+  // placement engine to reject unsafe layouts.
+  uint32 min_failure_domains = 10;
+
+  // allow_degraded_writes lets the engine acknowledge writes even when
+  // fewer-than-target replicas are currently reachable. Disabled by
+  // default.
+  bool allow_degraded_writes = 11;
+}
+
+// ComplianceState describes how well a volume currently meets its
+// ProtectionPolicy.
+enum ComplianceState {
+  COMPLIANCE_STATE_UNSPECIFIED = 0;
+  COMPLIANCE_STATE_COMPLIANT = 1;
+  COMPLIANCE_STATE_DEGRADED = 2;
+  COMPLIANCE_STATE_NON_COMPLIANT = 3;
+  COMPLIANCE_STATE_UNKNOWN = 4;
+}
+
+// ComplianceReport is a point-in-time snapshot of protection health.
+message ComplianceReport {
+  ComplianceState state = 1;
+  uint32 available_copies = 2;
+  uint32 required_copies = 3;
+  string reason = 4;
+}

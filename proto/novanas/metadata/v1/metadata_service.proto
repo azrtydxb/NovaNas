@@ -1,0 +1,274 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.metadata.v1;
+
+import "novanas/chunk/v1/chunk.proto";
+import "novanas/common/v1/types.proto";
+import "novanas/metadata/v1/placement.proto";
+import "novanas/metadata/v1/protection.proto";
+import "novanas/metadata/v1/volume.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/metadata/v1;metadatav1";
+
+// VolumeService is the authoritative CRUD API for NovaNas volumes. It is
+// the narrow contract operators/API use to drive the storage engine's
+// richer internal metadata store.
+service VolumeService {
+  rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
+  rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse);
+  rpc UpdateVolume(UpdateVolumeRequest) returns (UpdateVolumeResponse);
+  rpc DeleteVolume(DeleteVolumeRequest) returns (DeleteVolumeResponse);
+  rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
+
+  // WatchVolumes streams volume lifecycle events (create / update /
+  // delete / state transitions) to the caller.
+  rpc WatchVolumes(WatchVolumesRequest) returns (stream VolumeEvent);
+
+  // UpdateProtection replaces the protection policy of an existing
+  // volume. The storage engine performs online re-protection in the
+  // background; progress is observable via GetVolume / WatchVolumes.
+  rpc UpdateProtection(UpdateProtectionRequest) returns (UpdateProtectionResponse);
+
+  // MapChunks resolves a volume byte range into the ordered list of
+  // chunks that back it. Used by the chunk data path to schedule reads.
+  rpc MapChunks(MapChunksRequest) returns (MapChunksResponse);
+}
+
+// PlacementService exposes the CRUSH-style topology used by the
+// placement engine. Typically operated by admins via the operator.
+service PlacementService {
+  rpc GetCrushMap(GetCrushMapRequest) returns (GetCrushMapResponse);
+  rpc UpdateCrushMap(UpdateCrushMapRequest) returns (UpdateCrushMapResponse);
+
+  // PickReplicas asks the placement engine where a specific chunk of a
+  // specific volume should live. Pure computation; does not mutate state.
+  rpc PickReplicas(PickReplicasRequest) returns (PickReplicasResponse);
+
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse);
+  rpc UpsertPool(UpsertPoolRequest) returns (UpsertPoolResponse);
+  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse);
+}
+
+// ProtectionService exposes compliance reporting and repair control.
+service ProtectionService {
+  rpc GetCompliance(GetComplianceRequest) returns (GetComplianceResponse);
+  rpc ListNonCompliantVolumes(ListNonCompliantVolumesRequest) returns (ListNonCompliantVolumesResponse);
+  // TriggerRepair requests an immediate compliance scan + repair cycle
+  // for a volume, bypassing the normal scheduler cadence.
+  rpc TriggerRepair(TriggerRepairRequest) returns (TriggerRepairResponse);
+}
+
+// ---------------------------------------------------------------------------
+// VolumeService messages
+// ---------------------------------------------------------------------------
+
+message CreateVolumeRequest {
+  novanas.common.v1.RequestContext context = 1;
+  // spec carries the user-facing fields; state/generation are server-set.
+  VolumeMeta spec = 2;
+}
+
+message CreateVolumeResponse {
+  VolumeMeta volume = 1;
+}
+
+message GetVolumeRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId id = 2;
+}
+
+message GetVolumeResponse {
+  VolumeMeta volume = 1;
+  ComplianceReport compliance = 2;
+}
+
+message UpdateVolumeRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeMeta spec = 2;
+  // expected_generation enables optimistic concurrency; 0 disables.
+  uint64 expected_generation = 3;
+}
+
+message UpdateVolumeResponse {
+  VolumeMeta volume = 1;
+}
+
+message DeleteVolumeRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId id = 2;
+  // force deletes the volume without waiting for references to drain.
+  bool force = 3;
+}
+
+message DeleteVolumeResponse {}
+
+message ListVolumesRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.common.v1.Page page = 2;
+  // Optional filters. Empty fields match everything.
+  string tenant = 10;
+  VolumeKind kind = 11;
+  VolumeState state = 12;
+  map<string, string> label_selector = 13;
+}
+
+message ListVolumesResponse {
+  repeated VolumeMeta volumes = 1;
+  novanas.common.v1.PageInfo page_info = 2;
+}
+
+message WatchVolumesRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string tenant = 2;
+  // resume_token, when non-empty, resumes a previous watch from the
+  // indicated server-side position.
+  string resume_token = 3;
+}
+
+message VolumeEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_CREATED = 1;
+    KIND_UPDATED = 2;
+    KIND_DELETED = 3;
+    KIND_STATE_CHANGED = 4;
+  }
+  Kind kind = 1;
+  VolumeMeta volume = 2;
+  string resume_token = 3;
+}
+
+message UpdateProtectionRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId id = 2;
+  ProtectionPolicy policy = 3;
+  uint64 expected_generation = 4;
+}
+
+message UpdateProtectionResponse {
+  VolumeMeta volume = 1;
+}
+
+message MapChunksRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeRange range = 2;
+}
+
+message VolumeChunkRef {
+  // chunk_index is the logical position within the volume.
+  uint64 chunk_index = 1;
+  novanas.chunk.v1.ChunkId chunk_id = 2;
+  uint64 offset = 3;
+  uint32 length = 4;
+  // placements enumerates the device ids holding replicas/shards.
+  repeated string placements = 5;
+}
+
+message MapChunksResponse {
+  repeated VolumeChunkRef chunks = 1;
+}
+
+// ---------------------------------------------------------------------------
+// PlacementService messages
+// ---------------------------------------------------------------------------
+
+message GetCrushMapRequest {
+  novanas.common.v1.RequestContext context = 1;
+}
+
+message GetCrushMapResponse {
+  CrushMap map = 1;
+}
+
+message UpdateCrushMapRequest {
+  novanas.common.v1.RequestContext context = 1;
+  CrushMap map = 2;
+  // expected_generation enables optimistic concurrency; 0 disables.
+  uint64 expected_generation = 3;
+}
+
+message UpdateCrushMapResponse {
+  CrushMap map = 1;
+}
+
+message PickReplicasRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId volume_id = 2;
+  novanas.chunk.v1.ChunkId chunk_id = 3;
+  // override_policy, if set, is used instead of the volume's declared
+  // ProtectionPolicy. Useful for what-if / dry-run planning.
+  ProtectionPolicy override_policy = 4;
+}
+
+message PickReplicasResponse {
+  // device_ids is the ordered list of target devices. Ordering is
+  // meaningful for EC (shard index) and for replication (primary first).
+  repeated string device_ids = 1;
+}
+
+message ListPoolsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.common.v1.Page page = 2;
+}
+
+message ListPoolsResponse {
+  repeated PoolSpec pools = 1;
+  novanas.common.v1.PageInfo page_info = 2;
+}
+
+message UpsertPoolRequest {
+  novanas.common.v1.RequestContext context = 1;
+  PoolSpec pool = 2;
+}
+
+message UpsertPoolResponse {
+  PoolSpec pool = 1;
+}
+
+message DeletePoolRequest {
+  novanas.common.v1.RequestContext context = 1;
+  string name = 2;
+}
+
+message DeletePoolResponse {}
+
+// ---------------------------------------------------------------------------
+// ProtectionService messages
+// ---------------------------------------------------------------------------
+
+message GetComplianceRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId id = 2;
+}
+
+message GetComplianceResponse {
+  ComplianceReport report = 1;
+}
+
+message ListNonCompliantVolumesRequest {
+  novanas.common.v1.RequestContext context = 1;
+  novanas.common.v1.Page page = 2;
+}
+
+message ListNonCompliantVolumesResponse {
+  message Entry {
+    VolumeMeta volume = 1;
+    ComplianceReport report = 2;
+  }
+  repeated Entry entries = 1;
+  novanas.common.v1.PageInfo page_info = 2;
+}
+
+message TriggerRepairRequest {
+  novanas.common.v1.RequestContext context = 1;
+  VolumeId id = 2;
+  // priority biases scheduler; 0 = default, higher = sooner.
+  int32 priority = 3;
+}
+
+message TriggerRepairResponse {
+  string job_id = 1;
+}

@@ -1,0 +1,65 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.chunk.v1;
+
+import "google/protobuf/timestamp.proto";
+import "novanas/common/v1/types.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/chunk/v1;chunkv1";
+
+// ChunkId is a content-addressed chunk identifier.
+// Format: lowercase hex encoding of the content hash plus algorithm prefix,
+// e.g. "blake3:9a0f...". The raw 32-byte hash is carried separately for
+// efficient indexing by the storage engine.
+message ChunkId {
+  // canonical is the string form used in logs, APIs and external systems.
+  string canonical = 1;
+
+  // raw is the binary form (length depends on algorithm).
+  bytes raw = 2;
+
+  // algorithm identifies the hash algorithm used to compute this id.
+  novanas.common.v1.Checksum.Algorithm algorithm = 3;
+}
+
+// Chunk is the full content-addressed blob. Used for small chunks only;
+// bulk transfer uses the streaming ChunkData frames on the service.
+message Chunk {
+  ChunkId id = 1;
+  bytes data = 2;
+  novanas.common.v1.Checksum checksum = 3;
+}
+
+// ChunkData is a single frame in a streaming chunk transfer. The first
+// frame in a stream MUST populate id and total_size; subsequent frames
+// carry only payload and (on the final frame) checksum.
+message ChunkData {
+  ChunkId id = 1;
+  bytes payload = 2;
+  uint64 offset = 3;
+  uint64 total_size = 4;
+  // checksum is populated on the final frame only.
+  novanas.common.v1.Checksum checksum = 10;
+}
+
+// ChunkMetadata describes a chunk's placement and health without carrying
+// the data itself.
+message ChunkMetadata {
+  ChunkId id = 1;
+  uint64 size_bytes = 2;
+  novanas.common.v1.Checksum checksum = 3;
+
+  // placements enumerates the device ids where replicas / shards of this
+  // chunk are stored.
+  repeated string placements = 4;
+
+  // reference_count is the number of volumes / objects referring to this
+  // chunk. A value of 0 means the chunk is eligible for garbage collection.
+  uint64 reference_count = 5;
+
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp last_verified_at = 11;
+}

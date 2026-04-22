@@ -1,0 +1,83 @@
+// Copyright NovaNas contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package novanas.dataplane.v1;
+
+import "novanas/common/v1/types.proto";
+import "novanas/dataplane/v1/dataplane.proto";
+
+option go_package = "github.com/azrtydxb/novanas/proto/gen/go/novanas/dataplane/v1;dataplanev1";
+
+// DataplaneService is the operator-facing contract in front of the
+// storage engine's SPDK dataplane. It intentionally exposes only the
+// attach / detach / observe operations that NovaNas orchestrates;
+// richer primitives (nvmf target management, chunk store init, etc.)
+// remain internal to the storage engine.
+service DataplaneService {
+  // AttachBdev declaratively ensures a bdev exists on the target node.
+  // Idempotent.
+  rpc AttachBdev(AttachBdevRequest) returns (AttachBdevResponse);
+
+  // DetachBdev removes a bdev. Fails if the bdev is still in use unless
+  // force is set.
+  rpc DetachBdev(DetachBdevRequest) returns (DetachBdevResponse);
+
+  // ListBdevs enumerates bdevs visible on a node (or cluster-wide when
+  // node_id is empty).
+  rpc ListBdevs(ListBdevsRequest) returns (ListBdevsResponse);
+
+  // GetStats returns IO counters for a bdev.
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+
+  // WatchStats streams periodic IoStats samples.
+  rpc WatchStats(WatchStatsRequest) returns (stream IoStats);
+}
+
+message AttachBdevRequest {
+  novanas.common.v1.RequestContext context = 1;
+  BdevSpec spec = 2;
+}
+
+message AttachBdevResponse {
+  BdevInfo bdev = 1;
+}
+
+message DetachBdevRequest {
+  novanas.common.v1.RequestContext context = 1;
+  BdevRef ref = 2;
+  bool force = 3;
+}
+
+message DetachBdevResponse {}
+
+message ListBdevsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  // node_id scopes to a single node; empty returns cluster-wide results.
+  string node_id = 2;
+  BdevKind kind = 3;
+  novanas.common.v1.Page page = 4;
+}
+
+message ListBdevsResponse {
+  repeated BdevInfo bdevs = 1;
+  novanas.common.v1.PageInfo page_info = 2;
+}
+
+message GetStatsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  BdevRef ref = 2;
+}
+
+message GetStatsResponse {
+  IoStats stats = 1;
+}
+
+message WatchStatsRequest {
+  novanas.common.v1.RequestContext context = 1;
+  BdevRef ref = 2;
+  // sample_interval_ms bounds how frequently the server emits samples.
+  // 0 asks for the server default.
+  uint32 sample_interval_ms = 3;
+}

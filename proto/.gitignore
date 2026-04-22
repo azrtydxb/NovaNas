@@ -1,0 +1,3 @@
+# Generated code lives under gen/ and is reproduced by `buf generate`.
+# We check in protobuf sources only, never generated artefacts.
+gen/
