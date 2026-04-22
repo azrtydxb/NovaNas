@@ -57,7 +57,7 @@ pub const NBD_REPLY_MAGIC: u32 = 0x67446698;
 pub enum NbdCommand {
     Read = 0,
     Write = 1,
-    Disc = 2,  // Disconnect
+    Disc = 2, // Disconnect
     Flush = 3,
     Trim = 4,
     WriteZeroes = 6,

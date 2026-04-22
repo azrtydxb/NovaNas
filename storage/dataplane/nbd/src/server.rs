@@ -150,9 +150,7 @@ impl<B: BlockDevice> NbdServer<B> {
                     let data_len = 4 + name.len() as u32;
                     self.send_option_reply(stream, opt_type, NBD_REP_SERVER, data_len)
                         .await?;
-                    stream
-                        .write_all(&(name.len() as u32).to_be_bytes())
-                        .await?;
+                    stream.write_all(&(name.len() as u32).to_be_bytes()).await?;
                     stream.write_all(name).await?;
                     // Final ACK
                     self.send_option_reply(stream, opt_type, NBD_REP_ACK, 0)
@@ -214,17 +212,15 @@ impl<B: BlockDevice> NbdServer<B> {
             };
 
             match command {
-                NbdCommand::Read => {
-                    match self.backend.read(offset, length).await {
-                        Ok(data) => {
-                            self.send_reply(stream, handle, NBD_OK, Some(&data)).await?;
-                        }
-                        Err(e) => {
-                            warn!("NBD: read error at offset {}: {}", offset, e);
-                            self.send_reply(stream, handle, NBD_EIO, None).await?;
-                        }
+                NbdCommand::Read => match self.backend.read(offset, length).await {
+                    Ok(data) => {
+                        self.send_reply(stream, handle, NBD_OK, Some(&data)).await?;
                     }
-                }
+                    Err(e) => {
+                        warn!("NBD: read error at offset {}: {}", offset, e);
+                        self.send_reply(stream, handle, NBD_EIO, None).await?;
+                    }
+                },
                 NbdCommand::Write => {
                     // Read write data from client.
                     let mut data = vec![0u8; length as usize];
@@ -240,24 +236,18 @@ impl<B: BlockDevice> NbdServer<B> {
                         }
                     }
                 }
-                NbdCommand::Flush => {
-                    match self.backend.flush().await {
-                        Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
-                        Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
-                    }
-                }
-                NbdCommand::Trim => {
-                    match self.backend.trim(offset, length).await {
-                        Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
-                        Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
-                    }
-                }
-                NbdCommand::WriteZeroes => {
-                    match self.backend.write_zeroes(offset, length).await {
-                        Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
-                        Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
-                    }
-                }
+                NbdCommand::Flush => match self.backend.flush().await {
+                    Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
+                    Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
+                },
+                NbdCommand::Trim => match self.backend.trim(offset, length).await {
+                    Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
+                    Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
+                },
+                NbdCommand::WriteZeroes => match self.backend.write_zeroes(offset, length).await {
+                    Ok(()) => self.send_reply(stream, handle, NBD_OK, None).await?,
+                    Err(_) => self.send_reply(stream, handle, NBD_EIO, None).await?,
+                },
                 NbdCommand::Disc => {
                     info!("NBD: client disconnected");
                     return Ok(());

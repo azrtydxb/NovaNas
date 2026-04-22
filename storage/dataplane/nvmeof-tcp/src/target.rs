@@ -4,7 +4,14 @@
 //! by its NQN. The initiator specifies which subsystem to connect to via the
 //! Fabric Connect command.
 
-#![allow(clippy::new_without_default, clippy::unnecessary_cast, dead_code)]
+#![allow(
+    clippy::new_without_default,
+    clippy::unnecessary_cast,
+    clippy::collapsible_match,
+    clippy::collapsible_if,
+    clippy::too_many_arguments,
+    dead_code
+)]
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
@@ -456,27 +463,35 @@ impl NvmeOfTarget {
                                     let offset = lba * subsys.backend.block_size() as u64;
                                     let nlb = (cmd.cdw12 & 0xFFFF) as u32 + 1;
                                     let length = nlb as u64 * subsys.backend.block_size() as u64;
-                                    let resp = match subsys.backend.read(offset, length as u32).await {
-                                        Ok(backend_data) => {
-                                            if let Some(ref cmp_data) = write_data {
-                                                if backend_data.len() == cmp_data.len()
-                                                    && backend_data == cmp_data.as_slice()
-                                                {
-                                                    build_capsule_resp(&NvmeCqe::success(cmd.cid, sq_id))
+                                    let resp =
+                                        match subsys.backend.read(offset, length as u32).await {
+                                            Ok(backend_data) => {
+                                                if let Some(ref cmp_data) = write_data {
+                                                    if backend_data.len() == cmp_data.len()
+                                                        && backend_data == cmp_data.as_slice()
+                                                    {
+                                                        build_capsule_resp(&NvmeCqe::success(
+                                                            cmd.cid, sq_id,
+                                                        ))
+                                                    } else {
+                                                        // Compare failure: status COMPARE_FAILURE (0x285)
+                                                        build_capsule_resp(&NvmeCqe::error(
+                                                            cmd.cid, sq_id, 0x02, 0x85,
+                                                        ))
+                                                    }
                                                 } else {
-                                                    // Compare failure: status COMPARE_FAILURE (0x285)
-                                                    build_capsule_resp(&NvmeCqe::error(
-                                                        cmd.cid, sq_id, 0x02, 0x85,
+                                                    build_capsule_resp(&NvmeCqe::success(
+                                                        cmd.cid, sq_id,
                                                     ))
                                                 }
-                                            } else {
-                                                build_capsule_resp(&NvmeCqe::success(cmd.cid, sq_id))
                                             }
-                                        }
-                                        Err(_) => build_capsule_resp(&NvmeCqe::error(
-                                            cmd.cid, sq_id, status::SCT_GENERIC, 0x04,
-                                        )),
-                                    };
+                                            Err(_) => build_capsule_resp(&NvmeCqe::error(
+                                                cmd.cid,
+                                                sq_id,
+                                                status::SCT_GENERIC,
+                                                0x04,
+                                            )),
+                                        };
                                     let _ = tx.send(resp.to_vec()).await;
                                 }
                                 opcode::WRITE_UNCORRECTABLE => {
@@ -784,7 +799,9 @@ impl NvmeOfTarget {
 
         let data = match cns {
             identify_cns::CONTROLLER => build_identify_controller(&subsys.config),
-            identify_cns::NAMESPACE => build_identify_namespace(&*subsys.backend, &subsys.config.nqn),
+            identify_cns::NAMESPACE => {
+                build_identify_namespace(&*subsys.backend, &subsys.config.nqn)
+            }
             identify_cns::ACTIVE_NS_LIST => {
                 let mut buf = vec![0u8; 4096];
                 buf[0..4].copy_from_slice(&1u32.to_le_bytes());

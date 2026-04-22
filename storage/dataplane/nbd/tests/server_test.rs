@@ -79,9 +79,7 @@ async fn test_nbd_server_handshake() {
     let (mut client, server_stream) = duplex(65536);
 
     // Run server in background.
-    let server_handle = tokio::spawn(async move {
-        server.serve_connection(server_stream).await
-    });
+    let server_handle = tokio::spawn(async move { server.serve_connection(server_stream).await });
 
     // Client side: read server hello.
     let magic = client.read_u64().await.unwrap();
@@ -100,8 +98,14 @@ async fn test_nbd_server_handshake() {
         .unwrap();
 
     // Client sends OPT_EXPORT_NAME.
-    client.write_all(&NBD_OPTS_MAGIC.to_be_bytes()).await.unwrap();
-    client.write_all(&NBD_OPT_EXPORT_NAME.to_be_bytes()).await.unwrap();
+    client
+        .write_all(&NBD_OPTS_MAGIC.to_be_bytes())
+        .await
+        .unwrap();
+    client
+        .write_all(&NBD_OPT_EXPORT_NAME.to_be_bytes())
+        .await
+        .unwrap();
     client.write_all(&0u32.to_be_bytes()).await.unwrap(); // no export name data
     client.flush().await.unwrap();
 
@@ -115,7 +119,10 @@ async fn test_nbd_server_handshake() {
     assert!(tx_flags & NBD_FLAG_SEND_TRIM != 0);
 
     // Now in transmission phase — send a read request.
-    client.write_all(&NBD_REQUEST_MAGIC.to_be_bytes()).await.unwrap();
+    client
+        .write_all(&NBD_REQUEST_MAGIC.to_be_bytes())
+        .await
+        .unwrap();
     client.write_all(&0u16.to_be_bytes()).await.unwrap(); // flags
     client.write_all(&0u16.to_be_bytes()).await.unwrap(); // cmd = READ
     client.write_all(&42u64.to_be_bytes()).await.unwrap(); // handle
@@ -135,7 +142,10 @@ async fn test_nbd_server_handshake() {
     assert_eq!(data, vec![0u8; 512]); // unwritten = zeros
 
     // Send disconnect.
-    client.write_all(&NBD_REQUEST_MAGIC.to_be_bytes()).await.unwrap();
+    client
+        .write_all(&NBD_REQUEST_MAGIC.to_be_bytes())
+        .await
+        .unwrap();
     client.write_all(&0u16.to_be_bytes()).await.unwrap();
     client.write_all(&2u16.to_be_bytes()).await.unwrap(); // cmd = DISC
     client.write_all(&0u64.to_be_bytes()).await.unwrap();
