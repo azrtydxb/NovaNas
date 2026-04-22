@@ -1,0 +1,16 @@
+---
+apiVersion: novanas.io/v1alpha1
+kind: Dataset
+metadata:
+  name: photos
+spec:
+  pool: main
+  compression: lz4
+---
+apiVersion: novanas.io/v1alpha1
+kind: Dataset
+metadata:
+  name: documents
+spec:
+  pool: main
+  compression: zstd

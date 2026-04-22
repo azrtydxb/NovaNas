@@ -95,10 +95,86 @@ The UI proxies `/api` and `/ws` to the api container (see
 configured. Re-run with `docker compose up -d openbao-init` if needed; the
 script is idempotent.
 
+## With Kubernetes (full stack)
+
+For a full local-ish experience with a real kube-apiserver:
+
+```sh
+make dev-cluster-up
+```
+
+This creates a single-node [kind](https://kind.sigs.k8s.io/) cluster named
+`novanas-dev`, installs every NovaNas CRD from
+`packages/operators/config/crd/bases/`, deploys the operators into the
+`novanas-system` namespace using a locally built `novanas/operators:dev`
+image, seeds a handful of sample resources, and finally brings up the
+compose stack wired to the cluster.
+
+Extra prerequisites:
+
+- [`kind`](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) v0.22+
+- `kubectl` v1.29+
+
+Browse:
+
+- UI: http://localhost:5173
+- API: http://localhost:8080
+- Kubernetes API: `kubectl --kubeconfig=~/.kube/novanas-dev.kubeconfig.raw get all -A`
+  (or just `kubectl --context kind-novanas-dev ...` — the context is
+  merged into your default kubeconfig automatically)
+
+Operators run in-cluster. The compose `api` service mounts
+`~/.kube/novanas-dev.kubeconfig` at `/kube/kubeconfig` (server rewritten
+to `host.docker.internal` so the container can reach the kind
+apiserver), and proxies resource reads/writes to it.
+
+Rebuild an image after source changes and reload it into the cluster:
+
+```sh
+make dev-load-image     # prompts for api / ui / operators
+kubectl --context kind-novanas-dev -n novanas-system rollout restart deploy/novanas-operators
+```
+
+Tear it down with:
+
+```sh
+make dev-cluster-down   # stops compose + deletes the kind cluster
+make dev-cluster-reset  # down + up again
+```
+
+### Kind layout
+
+```
+dev/kind/
+├── kind-cluster.yaml             # 1-node cluster, ingress-ready, 8088/8443
+├── create-cluster.sh             # kind create + kubeconfig rewrite
+├── install-crds.sh               # apply + wait Established
+├── install-operators.sh          # build, kind-load, apply manager.yaml
+├── install-sample-resources.sh   # seed samples/*.yaml
+├── uninstall.sh                  # kind delete + kubeconfig cleanup
+└── samples/
+    ├── storagepool.yaml          # `main` pool, warm tier
+    ├── datasets.yaml             # `photos`, `documents`
+    ├── share.yaml                # `photos` via SMB + NFS
+    └── users.yaml                # `pascal` admin, `family` user
+```
+
+### Networking gotcha
+
+Inside the compose `api` container, `127.0.0.1` is the container itself,
+not the host. `create-cluster.sh` therefore writes two kubeconfigs:
+
+- `~/.kube/novanas-dev.kubeconfig.raw` — unmodified, use this on the host
+- `~/.kube/novanas-dev.kubeconfig`     — `server:` rewritten to
+  `host.docker.internal` with `insecure-skip-tls-verify: true` (the
+  apiserver cert is issued for `127.0.0.1` only). This is the one
+  mounted into the api container.
+
+Dev-only. Never ship a kubeconfig with `insecure-skip-tls-verify: true`.
+
 ## Future enhancements
 
-- Wire the NovaNas operators into a `kind` cluster alongside this stack so
-  the API can reconcile real CRDs. Compose alone can't host the
-  kube-apiserver the API talks to.
-- Bring a mock storage backend. SPDK is not compose-friendly; a fake chunk
-  agent binary would let us exercise the storage paths here.
+- Bring a mock storage backend. SPDK is not compose-friendly; a fake
+  chunk agent binary would let us exercise the storage paths here.
+- Ingress controller inside kind so UI/API can be exposed on
+  `localhost:8088` the same way they will be in real clusters.

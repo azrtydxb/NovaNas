@@ -144,12 +144,18 @@ services:
       KEYCLOAK_CLIENT_SECRET: dev-api-secret
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: dev-token
+      # When a kind cluster is running (see dev/kind/), this kubeconfig
+      # points at it via host.docker.internal. If the file is missing the
+      # bind mount below uses :ro on an empty placeholder and the API
+      # simply operates without a kube-apiserver.
+      KUBECONFIG: /kube/kubeconfig
     ports:
       - "8080:8080"
     volumes:
       - ../packages/api/src:/app/packages/api/src
       - ../packages/schemas/src:/app/packages/schemas/src
       - ../packages/db/src:/app/packages/db/src
+      - ${HOME}/.kube/novanas-dev.kubeconfig:/kube/kubeconfig:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,0 +1,14 @@
+---
+apiVersion: novanas.io/v1alpha1
+kind: StoragePool
+metadata:
+  name: main
+spec:
+  tier: warm
+  deviceFilter:
+    # Dummy filter — in dev the storage engine is mocked, so nothing real
+    # is attached. The controller just records the desired state.
+    minSize: "1Gi"
+    preferredClass: hdd
+  rebalanceOnAdd: "true"
+  recoveryRate: balanced
