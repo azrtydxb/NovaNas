@@ -654,7 +654,7 @@ func TestNodeGetInfo_WithInitiatorAndTopology(t *testing.T) {
 
 	// Verify all segments are present
 	expectedSegments := map[string]string{
-		"novanas.io/node":              testNodeID,
+		"novanas.io/node":               testNodeID,
 		"topology.kubernetes.io/zone":   testZone,
 		"topology.kubernetes.io/region": testRegion,
 	}

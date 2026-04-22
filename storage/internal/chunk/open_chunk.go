@@ -8,14 +8,14 @@
 // chunk to fill before acknowledging fsync. To reconcile these, we extend
 // the chunk engine with a second state:
 //
-//   OpenChunk:   mutable, append-only, UUID-identified, capacity-bounded.
-//                Every append is fan-out-replicated to the chunk's replica
-//                set (same quorum rules as sealed chunks). Reads of an open
-//                chunk go through the owner replica.
+//	OpenChunk:   mutable, append-only, UUID-identified, capacity-bounded.
+//	             Every append is fan-out-replicated to the chunk's replica
+//	             set (same quorum rules as sealed chunks). Reads of an open
+//	             chunk go through the owner replica.
 //
-//   SealedChunk: the classic content-addressed, immutable 4 MiB chunk. After
-//                sealing, a ChunkID (SHA-256 of the final contents) is
-//                computed and registered; subsequent writes are rejected.
+//	SealedChunk: the classic content-addressed, immutable 4 MiB chunk. After
+//	             sealing, a ChunkID (SHA-256 of the final contents) is
+//	             computed and registered; subsequent writes are rejected.
 //
 // Transitions: Open -> (Append, Append, ..., Full || Timeout) -> Sealed.
 //
@@ -153,10 +153,10 @@ func (o *OpenChunk) SealedID() ChunkID {
 
 // Errors.
 var (
-	ErrOpenChunkSealed       = errors.New("open chunk is already sealed")
-	ErrOpenChunkFull         = errors.New("open chunk is full")
+	ErrOpenChunkSealed         = errors.New("open chunk is already sealed")
+	ErrOpenChunkFull           = errors.New("open chunk is full")
 	ErrOpenChunkOffsetMismatch = errors.New("append offset does not match current length")
-	ErrOpenChunkNotFound     = errors.New("open chunk not found")
+	ErrOpenChunkNotFound       = errors.New("open chunk not found")
 )
 
 // Append writes data at the given byte offset. The offset MUST equal the

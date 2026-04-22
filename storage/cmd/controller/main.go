@@ -281,7 +281,7 @@ func main() {
 		}
 	}
 
-	if err := (&controller.SharedFilesystemReconciler{
+	if err := (&controller.SharedFilesystemReconciler{ //nolint:staticcheck // SA1019: deprecated but kept wired to emit migration events
 		Client:           mgr.GetClient(),
 		ImageRegistry:    imageRegistry,
 		ImageTag:         imageTag,

@@ -18,9 +18,10 @@ func NewRecorder(mgr ctrl.Manager, controllerName string) record.EventRecorder {
 	if mgr == nil {
 		return nil
 	}
-	// NOTE: when controller-runtime promotes the new events API
-	// (mgr.GetEventRecorder), swap the call below. The call sites in the
-	// controllers package are already routed through this shim.
+	// GetEventRecorderFor is deprecated in newer controller-runtime but the
+	// replacement GetEventRecorder is not yet widely available. Pinning to
+	// this shim so the migration is a one-line change when we bump deps.
+	//lint:ignore SA1019 intentional — pending controller-runtime event API migration
 	return mgr.GetEventRecorderFor(controllerName)
 }
 

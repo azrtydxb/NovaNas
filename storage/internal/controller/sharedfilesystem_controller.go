@@ -8,10 +8,10 @@
 // knfsd + a Samba pod wired through the `Share` and related server CRDs.
 //
 // This reconciler now:
-//  - validates that the referenced StoragePool exists and is Ready,
-//  - marks the CR Ready with a clear `Deprecated` condition and a migration
-//    message pointing operators at Dataset/Share,
-//  - no longer creates any Deployments or Services.
+//   - validates that the referenced StoragePool exists and is Ready,
+//   - marks the CR Ready with a clear `Deprecated` condition and a migration
+//     message pointing operators at Dataset/Share,
+//   - no longer creates any Deployments or Services.
 //
 // New deployments should use `Dataset` (for filesystem storage) with a `Share`
 // resource referencing an `NfsServer` or `SmbServer` instead.

@@ -11,22 +11,22 @@
 //
 // Layout (little-endian, fixed offsets):
 //
-//   offset  size  field
-//   ------  ----  -------------------------------------------------
-//   0       8     magic   ("NOVANAS\x00")
-//   8       4     version (currently 1)
-//   12      4     flags   (reserved, 0)
-//   16      16    disk UUID (binary, matches WWN-derived identity)
-//   32      32    pool ID  (utf-8, zero-padded)
-//   64      4     role     (1 = data, 2 = metadata, 3 = both)
-//   68      32    CRUSH map digest (sha256 of canonical CRUSH map)
-//   100     32    metadata volume name (utf-8, zero-padded)
-//   132     64    metadata volume root chunk ID (hex sha256, zero-padded)
-//   196     8     metadata volume version (monotonic counter)
-//   204     8     created_unix_nanos
-//   212     8     updated_unix_nanos
-//   220     3872  reserved (zeroed)
-//   4092    4     crc32c over bytes [0..4092)
+//	offset  size  field
+//	------  ----  -------------------------------------------------
+//	0       8     magic   ("NOVANAS\x00")
+//	8       4     version (currently 1)
+//	12      4     flags   (reserved, 0)
+//	16      16    disk UUID (binary, matches WWN-derived identity)
+//	32      32    pool ID  (utf-8, zero-padded)
+//	64      4     role     (1 = data, 2 = metadata, 3 = both)
+//	68      32    CRUSH map digest (sha256 of canonical CRUSH map)
+//	100     32    metadata volume name (utf-8, zero-padded)
+//	132     64    metadata volume root chunk ID (hex sha256, zero-padded)
+//	196     8     metadata volume version (monotonic counter)
+//	204     8     created_unix_nanos
+//	212     8     updated_unix_nanos
+//	220     3872  reserved (zeroed)
+//	4092    4     crc32c over bytes [0..4092)
 //
 // The superblock is written at byte offset 0 of the raw device. For GPT
 // co-existence, higher deployments may opt to shift the superblock to a
@@ -94,23 +94,23 @@ type Superblock struct {
 
 // Field offsets — keep in sync with the layout comment above.
 const (
-	sbOffMagic             = 0
-	sbOffVersion           = 8
-	sbOffFlags             = 12
-	sbOffDiskUUID          = 16
-	sbOffPoolID            = 32
-	sbOffRole              = 64
-	sbOffCRUSHDigest       = 68
-	sbOffMetaVolName       = 100
-	sbOffMetaVolRoot       = 132
-	sbOffMetaVolVersion    = 196
-	sbOffCreated           = 204
-	sbOffUpdated           = 212
-	sbOffCRC               = 4092
+	sbOffMagic          = 0
+	sbOffVersion        = 8
+	sbOffFlags          = 12
+	sbOffDiskUUID       = 16
+	sbOffPoolID         = 32
+	sbOffRole           = 64
+	sbOffCRUSHDigest    = 68
+	sbOffMetaVolName    = 100
+	sbOffMetaVolRoot    = 132
+	sbOffMetaVolVersion = 196
+	sbOffCreated        = 204
+	sbOffUpdated        = 212
+	sbOffCRC            = 4092
 
-	sbFieldPoolIDLen       = 32
-	sbFieldMetaVolNameLen  = 32
-	sbFieldMetaVolRootLen  = 64
+	sbFieldPoolIDLen      = 32
+	sbFieldMetaVolNameLen = 32
+	sbFieldMetaVolRootLen = 64
 )
 
 // Errors.

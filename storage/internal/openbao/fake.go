@@ -28,8 +28,8 @@ type FakeTransit struct {
 }
 
 type fakeKey struct {
-	versions  map[uint64][]byte // version -> 32-byte master key
-	latest    uint64
+	versions map[uint64][]byte // version -> 32-byte master key
+	latest   uint64
 }
 
 // NewFakeTransit constructs an empty fake.

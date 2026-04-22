@@ -28,7 +28,7 @@ func TestParseSSEHeaders_DecisionTree(t *testing.T) {
 		{"none", map[string]string{}, SSEModeNone, ""},
 		{"sse-s3", map[string]string{"x-amz-server-side-encryption": "AES256"}, SSEModeS3, ""},
 		{"sse-kms", map[string]string{
-			"x-amz-server-side-encryption":              "aws:kms",
+			"x-amz-server-side-encryption":                "aws:kms",
 			"x-amz-server-side-encryption-aws-kms-key-id": "my-key",
 		}, SSEModeKMS, ""},
 		{"sse-c", map[string]string{

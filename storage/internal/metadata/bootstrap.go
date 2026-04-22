@@ -11,18 +11,18 @@
 // The solution is the per-disk superblock (see storage/internal/disk).
 // At startup the metadata service:
 //
-//   1. Waits for agents to report their local superblocks (heartbeat).
-//   2. Gathers superblocks from disks with role ∈ {metadata, both}.
-//   3. Verifies they agree on a single CRUSH-map digest (divergence
-//      indicates a split-brain situation — abort and alert).
-//   4. Reads the "metadata volume locator" (name + root chunk ID + version)
-//      from the superblocks — any one is authoritative once CRUSH digests
-//      agree.
-//   5. Assembles the BlockVolume, exposes it as a local block device
-//      (loopback or NBD), formats with xfs on first use, and mounts at
-//      --meta-mount-path.
-//   6. Opens BadgerDB at the mount path.
-//   7. Serves gRPC as normal.
+//  1. Waits for agents to report their local superblocks (heartbeat).
+//  2. Gathers superblocks from disks with role ∈ {metadata, both}.
+//  3. Verifies they agree on a single CRUSH-map digest (divergence
+//     indicates a split-brain situation — abort and alert).
+//  4. Reads the "metadata volume locator" (name + root chunk ID + version)
+//     from the superblocks — any one is authoritative once CRUSH digests
+//     agree.
+//  5. Assembles the BlockVolume, exposes it as a local block device
+//     (loopback or NBD), formats with xfs on first use, and mounts at
+//     --meta-mount-path.
+//  6. Opens BadgerDB at the mount path.
+//  7. Serves gRPC as normal.
 //
 // This file contains the Go-side control flow. The actual BlockVolume
 // assembly / mount step is delegated to the Rust data-plane via gRPC

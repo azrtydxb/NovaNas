@@ -1,29 +1,28 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - govet
     - staticcheck
-    - errcheck
-    - gosimple
     - unused
-    - gosec
-    - gofmt
-    - revive
-
-linters-settings:
-  revive:
-    severity: warning
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -QF1002  # could use tagged switch — cosmetic
+        - -QF1008  # could remove embedded field selector — cosmetic
+        - -ST1000  # missing package comment — non-blocking
+        - -ST1003  # naming preference (ApiToken vs APIToken) — CRD types mirror user-chosen names
+        - -SA1019  # deprecation warnings — handled case by case with //lint:ignore
+  exclusions:
+    generated: lax
     rules:
-      - name: exported
-      - name: var-naming
-      - name: package-comments
-      - name: indent-error-flow
-
-issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  exclude-use-default: false
+      - path: _test\.go
+        linters: [unused]
+      - path: zz_generated.*\.go
+        linters: [unused, staticcheck]

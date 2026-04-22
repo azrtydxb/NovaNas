@@ -31,7 +31,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 
-	"github.com/azrtydxb/novanas/storage/internal/disk"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
@@ -223,19 +222,5 @@ func main() {
 	log.Println("Metadata service stopped")
 }
 
-// noopSuperblockSource is a placeholder metadata.SuperblockSource used
-// until the agent-to-meta superblock-report channel is wired. It always
-// returns an empty slice, which deliberately causes
-// BootstrapChunkBacked to fail with ErrBootstrapTimeout; the main()
-// call-site then logs and falls back to --data-dir. This keeps the
-// chunk-backed startup path exercised end-to-end in code without
-// requiring a live cluster.
-//
-// TODO(integration): replace with a real source that subscribes to
-// agent heartbeats and accumulates disk.ScanResult from their reports.
-type noopSuperblockSource struct{}
-
-func (*noopSuperblockSource) GatherMetadataSuperblocks(ctx context.Context, min int) ([]disk.ScanResult, error) {
-	<-ctx.Done()
-	return nil, ctx.Err()
-}
+// Previously this file contained a noopSuperblockSource placeholder.
+// Replaced by metadata.NewSuperblockRegistry() from A10-API-Infra wiring.
