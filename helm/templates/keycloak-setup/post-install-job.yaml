@@ -1,0 +1,71 @@
+{{/*
+Waits for Keycloak readiness, then imports the novanas realm and installs
+the theme. Uses kcadm.sh from the Keycloak image.
+*/}}
+{{- if .Values.keycloak.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: novanas-keycloak-setup
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak-setup") | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "keycloak-setup") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: novanas-operators
+      containers:
+        - name: kcadm
+          image: quay.io/keycloak/keycloak:24.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              # Wait for Keycloak readiness.
+              until curl -fsS http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc/realms/master >/dev/null; do
+                echo "waiting for keycloak..."
+                sleep 5
+              done
+
+              /opt/keycloak/bin/kcadm.sh config credentials \
+                --server http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc \
+                --realm master \
+                --user "$KEYCLOAK_ADMIN" \
+                --password "$KEYCLOAK_ADMIN_PASSWORD"
+
+              # Create realm if missing.
+              if ! /opt/keycloak/bin/kcadm.sh get realms/novanas >/dev/null 2>&1; then
+                /opt/keycloak/bin/kcadm.sh create realms \
+                  -f /realm/novanas-realm.json
+              fi
+
+              # TODO(Wave 5+): upload theme via the Admin REST API once the
+              # real theme bundle is generated. For now the ConfigMap exists
+              # and is mounted by the Keycloak StatefulSet.
+              echo "keycloak setup complete"
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.auth.adminUser | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keycloak.auth.existingSecret | default "novanas-bootstrap" }}
+                  key: admin-password
+                  optional: true
+          volumeMounts:
+            - name: realm
+              mountPath: /realm
+      volumes:
+        - name: realm
+          configMap:
+            name: novanas-keycloak-realm
+{{- end }}

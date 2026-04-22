@@ -1,0 +1,43 @@
+{{/*
+Samba pod. Shares are mounted BlockVolumes from the NovaNas CSI. One pod
+per node pattern is handled by the operator at Share creation time; this
+chart only ships the base deployment used for the system "default" share
+surface (admin-only until a Share is created).
+*/}}
+{{- if .Values.smb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-smb
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "smb") | nindent 4 }}
+spec:
+  replicas: {{ .Values.smb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "smb") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "smb") | nindent 8 }}
+    spec:
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: samba
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.smb.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.smb.image) }}
+          ports:
+            - name: smb
+              containerPort: 445
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.smb.resources | nindent 12 }}
+          securityContext:
+            # Samba needs CAP_NET_BIND_SERVICE for 445 and capabilities to set
+            # effective UIDs on behalf of authenticated users.
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["NET_BIND_SERVICE", "SETUID", "SETGID"]
+              drop: ["ALL"]
+{{- end }}

@@ -1,0 +1,54 @@
+{{/*
+SPDK dataplane DaemonSet. Privileged — requires hugepages, SYS_ADMIN and
+/dev access. Default disabled; enable only when the host is prepared
+(see os/ chart from A5-OS).
+*/}}
+{{- if .Values.storage.dataplane.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: novanas-storage-dataplane
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-dataplane") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-dataplane") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-dataplane") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      hostNetwork: true
+      hostPID: true
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: dataplane
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.dataplane.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.dataplane.image) }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN", "IPC_LOCK", "SYS_NICE"]
+          resources:
+            requests:
+              {{- toYaml .Values.storage.dataplane.resources.requests | nindent 14 }}
+              hugepages-{{ .Values.storage.dataplane.hugepages.size }}: {{ .Values.storage.dataplane.hugepages.requests }}
+            limits:
+              {{- toYaml .Values.storage.dataplane.resources.limits | nindent 14 }}
+              hugepages-{{ .Values.storage.dataplane.hugepages.size }}: {{ .Values.storage.dataplane.hugepages.requests }}
+          volumeMounts:
+            - name: hugepages
+              mountPath: /dev/hugepages
+            - name: dev
+              mountPath: /dev
+      volumes:
+        - name: hugepages
+          emptyDir:
+            medium: HugePages
+        - name: dev
+          hostPath:
+            path: /dev
+{{- end }}

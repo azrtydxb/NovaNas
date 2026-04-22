@@ -1,0 +1,446 @@
+# NovaNas umbrella chart default values.
+# Values are opinionated defaults for a single-node k3s appliance but all
+# image registries, replica counts, and resource limits are overridable.
+# See values/values-{dev,beta,production}.yaml for channel-specific overrides.
+
+global:
+  # Registry prefix applied to all NovaNas-owned images (api, ui, operators,
+  # storage-*). Subcharts publish their own images via their own values.
+  imageRegistry: ghcr.io/azrtydxb
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  clusterName: novanas
+  # Default StorageClass created by the storage chart and consumed by all
+  # PersistentVolumeClaims unless overridden at the component level.
+  storageClass: novanas-default
+  # mDNS domain advertised by the discovery DaemonSet (Avahi/SSDP).
+  mdnsDomain: nas.local
+  # Public hostname is optional; if unset the UI is reachable via mDNS only.
+  publicHostname: ""
+  # PodSecurityStandards level enforced on user namespaces.
+  psaProfile: restricted
+
+namespaces:
+  system: novanas-system
+  appsSystem: novanas-apps-system
+  vms: novanas-vms
+  # users is a prefix; per-user namespaces are created at runtime by the
+  # operator as novanas-user-<uid>.
+  users: novanas-users
+
+# -----------------------------------------------------------------------------
+# NovaNas-owned workloads
+# -----------------------------------------------------------------------------
+
+api:
+  enabled: true
+  image:
+    repository: novanas/api
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: ""
+  replicas: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+  env:
+    NODE_ENV: production
+    LOG_LEVEL: info
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: novaedge
+    hostOverride: ""
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+ui:
+  enabled: true
+  image:
+    repository: novanas/ui
+    tag: ""
+    pullPolicy: ""
+  replicas: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: novaedge
+    hostOverride: ""
+
+operators:
+  enabled: true
+  image:
+    repository: novanas/operators
+    tag: ""
+    pullPolicy: ""
+  replicas: 1
+  leaderElect: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  metricsPort: 8080
+  healthPort: 8081
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+# -----------------------------------------------------------------------------
+# Storage control plane + data plane
+# -----------------------------------------------------------------------------
+storage:
+  meta:
+    enabled: true
+    image:
+      repository: novanas/storage-meta
+      tag: ""
+    replicas: 1
+    resources:
+      requests: { cpu: "200m", memory: "512Mi" }
+      limits:   { cpu: "2",    memory: "4Gi" }
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # hostPath fallback if empty
+    # Metadata-as-chunks mode is a forward-looking scheme (see A4). Default off.
+    chunkBacked:
+      enabled: false
+      minMetadataDisks: 1
+      bootstrapTimeout: 120s
+    encryption:
+      mode: "off"  # off | mandatory
+    service:
+      grpcPort: 9100
+  agent:
+    enabled: true
+    image:
+      repository: novanas/storage-agent
+      tag: ""
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits:   { cpu: "2",    memory: "2Gi" }
+    # Host path where chunk files are persisted on each node.
+    dataDir: /var/lib/novanas/chunks
+    service:
+      grpcPort: 9200
+  csi:
+    enabled: true
+    controller:
+      image:
+        repository: novanas/storage-csi
+        tag: ""
+      replicas: 1
+      resources:
+        requests: { cpu: "50m",  memory: "128Mi" }
+        limits:   { cpu: "500m", memory: "512Mi" }
+    node:
+      image:
+        repository: novanas/storage-csi
+        tag: ""
+      resources:
+        requests: { cpu: "50m",  memory: "64Mi" }
+        limits:   { cpu: "500m", memory: "256Mi" }
+  controller:
+    enabled: true
+    image:
+      repository: novanas/storage-controller
+      tag: ""
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits:   { cpu: "500m", memory: "512Mi" }
+  scheduler:
+    enabled: true
+    image:
+      repository: novanas/storage-scheduler
+      tag: ""
+    replicas: 1
+  webhook:
+    enabled: true
+    image:
+      repository: novanas/storage-webhook
+      tag: ""
+    replicas: 1
+  s3gw:
+    enabled: true
+    image:
+      repository: novanas/storage-s3gw
+      tag: ""
+    replicas: 1
+    service:
+      port: 8333
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits:   { cpu: "2",    memory: "2Gi" }
+  dataplane:
+    # SPDK dataplane pod. Requires hugepages + SYS_ADMIN on the host.
+    # Default disabled until the host is prepared (see os/ chart from A5-OS).
+    enabled: false
+    image:
+      repository: novanas/dataplane
+      tag: ""
+    hugepages:
+      size: 2Mi
+      requests: 1Gi
+    resources:
+      requests: { cpu: "1", memory: "1Gi" }
+      limits:   { cpu: "4", memory: "4Gi" }
+  storageClass:
+    name: novanas-default
+    isDefault: true
+    reclaimPolicy: Delete
+
+# -----------------------------------------------------------------------------
+# Access protocols
+# -----------------------------------------------------------------------------
+
+smb:
+  enabled: true
+  image:
+    repository: novanas/samba
+    tag: ""
+  replicas: 1
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
+
+nfs:
+  # Privileged operator pod that manages host knfsd. Single instance per node.
+  enabled: true
+  image:
+    repository: novanas/nfs-operator
+    tag: ""
+  resources:
+    requests: { cpu: "50m",  memory: "64Mi" }
+    limits:   { cpu: "500m", memory: "256Mi" }
+
+discovery:
+  enabled: true
+  image:
+    repository: novanas/discovery
+    tag: ""
+  # Avahi + SSDP + WS-Discovery exposed on the host network for LAN discovery.
+
+# -----------------------------------------------------------------------------
+# Subchart dependencies. Keys at this level are consumed by the respective
+# subchart; see each project's values reference for the full schema.
+# -----------------------------------------------------------------------------
+
+keycloak:
+  enabled: true
+  auth:
+    adminUser: admin
+    # Empty → the post-install job generates and stores the password in OpenBao.
+    adminPassword: ""
+    existingSecret: ""
+  postgresql:
+    enabled: false  # we reuse the shared novanas-postgresql
+  externalDatabase:
+    host: novanas-postgresql.novanas-system.svc
+    port: 5432
+    database: keycloak
+    user: keycloak
+    existingSecret: novanas-bootstrap
+    existingSecretPasswordKey: keycloak-db-password
+  production: true
+  proxy: edge
+  resources:
+    requests: { cpu: "250m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "2Gi" }
+
+openbao:
+  enabled: true
+  server:
+    dataStorage:
+      enabled: false
+    storage:
+      raft:
+        enabled: false
+      postgresql:
+        enabled: true
+        # The literal substitution is performed by OpenBao from the env secret.
+        connectionURL: "postgresql://openbao:$(OPENBAO_DB_PASSWORD)@novanas-postgresql.novanas-system.svc:5432/openbao?sslmode=disable"
+    unseal:
+      # TPM auto-unseal handled by a sidecar exporter on the host (see os/).
+      tpm:
+        enabled: true
+    extraEnvironmentVars:
+      OPENBAO_DB_PASSWORD: ""
+  injector:
+    enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    database: novanas
+    username: novanas
+    existingSecret: novanas-postgresql
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ""
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: novanas-redis
+    existingSecretPasswordKey: redis-password
+  master:
+    persistence:
+      enabled: false
+
+observability:
+  # kube-prometheus-stack subchart.
+  enabled: true
+  fullnameOverride: novanas-observability
+  crds:
+    enabled: true
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      resources:
+        requests: { cpu: "200m", memory: "1Gi" }
+        limits:   { cpu: "2",    memory: "4Gi" }
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 30Gi
+  alertmanager:
+    alertmanagerSpec:
+      resources:
+        requests: { cpu: "50m", memory: "128Mi" }
+        limits:   { cpu: "500m", memory: "512Mi" }
+  grafana:
+    enabled: true
+    adminPassword: ""  # auto-generated and stored in OpenBao
+    defaultDashboardsEnabled: true
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+      datasources:
+        enabled: true
+        label: grafana_datasource
+
+loki:
+  enabled: true
+  deploymentMode: SingleBinary
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: filesystem
+    schemaConfig:
+      configs:
+        - from: "2024-04-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+  singleBinary:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 20Gi
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  backend:
+    replicas: 0
+
+tempo:
+  enabled: true
+  tempo:
+    retention: 24h
+  persistence:
+    enabled: true
+    size: 10Gi
+
+alloy:
+  enabled: true
+  alloy:
+    extraPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+
+kubevirt:
+  enabled: true
+
+novanet:
+  enabled: true
+  overlay: geneve
+
+novaedge:
+  enabled: true
+  vipPool:
+    enabled: true
+    range: "192.168.1.200-192.168.1.240"
+
+# -----------------------------------------------------------------------------
+# Meta: alerts, network policies, ingress
+# -----------------------------------------------------------------------------
+
+alerts:
+  enabled: true
+  defaults:
+    # Names mirror rule IDs in docs/12-observability.md.
+    diskSmartFailing: true
+    poolDegraded: true
+    poolNearFull: true
+    metadataQuorumLost: true
+    apiErrorRateHigh: true
+    operatorReconcileBacklog: true
+    certificateExpirySoon: true
+
+networkPolicy:
+  enabled: true
+  # Default-deny in system namespaces; operator-managed policies wire per-user
+  # allowlists. Toggle off only for debugging.
+  denySystemIngressFromUsers: true
+
+# -----------------------------------------------------------------------------
+# Bootstrap secrets. These are seeded at first install and subsequently
+# rotated into OpenBao. Empty values mean "generate me".
+# -----------------------------------------------------------------------------
+bootstrapSecret:
+  create: true
+  name: novanas-bootstrap
+  postgresPassword: ""       # generated if empty
+  keycloakDbPassword: ""     # generated if empty
+  openbaoDbPassword: ""      # generated if empty
+  redisPassword: ""          # generated if empty

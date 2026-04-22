@@ -1,0 +1,64 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-api
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "api") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config/api-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: novanas-api
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "novanas.securityContext" . | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.api.image) }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.service.port }}
+          env:
+            {{- range $k, $v := .Values.api.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: PORT
+              value: {{ .Values.api.service.port | quote }}
+          envFrom:
+            - configMapRef:
+                name: novanas-api-config
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

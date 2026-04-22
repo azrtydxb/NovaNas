@@ -1,0 +1,48 @@
+# Development channel overrides: single replica, looser limits, debug logs.
+global:
+  imagePullPolicy: Always
+
+api:
+  replicas: 1
+  env:
+    NODE_ENV: development
+    LOG_LEVEL: debug
+
+ui:
+  replicas: 1
+
+operators:
+  replicas: 1
+  leaderElect: false
+
+storage:
+  meta:
+    replicas: 1
+    persistence:
+      size: 5Gi
+  dataplane:
+    enabled: false
+
+postgresql:
+  primary:
+    persistence:
+      size: 10Gi
+
+observability:
+  prometheus:
+    prometheusSpec:
+      retention: 3d
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 5Gi
+
+loki:
+  singleBinary:
+    persistence:
+      size: 5Gi
+
+alerts:
+  enabled: false

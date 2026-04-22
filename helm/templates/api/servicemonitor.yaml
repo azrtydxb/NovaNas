@@ -1,0 +1,17 @@
+{{- if and .Values.api.enabled .Values.api.serviceMonitor.enabled .Values.observability.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: novanas-api
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "api") | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.api.serviceMonitor.interval }}
+{{- end }}

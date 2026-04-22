@@ -1,0 +1,24 @@
+{{/*
+Static namespaces declared by the umbrella chart. Per-user namespaces
+(novanas-user-<uid>) are created at runtime by the operators.
+*/}}
+{{- $ns := .Values.namespaces -}}
+{{- range $key, $name := (dict "system" $ns.system "appsSystem" $ns.appsSystem "vms" $ns.vms) -}}
+{{- if $name }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "novanas.labels" $ | nindent 4 }}
+    novanas.io/tier: system
+    {{- if eq $key "vms" }}
+    pod-security.kubernetes.io/enforce: baseline
+    {{- else }}
+    pod-security.kubernetes.io/enforce: {{ $.Values.global.psaProfile | default "restricted" }}
+    {{- end }}
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+{{- end }}
+{{- end }}

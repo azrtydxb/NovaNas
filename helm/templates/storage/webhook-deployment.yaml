@@ -1,0 +1,33 @@
+{{- if .Values.storage.webhook.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-storage-webhook
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-webhook") | nindent 4 }}
+spec:
+  replicas: {{ .Values.storage.webhook.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-webhook") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-webhook") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "novanas.securityContext" . | nindent 8 }}
+      containers:
+        - name: webhook
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.webhook.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.webhook.image) }}
+          command: ["/usr/local/bin/novanas-storage-webhook"]
+          ports:
+            - name: https
+              containerPort: 9443
+          securityContext:
+            {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+{{- end }}

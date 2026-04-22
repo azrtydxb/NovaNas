@@ -1,0 +1,44 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-api
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+---
+# The API needs read access to novanas.io resources (to render the UI) and
+# create/update for write endpoints. Actual mutation of cluster state goes
+# through the operators; the API only emits CR mutations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-api
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+rules:
+  - apiGroups: ["novanas.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-api
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-api
+subjects:
+  - kind: ServiceAccount
+    name: novanas-api
+    namespace: {{ include "novanas.systemNamespace" . }}
+{{- end }}

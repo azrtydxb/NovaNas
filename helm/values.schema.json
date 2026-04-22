@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NovaNas umbrella chart values",
+  "type": "object",
+  "required": ["global", "namespaces", "api", "ui", "operators", "storage"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["imageRegistry", "clusterName"],
+      "properties": {
+        "imageRegistry":    { "type": "string", "minLength": 1 },
+        "imagePullPolicy":  { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "imagePullSecrets": { "type": "array",  "items": { "type": ["string", "object"] } },
+        "clusterName":      { "type": "string", "minLength": 1 },
+        "storageClass":     { "type": "string" },
+        "mdnsDomain":       { "type": "string" },
+        "publicHostname":   { "type": "string" },
+        "psaProfile":       { "type": "string", "enum": ["privileged", "baseline", "restricted"] }
+      }
+    },
+    "namespaces": {
+      "type": "object",
+      "required": ["system"],
+      "properties": {
+        "system":      { "type": "string", "minLength": 1 },
+        "appsSystem":  { "type": "string" },
+        "vms":         { "type": "string" },
+        "users":       { "type": "string" }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "enabled":  { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "image": {
+          "type": "object",
+          "required": ["repository"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag":        { "type": "string" },
+            "pullPolicy": { "type": "string" }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "port": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "enabled":  { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "image": {
+          "type": "object",
+          "required": ["repository"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag":        { "type": "string" }
+          }
+        }
+      }
+    },
+    "operators": {
+      "type": "object",
+      "properties": {
+        "enabled":      { "type": "boolean" },
+        "replicas":     { "type": "integer", "minimum": 0 },
+        "leaderElect":  { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "required": ["repository"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag":        { "type": "string" }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "meta":       { "type": "object" },
+        "agent":      { "type": "object" },
+        "csi":        { "type": "object" },
+        "controller": { "type": "object" },
+        "scheduler":  { "type": "object" },
+        "webhook":    { "type": "object" },
+        "s3gw":       { "type": "object" },
+        "dataplane":  { "type": "object" },
+        "storageClass": {
+          "type": "object",
+          "properties": {
+            "name":          { "type": "string" },
+            "isDefault":     { "type": "boolean" },
+            "reclaimPolicy": { "type": "string", "enum": ["Delete", "Retain", "Recycle"] }
+          }
+        }
+      }
+    },
+    "smb":       { "type": "object" },
+    "nfs":       { "type": "object" },
+    "discovery": { "type": "object" },
+    "keycloak":  { "type": "object" },
+    "openbao":   { "type": "object" },
+    "postgresql":{ "type": "object" },
+    "redis":     { "type": "object" },
+    "observability": { "type": "object" },
+    "loki":      { "type": "object" },
+    "tempo":     { "type": "object" },
+    "alloy":     { "type": "object" },
+    "kubevirt":  { "type": "object" },
+    "novanet":   { "type": "object" },
+    "novaedge":  { "type": "object" },
+    "alerts":    { "type": "object" },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "bootstrapSecret": { "type": "object" }
+  }
+}

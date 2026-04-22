@@ -1,0 +1,91 @@
+{{/*
+Default-enabled Prometheus alert rules. Toggle individual rules via
+.Values.alerts.defaults.<ruleID>.
+*/}}
+{{- if and .Values.alerts.enabled .Values.observability.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: novanas-default
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "alerts") | nindent 4 }}
+    release: novanas-observability
+spec:
+  groups:
+    - name: novanas.storage
+      interval: 30s
+      rules:
+        {{- if .Values.alerts.defaults.diskSmartFailing }}
+        - alert: NovaNasDiskSmartFailing
+          expr: novanas_disk_smart_failing > 0
+          for: 5m
+          labels: { severity: critical, component: storage }
+          annotations:
+            summary: "Disk SMART indicates imminent failure"
+            description: "Disk {{`{{ $labels.disk }}`}} on node {{`{{ $labels.node }}`}} is reporting SMART failure."
+        {{- end }}
+        {{- if .Values.alerts.defaults.poolDegraded }}
+        - alert: NovaNasPoolDegraded
+          expr: novanas_pool_health{status="degraded"} == 1
+          for: 2m
+          labels: { severity: warning, component: storage }
+          annotations:
+            summary: "Storage pool is degraded"
+            description: "Pool {{`{{ $labels.pool }}`}} is degraded."
+        {{- end }}
+        {{- if .Values.alerts.defaults.poolNearFull }}
+        - alert: NovaNasPoolNearFull
+          expr: novanas_pool_used_ratio > 0.9
+          for: 10m
+          labels: { severity: warning, component: storage }
+          annotations:
+            summary: "Storage pool nearly full"
+            description: "Pool {{`{{ $labels.pool }}`}} usage is above 90%."
+        {{- end }}
+        {{- if .Values.alerts.defaults.metadataQuorumLost }}
+        - alert: NovaNasMetadataQuorumLost
+          expr: novanas_meta_quorum_ok == 0
+          for: 1m
+          labels: { severity: critical, component: storage }
+          annotations:
+            summary: "Metadata quorum lost"
+            description: "The storage metadata service has lost quorum."
+        {{- end }}
+    - name: novanas.api
+      interval: 30s
+      rules:
+        {{- if .Values.alerts.defaults.apiErrorRateHigh }}
+        - alert: NovaNasApiErrorRateHigh
+          expr: |
+            sum(rate(http_requests_total{app_kubernetes_io_name="novanas",code=~"5.."}[5m]))
+              / sum(rate(http_requests_total{app_kubernetes_io_name="novanas"}[5m])) > 0.05
+          for: 10m
+          labels: { severity: warning, component: api }
+          annotations:
+            summary: "API 5xx error rate above 5%"
+        {{- end }}
+    - name: novanas.operators
+      interval: 30s
+      rules:
+        {{- if .Values.alerts.defaults.operatorReconcileBacklog }}
+        - alert: NovaNasOperatorReconcileBacklog
+          expr: controller_runtime_reconcile_queue_length > 50
+          for: 10m
+          labels: { severity: warning, component: operators }
+          annotations:
+            summary: "Operator reconcile backlog is growing"
+        {{- end }}
+    - name: novanas.pki
+      interval: 30s
+      rules:
+        {{- if .Values.alerts.defaults.certificateExpirySoon }}
+        - alert: NovaNasCertificateExpirySoon
+          expr: (novanas_certificate_expiry_timestamp - time()) < (14 * 24 * 3600)
+          for: 1h
+          labels: { severity: warning, component: pki }
+          annotations:
+            summary: "Certificate expires within 14 days"
+            description: "Certificate {{`{{ $labels.name }}`}} expires soon."
+        {{- end }}
+{{- end }}

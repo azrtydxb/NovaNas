@@ -1,0 +1,24 @@
+{{- if and .Values.observability.enabled .Values.observability.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-grafana-datasources
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana-setup") | nindent 4 }}
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://novanas-loki.{{ include "novanas.systemNamespace" . }}.svc:3100
+        isDefault: false
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://novanas-tempo.{{ include "novanas.systemNamespace" . }}.svc:3200
+        isDefault: false
+{{- end }}

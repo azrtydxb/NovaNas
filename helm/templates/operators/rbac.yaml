@@ -1,0 +1,70 @@
+{{/*
+Mirrors packages/operators/config/rbac/role.yaml. Any change here must be
+reflected in that file, and vice versa, until the operator chart absorbs it.
+*/}}
+{{- if .Values.operators.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-operators
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "operators") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-operators-manager
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "operators") | nindent 4 }}
+rules:
+  - apiGroups: ["novanas.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["novanas.io"]
+    resources: ["*/status", "*/finalizers"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - secrets
+      - configmaps
+      - services
+      - serviceaccounts
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-operators-manager
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "operators") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-operators-manager
+subjects:
+  - kind: ServiceAccount
+    name: novanas-operators
+    namespace: {{ include "novanas.systemNamespace" . }}
+{{- end }}

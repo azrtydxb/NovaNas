@@ -1,0 +1,20 @@
+NovaNas {{ .Chart.AppVersion }} installed in namespace "{{ .Values.namespaces.system }}".
+
+Access the UI:
+  https://{{ .Values.global.publicHostname | default .Values.global.mdnsDomain }}/
+
+Retrieve the initial admin password (stored in OpenBao after first boot):
+  kubectl -n {{ .Values.namespaces.system }} get secret novanas-admin \
+    -o jsonpath='{.data.password}' | base64 -d
+
+Check component health:
+  kubectl -n {{ .Values.namespaces.system }} get pods
+  kubectl -n {{ .Values.namespaces.system }} get novanas
+
+Next steps:
+  1. Create a StoragePool       — kubectl apply -f examples/pool.yaml
+  2. Create a Dataset            — kubectl apply -f examples/dataset.yaml
+  3. Create a Share              — kubectl apply -f examples/share.yaml
+  4. Visit the UI and finish onboarding.
+
+Documentation: https://github.com/azrtydxb/NovaNas/tree/main/docs

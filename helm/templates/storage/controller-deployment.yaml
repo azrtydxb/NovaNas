@@ -1,0 +1,34 @@
+{{- if .Values.storage.controller.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-storage-controller
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-controller") | nindent 4 }}
+spec:
+  replicas: {{ .Values.storage.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-controller") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-controller") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "novanas.securityContext" . | nindent 8 }}
+      containers:
+        - name: controller
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.controller.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.controller.image) }}
+          command: ["/usr/local/bin/novanas-storage-controller"]
+          args:
+            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          resources:
+            {{- toYaml .Values.storage.controller.resources | nindent 12 }}
+          securityContext:
+            {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+{{- end }}

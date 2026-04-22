@@ -1,0 +1,32 @@
+{{- if .Values.storage.scheduler.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-storage-scheduler
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-scheduler") | nindent 4 }}
+spec:
+  replicas: {{ .Values.storage.scheduler.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-scheduler") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-scheduler") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "novanas.securityContext" . | nindent 8 }}
+      containers:
+        - name: scheduler
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.scheduler.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.scheduler.image) }}
+          command: ["/usr/local/bin/novanas-storage-scheduler"]
+          args:
+            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          securityContext:
+            {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+{{- end }}

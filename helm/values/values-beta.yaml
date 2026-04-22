@@ -1,0 +1,14 @@
+# Beta channel defaults. Production-like but with verbose logging and
+# shorter retention windows to keep test installs lean.
+api:
+  env:
+    NODE_ENV: production
+    LOG_LEVEL: debug
+
+observability:
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+
+alerts:
+  enabled: true

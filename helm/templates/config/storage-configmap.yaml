@@ -1,0 +1,18 @@
+{{- if .Values.storage.meta.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-storage-config
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage") | nindent 4 }}
+data:
+  meta.grpcPort: {{ .Values.storage.meta.service.grpcPort | quote }}
+  agent.grpcPort: {{ .Values.storage.agent.service.grpcPort | quote }}
+  agent.dataDir: {{ .Values.storage.agent.dataDir | quote }}
+  chunkBacked.enabled: {{ .Values.storage.meta.chunkBacked.enabled | quote }}
+  chunkBacked.minMetadataDisks: {{ .Values.storage.meta.chunkBacked.minMetadataDisks | quote }}
+  chunkBacked.bootstrapTimeout: {{ .Values.storage.meta.chunkBacked.bootstrapTimeout | quote }}
+  encryption.mode: {{ .Values.storage.meta.encryption.mode | quote }}
+  storageClass.default: {{ .Values.storage.storageClass.name | quote }}
+{{- end }}

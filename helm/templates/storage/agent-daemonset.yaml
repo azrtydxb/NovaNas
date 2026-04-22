@@ -1,0 +1,64 @@
+{{- if .Values.storage.agent.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: novanas-storage-agent
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-agent") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-agent") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      hostPID: false
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.agent.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.agent.image) }}
+          command: ["/usr/local/bin/novanas-storage-agent"]
+          args:
+            - --grpc-port={{ .Values.storage.agent.service.grpcPort }}
+            - --data-dir={{ .Values.storage.agent.dataDir }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.storage.agent.service.grpcPort }}
+              hostPort: {{ .Values.storage.agent.service.grpcPort }}
+          envFrom:
+            - configMapRef:
+                name: novanas-storage-config
+          resources:
+            {{- toYaml .Values.storage.agent.resources | nindent 12 }}
+          securityContext:
+            # Agents need raw disk access for chunk persistence; capabilities
+            # are constrained but privilege escalation is allowed for mount
+            # operations when provisioning new pools.
+            allowPrivilegeEscalation: true
+            readOnlyRootFilesystem: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.storage.agent.dataDir }}
+            - name: dev
+              mountPath: /dev
+      volumes:
+        - name: data
+          hostPath:
+            path: {{ .Values.storage.agent.dataDir }}
+            type: DirectoryOrCreate
+        - name: dev
+          hostPath:
+            path: /dev
+{{- end }}

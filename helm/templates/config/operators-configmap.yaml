@@ -1,0 +1,16 @@
+{{- if .Values.operators.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-operators-config
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "operators") | nindent 4 }}
+data:
+  cluster.name: {{ .Values.global.clusterName | quote }}
+  namespaces.system: {{ .Values.namespaces.system | quote }}
+  namespaces.users: {{ .Values.namespaces.users | quote }}
+  namespaces.vms: {{ .Values.namespaces.vms | quote }}
+  namespaces.appsSystem: {{ .Values.namespaces.appsSystem | quote }}
+  leader.elect: {{ .Values.operators.leaderElect | quote }}
+{{- end }}

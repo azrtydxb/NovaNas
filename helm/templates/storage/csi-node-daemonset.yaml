@@ -1,0 +1,50 @@
+{{- if .Values.storage.csi.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: novanas-storage-csi-node
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-csi-node") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-csi-node") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-csi-node") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      hostNetwork: false
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: csi-node
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.csi.node.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.csi.node.image) }}
+          command: ["/usr/local/bin/novanas-storage-csi"]
+          args:
+            - --mode=node
+            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+          resources:
+            {{- toYaml .Values.storage.csi.node.resources | nindent 12 }}
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            - name: plugin-dir
+              mountPath: /csi
+      volumes:
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/novanas.storage.csi/
+            type: DirectoryOrCreate
+{{- end }}

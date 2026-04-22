@@ -1,0 +1,46 @@
+{{/*
+NFS operator — a privileged pod that manages host knfsd exports. Runs as a
+DaemonSet so every node that can host exports gets an instance.
+*/}}
+{{- if .Values.nfs.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: novanas-nfs-operator
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "nfs") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "nfs") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "nfs") | nindent 8 }}
+    spec:
+      hostNetwork: true
+      hostPID: true
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: nfs
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.nfs.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.nfs.image) }}
+          securityContext:
+            privileged: true
+          resources:
+            {{- toYaml .Values.nfs.resources | nindent 12 }}
+          volumeMounts:
+            - name: host-exports
+              mountPath: /etc/exports.d
+            - name: run
+              mountPath: /run
+      volumes:
+        - name: host-exports
+          hostPath:
+            path: /etc/exports.d
+            type: DirectoryOrCreate
+        - name: run
+          hostPath:
+            path: /run
+{{- end }}

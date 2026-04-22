@@ -1,0 +1,32 @@
+{{/*
+Grafana dashboard provisioning via the sidecar. The label matches the
+discovery selector configured on the kube-prometheus-stack chart.
+TODO(Wave 5+): import the real NovaNas dashboard JSONs from docs/12.
+*/}}
+{{- if and .Values.observability.enabled .Values.observability.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-grafana-dashboards
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana-setup") | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  novanas-overview.json: |-
+    {
+      "title": "NovaNas Overview",
+      "uid": "novanas-overview",
+      "schemaVersion": 36,
+      "panels": [],
+      "templating": { "list": [] }
+    }
+  novanas-storage.json: |-
+    {
+      "title": "NovaNas Storage",
+      "uid": "novanas-storage",
+      "schemaVersion": 36,
+      "panels": [],
+      "templating": { "list": [] }
+    }
+{{- end }}

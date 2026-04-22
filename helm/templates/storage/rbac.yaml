@@ -1,0 +1,44 @@
+{{- if .Values.storage.meta.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-storage
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-storage
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage") | nindent 4 }}
+rules:
+  - apiGroups: ["novanas.io"]
+    resources: ["storagepools", "storagepools/status", "datasets", "datasets/status", "disks", "disks/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes", "persistentvolumes", "persistentvolumeclaims", "events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments", "csinodes", "storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-storage
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-storage
+subjects:
+  - kind: ServiceAccount
+    name: novanas-storage
+    namespace: {{ include "novanas.systemNamespace" . }}
+{{- end }}

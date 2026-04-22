@@ -1,0 +1,11 @@
+{{/*
+Separate Job that only enables the Kubernetes auth method. Kept distinct
+from the main init job so it can be re-run without touching engines.
+TODO(Wave 5+): fold into init-job once idempotence is verified across
+minor upgrades.
+*/}}
+{{- if and .Values.openbao.enabled false }}
+# Intentionally disabled at the template level; see init-job.yaml which
+# performs the same setup. Keeping this file as a placeholder so the
+# scaffold structure matches the brief.
+{{- end }}

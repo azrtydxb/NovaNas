@@ -1,0 +1,64 @@
+{{/*
+NetworkPolicy skeleton. Implements default-deny ingress into system namespaces
+and an allowlist for user namespaces reaching the API + CSI + novaedge.
+Full per-user wiring is managed by the operators at namespace creation time
+(see packages/operators/...); the rules below are the cluster-wide guardrails.
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $sys := include "novanas.systemNamespace" . -}}
+---
+# Default-deny ingress into the system namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: novanas-system-default-deny
+  namespace: {{ $sys }}
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress: []
+---
+# Allow intra-system traffic between NovaNas components.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: novanas-system-allow-intrasystem
+  namespace: {{ $sys }}
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $sys }}
+---
+# Allow the API to be reached from user namespaces. Novaedge handles external
+# ingress separately via its own CRD-managed policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: novanas-api-allow-users
+  namespace: {{ $sys }}
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "api") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              novanas.io/tier: user
+      ports:
+        - port: {{ .Values.api.service.port }}
+          protocol: TCP
+# TODO(Wave 5+): emit per-user NetworkPolicies from the operator when user
+# namespaces are created; this chart only declares the cluster-wide guardrails.
+{{- end }}

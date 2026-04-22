@@ -1,0 +1,32 @@
+{{/*
+Ingress for the API. Uses the novaedge IngressClass so that the novaedge
+controller programs the in-cluster L4/L7 datapath (see docs/11-networking.md).
+*/}}
+{{- if and .Values.api.enabled .Values.api.ingress.enabled }}
+{{- $host := default .Values.global.mdnsDomain .Values.api.ingress.hostOverride -}}
+{{- if .Values.global.publicHostname }}
+{{- $host = .Values.global.publicHostname -}}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: novanas-api
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+  annotations:
+    novaedge.novanas.io/component: api
+spec:
+  ingressClassName: {{ .Values.api.ingress.className }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-api
+                port:
+                  number: {{ .Values.api.service.port }}
+{{- end }}

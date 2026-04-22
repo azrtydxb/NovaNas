@@ -1,0 +1,28 @@
+{{- if and .Values.ui.enabled .Values.ui.ingress.enabled }}
+{{- $host := default .Values.global.mdnsDomain .Values.ui.ingress.hostOverride -}}
+{{- if .Values.global.publicHostname }}
+{{- $host = .Values.global.publicHostname -}}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: novanas-ui
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "ui") | nindent 4 }}
+  annotations:
+    novaedge.novanas.io/component: ui
+spec:
+  ingressClassName: {{ .Values.ui.ingress.className }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-ui
+                port:
+                  number: {{ .Values.ui.service.port }}
+{{- end }}

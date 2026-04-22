@@ -1,0 +1,85 @@
+{{/*
+Bootstraps OpenBao: initializes (if needed), enables Transit + PKI engines,
+and writes the ACL policies. Idempotent — safe to re-run on upgrade.
+*/}}
+{{- if .Values.openbao.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: novanas-openbao-init
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao-setup") | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "openbao-setup") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: novanas-operators
+      containers:
+        - name: bao
+          image: quay.io/openbao/openbao:latest
+          command: ["/bin/sh", "-c"]
+          env:
+            - name: BAO_ADDR
+              value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
+          args:
+            - |
+              set -eu
+              # Wait for OpenBao to be listening.
+              until bao status -format=json >/dev/null 2>&1 || [ $? -eq 2 ]; do
+                echo "waiting for openbao..."
+                sleep 5
+              done
+
+              # TODO(Wave 5+): wire real init + unseal flow. For TPM auto-
+              # unseal (default in this chart), OpenBao self-unseals on start.
+              # Stub the engine enables below; they are idempotent.
+
+              bao secrets enable -path=transit transit 2>/dev/null || true
+              bao secrets enable -path=secret -version=2 kv        2>/dev/null || true
+              bao secrets enable -path=pki pki                     2>/dev/null || true
+
+              bao auth enable kubernetes 2>/dev/null || true
+              bao write auth/kubernetes/config \
+                kubernetes_host=https://kubernetes.default.svc \
+                || true
+
+              # Apply ACL policies.
+              for p in /policies/*.hcl; do
+                name=$(basename "$p" .hcl)
+                bao policy write "$name" "$p"
+              done
+
+              # Bind the core ServiceAccounts. Policy names map 1:1 to SAs.
+              bao write auth/kubernetes/role/novanas-api \
+                bound_service_account_names=novanas-api \
+                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
+                policies=novanas-api ttl=1h
+
+              bao write auth/kubernetes/role/novanas-operators \
+                bound_service_account_names=novanas-operators \
+                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
+                policies=novanas-operators ttl=1h
+
+              bao write auth/kubernetes/role/novanas-storage \
+                bound_service_account_names=novanas-storage \
+                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
+                policies=novanas-storage ttl=1h
+
+              echo "openbao bootstrap complete"
+          volumeMounts:
+            - name: policies
+              mountPath: /policies
+      volumes:
+        - name: policies
+          configMap:
+            name: novanas-openbao-policies
+{{- end }}

@@ -1,0 +1,31 @@
+{{/*
+OpenBao ACL policies applied by the init job. Representative set — per-
+component policies are added incrementally by their owning operators.
+*/}}
+{{- if .Values.openbao.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-openbao-policies
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao-setup") | nindent 4 }}
+data:
+  novanas-api.hcl: |-
+    # Read bootstrap secrets + sign tokens.
+    path "secret/data/novanas/api/*"       { capabilities = ["read"] }
+    path "transit/encrypt/novanas-api"     { capabilities = ["update"] }
+    path "transit/decrypt/novanas-api"     { capabilities = ["update"] }
+  novanas-operators.hcl: |-
+    path "secret/data/novanas/operators/*" { capabilities = ["read", "create", "update"] }
+    path "transit/encrypt/novanas-*"       { capabilities = ["update"] }
+    path "transit/decrypt/novanas-*"       { capabilities = ["update"] }
+    # Issue per-tenant sub-keys.
+    path "transit/keys/novanas-*"          { capabilities = ["create", "read", "update"] }
+  novanas-storage.hcl: |-
+    path "secret/data/novanas/storage/*"   { capabilities = ["read"] }
+    # Envelope-encrypt per-pool data keys via Transit.
+    path "transit/encrypt/novanas-pool-*"  { capabilities = ["update"] }
+    path "transit/decrypt/novanas-pool-*"  { capabilities = ["update"] }
+  # TODO(Wave 5+): per-tenant / per-dataset policies generated at runtime.
+{{- end }}

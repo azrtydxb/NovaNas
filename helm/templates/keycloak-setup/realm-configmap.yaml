@@ -1,0 +1,54 @@
+{{/*
+Minimal novanas realm definition. The post-install Job imports this JSON
+after Keycloak is ready. Scope: one realm, two clients (ui public, api
+confidential), two default roles. Operator-driven updates take over after
+first boot.
+*/}}
+{{- if .Values.keycloak.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-keycloak-realm
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak-setup") | nindent 4 }}
+data:
+  novanas-realm.json: |-
+    {
+      "realm": "novanas",
+      "enabled": true,
+      "displayName": "NovaNas",
+      "registrationAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "loginTheme": "novanas",
+      "accountTheme": "novanas",
+      "adminTheme": "keycloak.v2",
+      "emailTheme": "novanas",
+      "roles": {
+        "realm": [
+          { "name": "admin",  "description": "NovaNas administrator" },
+          { "name": "user",   "description": "NovaNas end user" }
+        ]
+      },
+      "defaultRoles": ["user"],
+      "clients": [
+        {
+          "clientId": "novanas-ui",
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": false,
+          "redirectUris": ["https://*/*"],
+          "webOrigins": ["+"]
+        },
+        {
+          "clientId": "novanas-api",
+          "publicClient": false,
+          "serviceAccountsEnabled": true,
+          "standardFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "secret": "REPLACE_ON_BOOT"
+        }
+      ]
+    }
+{{- end }}

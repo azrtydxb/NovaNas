@@ -1,0 +1,22 @@
+{{- if and .Values.storage.meta.enabled .Values.observability.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: novanas-storage
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage") | nindent 4 }}
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - storage-meta
+          - storage-agent
+          - storage-s3gw
+  endpoints:
+    - port: grpc
+      path: /metrics
+      interval: 30s
+{{- end }}

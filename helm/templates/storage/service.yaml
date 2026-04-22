@@ -1,0 +1,52 @@
+{{- if .Values.storage.meta.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-storage-meta
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-meta") | nindent 4 }}
+spec:
+  # Headless — the StatefulSet needs stable per-pod DNS.
+  clusterIP: None
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-meta") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.storage.meta.service.grpcPort }}
+      targetPort: grpc
+{{- end }}
+{{- if .Values.storage.agent.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-storage-agent
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-agent") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-agent") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.storage.agent.service.grpcPort }}
+      targetPort: grpc
+{{- end }}
+{{- if .Values.storage.s3gw.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-storage-s3gw
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-s3gw") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-s3gw") | nindent 4 }}
+  ports:
+    - name: s3
+      port: {{ .Values.storage.s3gw.service.port }}
+      targetPort: s3
+{{- end }}

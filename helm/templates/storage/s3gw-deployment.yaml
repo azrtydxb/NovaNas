@@ -1,0 +1,38 @@
+{{- if .Values.storage.s3gw.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-storage-s3gw
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-s3gw") | nindent 4 }}
+spec:
+  replicas: {{ .Values.storage.s3gw.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-s3gw") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "storage-s3gw") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-storage
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "novanas.securityContext" . | nindent 8 }}
+      containers:
+        - name: s3gw
+          image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.s3gw.image) }}
+          imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.s3gw.image) }}
+          command: ["/usr/local/bin/novanas-storage-s3gw"]
+          args:
+            - --listen=:{{ .Values.storage.s3gw.service.port }}
+            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          ports:
+            - name: s3
+              containerPort: {{ .Values.storage.s3gw.service.port }}
+          resources:
+            {{- toYaml .Values.storage.s3gw.resources | nindent 12 }}
+          securityContext:
+            {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+{{- end }}

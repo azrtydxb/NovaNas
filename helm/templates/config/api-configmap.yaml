@@ -1,0 +1,19 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-api-config
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+data:
+  cluster.name: {{ .Values.global.clusterName | quote }}
+  public.hostname: {{ .Values.global.publicHostname | quote }}
+  mdns.domain: {{ .Values.global.mdnsDomain | quote }}
+  keycloak.url: {{ printf "http://novanas-keycloak.%s.svc:80" (include "novanas.systemNamespace" .) | quote }}
+  keycloak.realm: "novanas"
+  openbao.url: {{ printf "http://novanas-openbao.%s.svc:8200" (include "novanas.systemNamespace" .) | quote }}
+  postgres.host: {{ printf "novanas-postgresql.%s.svc" (include "novanas.systemNamespace" .) | quote }}
+  postgres.database: "novanas"
+  redis.host: {{ printf "novanas-redis-master.%s.svc" (include "novanas.systemNamespace" .) | quote }}
+{{- end }}

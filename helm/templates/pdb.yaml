@@ -1,0 +1,21 @@
+{{/*
+PodDisruptionBudgets for singletons whose loss is user-visible.
+On a single-node appliance these are advisory (no peer to drain to), but on
+HA clusters they prevent simultaneous voluntary eviction.
+*/}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+{{- range $component := list "api" "operators" "storage-meta" "storage-controller" "storage-s3gw" "smb" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: novanas-{{ $component }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" $ "component" $component) | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" $ "component" $component) | nindent 6 }}
+{{- end }}
