@@ -1,0 +1,46 @@
+{{- if eq (include "novanas.dashboard.enabled" (dict "ctx" . "slug" "protocols")) "true" }}
+---
+{{- $json := `{
+  "uid": "novanas-protocols",
+  "title": "NovaNas / Protocols",
+  "tags": ["novanas", "protocols"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [ { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "prometheus" } } ] },
+  "panels": [
+    { "id": 1, "type": "stat", "title": "SMB sessions", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_smb_sessions)" }] },
+    { "id": 2, "type": "stat", "title": "NFS clients", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_nfs_clients)" }] },
+    { "id": 3, "type": "stat", "title": "iSCSI sessions", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_iscsi_sessions)" }] },
+    { "id": 4, "type": "stat", "title": "S3 RPS", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(novanas_s3_requests_total[1m]))" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" } } },
+    { "id": 5, "type": "timeseries", "title": "SMB ops/s", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "sum by (op)(rate(novanas_smb_ops_total[5m]))", "legendFormat": "OP_PLACEHOLDER" }] },
+    { "id": 6, "type": "timeseries", "title": "NFS ops/s", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "sum by (op)(rate(novanas_nfs_ops_total[5m]))", "legendFormat": "OP_PLACEHOLDER" }] },
+    { "id": 7, "type": "timeseries", "title": "iSCSI IO", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(novanas_iscsi_bytes_total{dir=\"read\"}[5m])",  "legendFormat": "r" },
+        { "expr": "rate(novanas_iscsi_bytes_total{dir=\"write\"}[5m])", "legendFormat": "w" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" } } },
+    { "id": 8, "type": "timeseries", "title": "S3 request success ratio", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{ "expr": "novanas_s3_request_success_ratio", "legendFormat": "success" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } } },
+    { "id": 9, "type": "timeseries", "title": "Protocol errors", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "rate(novanas_smb_errors_total[5m])", "legendFormat": "smb" },
+        { "expr": "rate(novanas_nfs_errors_total[5m])", "legendFormat": "nfs" },
+        { "expr": "rate(novanas_iscsi_errors_total[5m])", "legendFormat": "iscsi" },
+        { "expr": "rate(novanas_s3_errors_total[5m])", "legendFormat": "s3" }
+      ] }
+  ]
+}` }}
+{{- $json = $json | replace "OP_PLACEHOLDER" "{{ op }}" }}
+{{ include "novanas.dashboard.cm" (dict "ctx" . "slug" "protocols" "json" $json) }}
+{{- end }}

@@ -1,11 +1,10 @@
 {{/*
-Separate Job that only enables the Kubernetes auth method. Kept distinct
-from the main init job so it can be re-run without touching engines.
-TODO(Wave 5+): fold into init-job once idempotence is verified across
-minor upgrades.
+The Kubernetes auth enable / role-binding steps are performed inline by
+novanas-openbao-init (see init-job.yaml). This file is retained as a
+permanently-disabled placeholder so the template directory matches the
+bootstrap scaffold and operators know where to look.
+
+Do NOT re-enable this Job without also removing the corresponding steps
+from init-job.yaml — running both concurrently causes role overwrites.
 */}}
-{{- if and .Values.openbao.enabled false }}
-# Intentionally disabled at the template level; see init-job.yaml which
-# performs the same setup. Keeping this file as a placeholder so the
-# scaffold structure matches the brief.
-{{- end }}
+{{- /* intentionally renders nothing */ -}}

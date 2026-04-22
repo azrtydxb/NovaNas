@@ -59,6 +59,53 @@ to generate random values and keep them in a resource-policy=keep Secret.
 After first boot the OpenBao init job migrates these into Transit-
 wrapped entries; rotation is handled by the operators.
 
+## Identity, secrets, observability content
+
+The umbrella chart ships opinionated bootstrap content for the three
+platform subsystems:
+
+### Keycloak realm (`templates/keycloak-setup/`)
+- `realm-configmap.yaml` — the `novanas` realm with four clients
+  (`novanas-ui`, `novanas-api`, `novanas-cli`, `grafana`), four realm
+  roles (`admin`, `user`, `viewer`, `share-only`), three groups, a
+  strict password policy, brute-force protection, and a WebAuthn
+  sub-flow required for admins.
+- `theme-configmap.yaml` — the `novanas` login theme (parent: `keycloak`)
+  with a dark palette CSS override and localized messages. Mounted into
+  the Keycloak pod at `/opt/keycloak/themes/novanas/`.
+- `post-install-job.yaml` — Helm post-install/upgrade hook. Uses
+  `kcadm.sh` to import the realm and is idempotent.
+- Toggle: `keycloak.realm.enabled` (default `true`).
+
+### OpenBao policies & bootstrap (`templates/openbao-setup/`)
+- `policies-configmap.yaml` — path-scoped ACL policies per
+  `docs/10-identity-and-secrets.md`: `novanas-admin`, `novanas-api`,
+  `novanas-storage-meta`, `novanas-storage-agent`, `novanas-s3gw`,
+  `novanas-operators`, plus a reference template for per-user policies.
+- `init-job.yaml` — enables Transit + PKI + kv-v2, configures the root
+  CA, enables the Kubernetes auth method, binds every NovaNas
+  ServiceAccount to its policy, and creates the chunk-engine master key
+  (`transit/keys/novanas-chunk-master`). Idempotent.
+- `k8s-auth-job.yaml` — placeholder (folded into `init-job.yaml`).
+- Toggle: `openbao.policies.enabled` (default `true`).
+
+### Grafana dashboards (`templates/grafana-setup/`)
+- Ten dashboards provisioned via the sidecar (label
+  `grafana_dashboard=1`): `system-overview`, `storage-pools`,
+  `storage-disks`, `storage-datasets`, `protocols`, `apps`, `vms`,
+  `network`, `cluster`, `security`.
+- `datasources-configmap.yaml` — Prometheus (default), Loki, Tempo,
+  Alertmanager, and a Postgres datasource for the audit log.
+- Toggle: `grafana.dashboards.enabled` (default `true`). Subset via
+  `grafana.dashboards.list`.
+
+### Prometheus alerts (`templates/alerts/`)
+- 28 rules across storage (disk/pool/scrub), data protection
+  (snapshots/replication/cloud backup), node health, platform
+  (OpenBao, Keycloak, certificates, API, operators, update), and
+  security (failed logins, 2FA brute force, admin actions).
+- Every rule is individually toggleable via `alerts.defaults.<ruleID>`.
+
 ## Development
 
 ```sh

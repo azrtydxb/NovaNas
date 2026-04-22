@@ -1,8 +1,152 @@
 {{/*
-Bootstraps OpenBao: initializes (if needed), enables Transit + PKI engines,
-and writes the ACL policies. Idempotent — safe to re-run on upgrade.
+OpenBao bootstrap Job.
+
+Runs once post-install (and on upgrades) to:
+  1. Wait for the server to respond and be unsealed (TPM auto-unseal is
+     the default; if `bao status` reports sealed, the Job exits with a
+     clear error so the operator can investigate the TPM sidecar).
+  2. Enable the engines: transit, pki, kv-v2 at `secret/`.
+  3. Configure a root internal CA at `pki/`.
+  4. Enable and configure the Kubernetes auth method.
+  5. Write all ACL policies from the mounted ConfigMap.
+  6. Bind NovaNas ServiceAccounts to their policies (k8s auth roles).
+  7. Create the chunk-engine master key:
+     `bao write transit/keys/novanas-chunk-master type=aes256-gcm96`
+
+Every step uses `|| true` / idempotent checks. Safe to re-run.
+
+NOTE: the separate k8s-auth-job is folded into this job; see
+k8s-auth-job.yaml for the stub retained for operator discoverability.
 */}}
 {{- if .Values.openbao.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-openbao-init-script
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao-setup") | nindent 4 }}
+data:
+  init.sh: |-
+    #!/bin/sh
+    set -eu
+
+    NS="{{ include "novanas.systemNamespace" . }}"
+    CLUSTER="{{ .Values.global.clusterName }}"
+
+    echo "[openbao-init] BAO_ADDR=${BAO_ADDR}"
+
+    # --- 1. Wait for the server ----------------------------------------
+    attempts=0
+    until bao status -format=json >/tmp/status.json 2>/dev/null || [ $? -eq 2 ]; do
+      attempts=$((attempts + 1))
+      if [ "$attempts" -gt 60 ]; then
+        echo "[openbao-init] timed out waiting for openbao"
+        exit 1
+      fi
+      echo "[openbao-init] waiting for openbao..."
+      sleep 5
+    done
+
+    # Status rc: 0 unsealed, 1 error, 2 sealed.
+    if bao status >/dev/null 2>&1; then
+      echo "[openbao-init] unsealed"
+    else
+      rc=$?
+      if [ $rc -eq 2 ]; then
+        echo "[openbao-init] ERROR: openbao is sealed. TPM auto-unseal should be in place; check the tpm-unseal sidecar."
+        exit 1
+      fi
+      echo "[openbao-init] ERROR: bao status failed with rc=$rc"
+      exit 1
+    fi
+
+    # Helper: run a command, ignore "already exists"/"path is already in use" style errors.
+    ok() { "$@" 2>&1 | tee /tmp/out; grep -qi "already\|exist" /tmp/out && return 0 || return ${PIPESTATUS:-0}; }
+
+    # --- 2. Enable engines ---------------------------------------------
+    bao secrets enable -path=transit transit            2>/dev/null || true
+    bao secrets enable -path=secret -version=2 kv       2>/dev/null || true
+    bao secrets enable -path=pki    -max-lease-ttl=87600h pki 2>/dev/null || true
+
+    # --- 3. Configure PKI root -----------------------------------------
+    if ! bao read pki/cert/ca >/dev/null 2>&1; then
+      bao write -field=certificate pki/root/generate/internal \
+        common_name="NovaNas Root CA (${CLUSTER})" \
+        ttl=87600h > /dev/null || true
+      bao write pki/config/urls \
+        issuing_certificates="${BAO_ADDR}/v1/pki/ca" \
+        crl_distribution_points="${BAO_ADDR}/v1/pki/crl" >/dev/null || true
+    fi
+    bao write pki/roles/novanas-internal \
+      allowed_domains="svc,cluster.local,${NS}.svc,${NS}.svc.cluster.local" \
+      allow_subdomains=true \
+      allow_bare_domains=true \
+      max_ttl=720h >/dev/null 2>&1 || true
+
+    # --- 4. Enable kubernetes auth -------------------------------------
+    bao auth enable kubernetes 2>/dev/null || true
+    bao write auth/kubernetes/config \
+      kubernetes_host="https://kubernetes.default.svc" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+      token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token \
+      disable_iss_validation=true >/dev/null 2>&1 || \
+    bao write auth/kubernetes/config \
+      kubernetes_host="https://kubernetes.default.svc" >/dev/null
+
+    # --- 5. Write all policies -----------------------------------------
+    for p in /policies/*.hcl; do
+      name=$(basename "$p" .hcl)
+      # skip the reference-only template (starts with novanas-user-tmpl)
+      case "$name" in
+        novanas-user-tmpl) continue ;;
+      esac
+      echo "[openbao-init] writing policy $name"
+      bao policy write "$name" "$p"
+    done
+
+    # --- 6. Bind ServiceAccounts to policies ---------------------------
+    # Map of role -> (sa, namespace, policy). Kept inline — additions made
+    # by operators at runtime via the novanas-operators policy.
+    bind_role() {
+      role="$1"; sa="$2"; ns="$3"; policy="$4"; ttl="${5:-1h}"
+      bao write "auth/kubernetes/role/${role}" \
+        bound_service_account_names="${sa}" \
+        bound_service_account_namespaces="${ns}" \
+        policies="${policy}" \
+        ttl="${ttl}" >/dev/null
+    }
+
+    bind_role novanas-api          novanas-api          "${NS}" novanas-api          1h
+    bind_role novanas-operators    novanas-operators    "${NS}" novanas-operators    1h
+    bind_role novanas-storage-meta novanas-storage-meta "${NS}" novanas-storage-meta 1h
+    bind_role novanas-storage-agent novanas-storage-agent "${NS}" novanas-storage-agent 1h
+    bind_role novanas-s3gw         novanas-s3gw         "${NS}" novanas-s3gw         1h
+    bind_role novanas-admin        novanas-admin        "${NS}" novanas-admin        30m
+
+    # --- 7. Chunk engine master key ------------------------------------
+    if ! bao read transit/keys/novanas-chunk-master >/dev/null 2>&1; then
+      echo "[openbao-init] creating chunk-engine master key"
+      bao write -f transit/keys/novanas-chunk-master type=aes256-gcm96
+      bao write transit/keys/novanas-chunk-master/config \
+        deletion_allowed=false \
+        exportable=false \
+        allow_plaintext_backup=false >/dev/null
+    fi
+
+    # Convenience keys per component scope. Idempotent.
+    for k in novanas-api novanas-kms-default; do
+      bao read "transit/keys/${k}" >/dev/null 2>&1 || \
+        bao write -f "transit/keys/${k}" type=aes256-gcm96
+    done
+
+    # Record a marker so operators can detect completion.
+    bao kv put secret/novanas/bootstrap \
+      timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      version="{{ .Chart.AppVersion }}" >/dev/null || true
+
+    echo "[openbao-init] complete"
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -26,60 +170,25 @@ spec:
       containers:
         - name: bao
           image: quay.io/openbao/openbao:latest
-          command: ["/bin/sh", "-c"]
+          command: ["/bin/sh", "/scripts/init.sh"]
           env:
             - name: BAO_ADDR
               value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
-          args:
-            - |
-              set -eu
-              # Wait for OpenBao to be listening.
-              until bao status -format=json >/dev/null 2>&1 || [ $? -eq 2 ]; do
-                echo "waiting for openbao..."
-                sleep 5
-              done
-
-              # TODO(Wave 5+): wire real init + unseal flow. For TPM auto-
-              # unseal (default in this chart), OpenBao self-unseals on start.
-              # Stub the engine enables below; they are idempotent.
-
-              bao secrets enable -path=transit transit 2>/dev/null || true
-              bao secrets enable -path=secret -version=2 kv        2>/dev/null || true
-              bao secrets enable -path=pki pki                     2>/dev/null || true
-
-              bao auth enable kubernetes 2>/dev/null || true
-              bao write auth/kubernetes/config \
-                kubernetes_host=https://kubernetes.default.svc \
-                || true
-
-              # Apply ACL policies.
-              for p in /policies/*.hcl; do
-                name=$(basename "$p" .hcl)
-                bao policy write "$name" "$p"
-              done
-
-              # Bind the core ServiceAccounts. Policy names map 1:1 to SAs.
-              bao write auth/kubernetes/role/novanas-api \
-                bound_service_account_names=novanas-api \
-                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
-                policies=novanas-api ttl=1h
-
-              bao write auth/kubernetes/role/novanas-operators \
-                bound_service_account_names=novanas-operators \
-                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
-                policies=novanas-operators ttl=1h
-
-              bao write auth/kubernetes/role/novanas-storage \
-                bound_service_account_names=novanas-storage \
-                bound_service_account_namespaces={{ include "novanas.systemNamespace" . }} \
-                policies=novanas-storage ttl=1h
-
-              echo "openbao bootstrap complete"
+            - name: VAULT_ADDR
+              value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
           volumeMounts:
             - name: policies
               mountPath: /policies
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
       volumes:
         - name: policies
           configMap:
             name: novanas-openbao-policies
+        - name: scripts
+          configMap:
+            name: novanas-openbao-init-script
+            defaultMode: 0755
 {{- end }}

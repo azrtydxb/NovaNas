@@ -1,8 +1,12 @@
 {{/*
-OpenBao ACL policies applied by the init job. Representative set — per-
-component policies are added incrementally by their owning operators.
+OpenBao ACL policies. Applied by novanas-openbao-init. Each file is loaded
+as `novanas-<name>` (init job strips the .hcl extension). Paths mirror the
+resource shapes in docs/10-identity-and-secrets.md § "Path-scoped ACLs".
+
+Per-tenant / per-dataset policies are generated at runtime by the tenant
+operator from the `novanas-user-tmpl.hcl` shape below.
 */}}
-{{- if .Values.openbao.enabled }}
+{{- if and .Values.openbao.enabled (default true .Values.openbao.policies.enabled) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,21 +15,84 @@ metadata:
   labels:
     {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao-setup") | nindent 4 }}
 data:
+  novanas-admin.hcl: |-
+    # Full access across the novanas/ hierarchy and cryptographic engines.
+    # Bound to the `novanas-admin` role; used by the admin CLI session and
+    # the break-glass escape hatch documented in docs/10.
+    path "novanas/*"             { capabilities = ["create", "read", "update", "delete", "list", "sudo"] }
+    path "transit/*"             { capabilities = ["create", "read", "update", "delete", "list"] }
+    path "pki/*"                 { capabilities = ["create", "read", "update", "delete", "list"] }
+    path "sys/policies/acl/*"    { capabilities = ["create", "read", "update", "delete", "list"] }
+    path "auth/kubernetes/role/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+
   novanas-api.hcl: |-
-    # Read bootstrap secrets + sign tokens.
-    path "secret/data/novanas/api/*"       { capabilities = ["read"] }
+    # NovaNas API: read-only on runtime config + session secrets, Transit
+    # encrypt/decrypt for the api-scoped key, and lookup of its own token.
+    path "novanas/api/*"                   { capabilities = ["read", "list"] }
+    path "novanas/sessions/*"              { capabilities = ["create", "read", "update", "delete"] }
     path "transit/encrypt/novanas-api"     { capabilities = ["update"] }
     path "transit/decrypt/novanas-api"     { capabilities = ["update"] }
+    path "transit/sign/novanas-api"        { capabilities = ["update"] }
+    path "transit/verify/novanas-api"      { capabilities = ["update"] }
+    path "auth/token/lookup-self"          { capabilities = ["read"] }
+    path "auth/token/renew-self"           { capabilities = ["update"] }
+
+  novanas-storage-meta.hcl: |-
+    # Metadata service: manages the chunk-engine master key (rotate/rewrap)
+    # and its own metadata-volume secrets.
+    path "novanas/chunk-engine/master-key"          { capabilities = ["read"] }
+    path "novanas/metadata-volume/*"                { capabilities = ["create", "read", "update", "delete", "list"] }
+    path "transit/keys/novanas-chunk-master"        { capabilities = ["read"] }
+    path "transit/keys/novanas-chunk-master/rotate" { capabilities = ["update"] }
+    path "transit/encrypt/novanas-chunk-master"     { capabilities = ["update"] }
+    path "transit/decrypt/novanas-chunk-master"     { capabilities = ["update"] }
+    path "transit/rewrap/novanas-chunk-master"      { capabilities = ["update"] }
+
+  novanas-storage-agent.hcl: |-
+    # Per-node chunk agent: unwraps the master key (no rotate), reads
+    # per-bucket data-key envelopes. Read-only everywhere.
+    path "novanas/chunk-engine/master-key"      { capabilities = ["read"] }
+    path "novanas/buckets/+/dk"                 { capabilities = ["read"] }
+    path "novanas/datasets/+/+/dk"              { capabilities = ["read"] }
+    path "transit/decrypt/novanas-chunk-master" { capabilities = ["update"] }
+
+  novanas-s3gw.hcl: |-
+    # S3 gateway: reads per-bucket data keys, manages SSE-KMS KmsKey material.
+    path "novanas/buckets/+/dk"       { capabilities = ["read"] }
+    path "novanas/buckets/+/config"   { capabilities = ["read", "list"] }
+    path "novanas/kms/keys/*"         { capabilities = ["create", "read", "update", "list"] }
+    path "transit/encrypt/novanas-kms-*" { capabilities = ["update"] }
+    path "transit/decrypt/novanas-kms-*" { capabilities = ["update"] }
+
   novanas-operators.hcl: |-
-    path "secret/data/novanas/operators/*" { capabilities = ["read", "create", "update"] }
-    path "transit/encrypt/novanas-*"       { capabilities = ["update"] }
-    path "transit/decrypt/novanas-*"       { capabilities = ["update"] }
-    # Issue per-tenant sub-keys.
-    path "transit/keys/novanas-*"          { capabilities = ["create", "read", "update"] }
-  novanas-storage.hcl: |-
-    path "secret/data/novanas/storage/*"   { capabilities = ["read"] }
-    # Envelope-encrypt per-pool data keys via Transit.
-    path "transit/encrypt/novanas-pool-*"  { capabilities = ["update"] }
-    path "transit/decrypt/novanas-pool-*"  { capabilities = ["update"] }
-  # TODO(Wave 5+): per-tenant / per-dataset policies generated at runtime.
+    # Controller-manager SA: provisions DKs for new buckets/datasets,
+    # mints per-tenant transit keys, issues PKI certs, writes per-user
+    # policies (templated from novanas-user-tmpl.hcl).
+    path "novanas/*"                          { capabilities = ["create", "read", "update", "delete", "list"] }
+    path "transit/keys/novanas-*"             { capabilities = ["create", "read", "update", "list"] }
+    path "transit/encrypt/novanas-*"          { capabilities = ["update"] }
+    path "transit/decrypt/novanas-*"          { capabilities = ["update"] }
+    path "pki/issue/novanas-*"                { capabilities = ["update"] }
+    path "pki/roles/novanas-*"                { capabilities = ["create", "read", "update"] }
+    path "sys/policies/acl/novanas-user-*"    { capabilities = ["create", "read", "update", "delete"] }
+    path "auth/kubernetes/role/novanas-user-*" { capabilities = ["create", "read", "update", "delete"] }
+
+  novanas-user-tmpl.hcl: |-
+    # REFERENCE TEMPLATE — not applied directly.
+    #
+    # The tenant operator renders this per-user by substituting {USER_UID}
+    # and writes the result as `novanas-user-<uid>`. Each per-user token is
+    # scoped to exactly that user's namespace and datasets. See the
+    # operator's pkg/openbao/user_policy.go for the renderer.
+    #
+    # Substitution tokens:
+    #   {USER_UID}  — the user's stable UUID
+    #   {USER_NS}   — novanas-user-<uid>
+    #
+    # path "novanas/users/{USER_UID}/*"                   { capabilities = ["read"] }
+    # path "novanas/datasets/{USER_NS}/+/dk"              { capabilities = ["read"] }
+    # path "novanas/apps/{USER_NS}/*"                     { capabilities = ["read"] }
+    # path "transit/encrypt/novanas-user-{USER_UID}"      { capabilities = ["update"] }
+    # path "transit/decrypt/novanas-user-{USER_UID}"      { capabilities = ["update"] }
+    # path "pki/issue/novanas-user-{USER_UID}"            { capabilities = ["update"] }
 {{- end }}

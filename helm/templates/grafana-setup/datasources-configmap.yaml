@@ -1,9 +1,15 @@
+{{/*
+Grafana datasources provisioned via the sidecar discovery. Picked up when
+labeled `grafana_datasource=1` (matches the selector configured in the
+observability subchart values).
+*/}}
 {{- if and .Values.observability.enabled .Values.observability.grafana.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: novanas-grafana-datasources
-  namespace: {{ include "novanas.systemNamespace" . }}
+  namespace: {{ $ns }}
   labels:
     {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana-setup") | nindent 4 }}
     grafana_datasource: "1"
@@ -11,14 +17,53 @@ data:
   datasources.yaml: |-
     apiVersion: 1
     datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        access: proxy
+        url: http://novanas-observability-kube-prom-prometheus.{{ $ns }}.svc:9090
+        isDefault: true
+        jsonData:
+          timeInterval: 30s
+          httpMethod: POST
+          manageAlerts: true
       - name: Loki
         type: loki
+        uid: loki
         access: proxy
-        url: http://novanas-loki.{{ include "novanas.systemNamespace" . }}.svc:3100
+        url: http://novanas-loki.{{ $ns }}.svc:3100
         isDefault: false
+        jsonData:
+          maxLines: 1000
       - name: Tempo
         type: tempo
+        uid: tempo
         access: proxy
-        url: http://novanas-tempo.{{ include "novanas.systemNamespace" . }}.svc:3200
+        url: http://novanas-tempo.{{ $ns }}.svc:3200
         isDefault: false
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+          serviceMap:
+            datasourceUid: prometheus
+      - name: Alertmanager
+        type: alertmanager
+        uid: alertmanager
+        access: proxy
+        url: http://novanas-observability-kube-prom-alertmanager.{{ $ns }}.svc:9093
+        jsonData:
+          implementation: prometheus
+      - name: Audit-Postgres
+        type: postgres
+        uid: audit_postgres
+        access: proxy
+        url: novanas-postgresql.{{ $ns }}.svc:5432
+        user: novanas_audit_ro
+        database: novanas_audit
+        jsonData:
+          sslmode: disable
+          postgresVersion: 1500
+          timescaledb: false
+        secureJsonData:
+          password: ${AUDIT_DB_PASSWORD}
 {{- end }}

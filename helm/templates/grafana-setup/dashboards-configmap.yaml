@@ -1,32 +1,36 @@
 {{/*
-Grafana dashboard provisioning via the sidecar. The label matches the
-discovery selector configured on the kube-prometheus-stack chart.
-TODO(Wave 5+): import the real NovaNas dashboard JSONs from docs/12.
+Top-level enabler for NovaNas Grafana dashboards.
+
+Individual dashboards are in sibling files named dashboard-*.yaml in this
+directory. Each renders a single ConfigMap labeled `grafana_dashboard=1`
+for sidecar provisioning. Enabling/disabling a dashboard is controlled
+per-slug via `.Values.grafana.dashboards.list`.
+
+This file only emits an informational marker ConfigMap listing which
+dashboards shipped; Grafana ignores ConfigMaps without the sidecar label.
 */}}
-{{- if and .Values.observability.enabled .Values.observability.grafana.enabled }}
+{{- if and .Values.observability.enabled .Values.observability.grafana.enabled (default true .Values.grafana.dashboards.enabled) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: novanas-grafana-dashboards
+  name: novanas-grafana-dashboards-index
   namespace: {{ include "novanas.systemNamespace" . }}
   labels:
     {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana-setup") | nindent 4 }}
-    grafana_dashboard: "1"
 data:
-  novanas-overview.json: |-
-    {
-      "title": "NovaNas Overview",
-      "uid": "novanas-overview",
-      "schemaVersion": 36,
-      "panels": [],
-      "templating": { "list": [] }
-    }
-  novanas-storage.json: |-
-    {
-      "title": "NovaNas Storage",
-      "uid": "novanas-storage",
-      "schemaVersion": 36,
-      "panels": [],
-      "templating": { "list": [] }
-    }
+  dashboards.txt: |-
+    {{- range (default (list
+        "system-overview"
+        "storage-pools"
+        "storage-disks"
+        "storage-datasets"
+        "protocols"
+        "apps"
+        "vms"
+        "network"
+        "cluster"
+        "security"
+      ) .Values.grafana.dashboards.list) }}
+    {{ . }}
+    {{- end }}
 {{- end }}

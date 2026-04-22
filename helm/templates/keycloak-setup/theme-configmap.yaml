@@ -1,8 +1,17 @@
 {{/*
-NovaNas theme. Shipped as a ConfigMap mounted by the Keycloak StatefulSet
-as an extra volume; the post-install job kicks Keycloak to pick it up.
+NovaNas Keycloak login theme. Minimal overlay that inherits from the base
+`keycloak` theme and applies NovaNas branding via CSS + a handful of
+localized strings.
 
-TODO(Wave 5+): generate theme files from packages/ui design tokens.
+Delivery approach: ConfigMap mounted into the Keycloak pod at
+/opt/keycloak/themes/novanas/. The Bitnami Keycloak chart's
+`extraVolumeMounts` is configured in helm/values.yaml under `keycloak.extraVolumes`
+by operators (see docs/10). The post-install Job does NOT upload theme files
+via the Admin REST API because the Keycloak 24+ Admin API does not expose a
+theme upload endpoint; pod-mounted theme files is the only reliable path.
+
+Keys below map to file paths under /opt/keycloak/themes/novanas/.
+ConfigMap mount with `subPath` reproduces the directory layout.
 */}}
 {{- if .Values.keycloak.enabled }}
 apiVersion: v1
@@ -13,11 +22,115 @@ metadata:
   labels:
     {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak-setup") | nindent 4 }}
 data:
-  theme.properties: |-
-    parent=keycloak.v2
+  # /opt/keycloak/themes/novanas/login/theme.properties
+  login__theme.properties: |-
+    parent=keycloak
     import=common/keycloak
-    styles=css/novanas.css
-  novanas.css: |-
-    /* Placeholder. Real theme assets will be wired in from the design system. */
-    :root { --nn-brand: #3b82f6; }
+    styles=css/login.css css/novanas.css
+    meta=viewport==width=device-width,initial-scale=1
+    kcLogoLink=https://novanas.io
+    kcLogoIdP-novanas=fa fa-shield
+
+  # /opt/keycloak/themes/novanas/login/resources/css/novanas.css
+  login__resources__css__novanas.css: |-
+    /*
+     * NovaNas login branding. Pulls tokens from design-files/styles.css
+     * (dark palette; blue accent). Kept intentionally small — only the
+     * variables and a handful of overrides. Base keycloak theme supplies
+     * layout and component structure.
+     */
+    :root {
+      --nn-bg:             #0b1220;
+      --nn-surface:        #121a2e;
+      --nn-surface-hi:     #1a2440;
+      --nn-border:         #243056;
+      --nn-text:           #e8ecf5;
+      --nn-text-muted:     #9aa3bf;
+      --nn-brand:          #3b82f6;
+      --nn-brand-hover:    #2563eb;
+      --nn-error:          #ef4444;
+      --nn-success:        #10b981;
+      --nn-radius:         8px;
+      --nn-radius-sm:      4px;
+    }
+
+    html, body,
+    .login-pf body,
+    .login-pf {
+      background: var(--nn-bg) !important;
+      color: var(--nn-text) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .card-pf {
+      background: var(--nn-surface) !important;
+      border: 1px solid var(--nn-border) !important;
+      border-radius: var(--nn-radius) !important;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4) !important;
+      color: var(--nn-text) !important;
+    }
+
+    #kc-header, #kc-header-wrapper {
+      color: var(--nn-text) !important;
+      padding-top: 24px;
+      padding-bottom: 24px;
+      letter-spacing: 0.05em;
+    }
+
+    .form-control {
+      background: var(--nn-surface-hi) !important;
+      border: 1px solid var(--nn-border) !important;
+      border-radius: var(--nn-radius-sm) !important;
+      color: var(--nn-text) !important;
+      padding: 10px 12px;
+    }
+
+    .form-control:focus {
+      border-color: var(--nn-brand) !important;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.25) !important;
+      outline: none !important;
+    }
+
+    label { color: var(--nn-text-muted) !important; }
+    a, a:hover { color: var(--nn-brand) !important; }
+
+    .btn-primary {
+      background: var(--nn-brand) !important;
+      border-color: var(--nn-brand) !important;
+      border-radius: var(--nn-radius-sm) !important;
+      font-weight: 600;
+      padding: 10px 16px;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+      background: var(--nn-brand-hover) !important;
+      border-color: var(--nn-brand-hover) !important;
+    }
+
+    .alert-error {
+      background: rgba(239,68,68,0.10) !important;
+      border: 1px solid var(--nn-error) !important;
+      color: var(--nn-text) !important;
+    }
+    .alert-success {
+      background: rgba(16,185,129,0.10) !important;
+      border: 1px solid var(--nn-success) !important;
+      color: var(--nn-text) !important;
+    }
+
+    #kc-locale ul { background: var(--nn-surface-hi) !important; }
+
+  # /opt/keycloak/themes/novanas/login/messages/messages_en.properties
+  login__messages__messages_en.properties: |-
+    # NovaNas-branded strings. Override only what's user-facing on the
+    # login screen; everything else falls back to the base keycloak theme.
+    loginAccountTitle=Sign in to NovaNas
+    loginTitle=Sign in to NovaNas
+    loginTitleHtml=Sign in to <strong>NovaNas</strong>
+    doLogIn=Sign in
+    doForgotPassword=Forgot password?
+    emailForgotTitle=Reset your NovaNas password
+    backToLogin=&laquo; Back to sign in
+    noAccount=New to NovaNas?
+    registerWithTitle=Register with NovaNas
+    copyrightHtml=&copy; NovaNas
 {{- end }}

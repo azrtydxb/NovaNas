@@ -1,0 +1,37 @@
+{{- if eq (include "novanas.dashboard.enabled" (dict "ctx" . "slug" "cluster")) "true" }}
+---
+{{- $json := `{
+  "uid": "novanas-cluster",
+  "title": "NovaNas / Cluster (k3s)",
+  "tags": ["novanas", "cluster", "k3s"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [ { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "prometheus" } } ] },
+  "panels": [
+    { "id": 1, "type": "stat", "title": "API server up", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"apiserver\"}" }] },
+    { "id": 2, "type": "stat", "title": "etcd members", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "count(etcd_server_has_leader)" }] },
+    { "id": 3, "type": "stat", "title": "Nodes Ready", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})" }] },
+    { "id": 4, "type": "stat", "title": "Pods total", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(kube_pod_info)" }] },
+    { "id": 5, "type": "timeseries", "title": "API request latency (p99)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum by (le,verb)(rate(apiserver_request_duration_seconds_bucket[5m])))", "legendFormat": "VERB_PLACEHOLDER" }],
+      "fieldConfig": { "defaults": { "unit": "s" } } },
+    { "id": 6, "type": "timeseries", "title": "API request rate", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "sum by (verb)(rate(apiserver_request_total[5m]))", "legendFormat": "VERB_PLACEHOLDER" }] },
+    { "id": 7, "type": "timeseries", "title": "etcd leader changes", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [{ "expr": "increase(etcd_server_leader_changes_seen_total[10m])", "legendFormat": "leader changes" }] },
+    { "id": 8, "type": "timeseries", "title": "etcd DB size", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{ "expr": "etcd_mvcc_db_total_size_in_bytes", "legendFormat": "db" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } } },
+    { "id": 9, "type": "timeseries", "title": "Workqueue depth", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "targets": [{ "expr": "workqueue_depth", "legendFormat": "NAME_PLACEHOLDER" }] }
+  ]
+}` }}
+{{- $json = $json | replace "VERB_PLACEHOLDER" "{{ verb }}" | replace "NAME_PLACEHOLDER" "{{ name }}" }}
+{{ include "novanas.dashboard.cm" (dict "ctx" . "slug" "cluster" "json" $json) }}
+{{- end }}

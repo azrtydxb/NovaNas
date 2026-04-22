@@ -1,0 +1,40 @@
+{{- if eq (include "novanas.dashboard.enabled" (dict "ctx" . "slug" "apps")) "true" }}
+---
+{{- $json := `{
+  "uid": "novanas-apps",
+  "title": "NovaNas / Apps",
+  "tags": ["novanas", "apps"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "prometheus" } },
+      { "name": "namespace", "label": "Namespace", "type": "query", "datasource": "${DS_PROMETHEUS}", "query": "label_values(kube_pod_info{namespace=~\"novanas-(user|apps).*\"}, namespace)", "refresh": 2, "includeAll": true, "multi": true },
+      { "name": "app", "label": "App", "type": "query", "datasource": "${DS_PROMETHEUS}", "query": "label_values(kube_pod_info{namespace=~\"$namespace\"}, pod)", "refresh": 2, "includeAll": true, "multi": true }
+    ]
+  },
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Running pods", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(kube_pod_status_phase{namespace=~\"$namespace\",phase=\"Running\"})" }] },
+    { "id": 2, "type": "stat", "title": "Failed pods", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(kube_pod_status_phase{namespace=~\"$namespace\",phase=\"Failed\"})" }] },
+    { "id": 3, "type": "stat", "title": "Restarts (1h)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}[1h]))" }] },
+    { "id": 4, "type": "stat", "title": "CPU (cores)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[5m]))" }] },
+    { "id": 5, "type": "timeseries", "title": "Per-app CPU", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "sum by (pod)(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"$app\"}[5m]))", "legendFormat": "POD_PLACEHOLDER" }] },
+    { "id": 6, "type": "timeseries", "title": "Per-app memory", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "sum by (pod)(container_memory_working_set_bytes{namespace=~\"$namespace\",pod=~\"$app\"})", "legendFormat": "POD_PLACEHOLDER" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } } },
+    { "id": 7, "type": "timeseries", "title": "Restart counts", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "targets": [{ "expr": "rate(kube_pod_container_status_restarts_total{namespace=~\"$namespace\",pod=~\"$app\"}[5m])", "legendFormat": "POD_PLACEHOLDER" }] },
+    { "id": 8, "type": "table", "title": "Pods by phase", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "targets": [{ "expr": "sum by (namespace,pod,phase)(kube_pod_status_phase{namespace=~\"$namespace\"})", "format": "table", "instant": true }] }
+  ]
+}` }}
+{{- $json = $json | replace "POD_PLACEHOLDER" "{{ pod }}" }}
+{{ include "novanas.dashboard.cm" (dict "ctx" . "slug" "apps" "json" $json) }}
+{{- end }}

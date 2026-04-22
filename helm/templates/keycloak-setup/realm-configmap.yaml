@@ -1,10 +1,21 @@
 {{/*
-Minimal novanas realm definition. The post-install Job imports this JSON
-after Keycloak is ready. Scope: one realm, two clients (ui public, api
-confidential), two default roles. Operator-driven updates take over after
-first boot.
+NovaNas realm definition. Production-shaped JSON imported at first boot by
+the post-install Job via `kcadm create realms -f`. The realm is idempotent —
+re-imports are skipped if the realm already exists.
+
+Scope:
+- One realm: `novanas`
+- Four clients: novanas-ui, novanas-api, novanas-cli, grafana
+- Four realm roles: admin, user, viewer, share-only
+- Three groups: /admins, /users, /viewers
+- One bootstrap user: admin (password from OpenBao via env substitution)
+- Password policy, brute-force protection, WebAuthn sub-flow for admins
+
+Additional users are created at runtime via the NovaNas UI and the API
+calling Keycloak's Admin REST API with the `novanas-api` service account.
 */}}
 {{- if .Values.keycloak.enabled }}
+{{- $hostname := .Values.global.publicHostname | default (printf "novanas.%s" .Values.global.mdnsDomain) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -18,36 +29,260 @@ data:
       "realm": "novanas",
       "enabled": true,
       "displayName": "NovaNas",
+      "displayNameHtml": "<strong>NovaNas</strong>",
       "registrationAllowed": false,
+      "registrationEmailAsUsername": false,
+      "rememberMe": true,
+      "verifyEmail": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
       "resetPasswordAllowed": true,
       "editUsernameAllowed": false,
+      "sslRequired": "external",
       "loginTheme": "novanas",
-      "accountTheme": "novanas",
+      "accountTheme": "keycloak.v2",
       "adminTheme": "keycloak.v2",
-      "emailTheme": "novanas",
+      "emailTheme": "keycloak",
+      "internationalizationEnabled": true,
+      "supportedLocales": ["en"],
+      "defaultLocale": "en",
+      "passwordPolicy": "length(12) and digits(1) and specialChars(1) and upperCase(1) and notUsername(undefined) and passwordHistory(5)",
+      "bruteForceProtected": true,
+      "permanentLockout": false,
+      "maxFailureWaitSeconds": 900,
+      "minimumQuickLoginWaitSeconds": 60,
+      "waitIncrementSeconds": 60,
+      "quickLoginCheckMilliSeconds": 1000,
+      "maxDeltaTimeSeconds": 43200,
+      "failureFactor": 10,
+      "accessTokenLifespan": 900,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "offlineSessionIdleTimeout": 2592000,
+      "smtpServer": {},
       "roles": {
         "realm": [
-          { "name": "admin",  "description": "NovaNas administrator" },
-          { "name": "user",   "description": "NovaNas end user" }
+          { "name": "admin",      "description": "NovaNas administrator — full access to all tenants and system settings" },
+          { "name": "user",       "description": "NovaNas end user — access their own namespace" },
+          { "name": "viewer",     "description": "Read-only access across the user's scope" },
+          { "name": "share-only", "description": "Consumes SMB/NFS only; no UI access" }
         ]
       },
-      "defaultRoles": ["user"],
+      "defaultRole": {
+        "name": "user",
+        "composite": false,
+        "clientRole": false
+      },
+      "groups": [
+        {
+          "name": "admins",
+          "path": "/admins",
+          "realmRoles": ["admin"]
+        },
+        {
+          "name": "users",
+          "path": "/users",
+          "realmRoles": ["user"]
+        },
+        {
+          "name": "viewers",
+          "path": "/viewers",
+          "realmRoles": ["viewer"]
+        }
+      ],
+      "defaultGroups": ["/users"],
+      "clientScopes": [
+        {
+          "name": "novanas:roles",
+          "description": "Maps realm roles into the `groups` claim consumed by novanas-api",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "true",
+            "display.on.consent.screen": "false"
+          },
+          "protocolMappers": [
+            {
+              "name": "realm-roles-to-groups",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-realm-role-mapper",
+              "consentRequired": false,
+              "config": {
+                "multivalued": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "groups",
+                "jsonType.label": "String"
+              }
+            }
+          ]
+        }
+      ],
+      "defaultDefaultClientScopes": [
+        "novanas:roles",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
       "clients": [
         {
           "clientId": "novanas-ui",
+          "name": "NovaNas UI",
+          "description": "Public SPA client with PKCE",
+          "enabled": true,
           "publicClient": true,
           "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
           "directAccessGrantsEnabled": false,
-          "redirectUris": ["https://*/*"],
-          "webOrigins": ["+"]
+          "serviceAccountsEnabled": false,
+          "redirectUris": ["https://{{ $hostname }}/*", "https://*.{{ $hostname }}/*"],
+          "webOrigins": ["+"],
+          "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": "https://{{ $hostname }}/*"
+          },
+          "defaultClientScopes": ["novanas:roles", "profile", "email", "roles", "web-origins"],
+          "optionalClientScopes": ["offline_access"]
         },
         {
           "clientId": "novanas-api",
+          "name": "NovaNas API",
+          "description": "Confidential backend client; service account with audience scoping",
+          "enabled": true,
           "publicClient": false,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "${NOVANAS_API_CLIENT_SECRET}",
+          "standardFlowEnabled": false,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
           "serviceAccountsEnabled": true,
+          "attributes": {
+            "access.token.signed.response.alg": "RS256",
+            "use.refresh.tokens": "false"
+          },
+          "defaultClientScopes": ["novanas:roles", "roles"],
+          "protocolMappers": [
+            {
+              "name": "audience-novanas-api",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "config": {
+                "included.client.audience": "novanas-api",
+                "id.token.claim": "false",
+                "access.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "novanas-cli",
+          "name": "NovaNas CLI",
+          "description": "Public client for the `nova` CLI; OAuth2 device flow only",
+          "enabled": true,
+          "publicClient": true,
           "standardFlowEnabled": false,
           "directAccessGrantsEnabled": false,
-          "secret": "REPLACE_ON_BOOT"
+          "serviceAccountsEnabled": false,
+          "attributes": {
+            "oauth2.device.authorization.grant.enabled": "true",
+            "oauth2.device.polling.interval": "5"
+          },
+          "defaultClientScopes": ["novanas:roles", "profile", "email", "roles"]
+        },
+        {
+          "clientId": "grafana",
+          "name": "Grafana",
+          "description": "Grafana OIDC integration",
+          "enabled": true,
+          "publicClient": false,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "${GRAFANA_CLIENT_SECRET}",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": false,
+          "redirectUris": ["https://grafana.{{ $hostname }}/login/generic_oauth"],
+          "webOrigins": ["https://grafana.{{ $hostname }}"],
+          "defaultClientScopes": ["novanas:roles", "profile", "email", "roles"]
+        }
+      ],
+      "users": [
+        {
+          "username": "admin",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "NovaNas",
+          "lastName": "Administrator",
+          "email": "admin@novanas.local",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "${ADMIN_PASSWORD}",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["admin", "user"],
+          "groups": ["/admins"]
+        }
+      ],
+      "authenticationFlows": [
+        {
+          "alias": "novanas-browser",
+          "description": "Browser flow with PKCE + optional WebAuthn",
+          "providerId": "basic-flow",
+          "topLevel": true,
+          "builtIn": false,
+          "authenticationExecutions": [
+            { "authenticator": "auth-cookie",            "requirement": "ALTERNATIVE", "priority": 10, "userSetupAllowed": false, "autheticatorFlow": false },
+            { "authenticator": "identity-provider-redirector", "requirement": "ALTERNATIVE", "priority": 20, "userSetupAllowed": false, "autheticatorFlow": false },
+            { "requirement": "ALTERNATIVE", "priority": 30, "flowAlias": "novanas-forms", "userSetupAllowed": false, "autheticatorFlow": true }
+          ]
+        },
+        {
+          "alias": "novanas-forms",
+          "description": "Username+password, then WebAuthn (required for admins)",
+          "providerId": "basic-flow",
+          "topLevel": false,
+          "builtIn": false,
+          "authenticationExecutions": [
+            { "authenticator": "auth-username-password-form", "requirement": "REQUIRED",  "priority": 10, "autheticatorFlow": false },
+            { "requirement": "CONDITIONAL", "priority": 20, "flowAlias": "novanas-webauthn", "autheticatorFlow": true }
+          ]
+        },
+        {
+          "alias": "novanas-webauthn",
+          "description": "WebAuthn sub-flow — required for admins, optional for users",
+          "providerId": "basic-flow",
+          "topLevel": false,
+          "builtIn": false,
+          "authenticationExecutions": [
+            { "authenticator": "conditional-user-role", "requirement": "REQUIRED", "priority": 10, "authenticatorConfig": "novanas-admin-role", "autheticatorFlow": false },
+            { "authenticator": "webauthn-authenticator", "requirement": "REQUIRED", "priority": 20, "autheticatorFlow": false }
+          ]
+        }
+      ],
+      "authenticatorConfig": [
+        {
+          "alias": "novanas-admin-role",
+          "config": { "condUserRole": "admin" }
+        }
+      ],
+      "browserFlow": "novanas-browser",
+      "attributes": {
+        "webAuthnPolicyRpEntityName": "NovaNas",
+        "webAuthnPolicyRpId": "{{ $hostname }}",
+        "webAuthnPolicySignatureAlgorithms": "ES256,RS256",
+        "webAuthnPolicyUserVerificationRequirement": "preferred",
+        "webAuthnPolicyAttestationConveyancePreference": "none",
+        "webAuthnPolicyRequireResidentKey": "not specified"
+      },
+      "requiredActions": [
+        {
+          "alias": "webauthn-register",
+          "name": "Webauthn Register",
+          "providerId": "webauthn-register",
+          "enabled": true,
+          "defaultAction": false,
+          "priority": 70
         }
       ]
     }

@@ -246,6 +246,13 @@ discovery:
 
 keycloak:
   enabled: true
+  # NovaNas realm import. Controls post-install-job.yaml + realm-configmap.yaml.
+  realm:
+    enabled: true
+    name: novanas
+    # Group assigned the `admin` realm role. Used by the operator when
+    # promoting users to admins.
+    adminGroup: admins
   auth:
     adminUser: admin
     # Empty → the post-install job generates and stores the password in OpenBao.
@@ -268,6 +275,9 @@ keycloak:
 
 openbao:
   enabled: true
+  # Policy provisioning. Controls policies-configmap.yaml + init-job.yaml.
+  policies:
+    enabled: true
   server:
     dataStorage:
       enabled: false
@@ -415,17 +425,65 @@ novaedge:
 # Meta: alerts, network policies, ingress
 # -----------------------------------------------------------------------------
 
+# NovaNas-owned Grafana dashboard provisioning. The Grafana sidecar in the
+# observability subchart picks up ConfigMaps labeled `grafana_dashboard=1`;
+# this section controls which dashboards the umbrella chart ships.
+grafana:
+  dashboards:
+    enabled: true
+    # Empty list means "ship all". Override to a subset in channel overlays.
+    list:
+      - system-overview
+      - storage-pools
+      - storage-disks
+      - storage-datasets
+      - protocols
+      - apps
+      - vms
+      - network
+      - cluster
+      - security
+
 alerts:
   enabled: true
   defaults:
-    # Names mirror rule IDs in docs/12-observability.md.
+    # Names mirror rule IDs in docs/12-observability.md. Any missing key
+    # defaults to true via `default true` in the template.
+    # Disk / filesystem
     diskSmartFailing: true
+    diskFull90: true
+    diskFull95: true
+    # Pool
     poolDegraded: true
     poolNearFull: true
+    poolRebuildSlow: true
+    poolRebuildFailed: true
     metadataQuorumLost: true
+    storageEngineUnhealthy: true
+    # Scrub
+    scrubFailed: true
+    scrubErrors: true
+    # Data protection
+    snapshotMissed: true
+    replicationFailed: true
+    replicationBehind: true
+    cloudBackupFailed: true
+    # Node
+    nodeHighCPU: true
+    nodeHighMemory: true
+    nodeHighTemperature: true
+    # Platform
+    certificateExpirySoon: true
+    openbaoSealed: true
+    openbaoUnhealthy: true
+    keycloakUnhealthy: true
     apiErrorRateHigh: true
     operatorReconcileBacklog: true
-    certificateExpirySoon: true
+    updateAvailable: true
+    # Security
+    securityFailedLogin: true
+    security2faBruteForce: true
+    securityAdminAction: true
 
 networkPolicy:
   enabled: true

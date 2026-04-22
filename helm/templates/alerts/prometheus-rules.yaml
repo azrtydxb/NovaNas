@@ -1,8 +1,13 @@
 {{/*
-Default-enabled Prometheus alert rules. Toggle individual rules via
-.Values.alerts.defaults.<ruleID>.
+NovaNas Prometheus alert rules. Full set per docs/12-observability.md.
+
+Each rule is individually toggleable via .Values.alerts.defaults.<ruleID>.
+Severities: critical (page), warning (Alertmanager route to chat),
+info (visible in Grafana only, no notification).
 */}}
 {{- if and .Values.alerts.enabled .Values.observability.enabled }}
+{{- $d := .Values.alerts.defaults }}
+{{- $runbook := "https://novanas.io/docs/runbooks/" }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -13,79 +18,311 @@ metadata:
     release: novanas-observability
 spec:
   groups:
-    - name: novanas.storage
+    - name: novanas.storage.disk
       interval: 30s
       rules:
-        {{- if .Values.alerts.defaults.diskSmartFailing }}
+        {{- if default true $d.diskSmartFailing }}
         - alert: NovaNasDiskSmartFailing
           expr: novanas_disk_smart_failing > 0
           for: 5m
-          labels: { severity: critical, component: storage }
+          labels: { severity: critical, component: storage, team: storage }
           annotations:
             summary: "Disk SMART indicates imminent failure"
-            description: "Disk {{`{{ $labels.disk }}`}} on node {{`{{ $labels.node }}`}} is reporting SMART failure."
+            description: "Disk {{`{{ $labels.disk }}`}} on node {{`{{ $labels.node }}`}} reports SMART failure."
+            runbook_url: "{{ $runbook }}disk-smart-failing"
         {{- end }}
-        {{- if .Values.alerts.defaults.poolDegraded }}
+        {{- if default true $d.diskFull90 }}
+        - alert: NovaNasDiskFull90
+          expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 0.90
+          for: 10m
+          labels: { severity: warning, component: storage, team: storage }
+          annotations:
+            summary: "Filesystem over 90% full"
+            description: "{{`{{ $labels.mountpoint }}`}} on {{`{{ $labels.instance }}`}} is over 90% full."
+            runbook_url: "{{ $runbook }}disk-full"
+        {{- end }}
+        {{- if default true $d.diskFull95 }}
+        - alert: NovaNasDiskFull95
+          expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 0.95
+          for: 5m
+          labels: { severity: critical, component: storage, team: storage }
+          annotations:
+            summary: "Filesystem over 95% full"
+            description: "{{`{{ $labels.mountpoint }}`}} on {{`{{ $labels.instance }}`}} is over 95% full — write failures imminent."
+            runbook_url: "{{ $runbook }}disk-full"
+        {{- end }}
+
+    - name: novanas.storage.pool
+      interval: 30s
+      rules:
+        {{- if default true $d.poolDegraded }}
         - alert: NovaNasPoolDegraded
           expr: novanas_pool_health{status="degraded"} == 1
           for: 2m
-          labels: { severity: warning, component: storage }
+          labels: { severity: warning, component: storage, team: storage }
           annotations:
             summary: "Storage pool is degraded"
             description: "Pool {{`{{ $labels.pool }}`}} is degraded."
+            runbook_url: "{{ $runbook }}pool-degraded"
         {{- end }}
-        {{- if .Values.alerts.defaults.poolNearFull }}
+        {{- if default true $d.poolNearFull }}
         - alert: NovaNasPoolNearFull
           expr: novanas_pool_used_ratio > 0.9
           for: 10m
-          labels: { severity: warning, component: storage }
+          labels: { severity: warning, component: storage, team: storage }
           annotations:
             summary: "Storage pool nearly full"
             description: "Pool {{`{{ $labels.pool }}`}} usage is above 90%."
+            runbook_url: "{{ $runbook }}pool-near-full"
         {{- end }}
-        {{- if .Values.alerts.defaults.metadataQuorumLost }}
+        {{- if default true $d.poolRebuildSlow }}
+        - alert: NovaNasPoolRebuildSlow
+          expr: rate(novanas_pool_rebuild_progress[10m]) < 0.0001
+          for: 1h
+          labels: { severity: warning, component: storage, team: storage }
+          annotations:
+            summary: "Pool rebuild is not progressing"
+            description: "Pool {{`{{ $labels.pool }}`}} rebuild has shown no meaningful progress for 1h."
+            runbook_url: "{{ $runbook }}pool-rebuild-slow"
+        {{- end }}
+        {{- if default true $d.poolRebuildFailed }}
+        - alert: NovaNasPoolRebuildFailed
+          expr: novanas_pool_rebuild_failed > 0
+          for: 5m
+          labels: { severity: critical, component: storage, team: storage }
+          annotations:
+            summary: "Pool rebuild failed"
+            description: "Pool {{`{{ $labels.pool }}`}} rebuild failed."
+            runbook_url: "{{ $runbook }}pool-rebuild-failed"
+        {{- end }}
+        {{- if default true $d.metadataQuorumLost }}
         - alert: NovaNasMetadataQuorumLost
           expr: novanas_meta_quorum_ok == 0
           for: 1m
-          labels: { severity: critical, component: storage }
+          labels: { severity: critical, component: storage, team: storage }
           annotations:
             summary: "Metadata quorum lost"
             description: "The storage metadata service has lost quorum."
+            runbook_url: "{{ $runbook }}metadata-quorum"
         {{- end }}
-    - name: novanas.api
+        {{- if default true $d.storageEngineUnhealthy }}
+        - alert: NovaNasStorageEngineUnhealthy
+          expr: up{job=~"novanas-storage-(meta|agent)"} == 0
+          for: 5m
+          labels: { severity: critical, component: storage, team: storage }
+          annotations:
+            summary: "Storage engine unhealthy"
+            description: "Storage component {{`{{ $labels.job }}`}} on {{`{{ $labels.instance }}`}} is down."
+            runbook_url: "{{ $runbook }}storage-engine"
+        {{- end }}
+
+    - name: novanas.storage.scrub
       interval: 30s
       rules:
-        {{- if .Values.alerts.defaults.apiErrorRateHigh }}
+        {{- if default true $d.scrubFailed }}
+        - alert: NovaNasScrubFailed
+          expr: novanas_pool_scrub_failed > 0
+          for: 5m
+          labels: { severity: warning, component: storage, team: storage }
+          annotations:
+            summary: "Scrub failed"
+            description: "Scrub on pool {{`{{ $labels.pool }}`}} failed."
+            runbook_url: "{{ $runbook }}scrub-failed"
+        {{- end }}
+        {{- if default true $d.scrubErrors }}
+        - alert: NovaNasScrubErrors
+          expr: novanas_pool_scrub_errors > 0
+          for: 0m
+          labels: { severity: warning, component: storage, team: storage }
+          annotations:
+            summary: "Scrub found errors"
+            description: "Scrub on pool {{`{{ $labels.pool }}`}} found {{`{{ $value }}`}} error(s)."
+            runbook_url: "{{ $runbook }}scrub-errors"
+        {{- end }}
+
+    - name: novanas.data-protection
+      interval: 30s
+      rules:
+        {{- if default true $d.snapshotMissed }}
+        - alert: NovaNasSnapshotScheduleMissed
+          expr: (time() - novanas_snapshot_last_success_timestamp) > (novanas_snapshot_schedule_interval_seconds * 1.5)
+          for: 5m
+          labels: { severity: warning, component: snapshots, team: storage }
+          annotations:
+            summary: "Snapshot schedule missed"
+            description: "Snapshot schedule {{`{{ $labels.schedule }}`}} for {{`{{ $labels.dataset }}`}} has not run on time."
+            runbook_url: "{{ $runbook }}snapshot-missed"
+        {{- end }}
+        {{- if default true $d.replicationFailed }}
+        - alert: NovaNasReplicationFailed
+          expr: novanas_replication_job_failed > 0
+          for: 5m
+          labels: { severity: warning, component: replication, team: storage }
+          annotations:
+            summary: "Replication job failed"
+            description: "Replication job {{`{{ $labels.job }}`}} to {{`{{ $labels.target }}`}} failed."
+            runbook_url: "{{ $runbook }}replication-failed"
+        {{- end }}
+        {{- if default true $d.replicationBehind }}
+        - alert: NovaNasReplicationBehind
+          expr: (time() - novanas_replication_last_success_timestamp) > novanas_replication_rpo_seconds
+          for: 10m
+          labels: { severity: warning, component: replication, team: storage }
+          annotations:
+            summary: "Replication is behind its RPO"
+            description: "Replication job {{`{{ $labels.job }}`}} is behind the configured RPO."
+            runbook_url: "{{ $runbook }}replication-behind"
+        {{- end }}
+        {{- if default true $d.cloudBackupFailed }}
+        - alert: NovaNasCloudBackupFailed
+          expr: novanas_cloud_backup_job_failed > 0
+          for: 5m
+          labels: { severity: warning, component: backup, team: storage }
+          annotations:
+            summary: "CloudBackup job failed"
+            description: "CloudBackup job {{`{{ $labels.job }}`}} failed."
+            runbook_url: "{{ $runbook }}cloudbackup-failed"
+        {{- end }}
+
+    - name: novanas.node
+      interval: 30s
+      rules:
+        {{- if default true $d.nodeHighCPU }}
+        - alert: NovaNasNodeHighCPU
+          expr: 100 - (avg by (instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+          for: 15m
+          labels: { severity: warning, component: node, team: sre }
+          annotations:
+            summary: "Node CPU sustained above 90%"
+            description: "Node {{`{{ $labels.instance }}`}} CPU is above 90% for 15m."
+            runbook_url: "{{ $runbook }}node-high-cpu"
+        {{- end }}
+        {{- if default true $d.nodeHighMemory }}
+        - alert: NovaNasNodeHighMemory
+          expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+          for: 15m
+          labels: { severity: warning, component: node, team: sre }
+          annotations:
+            summary: "Node memory sustained above 90%"
+            description: "Node {{`{{ $labels.instance }}`}} memory is above 90% for 15m."
+            runbook_url: "{{ $runbook }}node-high-memory"
+        {{- end }}
+        {{- if default true $d.nodeHighTemperature }}
+        - alert: NovaNasNodeHighTemperature
+          expr: node_hwmon_temp_celsius > 75
+          for: 10m
+          labels: { severity: warning, component: node, team: sre }
+          annotations:
+            summary: "Node hardware temperature high"
+            description: "Sensor {{`{{ $labels.sensor }}`}} on {{`{{ $labels.instance }}`}} above 75°C."
+            runbook_url: "{{ $runbook }}node-high-temperature"
+        {{- end }}
+
+    - name: novanas.platform
+      interval: 30s
+      rules:
+        {{- if default true $d.certificateExpirySoon }}
+        - alert: NovaNasCertificateExpirySoon
+          expr: (novanas_certificate_expiry_timestamp - time()) / 86400 < 14
+          for: 1h
+          labels: { severity: warning, component: pki, team: platform }
+          annotations:
+            summary: "Certificate expires within 14 days"
+            description: "Certificate {{`{{ $labels.name }}`}} expires in less than 14 days."
+            runbook_url: "{{ $runbook }}cert-expiry"
+        {{- end }}
+        {{- if default true $d.openbaoSealed }}
+        - alert: NovaNasOpenBaoSealed
+          expr: openbao_core_unsealed == 0 or vault_core_unsealed == 0
+          for: 2m
+          labels: { severity: critical, component: openbao, team: platform }
+          annotations:
+            summary: "OpenBao is sealed"
+            description: "OpenBao is sealed and cannot serve requests. TPM auto-unseal may have failed."
+            runbook_url: "{{ $runbook }}openbao-sealed"
+        {{- end }}
+        {{- if default true $d.openbaoUnhealthy }}
+        - alert: NovaNasOpenBaoUnhealthy
+          expr: up{job=~".*openbao.*"} == 0
+          for: 5m
+          labels: { severity: critical, component: openbao, team: platform }
+          annotations:
+            summary: "OpenBao unhealthy"
+            description: "OpenBao target {{`{{ $labels.instance }}`}} is not scrapable."
+            runbook_url: "{{ $runbook }}openbao-unhealthy"
+        {{- end }}
+        {{- if default true $d.keycloakUnhealthy }}
+        - alert: NovaNasKeycloakUnhealthy
+          expr: up{job=~".*keycloak.*"} == 0
+          for: 5m
+          labels: { severity: critical, component: keycloak, team: platform }
+          annotations:
+            summary: "Keycloak unhealthy"
+            description: "Keycloak target {{`{{ $labels.instance }}`}} is not scrapable."
+            runbook_url: "{{ $runbook }}keycloak-unhealthy"
+        {{- end }}
+        {{- if default true $d.apiErrorRateHigh }}
         - alert: NovaNasApiErrorRateHigh
           expr: |
             sum(rate(http_requests_total{app_kubernetes_io_name="novanas",code=~"5.."}[5m]))
               / sum(rate(http_requests_total{app_kubernetes_io_name="novanas"}[5m])) > 0.05
           for: 10m
-          labels: { severity: warning, component: api }
+          labels: { severity: warning, component: api, team: platform }
           annotations:
             summary: "API 5xx error rate above 5%"
+            runbook_url: "{{ $runbook }}api-errors"
         {{- end }}
-    - name: novanas.operators
-      interval: 30s
-      rules:
-        {{- if .Values.alerts.defaults.operatorReconcileBacklog }}
+        {{- if default true $d.operatorReconcileBacklog }}
         - alert: NovaNasOperatorReconcileBacklog
           expr: controller_runtime_reconcile_queue_length > 50
           for: 10m
-          labels: { severity: warning, component: operators }
+          labels: { severity: warning, component: operators, team: platform }
           annotations:
             summary: "Operator reconcile backlog is growing"
+            runbook_url: "{{ $runbook }}operator-backlog"
         {{- end }}
-    - name: novanas.pki
+        {{- if default true $d.updateAvailable }}
+        - alert: NovaNasUpdateAvailable
+          expr: novanas_update_available == 1
+          for: 1h
+          labels: { severity: info, component: lifecycle, team: platform }
+          annotations:
+            summary: "NovaNas update available"
+            description: "Version {{`{{ $labels.version }}`}} is available on channel {{`{{ $labels.channel }}`}}."
+            runbook_url: "{{ $runbook }}update-available"
+        {{- end }}
+
+    - name: novanas.security
       interval: 30s
       rules:
-        {{- if .Values.alerts.defaults.certificateExpirySoon }}
-        - alert: NovaNasCertificateExpirySoon
-          expr: (novanas_certificate_expiry_timestamp - time()) < (14 * 24 * 3600)
-          for: 1h
-          labels: { severity: warning, component: pki }
+        {{- if default true $d.securityFailedLogin }}
+        - alert: NovaNasRepeatedFailedLogin
+          expr: rate(novanas_auth_failures_total[5m]) > 5
+          for: 5m
+          labels: { severity: warning, component: security, team: security }
           annotations:
-            summary: "Certificate expires within 14 days"
-            description: "Certificate {{`{{ $labels.name }}`}} expires soon."
+            summary: "Repeated login failures"
+            description: "Login failure rate for {{`{{ $labels.user }}`}} exceeds 5/s over 5m."
+            runbook_url: "{{ $runbook }}failed-login"
+        {{- end }}
+        {{- if default true $d.security2faBruteForce }}
+        - alert: NovaNas2FABruteForce
+          expr: rate(novanas_2fa_failures_total[5m]) > 3
+          for: 5m
+          labels: { severity: warning, component: security, team: security }
+          annotations:
+            summary: "2FA brute-force suspected"
+            description: "2FA failure rate for {{`{{ $labels.user }}`}} exceeds 3/s over 5m."
+            runbook_url: "{{ $runbook }}2fa-brute-force"
+        {{- end }}
+        {{- if default true $d.securityAdminAction }}
+        - alert: NovaNasAdminAction
+          expr: increase(novanas_admin_action_total[1m]) > 0
+          for: 0m
+          labels: { severity: info, component: security, team: security }
+          annotations:
+            summary: "Administrative action performed"
+            description: "Admin {{`{{ $labels.actor }}`}} performed {{`{{ $labels.verb }}`}} on {{`{{ $labels.target }}`}}."
+            runbook_url: "{{ $runbook }}admin-action"
         {{- end }}
 {{- end }}

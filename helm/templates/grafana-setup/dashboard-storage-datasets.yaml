@@ -1,0 +1,47 @@
+{{- if eq (include "novanas.dashboard.enabled" (dict "ctx" . "slug" "storage-datasets")) "true" }}
+---
+{{- $json := `{
+  "uid": "novanas-storage-datasets",
+  "title": "NovaNas / Storage — Datasets & Buckets",
+  "tags": ["novanas", "storage", "datasets"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "prometheus" } },
+      { "name": "dataset", "label": "Dataset", "type": "query", "datasource": "${DS_PROMETHEUS}", "query": "label_values(novanas_dataset_used_bytes, dataset)", "refresh": 2, "includeAll": true, "multi": true }
+    ]
+  },
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Datasets", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "count(count by (dataset)(novanas_dataset_used_bytes))" }] },
+    { "id": 2, "type": "stat", "title": "Buckets", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "count(count by (bucket)(novanas_bucket_used_bytes))" }] },
+    { "id": 3, "type": "stat", "title": "Total dataset used", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_dataset_used_bytes)" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } } },
+    { "id": 4, "type": "stat", "title": "Total bucket used", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_bucket_used_bytes)" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } } },
+    { "id": 5, "type": "timeseries", "title": "Dataset used bytes", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "novanas_dataset_used_bytes{dataset=~\"$dataset\"}", "legendFormat": "DATASET_PLACEHOLDER" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } } },
+    { "id": 6, "type": "timeseries", "title": "Growth rate (1h)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "deriv(novanas_dataset_used_bytes{dataset=~\"$dataset\"}[1h])", "legendFormat": "DATASET_PLACEHOLDER" }],
+      "fieldConfig": { "defaults": { "unit": "Bps" } } },
+    { "id": 7, "type": "table", "title": "Top 10 hot datasets (ops/s)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [{ "expr": "topk(10, sum by (dataset)(rate(novanas_dataset_ops_total[5m])))", "format": "table", "instant": true }] },
+    { "id": 8, "type": "table", "title": "Top 10 hot buckets (req/s)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{ "expr": "topk(10, sum by (bucket)(rate(novanas_bucket_requests_total[5m])))", "format": "table", "instant": true }] },
+    { "id": 9, "type": "timeseries", "title": "Snapshot count", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [{ "expr": "novanas_dataset_snapshot_count{dataset=~\"$dataset\"}", "legendFormat": "DATASET_PLACEHOLDER" }] },
+    { "id": 10, "type": "timeseries", "title": "Quota utilization", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [{ "expr": "novanas_dataset_used_bytes{dataset=~\"$dataset\"} / novanas_dataset_quota_bytes{dataset=~\"$dataset\"}", "legendFormat": "DATASET_PLACEHOLDER" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } } }
+  ]
+}` }}
+{{- $json = $json | replace "DATASET_PLACEHOLDER" "{{ dataset }}" }}
+{{ include "novanas.dashboard.cm" (dict "ctx" . "slug" "storage-datasets" "json" $json) }}
+{{- end }}

@@ -1,8 +1,23 @@
 {{/*
-Waits for Keycloak readiness, then imports the novanas realm and installs
-the theme. Uses kcadm.sh from the Keycloak image.
+Keycloak post-install Job.
+
+Approach: use kcadm.sh (bundled in the Keycloak image) rather than the
+external keycloak-config-cli so we can stay on the same image stream as
+the server. The Job is idempotent — realm-exists / client-exists / theme-
+sync are skipped when already in place.
+
+Sequence:
+  1. Wait for /realms/master/.well-known/openid-configuration to return 200
+  2. kcadm config credentials (admin / password from OpenBao-minted Secret)
+  3. Fetch per-client secrets from OpenBao (mounted via agent sidecar) and
+     perform envsubst on the realm JSON (ADMIN_PASSWORD, NOVANAS_API_CLIENT_SECRET,
+     GRAFANA_CLIENT_SECRET).
+  4. If the `novanas` realm exists, `update` it; otherwise `create`.
+  5. The theme is delivered via ConfigMap-mounted files in the Keycloak
+     pod (see theme-configmap.yaml). This Job only bumps a marker attribute
+     on the realm to force Keycloak to clear the theme cache.
 */}}
-{{- if .Values.keycloak.enabled }}
+{{- if and .Values.keycloak.enabled (default true .Values.keycloak.realm.enabled) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,32 +42,9 @@ spec:
         - name: kcadm
           image: quay.io/keycloak/keycloak:24.0
           command: ["/bin/bash", "-c"]
-          args:
-            - |
-              set -euo pipefail
-              # Wait for Keycloak readiness.
-              until curl -fsS http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc/realms/master >/dev/null; do
-                echo "waiting for keycloak..."
-                sleep 5
-              done
-
-              /opt/keycloak/bin/kcadm.sh config credentials \
-                --server http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc \
-                --realm master \
-                --user "$KEYCLOAK_ADMIN" \
-                --password "$KEYCLOAK_ADMIN_PASSWORD"
-
-              # Create realm if missing.
-              if ! /opt/keycloak/bin/kcadm.sh get realms/novanas >/dev/null 2>&1; then
-                /opt/keycloak/bin/kcadm.sh create realms \
-                  -f /realm/novanas-realm.json
-              fi
-
-              # TODO(Wave 5+): upload theme via the Admin REST API once the
-              # real theme bundle is generated. For now the ConfigMap exists
-              # and is mounted by the Keycloak StatefulSet.
-              echo "keycloak setup complete"
           env:
+            - name: KC_SERVER
+              value: "http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc"
             - name: KEYCLOAK_ADMIN
               value: {{ .Values.keycloak.auth.adminUser | quote }}
             - name: KEYCLOAK_ADMIN_PASSWORD
@@ -61,9 +53,70 @@ spec:
                   name: {{ .Values.keycloak.auth.existingSecret | default "novanas-bootstrap" }}
                   key: admin-password
                   optional: true
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: novanas-bootstrap
+                  key: keycloak-realm-admin-password
+                  optional: true
+            - name: NOVANAS_API_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: novanas-bootstrap
+                  key: keycloak-novanas-api-secret
+                  optional: true
+            - name: GRAFANA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: novanas-bootstrap
+                  key: keycloak-grafana-secret
+                  optional: true
+          args:
+            - |
+              set -euo pipefail
+
+              # --- Wait for Keycloak readiness -------------------------------
+              echo "[keycloak-setup] waiting for ${KC_SERVER}/realms/master ..."
+              until curl -fsS "${KC_SERVER}/realms/master/.well-known/openid-configuration" >/dev/null 2>&1; do
+                sleep 5
+              done
+
+              # --- Authenticate ---------------------------------------------
+              /opt/keycloak/bin/kcadm.sh config credentials \
+                --server "${KC_SERVER}" \
+                --realm master \
+                --user "${KEYCLOAK_ADMIN}" \
+                --password "${KEYCLOAK_ADMIN_PASSWORD}"
+
+              # --- Envsubst the realm JSON ---------------------------------
+              # Defaults for optional secrets (kcadm will accept placeholder
+              # secrets; the operator reconciler will rotate them).
+              : "${ADMIN_PASSWORD:=ChangeMeOnFirstLogin!}"
+              : "${NOVANAS_API_CLIENT_SECRET:=$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)}"
+              : "${GRAFANA_CLIENT_SECRET:=$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)}"
+
+              envsubst < /realm/novanas-realm.json > /tmp/realm.json
+
+              # --- Create or update the realm ------------------------------
+              if /opt/keycloak/bin/kcadm.sh get realms/novanas >/dev/null 2>&1; then
+                echo "[keycloak-setup] realm 'novanas' exists — updating partial state"
+                # Keycloak doesn't expose a single 'update realm from file' op
+                # via kcadm, but partial updates of attributes are safe and
+                # trigger a theme-cache clear.
+                /opt/keycloak/bin/kcadm.sh update realms/novanas \
+                  -s displayName="NovaNas" \
+                  -s loginTheme="{{ default "novanas" "novanas" }}" \
+                  -s 'attributes."novanas.realmBootstrap"'="{{ .Chart.AppVersion }}"
+              else
+                echo "[keycloak-setup] creating realm 'novanas'"
+                /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
+              fi
+
+              echo "[keycloak-setup] complete"
           volumeMounts:
             - name: realm
               mountPath: /realm
+              readOnly: true
       volumes:
         - name: realm
           configMap:

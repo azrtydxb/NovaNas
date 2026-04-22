@@ -1,0 +1,49 @@
+{{- if eq (include "novanas.dashboard.enabled" (dict "ctx" . "slug" "network")) "true" }}
+---
+{{- $json := `{
+  "uid": "novanas-network",
+  "title": "NovaNas / Network",
+  "tags": ["novanas", "network"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "prometheus" } },
+      { "name": "device", "label": "Device", "type": "query", "datasource": "${DS_PROMETHEUS}", "query": "label_values(node_network_up{device!~\"lo|veth.*|docker.*\"}, device)", "refresh": 2, "includeAll": true, "multi": true }
+    ]
+  },
+  "panels": [
+    { "id": 1, "type": "stat", "title": "VIP sessions", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_novaedge_vip_sessions)" }] },
+    { "id": 2, "type": "stat", "title": "Interfaces up", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(node_network_up{device=~\"$device\"})" }] },
+    { "id": 3, "type": "stat", "title": "Overlay tunnels", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(novanas_novanet_tunnels)" }] },
+    { "id": 4, "type": "stat", "title": "Dropped packets (5m)", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(node_network_receive_drop_total{device=~\"$device\"}[5m]) + rate(node_network_transmit_drop_total{device=~\"$device\"}[5m]))" }] },
+    { "id": 5, "type": "timeseries", "title": "Bits/s per interface", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{device=~\"$device\"}[5m]) * 8",  "legendFormat": "rx DEVICE_PLACEHOLDER" },
+        { "expr": "rate(node_network_transmit_bytes_total{device=~\"$device\"}[5m]) * 8", "legendFormat": "tx DEVICE_PLACEHOLDER" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bps" } } },
+    { "id": 6, "type": "timeseries", "title": "Packets/s per interface", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "rate(node_network_receive_packets_total{device=~\"$device\"}[5m])",  "legendFormat": "rx DEVICE_PLACEHOLDER" },
+        { "expr": "rate(node_network_transmit_packets_total{device=~\"$device\"}[5m])", "legendFormat": "tx DEVICE_PLACEHOLDER" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps" } } },
+    { "id": 7, "type": "timeseries", "title": "Errors per interface", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(node_network_receive_errs_total{device=~\"$device\"}[5m])",  "legendFormat": "rx err DEVICE_PLACEHOLDER" },
+        { "expr": "rate(node_network_transmit_errs_total{device=~\"$device\"}[5m])", "legendFormat": "tx err DEVICE_PLACEHOLDER" }
+      ] },
+    { "id": 8, "type": "timeseries", "title": "VIP session rate", "datasource": "${DS_PROMETHEUS}", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{ "expr": "rate(novanas_novaedge_vip_session_total[5m])", "legendFormat": "VIP_PLACEHOLDER" }] }
+  ]
+}` }}
+{{- $json = $json | replace "DEVICE_PLACEHOLDER" "{{ device }}" | replace "VIP_PLACEHOLDER" "{{ vip }}" }}
+{{ include "novanas.dashboard.cm" (dict "ctx" . "slug" "network" "json" $json) }}
+{{- end }}
