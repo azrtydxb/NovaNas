@@ -2,6 +2,10 @@ module github.com/azrtydxb/novanas/storage
 
 go 1.25.0
 
+// Local replace so the storage module can reference the operators' CRD
+// API package directly. See docs/CRD-CONSOLIDATION-PLAN.md (#35).
+replace github.com/azrtydxb/novanas/packages/operators => ../packages/operators
+
 require (
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/dgraph-io/badger/v4 v4.9.1

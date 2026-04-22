@@ -162,6 +162,68 @@ never ride along with unrelated refactors.
 - No rename of `novanas.io/v1alpha1`. We may revisit v1 promotion
   after consolidation lands.
 
+## Executed (2026-04-22, issue #35)
+
+C2 consolidation pass outcome:
+
+- **Storage module plumbing:** added
+  `replace github.com/azrtydxb/novanas/packages/operators => ../packages/operators`
+  to `storage/go.mod`. `go mod tidy` stays clean; `go build ./...` in the
+  storage module is green. The replace directive is dormant (no storage
+  code imports the operators API package yet) but unblocks a follow-up
+  that actually performs the aliasing.
+
+- **Aliasing deferred by design:** per the plan's own risk note ("don't
+  force a consolidation that breaks semantics"), the duplicated types
+  are *not* converted into Go type aliases in this pass. On inspection
+  the two packages have diverged along semantic axes, not just extra
+  fields:
+
+  | Kind | Divergence |
+  | --- | --- |
+  | StoragePool | storage's Spec is a backend contract (NodeSelector/BackendType/FileBackend); operators' Spec is a policy contract (Tier/RecoveryRate/RebalanceOnAdd). No field overlap beyond DeviceFilter. |
+  | DeviceFilter | storage: Type/MinSize. operators: PreferredClass/MinSize/MaxSize. Different field names *and* semantics. |
+  | BlockVolume | storage: AccessMode, DataProtection, Quota. operators: Protection, Tiering. Different names, different shapes. |
+  | ErasureCodingSpec | storage uses `int`; operators uses `int32`. Go type aliases require structural identity — aliasing is impossible without a breaking field-type change on one side. |
+  | ObjectStore | operators' Spec is an empty TODO stub; aliasing would erase the concrete Endpoint/BucketPolicy fields storage consumers rely on. |
+  | SharedFilesystem | no operators twin — operators split this concept into Dataset + Share with a different export model. Not aliasable. |
+  | BackendAssignment | storage-internal, correctly kept storage-local per the original plan. |
+  | StorageQuota | storage-only; operators promotion not executed in this pass (would require regenerating operators' CRD yaml + deepcopy, out of scope for the C2 bounded refactor). |
+
+  Forcing an alias in this state would require either (a) a breaking,
+  non-additive rewrite of the operators schema (outside this agent's
+  ownership — operators internal controllers consume the existing
+  fields), or (b) breaking every storage controller that reads
+  `Spec.BackendType`, `Spec.FileBackend`, `Spec.NodeSelector`,
+  `Spec.AccessMode`, etc. Neither is acceptable.
+
+- **Doc comment in `storage/api/v1alpha1/types.go`:** the package now
+  carries a top-of-file comment summarising the divergence so future
+  maintainers don't re-open the same investigation.
+
+- **Checklist status after this pass:**
+  - [ ] Promote `StorageQuota` into operators — *deferred (needs
+        operators CRD + deepcopy regeneration)*.
+  - [ ] Re-export StoragePool / BlockVolume / ObjectStore /
+        SharedFilesystem families — *deferred; see divergence table
+        above. Requires a field-by-field reconciliation pass.*
+  - [x] `storage/go.mod` replace directive pointing at
+        `../packages/operators` — added.
+  - [x] `storage/api/v1alpha1` documented as the not-yet-consolidated
+        subset.
+  - [ ] Remaining checklist items (scheme swap, delete duplicate
+        deepcopy / CRD manifests, helm chart changes, import greps)
+        intentionally left for the follow-up pass that actually lands
+        the reconciled types.
+
+- **Recommended follow-up:** a *single focused PR per type family*
+  that first lands the needed additive changes on the operators side
+  (e.g., extending `StoragePoolSpec` with the backend-contract fields
+  currently storage-local), then converts storage's copy into an
+  alias, then removes the storage-local deepcopy entries. Bundling
+  them all in one pass is what made C2 risky; splitting by kind keeps
+  each change reviewable.
+
 ## References
 
 - Source-of-truth directory:
