@@ -1,0 +1,61 @@
+[package]
+name = "novanas-dataplane"
+version = "0.1.0"
+edition = "2021"
+description = "NovaNas SPDK-based data plane for high-performance block storage"
+license = "Apache-2.0"
+
+[features]
+default = []
+spdk-sys = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+log = "0.4"
+env_logger = "0.11"
+uuid = { version = "1", features = ["v4"] }
+reed-solomon-simd = "3"
+crc32c = "0.6"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+dashmap = "6"
+ndp = { package = "novanas-ndp", path = "ndp" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs", "macros", "net"] }
+async-trait = "0.1"
+ctrlc = "3"
+hex = "0.4"
+ring = "0.17"
+openraft = { version = "0.9", features = ["serde", "storage-v2"] }
+anyerror = "0.1"
+redb = "3"
+rand = { version = "0.8", features = ["small_rng"] }
+base64 = "0.22"
+tonic = { version = "0.13", features = ["tls-ring", "transport"] }
+prost = "0.13"
+prost-types = "0.13"
+tokio-stream = "0.1"
+async-stream = "0.3"
+threadpool = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.31"
+opentelemetry = { version = "0.30", features = ["trace"] }
+opentelemetry_sdk = { version = "0.30", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic"] }
+
+[build-dependencies]
+bindgen = "0.71"
+cc = "1"
+pkg-config = "0.3"
+tonic-build = "0.13"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

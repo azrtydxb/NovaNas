@@ -1,0 +1,5 @@
+target/
+novanas-dataplane
+*.swp
+*.swo
+.git

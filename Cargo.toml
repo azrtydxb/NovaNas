@@ -1,5 +1,10 @@
 [workspace]
-members = []
+members = [
+    "storage/dataplane",
+    "storage/dataplane/ndp",
+    "storage/dataplane/nvmeof-tcp",
+    "storage/dataplane/nbd",
+]
 resolver = "2"
 
 [workspace.package]

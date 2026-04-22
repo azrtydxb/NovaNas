@@ -1,0 +1,710 @@
+package csi
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+// mockChunkClient is a test double for ChunkClient.
+type mockChunkClient struct{}
+
+func (m *mockChunkClient) GetChunk(_ context.Context, _ string, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockChunkClient) PutChunk(_ context.Context, _ string, _ string, _ []byte) error {
+	return nil
+}
+
+// mockMounter is a test double for Mounter.
+type mockMounter struct {
+	mountErr   error
+	unmountErr error
+
+	mountSource string
+	mountTarget string
+	unmountPath string
+}
+
+func (m *mockMounter) Mount(source, target string) error {
+	m.mountSource = source
+	m.mountTarget = target
+	return m.mountErr
+}
+
+func (m *mockMounter) Unmount(target string) error {
+	m.unmountPath = target
+	return m.unmountErr
+}
+
+// noopFormatter is a DeviceFormatter that succeeds without calling any system tools.
+// Used in tests that run with a StubInitiator (directory, not a real block device).
+type noopFormatter struct{}
+
+func (noopFormatter) IsFormatted(_ context.Context, _ string) (bool, error) { return true, nil }
+func (noopFormatter) Format(_ context.Context, _, _ string) error           { return nil }
+func (noopFormatter) Mount(_ context.Context, _, _, _ string) error         { return nil }
+func (noopFormatter) Unmount(_ context.Context, _ string) error             { return nil }
+
+func newTestNodeService(nodeID string, mounter Mounter) *NodeService {
+	return NewNodeService(nodeID, &mockChunkClient{}, mounter)
+}
+
+// newTestNodeServiceWithInitiator creates a NodeService with a StubInitiator and
+// a noopFormatter so tests don't need blkid/mkfs/mount available.
+func newTestNodeServiceWithInitiator(nodeID string, mounter Mounter, initiator NVMeInitiator) *NodeService {
+	svc := NewNodeServiceWithInitiator(nodeID, &mockChunkClient{}, mounter, initiator)
+	svc.formatter = noopFormatter{}
+	return svc
+}
+
+func TestNodeGetInfo(t *testing.T) {
+	const testNodeID = "node-test-001"
+	ns := newTestNodeService(testNodeID, &mockMounter{})
+
+	resp, err := ns.NodeGetInfo(context.Background(), &csi.NodeGetInfoRequest{})
+	if err != nil {
+		t.Fatalf("NodeGetInfo returned unexpected error: %v", err)
+	}
+
+	if resp.GetNodeId() != testNodeID {
+		t.Errorf("expected node ID %q, got %q", testNodeID, resp.GetNodeId())
+	}
+
+	topo := resp.GetAccessibleTopology()
+	if topo == nil {
+		t.Fatal("expected accessible topology, got nil")
+	}
+
+	val, ok := topo.GetSegments()["novanas.io/node"]
+	if !ok {
+		t.Fatal("expected topology key 'novanas.io/node' not found")
+	}
+	if val != testNodeID {
+		t.Errorf("expected topology value %q, got %q", testNodeID, val)
+	}
+}
+
+func TestNodeGetCapabilities(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	resp, err := ns.NodeGetCapabilities(context.Background(), &csi.NodeGetCapabilitiesRequest{})
+	if err != nil {
+		t.Fatalf("NodeGetCapabilities returned unexpected error: %v", err)
+	}
+
+	caps := resp.GetCapabilities()
+	if len(caps) != 3 {
+		t.Fatalf("expected 3 capabilities, got %d", len(caps))
+	}
+
+	expectedTypes := map[csi.NodeServiceCapability_RPC_Type]bool{
+		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME: false,
+		csi.NodeServiceCapability_RPC_GET_VOLUME_STATS:     false,
+		csi.NodeServiceCapability_RPC_EXPAND_VOLUME:        false,
+	}
+
+	for _, cap := range caps {
+		rpc := cap.GetRpc()
+		if rpc == nil {
+			t.Fatal("expected RPC capability, got nil")
+		}
+		expectedTypes[rpc.GetType()] = true
+	}
+
+	for capType, found := range expectedTypes {
+		if !found {
+			t.Errorf("missing expected capability: %v", capType)
+		}
+	}
+}
+
+func TestNodeStageVolume_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	stagingPath := filepath.Join(tmpDir, "staging")
+
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	resp, err := ns.NodeStageVolume(context.Background(), &csi.NodeStageVolumeRequest{
+		VolumeId:          "vol-001",
+		StagingTargetPath: stagingPath,
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NodeStageVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	// Verify staging directory was created.
+	if _, err := os.Stat(stagingPath); os.IsNotExist(err) {
+		t.Error("expected staging directory to be created")
+	}
+
+	// Verify marker file was written.
+	markerPath := filepath.Join(stagingPath, "staged")
+	data, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("expected staging marker file: %v", err)
+	}
+	if string(data) != "vol-001" {
+		t.Errorf("expected marker content 'vol-001', got %q", string(data))
+	}
+}
+
+func TestNodeStageVolume_WithInitiator(t *testing.T) {
+	tmpDir := t.TempDir()
+	stagingPath := filepath.Join(tmpDir, "staging")
+	initiatorBase := filepath.Join(tmpDir, "nvme-devices")
+
+	initiator := &StubInitiator{BasePath: initiatorBase}
+	ns := newTestNodeServiceWithInitiator("node-1", &mockMounter{}, initiator)
+
+	resp, err := ns.NodeStageVolume(context.Background(), &csi.NodeStageVolumeRequest{
+		VolumeId:          "vol-002",
+		StagingTargetPath: stagingPath,
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+		VolumeContext: map[string]string{
+			"targetAddress": "10.0.0.1",
+			"targetPort":    "4420",
+			"subsystemNQN":  "nqn.2024-01.io.novanas:vol-002",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NodeStageVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	// Verify NVMe device marker was created.
+	markerPath := filepath.Join(stagingPath, "nvme-device")
+	data, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("expected NVMe device marker: %v", err)
+	}
+	if string(data) != "nqn.2024-01.io.novanas:vol-002" {
+		t.Errorf("expected marker NQN, got %q", string(data))
+	}
+
+	// Verify the stub initiator created the device directory.
+	deviceDir := filepath.Join(initiatorBase, "nvme-nqn.2024-01.io.novanas:vol-002")
+	if _, err := os.Stat(deviceDir); os.IsNotExist(err) {
+		t.Error("expected stub NVMe device directory to be created")
+	}
+}
+
+func TestNodeUnstageVolume_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	stagingPath := filepath.Join(tmpDir, "staging")
+
+	// Create the staging directory and marker.
+	if err := os.MkdirAll(stagingPath, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingPath, "staged"), []byte("vol-001"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	resp, err := ns.NodeUnstageVolume(context.Background(), &csi.NodeUnstageVolumeRequest{
+		VolumeId:          "vol-001",
+		StagingTargetPath: stagingPath,
+	})
+	if err != nil {
+		t.Fatalf("NodeUnstageVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	// Verify staging directory was cleaned up.
+	if _, err := os.Stat(stagingPath); !os.IsNotExist(err) {
+		t.Error("expected staging directory to be removed")
+	}
+}
+
+func TestNodeUnstageVolume_WithInitiator(t *testing.T) {
+	tmpDir := t.TempDir()
+	stagingPath := filepath.Join(tmpDir, "staging")
+	initiatorBase := filepath.Join(tmpDir, "nvme-devices")
+
+	initiator := &StubInitiator{BasePath: initiatorBase}
+
+	// Simulate a previously staged NVMe device.
+	nqn := "nqn.2024-01.io.novanas:vol-003"
+	if err := os.MkdirAll(stagingPath, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingPath, "nvme-device"), []byte(nqn), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Create the stub device directory.
+	deviceDir := filepath.Join(initiatorBase, "nvme-"+nqn)
+	if err := os.MkdirAll(deviceDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	ns := newTestNodeServiceWithInitiator("node-1", &mockMounter{}, initiator)
+
+	resp, err := ns.NodeUnstageVolume(context.Background(), &csi.NodeUnstageVolumeRequest{
+		VolumeId:          "vol-003",
+		StagingTargetPath: stagingPath,
+	})
+	if err != nil {
+		t.Fatalf("NodeUnstageVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	// Verify device directory was cleaned up by the initiator.
+	if _, err := os.Stat(deviceDir); !os.IsNotExist(err) {
+		t.Error("expected NVMe device directory to be removed")
+	}
+}
+
+func TestNodeStageVolume_MissingVolumeID(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodeStageVolume(context.Background(), &csi.NodeStageVolumeRequest{
+		StagingTargetPath: "/staging/path",
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for missing volume ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodeUnstageVolume_MissingVolumeID(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodeUnstageVolume(context.Background(), &csi.NodeUnstageVolumeRequest{
+		StagingTargetPath: "/staging/path",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing volume ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodePublishVolume_Success(t *testing.T) {
+	mounter := &mockMounter{}
+	ns := newTestNodeService("node-1", mounter)
+
+	targetPath := t.TempDir()
+
+	resp, err := ns.NodePublishVolume(context.Background(), &csi.NodePublishVolumeRequest{
+		VolumeId:          "vol-001",
+		StagingTargetPath: "/staging/path",
+		TargetPath:        targetPath,
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NodePublishVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	if mounter.mountSource != "/staging/path" {
+		t.Errorf("expected mount source %q, got %q", "/staging/path", mounter.mountSource)
+	}
+	if mounter.mountTarget != targetPath {
+		t.Errorf("expected mount target %q, got %q", targetPath, mounter.mountTarget)
+	}
+}
+
+func TestNodePublishVolume_NFS(t *testing.T) {
+	mounter := &mockMounter{}
+	ns := newTestNodeService("node-1", mounter)
+
+	resp, err := ns.NodePublishVolume(context.Background(), &csi.NodePublishVolumeRequest{
+		VolumeId:          "vol-rwx",
+		StagingTargetPath: "/staging/path",
+		TargetPath:        "/target/path",
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+			},
+		},
+		VolumeContext: map[string]string{
+			"nfsServer": "10.0.0.5",
+			"nfsShare":  "/exports/vol-rwx",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NodePublishVolume NFS returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	// Should have mounted via NFS source format.
+	expectedSource := "10.0.0.5:/exports/vol-rwx"
+	if mounter.mountSource != expectedSource {
+		t.Errorf("expected mount source %q, got %q", expectedSource, mounter.mountSource)
+	}
+	if mounter.mountTarget != "/target/path" {
+		t.Errorf("expected mount target %q, got %q", "/target/path", mounter.mountTarget)
+	}
+}
+
+func TestNodePublishVolume_MountError(t *testing.T) {
+	mounter := &mockMounter{mountErr: errors.New("mount failed")}
+	ns := newTestNodeService("node-1", mounter)
+
+	targetPath := t.TempDir()
+
+	_, err := ns.NodePublishVolume(context.Background(), &csi.NodePublishVolumeRequest{
+		VolumeId:          "vol-001",
+		StagingTargetPath: "/staging/path",
+		TargetPath:        targetPath,
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for mount failure")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
+		t.Errorf("expected Internal error, got %v", err)
+	}
+}
+
+func TestNodePublishVolume_MissingTargetPath(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodePublishVolume(context.Background(), &csi.NodePublishVolumeRequest{
+		VolumeId:          "vol-001",
+		StagingTargetPath: "/staging/path",
+		VolumeCapability: &csi.VolumeCapability{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for missing target path")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodeUnpublishVolume_Success(t *testing.T) {
+	mounter := &mockMounter{}
+	ns := newTestNodeService("node-1", mounter)
+
+	resp, err := ns.NodeUnpublishVolume(context.Background(), &csi.NodeUnpublishVolumeRequest{
+		VolumeId:   "vol-001",
+		TargetPath: "/target/path",
+	})
+	if err != nil {
+		t.Fatalf("NodeUnpublishVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	if mounter.unmountPath != "/target/path" {
+		t.Errorf("expected unmount path %q, got %q", "/target/path", mounter.unmountPath)
+	}
+}
+
+func TestNodeUnpublishVolume_UnmountError(t *testing.T) {
+	mounter := &mockMounter{unmountErr: errors.New("unmount failed")}
+	ns := newTestNodeService("node-1", mounter)
+
+	_, err := ns.NodeUnpublishVolume(context.Background(), &csi.NodeUnpublishVolumeRequest{
+		VolumeId:   "vol-001",
+		TargetPath: "/target/path",
+	})
+	if err == nil {
+		t.Fatal("expected error for unmount failure")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
+		t.Errorf("expected Internal error, got %v", err)
+	}
+}
+
+func TestNodeUnpublishVolume_MissingVolumeID(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodeUnpublishVolume(context.Background(), &csi.NodeUnpublishVolumeRequest{
+		TargetPath: "/target/path",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing volume ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodeGetVolumeStats_Success(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	// Use t.TempDir() as the volume path since it exists on the filesystem.
+	volumePath := t.TempDir()
+
+	resp, err := ns.NodeGetVolumeStats(context.Background(), &csi.NodeGetVolumeStatsRequest{
+		VolumeId:   "vol-001",
+		VolumePath: volumePath,
+	})
+	if err != nil {
+		t.Fatalf("NodeGetVolumeStats returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	usage := resp.GetUsage()
+	if len(usage) != 2 {
+		t.Fatalf("expected 2 usage entries (bytes + inodes), got %d", len(usage))
+	}
+
+	// Verify bytes usage entry.
+	bytesUsage := usage[0]
+	if bytesUsage.GetUnit() != csi.VolumeUsage_BYTES {
+		t.Errorf("expected BYTES unit, got %v", bytesUsage.GetUnit())
+	}
+	if bytesUsage.GetTotal() <= 0 {
+		t.Error("expected positive total bytes")
+	}
+
+	// Verify inodes usage entry.
+	inodesUsage := usage[1]
+	if inodesUsage.GetUnit() != csi.VolumeUsage_INODES {
+		t.Errorf("expected INODES unit, got %v", inodesUsage.GetUnit())
+	}
+}
+
+func TestNodeGetVolumeStats_MissingVolumeID(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodeGetVolumeStats(context.Background(), &csi.NodeGetVolumeStatsRequest{
+		VolumePath: "/some/path",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing volume ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodeExpandVolume_Success(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	resp, err := ns.NodeExpandVolume(context.Background(), &csi.NodeExpandVolumeRequest{
+		VolumeId:   "vol-001",
+		VolumePath: "/some/path",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 10 * 1024 * 1024 * 1024, // 10 GiB
+		},
+	})
+	if err != nil {
+		t.Fatalf("NodeExpandVolume returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+	if resp.GetCapacityBytes() != 10*1024*1024*1024 {
+		t.Errorf("expected capacity 10GiB, got %d", resp.GetCapacityBytes())
+	}
+}
+
+func TestNodeExpandVolume_MissingVolumeID(t *testing.T) {
+	ns := newTestNodeService("node-1", &mockMounter{})
+
+	_, err := ns.NodeExpandVolume(context.Background(), &csi.NodeExpandVolumeRequest{
+		VolumePath: "/some/path",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing volume ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestNodeGetInfo_WithTopology(t *testing.T) {
+	const testNodeID = "node-test-001"
+	const testZone = "us-west-1a"
+	const testRegion = "us-west-1"
+
+	ns := NewNodeServiceWithTopology(testNodeID, testZone, testRegion, &mockChunkClient{}, &mockMounter{})
+
+	resp, err := ns.NodeGetInfo(context.Background(), &csi.NodeGetInfoRequest{})
+	if err != nil {
+		t.Fatalf("NodeGetInfo returned unexpected error: %v", err)
+	}
+
+	if resp.GetNodeId() != testNodeID {
+		t.Errorf("expected node ID %q, got %q", testNodeID, resp.GetNodeId())
+	}
+
+	topo := resp.GetAccessibleTopology()
+	if topo == nil {
+		t.Fatal("expected accessible topology, got nil")
+	}
+
+	segments := topo.GetSegments()
+
+	// Check novanas.io/node segment
+	val, ok := segments["novanas.io/node"]
+	if !ok {
+		t.Fatal("expected topology key 'novanas.io/node' not found")
+	}
+	if val != testNodeID {
+		t.Errorf("expected topology value %q for 'novanas.io/node', got %q", testNodeID, val)
+	}
+
+	// Check topology.kubernetes.io/zone segment
+	val, ok = segments["topology.kubernetes.io/zone"]
+	if !ok {
+		t.Fatal("expected topology key 'topology.kubernetes.io/zone' not found")
+	}
+	if val != testZone {
+		t.Errorf("expected topology value %q for 'topology.kubernetes.io/zone', got %q", testZone, val)
+	}
+
+	// Check topology.kubernetes.io/region segment
+	val, ok = segments["topology.kubernetes.io/region"]
+	if !ok {
+		t.Fatal("expected topology key 'topology.kubernetes.io/region' not found")
+	}
+	if val != testRegion {
+		t.Errorf("expected topology value %q for 'topology.kubernetes.io/region', got %q", testRegion, val)
+	}
+}
+
+func TestNodeGetInfo_WithInitiatorAndTopology(t *testing.T) {
+	const testNodeID = "node-test-002"
+	const testZone = "eu-central-1b"
+	const testRegion = "eu-central-1"
+
+	ns := NewNodeServiceWithInitiatorAndTopology(testNodeID, testZone, testRegion, &mockChunkClient{}, &mockMounter{}, &StubInitiator{})
+
+	resp, err := ns.NodeGetInfo(context.Background(), &csi.NodeGetInfoRequest{})
+	if err != nil {
+		t.Fatalf("NodeGetInfo returned unexpected error: %v", err)
+	}
+
+	topo := resp.GetAccessibleTopology()
+	if topo == nil {
+		t.Fatal("expected accessible topology, got nil")
+	}
+
+	segments := topo.GetSegments()
+
+	// Verify all segments are present
+	expectedSegments := map[string]string{
+		"novanas.io/node":              testNodeID,
+		"topology.kubernetes.io/zone":   testZone,
+		"topology.kubernetes.io/region": testRegion,
+	}
+
+	for key, expectedValue := range expectedSegments {
+		actualValue, ok := segments[key]
+		if !ok {
+			t.Errorf("expected topology key %q not found", key)
+			continue
+		}
+		if actualValue != expectedValue {
+			t.Errorf("expected topology value %q for key %q, got %q", expectedValue, key, actualValue)
+		}
+	}
+}
+
+func TestNodeGetInfo_WithoutTopology(t *testing.T) {
+	const testNodeID = "node-test-003"
+	ns := NewNodeService(testNodeID, &mockChunkClient{}, &mockMounter{})
+
+	resp, err := ns.NodeGetInfo(context.Background(), &csi.NodeGetInfoRequest{})
+	if err != nil {
+		t.Fatalf("NodeGetInfo returned unexpected error: %v", err)
+	}
+
+	topo := resp.GetAccessibleTopology()
+	if topo == nil {
+		t.Fatal("expected accessible topology, got nil")
+	}
+
+	segments := topo.GetSegments()
+
+	// Should only have novanas.io/node
+	if len(segments) != 1 {
+		t.Errorf("expected 1 topology segment without zone/region, got %d", len(segments))
+	}
+
+	val, ok := segments["novanas.io/node"]
+	if !ok {
+		t.Fatal("expected topology key 'novanas.io/node' not found")
+	}
+	if val != testNodeID {
+		t.Errorf("expected topology value %q, got %q", testNodeID, val)
+	}
+
+	// These should not be present when not specified
+	if _, ok := segments["topology.kubernetes.io/zone"]; ok {
+		t.Error("expected 'topology.kubernetes.io/zone' to be absent when not specified")
+	}
+	if _, ok := segments["topology.kubernetes.io/region"]; ok {
+		t.Error("expected 'topology.kubernetes.io/region' to be absent when not specified")
+	}
+}
