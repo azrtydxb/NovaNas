@@ -32,6 +32,11 @@ NovaNas is a Kubernetes-native single-node NAS appliance providing unified block
 | 13 | [Build & Release](13-build-and-release.md) | Monorepo, CI, RAUC bundles, signing |
 | 14 | [Decision Log](14-decision-log.md) | Summary of every locked-in design decision |
 
+## Developer docs
+
+- [Developer guide](developer/README.md) — onboarding, workflow, testing, debugging
+- [Architecture Decision Records](adr/README.md) — historical context for major decisions
+
 ## Scope status
 
 **Out of scope for v1**: multi-box clustering.
