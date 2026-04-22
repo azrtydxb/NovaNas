@@ -1,6 +1,6 @@
 module github.com/azrtydxb/novanas/packages/operators
 
-go 1.25.0
+go 1.24.0
 
 // The operators module imports the storage module's generated proto
 // types and the metadata server for in-process bufconn-based tests.

@@ -1,6 +1,6 @@
 module github.com/azrtydxb/novanas/storage
 
-go 1.25.0
+go 1.24.0
 
 // Local replace so the storage module can reference the operators' CRD
 // API package directly. See docs/CRD-CONSOLIDATION-PLAN.md (#35).
