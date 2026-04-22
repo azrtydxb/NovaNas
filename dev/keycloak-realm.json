@@ -1,0 +1,135 @@
+{
+  "realm": "novanas",
+  "enabled": true,
+  "displayName": "NovaNas (dev)",
+  "registrationAllowed": false,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "sslRequired": "none",
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      { "name": "admin",  "description": "NovaNas administrator" },
+      { "name": "user",   "description": "NovaNas end user" },
+      { "name": "viewer", "description": "Read-only access" }
+    ]
+  },
+  "defaultRole": { "name": "user", "composite": false, "clientRole": false },
+  "groups": [
+    { "name": "admins",  "path": "/admins",  "realmRoles": ["admin"] },
+    { "name": "users",   "path": "/users",   "realmRoles": ["user"] },
+    { "name": "viewers", "path": "/viewers", "realmRoles": ["viewer"] }
+  ],
+  "defaultGroups": ["/users"],
+  "clientScopes": [
+    {
+      "name": "novanas:roles",
+      "description": "Maps realm roles into the groups claim",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-to-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": ["novanas:roles", "profile", "email", "roles", "web-origins"],
+  "clients": [
+    {
+      "clientId": "novanas-ui",
+      "name": "NovaNas UI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*", "http://127.0.0.1:5173/*"],
+      "webOrigins": ["http://localhost:5173", "http://127.0.0.1:5173", "+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "defaultClientScopes": ["novanas:roles", "profile", "email", "roles", "web-origins"]
+    },
+    {
+      "clientId": "novanas-api",
+      "name": "NovaNas API",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-api-secret",
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "defaultClientScopes": ["novanas:roles", "profile", "email", "roles", "web-origins"]
+    },
+    {
+      "clientId": "novanas-cli",
+      "name": "NovaNas CLI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true",
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": ["http://localhost/*"],
+      "defaultClientScopes": ["novanas:roles", "profile", "email", "roles", "web-origins"]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@novanas.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "admin-password", "temporary": false }],
+      "groups": ["/admins"],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "user",
+      "enabled": true,
+      "email": "user@novanas.local",
+      "firstName": "Regular",
+      "lastName": "User",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "user-password", "temporary": false }],
+      "groups": ["/users"],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "email": "viewer@novanas.local",
+      "firstName": "View",
+      "lastName": "Only",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "viewer-password", "temporary": false }],
+      "groups": ["/viewers"],
+      "realmRoles": ["viewer"]
+    }
+  ]
+}

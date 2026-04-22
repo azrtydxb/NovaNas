@@ -1,0 +1,18 @@
+# Dev image for @novanas/ui — runs the Vite dev server with HMR.
+# Source is bind-mounted by docker-compose.
+
+FROM node:22-slim
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/schemas ./packages/schemas
+COPY packages/ui ./packages/ui
+
+RUN pnpm install --frozen-lockfile --filter @novanas/ui...
+
+EXPOSE 5173
+
+CMD ["pnpm", "--filter", "@novanas/ui", "dev", "--", "--host", "0.0.0.0"]

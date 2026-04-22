@@ -1,0 +1,45 @@
+{
+  "uid": "novanas-dev-api",
+  "title": "NovaNas / Dev / API",
+  "tags": ["novanas", "dev"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "API up",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"novanas-api\"}" }]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP request rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum by (method, status_code)(rate(http_requests_total{job=\"novanas-api\"}[1m]))" }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Process resident memory",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{ "expr": "process_resident_memory_bytes{job=\"novanas-api\"}" }],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Event loop lag",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "nodejs_eventloop_lag_seconds{job=\"novanas-api\"}" }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    }
+  ]
+}

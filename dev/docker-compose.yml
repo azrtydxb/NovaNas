@@ -1,0 +1,189 @@
+name: novanas-dev
+
+# Local dev stack for NovaNas. Brings up external dependencies (Postgres,
+# Redis, Keycloak, OpenBao, Prometheus, Grafana) plus the api + ui with
+# hot-reload. Not for production — see helm/ for real deployments.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/novanas-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  openbao:
+    image: openbao/openbao:latest
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      BAO_DEV_ROOT_TOKEN_ID: dev-token
+      BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      BAO_ADDR: http://0.0.0.0:8200
+    command: ["server", "-dev", "-dev-root-token-id=dev-token", "-dev-listen-address=0.0.0.0:8200"]
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD-SHELL", "bao status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  openbao-init:
+    image: openbao/openbao:latest
+    restart: "no"
+    environment:
+      BAO_ADDR: http://openbao:8200
+      BAO_TOKEN: dev-token
+    entrypoint: ["/bin/sh", "/init/openbao-init.sh"]
+    volumes:
+      - ./openbao-init.sh:/init/openbao-init.sh:ro
+    depends_on:
+      openbao:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    profiles: ["observability", "full"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    profiles: ["mail", "full"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: ..
+      dockerfile: packages/api/Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: "8080"
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://novanas:novanas@postgres:5432/novanas
+      REDIS_URL: redis://redis:6379
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: novanas
+      KEYCLOAK_CLIENT_ID: novanas-api
+      KEYCLOAK_CLIENT_SECRET: dev-api-secret
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_TOKEN: dev-token
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../packages/api/src:/app/packages/api/src
+      - ../packages/schemas/src:/app/packages/schemas/src
+      - ../packages/db/src:/app/packages/db/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      openbao:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ..
+      dockerfile: packages/ui/Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:8080
+      VITE_KEYCLOAK_URL: http://localhost:8180
+      VITE_KEYCLOAK_REALM: novanas
+      VITE_KEYCLOAK_CLIENT_ID: novanas-ui
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../packages/ui/src:/app/packages/ui/src
+      - ../packages/ui/index.html:/app/packages/ui/index.html
+      - ../packages/ui/public:/app/packages/ui/public
+      - ../packages/ui/locales:/app/packages/ui/locales
+      - ../packages/schemas/src:/app/packages/schemas/src
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
