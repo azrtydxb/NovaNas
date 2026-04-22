@@ -1,0 +1,15 @@
+[Unit]
+Description=NovaNas persistent partition
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+After=systemd-fsck@dev-disk-by\x2dpartlabel-Persistent.service
+
+[Mount]
+What=/dev/disk/by-partlabel/Persistent
+Where=/mnt/persistent
+Type=ext4
+Options=rw,noatime,errors=remount-ro
+
+[Install]
+WantedBy=local-fs.target

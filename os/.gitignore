@@ -1,0 +1,17 @@
+# The repo-root .gitignore excludes `build/` globally. In this package,
+# `build/` contains source scripts that orchestrate image builds — the actual
+# artifacts land under `build/out/`. Un-ignore the scripts, keep outputs
+# ignored.
+!build/
+!build/*.sh
+!build/*.txt
+build/out/
+
+# Also un-ignore rootfs/usr/local/bin (was caught by `bin/` in root gitignore).
+!rootfs/usr/local/bin/
+!rootfs/usr/local/bin/*.sh
+
+# Generated RAUC signing material (placeholder files are kept by name;
+# developer-generated keys are not).
+rauc/key.pem
+rauc/*.signed.raucb

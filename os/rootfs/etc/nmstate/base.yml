@@ -1,0 +1,29 @@
+# Default nmstate declarative network config applied at first boot when the
+# installer did not stamp a specific profile. DHCP on every physical ethernet,
+# bridge-friendly, ignores virtual devices.
+#
+# Runtime edits go into /etc/nmstate/*.yml on the persistent overlay; nmstatectl
+# apply reconciles the union.
+
+interfaces:
+  - name: lo
+    type: loopback
+    state: up
+
+# Every unclaimed ethernet gets DHCPv4 + DHCPv6 out of the box.
+# The installer writes a more specific /etc/nmstate/installer.yml if the
+# operator chose a static address, which wins by load order.
+route-rules:
+  config: []
+
+dns-resolver:
+  config:
+    server:
+      - 1.1.1.1
+      - 9.9.9.9
+
+# Wildcard template applied by /usr/local/bin/novanas-firstboot.sh to any
+# physical NIC (type=ethernet) not already configured.
+#
+# We don't use nmstate's "desired state must list every interface" mode here;
+# base.yml is additive and firstboot patches in the discovered NICs.

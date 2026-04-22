@@ -1,0 +1,17 @@
+[Unit]
+Description=NovaNas first-boot initialization
+After=network-online.target k3s.service
+Wants=network-online.target
+Requires=k3s.service
+ConditionPathExists=!/var/lib/novanas/.firstboot-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/bin/novanas-firstboot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

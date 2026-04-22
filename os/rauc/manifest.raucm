@@ -1,0 +1,25 @@
+# RAUC bundle manifest template.
+# Placeholders of the form @NAME@ are substituted by build/build-rauc-bundle.sh
+# at bundle-assembly time.
+
+[update]
+compatible=novanas-amd64
+version=@VERSION@
+description=NovaNas @VERSION@ (@CHANNEL@)
+build=@BUILD_ID@
+
+[bundle]
+format=verity
+
+[image.rootfs]
+filename=rootfs.img
+size=@ROOTFS_SIZE@
+sha256=@ROOTFS_SHA256@
+
+[image.boot]
+filename=boot.img
+size=@BOOT_SIZE@
+sha256=@BOOT_SHA256@
+
+[hooks]
+filename=hooks.sh

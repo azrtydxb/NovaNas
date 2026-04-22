@@ -1,0 +1,60 @@
+# NovaNas offline image manifest.
+# One image reference per line. Bumped by Renovate alongside the Helm chart
+# values. build/prepull-images.sh consumes this during layered-rootfs build
+# so a freshly-installed appliance can come up with zero network access.
+#
+# Tags are pinned by digest-compatible semver; CI rewrites to @sha256 when
+# assembling a release bundle for reproducibility.
+
+# --- NovaNas first-party ---
+ghcr.io/azrtydxb/novanas/api:dev
+ghcr.io/azrtydxb/novanas/ui:dev
+ghcr.io/azrtydxb/novanas/cli:dev
+
+# --- Operators ---
+ghcr.io/azrtydxb/novanas/operator-storage:dev
+ghcr.io/azrtydxb/novanas/operator-apps:dev
+ghcr.io/azrtydxb/novanas/operator-network:dev
+ghcr.io/azrtydxb/novanas/operator-update:dev
+
+# --- Storage (forked NovaStor) ---
+ghcr.io/azrtydxb/novanas/storage-agent:dev
+ghcr.io/azrtydxb/novanas/storage-meta:dev
+ghcr.io/azrtydxb/novanas/storage-csi:dev
+ghcr.io/azrtydxb/novanas/storage-scheduler:dev
+ghcr.io/azrtydxb/novanas/storage-webhook:dev
+ghcr.io/azrtydxb/novanas/storage-s3gw:dev
+ghcr.io/azrtydxb/novanas/storage-dataplane:dev
+
+# --- Identity + secrets ---
+quay.io/keycloak/keycloak:25.0
+docker.io/openbao/openbao:2.0.0
+
+# --- Databases ---
+docker.io/library/postgres:16-alpine
+docker.io/library/redis:7-alpine
+
+# --- Observability (LGTM) ---
+docker.io/grafana/grafana:11.2.0
+docker.io/grafana/loki:3.1.0
+docker.io/grafana/tempo:2.5.0
+docker.io/prom/prometheus:v2.54.0
+docker.io/prom/alertmanager:v0.27.0
+docker.io/prom/node-exporter:v1.8.2
+
+# --- Virtualization ---
+quay.io/kubevirt/virt-api:v1.3.1
+quay.io/kubevirt/virt-controller:v1.3.1
+quay.io/kubevirt/virt-handler:v1.3.1
+quay.io/kubevirt/virt-launcher:v1.3.1
+quay.io/kubevirt/virt-operator:v1.3.1
+
+# --- Networking / edge (external repos) ---
+ghcr.io/azrtydxb/novanet/controller:dev
+ghcr.io/azrtydxb/novanet/agent:dev
+ghcr.io/azrtydxb/novaedge/ingress:dev
+ghcr.io/azrtydxb/novaedge/controller:dev
+
+# --- k3s core (bundled by k3s itself but listed for visibility) ---
+docker.io/rancher/klipper-helm:v0.8.4-build20240722
+docker.io/rancher/mirrored-coredns-coredns:1.11.3

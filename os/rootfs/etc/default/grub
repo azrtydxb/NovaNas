@@ -1,0 +1,19 @@
+# GRUB defaults for NovaNas. Managed by the image build; operator edits go
+# on the persistent overlay via /etc/default/grub.d/ (not GRUB_DEFAULT itself
+# — RAUC owns the default slot pointer).
+
+GRUB_DEFAULT=saved
+GRUB_TIMEOUT=3
+GRUB_DISTRIBUTOR="NovaNas"
+
+# Minimal, no quiet splash — storage appliances want boot logs on the serial
+# console and the tty by default for support.
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX="ro rootwait console=tty0 console=ttyS0,115200n8 systemd.unified_cgroup_hierarchy=1"
+
+# Serial + graphical on the same menu so headless installs work.
+GRUB_TERMINAL="console serial"
+GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
+
+# RAUC integration — countboot flips the default slot on boot failure.
+GRUB_RAUC_COUNTBOOT=3

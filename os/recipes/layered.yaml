@@ -1,0 +1,113 @@
+# debos-compatible recipe that turns a base Debian tarball into a NovaNas
+# rootfs image: adds storage/OS packages, installs k3s, overlays the
+# `rootfs/` skeleton, pre-pulls container images for offline install, seals
+# the tree read-only, and emits an ext4 image.
+
+{{- $arch       := or .arch       "amd64"    -}}
+{{- $version    := or .version    "0.0.0-dev" -}}
+{{- $channel    := or .channel    "dev"       -}}
+{{- $k3s        := or .k3s        "v1.31.3+k3s1" -}}
+
+architecture: {{ $arch }}
+
+actions:
+  - action: unpack
+    file: base-rootfs-{{ $version }}.tar
+
+  - action: apt
+    packages:
+      - nmstate
+      - tpm2-tools
+      - tpm2-abrmd
+      - cryptsetup
+      - lvm2
+      - mdadm
+      - smartmontools
+      - nvme-cli
+      - parted
+      - gdisk
+      - e2fsprogs
+      - xfsprogs
+      - dosfstools
+      - rauc
+      - firmware-linux
+      - firmware-linux-nonfree
+      - firmware-iwlwifi
+      - firmware-realtek
+      - intel-microcode
+      - amd64-microcode
+      - grub-efi-amd64
+      - grub-pc-bin
+      - efibootmgr
+      - iptables
+      - nftables
+      - conntrack
+      - ethtool
+      - jq
+      - python3
+      - python3-yaml
+
+  - action: overlay
+    description: Copy NovaNas rootfs skeleton (units, scripts, configs)
+    source: ../rootfs
+
+  - action: run
+    description: Install k3s at {{ $k3s }}
+    chroot: true
+    command: |
+      set -eu
+      mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
+      curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
+      INSTALL_K3S_VERSION="{{ $k3s }}" \
+        INSTALL_K3S_SKIP_START=true \
+        INSTALL_K3S_SKIP_ENABLE=true \
+        sh /tmp/k3s-install.sh
+      rm -f /tmp/k3s-install.sh
+
+  - action: run
+    description: Pre-pull container images referenced by the Helm chart
+    chroot: false
+    command: |
+      set -eu
+      "${RECIPEDIR}/../build/prepull-images.sh" \
+        "${ROOTDIR}/var/lib/rancher/k3s/agent/images" \
+        "${RECIPEDIR}/../build/image-manifest.txt"
+
+  - action: run
+    description: Create novanas user
+    chroot: true
+    command: |
+      set -eu
+      useradd -m -s /bin/bash -u 1000 novanas || true
+      passwd -l novanas || true
+      usermod -aG sudo novanas
+      systemctl disable ssh || true
+
+  - action: run
+    description: Enable NovaNas systemd units
+    chroot: true
+    command: |
+      set -eu
+      systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
+      systemctl enable novanas-persistent.mount || true
+      systemctl enable novanas-overlay-etc.mount || true
+      systemctl enable novanas-overlay-var.mount || true
+      systemctl enable novanas-firstboot.service || true
+      systemctl enable novanas-healthcheck.service || true
+
+  - action: image-partition
+    imagename: rootfs-{{ $version }}.img
+    imagesize: 4GB
+    partitiontype: msdos
+    mountpoints:
+      - mountpoint: /
+        partition: root
+    partitions:
+      - name: root
+        fs: ext4
+        start: 0%
+        end: 100%
+        flags: [ boot ]
+
+  - action: filesystem-deploy
+    description: Copy tree onto the image

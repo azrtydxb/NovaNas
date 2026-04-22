@@ -1,0 +1,18 @@
+[Unit]
+Description=NovaNas post-update health check (RAUC mark-good)
+# Runs on every boot; short-circuits if the current slot is already marked
+# good. On a fresh RAUC update the slot is still pending and this unit is the
+# gate that commits it.
+After=k3s.service novanas-firstboot.service
+Wants=k3s.service
+ConditionPathExists=/usr/bin/rauc
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/novanas-healthcheck.sh
+# Do not mark failed if rauc cannot be reached; healthcheck script handles it.
+SuccessExitStatus=0
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

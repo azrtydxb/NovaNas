@@ -1,0 +1,16 @@
+[Unit]
+Description=NovaNas overlay for /var
+DefaultDependencies=no
+Conflicts=umount.target
+After=novanas-persistent.mount
+Requires=novanas-persistent.mount
+Before=local-fs.target sysinit.target
+
+[Mount]
+What=overlay
+Where=/var
+Type=overlay
+Options=lowerdir=/var,upperdir=/mnt/persistent/var,workdir=/mnt/persistent/var.work
+
+[Install]
+WantedBy=local-fs.target
