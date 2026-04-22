@@ -1,0 +1,70 @@
+# Helm values overlay for E2E — smallest possible NovaNas install that still
+# exercises the full control/data plane. Inherits from helm/values.yaml.
+
+global:
+  environment: e2e
+  domain: localhost
+  tls:
+    # In E2E we use the umbrella chart's built-in self-signed CA.
+    mode: self-signed
+
+api:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 1, memory: 1Gi }
+
+ui:
+  replicas: 1
+
+operators:
+  replicas: 1
+
+s3gw:
+  enabled: true
+  replicas: 1
+
+# Use an in-memory Keycloak realm so the OIDC password grant in the auth
+# fixture works deterministically without external IdPs.
+keycloak:
+  enabled: true
+  auth:
+    adminUser: admin
+    adminPassword: e2e-admin-password
+  realms:
+    - name: novanas
+      clients:
+        - clientId: novanas-ui
+          publicClient: true
+          directAccessGrantsEnabled: true
+          redirectUris: ["https://localhost:8443/*"]
+      users:
+        - username: e2e-admin
+          enabled: true
+          credentials:
+            - { type: password, value: e2e-admin-password, temporary: false }
+          realmRoles: [admin]
+
+postgres:
+  persistence:
+    enabled: false   # ephemeral for E2E
+
+storage:
+  dataplane:
+    # Use loop-backed files instead of real NVMe in CI.
+    mode: loopback
+    devices:
+      - path: /var/lib/novanas/e2e-loop0.img
+        sizeGi: 10
+      - path: /var/lib/novanas/e2e-loop1.img
+        sizeGi: 10
+
+apps:
+  catalog:
+    # Point to a local registry mirror; upstream catalog is not required in E2E.
+    indexURL: "oci://localhost:5000/novanas-apps/index"
+
+observability:
+  prometheus: { enabled: false }
+  loki:       { enabled: false }
+  grafana:    { enabled: false }

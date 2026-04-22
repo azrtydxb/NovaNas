@@ -1,0 +1,254 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly at 02:17 UTC — offset to avoid colliding with other scheduled jobs.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      run_upgrade:
+        description: "Run the (expensive) upgrade test"
+        type: boolean
+        default: false
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NOVANAS_BASE_URL: https://localhost:8443
+  S3_ENDPOINT: https://localhost:9000
+  S3_ACCESS_KEY: novanas
+  S3_SECRET_KEY: novanas-secret
+
+jobs:
+  # ---------- UI + API (Playwright) -------------------------------------------------
+  ui-e2e:
+    name: UI E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: e2e/package.json
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: novanas-e2e
+          config: e2e/fixtures/kind-cluster.yaml
+          wait: 300s
+      - name: Bootstrap NovaNas into kind
+        run: bash e2e/scripts/bootstrap-cluster.sh
+      - name: Install Playwright + browsers
+        working-directory: e2e
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm exec playwright install --with-deps chromium
+      - name: Run Playwright
+        working-directory: e2e
+        run: pnpm test
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+      - name: Teardown
+        if: always()
+        run: bash e2e/scripts/teardown.sh
+
+  # ---------- Go API smokes --------------------------------------------------------
+  api-smoke:
+    name: API smoke (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: ui-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.25" }
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: novanas-e2e-api
+          config: e2e/fixtures/kind-cluster.yaml
+      - run: bash e2e/scripts/bootstrap-cluster.sh
+        env:
+          CLUSTER: novanas-e2e-api
+      - name: Build e2e module
+        working-directory: e2e
+        run: go build ./...
+      - name: Run Go API smokes
+        working-directory: e2e/api
+        env:
+          E2E_RUN: "1"
+          NOVANAS_BASE_URL: ${{ env.NOVANAS_BASE_URL }}
+        run: go test -v -timeout 15m ./...
+      - if: always()
+        run: bash e2e/scripts/teardown.sh
+        env:
+          CLUSTER: novanas-e2e-api
+
+  # ---------- S3 compatibility -----------------------------------------------------
+  s3-compat:
+    name: S3 compat (mint + Ceph + SDKs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: ui-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.25" }
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: novanas-e2e-s3
+          config: e2e/fixtures/kind-cluster.yaml
+      - run: bash e2e/scripts/bootstrap-cluster.sh
+        env:
+          CLUSTER: novanas-e2e-s3
+      - name: MinIO mint
+        run: bash e2e/compat/s3/minio-mint.sh
+      - name: Ceph s3-tests
+        run: bash e2e/compat/s3/ceph-s3-tests.sh
+        continue-on-error: true   # s3-tests has known NovaNas gaps; gate via allowlist later.
+      - name: boto3 smoke
+        run: |
+          pip install boto3
+          python3 e2e/compat/s3/aws-sdk/boto3-smoke.py
+      - name: js-sdk smoke
+        working-directory: e2e/compat/s3/aws-sdk
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund @aws-sdk/client-s3 @aws-sdk/lib-storage
+          node js-sdk-smoke.mjs
+      - name: go-sdk smoke
+        working-directory: e2e/compat/s3/aws-sdk
+        run: |
+          go mod init novanas-s3-gosdk 2>/dev/null || true
+          go mod tidy
+          go run go-sdk-smoke.go
+      - name: Upload S3 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-compat-artifacts
+          path: e2e/artifacts
+          retention-days: 7
+      - if: always()
+        run: bash e2e/scripts/teardown.sh
+        env:
+          CLUSTER: novanas-e2e-s3
+
+  # ---------- QEMU boot of the built ISO -------------------------------------------
+  qemu-boot:
+    name: QEMU boot (ISO smoke)
+    # Ubuntu 22.04+ runners have /dev/kvm accessible via the nested-virt path
+    # since late 2024. If unavailable, the script falls back to TCG.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: ui-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: novanas-iso
+          path: os/build/
+        continue-on-error: true
+      - name: Run QEMU boot smoke
+        run: bash e2e/qemu/smoke-boot.sh
+        env:
+          QEMU_ACCEL: ${{ secrets.QEMU_ACCEL || 'kvm' }}
+          TIMEOUT_SEC: "1500"
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-serial-log
+          path: e2e/qemu/artifacts/serial.log
+          retention-days: 14
+
+  # ---------- Upgrade test (nightly only) ------------------------------------------
+  upgrade:
+    name: Upgrade test
+    if: github.event_name == 'schedule' || inputs.run_upgrade == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU + OpenSSH
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils openssh-client
+      - name: Download prior release ISO
+        run: |
+          curl -sSL -o old.iso \
+            "https://github.com/azrtydxb/novanas/releases/download/${PRIOR_TAG}/novanas-${PRIOR_TAG}.iso"
+        env:
+          PRIOR_TAG: ${{ vars.NOVANAS_PRIOR_STABLE_TAG || 'v26.04.0' }}
+      - name: Download current RAUC bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: novanas-raucb
+          path: os/build/
+      - name: Run upgrade test
+        run: bash e2e/qemu/upgrade-test.sh
+        env:
+          OLD_ISO: ${{ github.workspace }}/old.iso
+          NEW_BUNDLE: ${{ github.workspace }}/os/build/novanas.raucb
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-artifacts
+          path: e2e/qemu/artifacts/upgrade
+          retention-days: 14
+
+  # ---------- Performance (nightly only) -------------------------------------------
+  perf:
+    name: Performance baseline
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: ui-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y fio jq nfs-common cifs-utils
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: novanas-e2e-perf
+          config: e2e/fixtures/kind-cluster.yaml
+      - run: bash e2e/scripts/bootstrap-cluster.sh
+        env:
+          CLUSTER: novanas-e2e-perf
+      - name: fio baseline
+        run: bash e2e/qemu/performance/fio-baseline.sh
+        continue-on-error: true
+      - name: NFS throughput
+        run: bash e2e/qemu/performance/nfs-throughput.sh
+        continue-on-error: true
+      - name: SMB throughput
+        run: bash e2e/qemu/performance/smb-throughput.sh
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-csv
+          path: e2e/qemu/artifacts/perf
+          retention-days: 30
+      - if: always()
+        run: bash e2e/scripts/teardown.sh
+        env:
+          CLUSTER: novanas-e2e-perf
