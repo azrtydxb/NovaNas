@@ -1,0 +1,110 @@
+# Deployment manifest for the NovaNas operator controller-manager.
+# ServiceAccount + ClusterRoleBinding + Deployment in one file for simplicity;
+# split at Helm-chart time.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: novanas-system
+  labels:
+    app.kubernetes.io/name: novanas
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-operators
+  namespace: novanas-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-operators-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-operators-manager
+subjects:
+  - kind: ServiceAccount
+    name: novanas-operators
+    namespace: novanas-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-operators
+  namespace: novanas-system
+  labels:
+    app.kubernetes.io/name: novanas-operators
+    app.kubernetes.io/component: controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: novanas-operators
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: novanas-operators
+        app.kubernetes.io/component: controller-manager
+    spec:
+      serviceAccountName: novanas-operators
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: manager
+          image: ghcr.io/azrtydxb/novanas/operators:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            - --leader-elect
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: health
+              containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-operators-metrics
+  namespace: novanas-system
+  labels:
+    app.kubernetes.io/name: novanas-operators
+    app.kubernetes.io/component: controller-manager
+spec:
+  selector:
+    app.kubernetes.io/name: novanas-operators
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics

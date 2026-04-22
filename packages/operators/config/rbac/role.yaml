@@ -1,0 +1,57 @@
+# Minimal ClusterRole for the NovaNas operator. Scope kept reasonable: all
+# novanas.io resources, plus the K8s primitives the controllers will create
+# when real reconcile logic lands in Wave 4+. Tighten later per-controller.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-operators-manager
+  labels:
+    app.kubernetes.io/name: novanas-operators
+    app.kubernetes.io/component: controller-manager
+rules:
+  # Everything under our own API group.
+  - apiGroups: ["novanas.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["novanas.io"]
+    resources: ["*/status", "*/finalizers"]
+    verbs: ["get", "update", "patch"]
+
+  # Leader election.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Core primitives controllers will emit.
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - secrets
+      - configmaps
+      - services
+      - serviceaccounts
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # Workloads.
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Ingress / networking primitives.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # RBAC bindings required when projecting users / groups.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
