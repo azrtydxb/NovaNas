@@ -553,7 +553,7 @@ function BucketDetailDrawer({ bucket, onClose }: { bucket: Bucket | null; onClos
             ) : (
               <ul className='flex flex-col gap-0.5 mono'>
                 {bucket!.spec.lifecycle!.map((r, i) => (
-                  <li key={i}>
+                  <li key={`${r.prefix ?? '*'}-${i}`}>
                     {r.prefix ?? '*'} {r.expireAfter ? `→ expire ${r.expireAfter}` : ''}{' '}
                     {r.transitionAfter ? `→ ${r.transitionTo} after ${r.transitionAfter}` : ''}
                   </li>

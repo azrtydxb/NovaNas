@@ -453,6 +453,7 @@ function CreateShareDialog({
               )}
               {form.access.map((a, i) => (
                 <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: append-only form list, no reorder
                   key={i}
                   className='flex items-center justify-between text-xs mono border border-border rounded-sm p-1'
                 >
@@ -602,7 +603,7 @@ function ShareDetailDrawer({ share, onClose }: { share: Share | null; onClose: (
             </div>
             <ul className='flex flex-col gap-0.5 mono'>
               {share?.spec.access?.map((a, i) => (
-                <li key={i}>
+                <li key={`${a.principal.user ?? a.principal.group}-${a.mode}-${i}`}>
                   {a.principal.user ? `user:${a.principal.user}` : `group:${a.principal.group}`} →{' '}
                   {a.mode}
                 </li>

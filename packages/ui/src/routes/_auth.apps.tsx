@@ -526,6 +526,7 @@ function InstallAppDialog({
                 </div>
                 <ul className='flex flex-col gap-1 mb-2'>
                   {values.map((v, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: append-only form list, no reorder
                     <li key={i} className='flex gap-2'>
                       <Input
                         placeholder={i18n._('key')}
@@ -569,6 +570,7 @@ function InstallAppDialog({
           <TabsContent value='storage' className='pt-3'>
             <ul className='flex flex-col gap-2 mb-2'>
               {storages.map((s, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: append-only form list, no reorder
                 <li key={i} className='grid grid-cols-3 gap-2 items-end'>
                   <FormField label={i18n._('Name')}>
                     <Input

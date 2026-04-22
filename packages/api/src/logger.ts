@@ -17,9 +17,13 @@ export function createLogger(opts: CreateLoggerOptions = {}): Logger {
       paths: [
         'req.headers.authorization',
         'req.headers.cookie',
+        'res.headers["set-cookie"]',
         '*.password',
         '*.secret',
         '*.token',
+        '*.apiKey',
+        '*.accessKey',
+        '*.privateKey',
       ],
       remove: true,
     },

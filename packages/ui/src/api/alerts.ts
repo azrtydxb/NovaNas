@@ -18,7 +18,8 @@ export const alertsKey = () => ['alerts', 'active'] as const;
 export function useActiveAlerts() {
   return useLiveQuery<Alert[]>(
     alertsKey(),
-    async () => unwrapList<Alert>(await api.get('/alerts', { searchParams: { state: 'active' } })),
+    async () =>
+      unwrapList<Alert>(await api.get('/system/alerts', { searchParams: { state: 'active' } })),
     {
       ...QUERY_DEFAULTS,
       staleTime: 60_000,

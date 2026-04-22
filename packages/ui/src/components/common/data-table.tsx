@@ -21,7 +21,7 @@ import { useState } from 'react';
 
 export interface DataTableProps<TData extends RowData> {
   data: TData[];
-  columns: ColumnDef<TData, any>[];
+  columns: ColumnDef<TData, unknown>[];
   initialSorting?: SortingState;
   emptyMessage?: React.ReactNode;
 }

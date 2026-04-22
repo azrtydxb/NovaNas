@@ -10,10 +10,11 @@ describe('alerts api hooks', () => {
   });
   afterEach(() => fetchMock.restore());
 
-  it('useActiveAlerts calls /alerts with state=active', async () => {
+  it('useActiveAlerts calls /system/alerts with state=active', async () => {
     fetchMock.enqueue({ status: 200, body: [] });
     const { result } = renderHookWithClient(() => useActiveAlerts());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock.calls[0]?.url).toMatch(/\/system\/alerts/);
     expect(fetchMock.calls[0]?.url).toMatch(/state=active/);
   });
 

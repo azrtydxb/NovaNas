@@ -425,6 +425,7 @@ function CreateVmDialog({
             <ul className='flex flex-col gap-1'>
               {form.disks.map((d, i) => (
                 <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: append-only form list, no reorder
                   key={i}
                   className='flex items-center justify-between gap-2 border border-border rounded-sm p-1 text-xs mono'
                 >
@@ -713,8 +714,8 @@ function VmDetailDrawer({ vm, onClose }: { vm: Vm | null; onClose: () => void })
               <Trans id='Disks' />
             </div>
             <ul className='flex flex-col gap-0.5 mono'>
-              {vm?.spec.disks?.map((d, i) => (
-                <li key={i}>
+              {vm?.spec.disks?.map((d) => (
+                <li key={d.name}>
                   {d.name} · {d.source.type}
                 </li>
               ))}

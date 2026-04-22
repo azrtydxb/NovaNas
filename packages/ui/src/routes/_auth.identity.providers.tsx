@@ -133,7 +133,7 @@ function ProvidersPage() {
                   <TableCell>
                     <div className='flex gap-1 flex-wrap'>
                       {(r.spec.federations ?? []).map((f, i) => (
-                        <Badge key={i}>{f.type}</Badge>
+                        <Badge key={`${f.type}-${i}`}>{f.type}</Badge>
                       ))}
                     </div>
                   </TableCell>
