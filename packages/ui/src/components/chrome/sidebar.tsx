@@ -33,6 +33,9 @@ const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>
 
 export function Sidebar() {
   const { user, hasRole } = useAuth();
+  // Role resolution: admin sees everything; user sees the narrowed list;
+  // viewer sees the same nav tree as 'user' but with all mutation actions
+  // hidden on the pages themselves (enforced per-screen via `useAuth().hasRole`).
   const isAdmin = user ? hasRole('admin') : true; // default to admin-view while scaffolding
   const nav = isAdmin ? ADMIN_NAV : USER_NAV;
   const { location } = useRouterState();

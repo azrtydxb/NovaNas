@@ -1,3 +1,8 @@
+import { useActiveAlerts } from '@/api/alerts';
+import { useRecentAudit } from '@/api/audit';
+import { useMetric } from '@/api/metrics';
+import { usePools } from '@/api/pools';
+import { useSystemHealth, useSystemInfo } from '@/api/system';
 import { CapacityBar } from '@/components/common/capacity-bar';
 import { PageHeader } from '@/components/common/page-header';
 import { Stat } from '@/components/common/stat';
@@ -13,6 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -22,155 +28,69 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatBytes } from '@/lib/format';
+import type { StatusTone } from '@/types';
 import { createFileRoute } from '@tanstack/react-router';
-import { Activity, BarChart3, Plus, RefreshCw, Shield } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Activity, BarChart3, RefreshCw, Shield } from 'lucide-react';
 
 export const Route = createFileRoute('/_auth/dashboard')({
   component: DashboardPage,
 });
 
-// -----------------------------------------------------------------------------
-// Mocked data — replaced by API-backed queries once /api/v1/dashboard is live.
-// -----------------------------------------------------------------------------
-
-const POOLS = [
-  {
-    name: 'fast',
-    tier: 'hot',
-    protection: 'rep×2',
-    disks: 8,
-    device: 'NVMe',
-    used: 4.9e12,
-    total: 7.6e12,
-    r: 1420,
-    w: 680,
-  },
-  {
-    name: 'bulk',
-    tier: 'warm',
-    protection: 'EC 6+2',
-    disks: 10,
-    device: 'HDD',
-    used: 23.1e12,
-    total: 60e12,
-    r: 340,
-    w: 210,
-  },
-  {
-    name: 'archive',
-    tier: 'cold',
-    protection: 'EC 4+2',
-    disks: 6,
-    device: 'HDD',
-    used: 14e12,
-    total: 30e12,
-    r: 120,
-    w: 80,
-  },
-  {
-    name: 'meta',
-    tier: 'hot',
-    protection: 'rep×3',
-    disks: 3,
-    device: 'NVMe',
-    used: 12e9,
-    total: 500e9,
-    r: 60,
-    w: 30,
-  },
-];
-
-const ACTIVITY: Array<{ tone: 'ok' | 'warn' | 'err' | 'info'; text: React.ReactNode; t: string }> =
-  [
-    {
-      tone: 'ok',
-      text: (
-        <>
-          Snapshot <b>family-media@auto-14:58</b> taken (1.4 GB).
-        </>
-      ),
-      t: '14:58',
-    },
-    {
-      tone: 'info',
-      text: (
-        <>
-          Replication <b>photos → offsite</b> started.
-        </>
-      ),
-      t: '14:47',
-    },
-    { tone: 'warn', text: <>Disk in slot 13 reports 5 reallocated sectors.</>, t: '13:12' },
-    {
-      tone: 'ok',
-      text: (
-        <>
-          Scrub on pool <b>bulk</b> progressing (18%).
-        </>
-      ),
-      t: '12:40',
-    },
-    {
-      tone: 'ok',
-      text: (
-        <>
-          Config backup <b>14:00</b> uploaded to S3.
-        </>
-      ),
-      t: '14:00',
-    },
-  ];
-
-// Build a deterministic sparkline series once at mount and nudge it occasionally.
-function useSparkSeries(length: number, baseline: number, volatility: number, seed: number) {
-  const [series, setSeries] = useState<number[]>(() =>
-    Array.from({ length }, (_, i) => {
-      const v = Math.sin((seed * 9301 + i * 49297) % 233280) * 43758.5453;
-      return baseline + (v - Math.floor(v) - 0.5) * volatility * 2;
-    })
-  );
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSeries((prev) => {
-        const next = prev.slice(1);
-        const last = prev[prev.length - 1] ?? baseline;
-        const target = baseline + (Math.random() - 0.5) * volatility * 4;
-        next.push(Math.max(0, Math.min(1, last * 0.6 + target * 0.4)));
-        return next;
-      });
-    }, 1500);
-    return () => clearInterval(id);
-  }, [baseline, volatility]);
-  return series;
+function toneFromStatus(s: 'ok' | 'warn' | 'err' | undefined): StatusTone {
+  if (s === 'warn') return 'warn';
+  if (s === 'err') return 'err';
+  return 'ok';
 }
 
 function DashboardPage() {
-  const readSeries = useSparkSeries(48, 0.55, 0.18, 11);
-  const writeSeries = useSparkSeries(48, 0.3, 0.15, 12);
-  const iopsSeries = useSparkSeries(48, 0.48, 0.22, 13);
-  const netSeries = useSparkSeries(48, 0.4, 0.2, 14);
+  const health = useSystemHealth();
+  const info = useSystemInfo();
+  const pools = usePools();
+  const alerts = useActiveAlerts();
+  const audit = useRecentAudit(20);
 
-  const readNow = Math.round((readSeries[readSeries.length - 1] ?? 0) * 2400);
-  const writeNow = Math.round((writeSeries[writeSeries.length - 1] ?? 0) * 1200);
-  const iopsNow = Math.round((iopsSeries[iopsSeries.length - 1] ?? 0) * 52000);
-  const netNow = ((netSeries[netSeries.length - 1] ?? 0) * 8.5).toFixed(1);
+  // Throughput / IOPS series from the metrics API.
+  const readMetric = useMetric('system', 'throughput_read', '1h');
+  const writeMetric = useMetric('system', 'throughput_write', '1h');
+  const iopsMetric = useMetric('system', 'iops', '1h');
+  const netMetric = useMetric('system', 'network_throughput', '1h');
+
+  const readSeries = extractSeries(readMetric.data?.series);
+  const writeSeries = extractSeries(writeMetric.data?.series);
+  const iopsSeries = extractSeries(iopsMetric.data?.series);
+  const netSeries = extractSeries(netMetric.data?.series);
+
+  const h = health.data;
+  const tone = toneFromStatus(h?.status);
+  const capacityPct =
+    h?.capacity && h.capacity.totalBytes > 0
+      ? Math.round((h.capacity.usedBytes / h.capacity.totalBytes) * 100)
+      : 0;
 
   return (
     <>
       <PageHeader
         title='Dashboard'
-        subtitle='nas-01 · NovaNas 26.07.3 · Europe/Brussels'
+        subtitle={
+          info.data
+            ? `${info.data.hostname} · NovaNas ${info.data.version} · ${info.data.timezone}`
+            : 'Loading system info…'
+        }
         actions={
           <>
-            <Button variant='default'>
+            <Button
+              variant='default'
+              onClick={() => {
+                health.refetch();
+                pools.refetch();
+                alerts.refetch();
+                audit.refetch();
+              }}
+            >
               <RefreshCw size={13} /> Refresh
             </Button>
             <Button variant='default'>
               <BarChart3 size={13} /> Open Grafana
-            </Button>
-            <Button variant='primary'>
-              <Plus size={13} /> Create
             </Button>
           </>
         }
@@ -186,17 +106,44 @@ function DashboardPage() {
           }}
         />
         <div className='relative z-[1]'>
-          <div className='text-[10px] tracking-[0.12em] uppercase text-success font-medium flex items-center gap-2'>
-            <StatusDot tone='ok' />
-            Operational
+          <div
+            className={`text-[10px] tracking-[0.12em] uppercase font-medium flex items-center gap-2 ${
+              tone === 'ok' ? 'text-success' : tone === 'warn' ? 'text-warning' : 'text-danger'
+            }`}
+          >
+            <StatusDot tone={tone} />
+            {h?.status === 'err'
+              ? 'Attention required'
+              : h?.status === 'warn'
+                ? 'Degraded'
+                : 'Operational'}
           </div>
           <div className='text-[28px] font-semibold text-foreground tracking-tight mt-1.5 mb-1'>
-            All systems healthy
+            {h?.message ?? (health.isLoading ? 'Loading…' : 'All systems healthy')}
           </div>
           <div className='text-foreground-muted text-base max-w-[56ch]'>
-            22 disks active · 4 pools online · Keycloak, OpenBao, k3s control plane nominal. Last
-            scrub: <span className='mono text-foreground'>3h ago</span>. Last config backup:{' '}
-            <span className='mono text-foreground'>14:00</span>.
+            {h ? (
+              <>
+                {h.disks.active} disks active · {h.pools.online} pools online
+                {h.lastScrubAt ? (
+                  <>
+                    {' '}
+                    · Last scrub: <span className='mono text-foreground'>{h.lastScrubAt}</span>
+                  </>
+                ) : null}
+                {h.lastConfigBackupAt ? (
+                  <>
+                    {' '}
+                    · Last config backup:{' '}
+                    <span className='mono text-foreground'>{h.lastConfigBackupAt}</span>
+                  </>
+                ) : null}
+              </>
+            ) : health.isError ? (
+              <span className='text-danger'>Unable to reach /system/health.</span>
+            ) : (
+              <Skeleton className='h-4 w-64' />
+            )}
           </div>
           <div className='grid grid-cols-3 gap-3 mt-4'>
             <div>
@@ -204,17 +151,24 @@ function DashboardPage() {
                 Capacity
               </div>
               <div className='mono text-lg text-foreground tnum'>
-                42.1
-                <span className='text-base text-foreground-subtle'> / 98.1 TB</span>
+                {h?.capacity ? formatBytes(h.capacity.usedBytes) : '—'}
+                <span className='text-base text-foreground-subtle'>
+                  {' '}
+                  / {h?.capacity ? formatBytes(h.capacity.totalBytes) : '—'}
+                </span>
               </div>
-              <Progress value={43} className='mt-2 max-w-[160px]' />
+              <Progress value={capacityPct} className='mt-2 max-w-[160px]' />
             </div>
             <div>
               <div className='text-2xs uppercase tracking-wider text-foreground-subtle'>
                 Apps running
               </div>
               <div className='mono text-lg text-foreground tnum'>
-                8<span className='text-base text-foreground-subtle'> / 12 installed</span>
+                {h?.apps?.running ?? '—'}
+                <span className='text-base text-foreground-subtle'>
+                  {' '}
+                  / {h?.apps?.installed ?? '—'} installed
+                </span>
               </div>
             </div>
             <div>
@@ -222,7 +176,11 @@ function DashboardPage() {
                 VMs running
               </div>
               <div className='mono text-lg text-foreground tnum'>
-                5<span className='text-base text-foreground-subtle'> / 6 defined</span>
+                {h?.vms?.running ?? '—'}
+                <span className='text-base text-foreground-subtle'>
+                  {' '}
+                  / {h?.vms?.defined ?? '—'} defined
+                </span>
               </div>
             </div>
           </div>
@@ -230,8 +188,10 @@ function DashboardPage() {
         <div className='relative z-[1] flex items-center justify-center'>
           <div className='w-[140px] h-[140px] rounded-full grid place-items-center border border-border-strong bg-surface/40'>
             <div className='flex flex-col items-center'>
-              <div className='mono text-2xl text-foreground font-medium tnum'>43%</div>
-              <div className='text-xs text-foreground-subtle'>of 98.1 TB usable</div>
+              <div className='mono text-2xl text-foreground font-medium tnum'>{capacityPct}%</div>
+              <div className='text-xs text-foreground-subtle'>
+                of {h?.capacity ? formatBytes(h.capacity.totalBytes) : '—'} usable
+              </div>
             </div>
           </div>
         </div>
@@ -241,86 +201,110 @@ function DashboardPage() {
       <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3'>
         <Stat
           label='Read'
-          value={readNow}
+          value={lastValue(readSeries).toFixed(0)}
           unit='MB/s'
-          delta='+4.2%'
-          up
           data={readSeries}
           color='var(--accent)'
         />
         <Stat
           label='Write'
-          value={writeNow}
+          value={lastValue(writeSeries).toFixed(0)}
           unit='MB/s'
-          delta='-1.1%'
-          down
           data={writeSeries}
           color='oklch(0.72 0.14 320)'
         />
         <Stat
           label='IOPS'
-          value={iopsNow.toLocaleString()}
-          delta='+7.8%'
-          up
+          value={Math.round(lastValue(iopsSeries)).toLocaleString()}
           data={iopsSeries}
           color='oklch(0.78 0.14 160)'
         />
         <Stat
           label='Network'
-          value={netNow}
+          value={lastValue(netSeries).toFixed(1)}
           unit='Gb/s'
-          delta='+0.4%'
-          up
           data={netSeries}
           color='oklch(0.82 0.14 60)'
         />
       </div>
 
-      {/* Pools + activity */}
+      {/* Pools + alerts */}
       <div className='grid grid-cols-12 gap-3 mb-3'>
         <Card className='col-span-12 xl:col-span-8'>
           <CardHeader>
             <CardTitle>Pools</CardTitle>
-            <CardDescription>4 online</CardDescription>
+            <CardDescription>
+              {pools.data ? `${pools.data.length} pool${pools.data.length === 1 ? '' : 's'}` : '…'}
+            </CardDescription>
           </CardHeader>
           <CardBody flush>
-            <Table>
-              <TableHead>
-                <tr>
-                  <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>Tier</TableHeaderCell>
-                  <TableHeaderCell>Protection</TableHeaderCell>
-                  <TableHeaderCell>Disks</TableHeaderCell>
-                  <TableHeaderCell>Usage</TableHeaderCell>
-                  <TableHeaderCell className='text-right'>Read</TableHeaderCell>
-                  <TableHeaderCell className='text-right'>Write</TableHeaderCell>
-                </tr>
-              </TableHead>
-              <TableBody>
-                {POOLS.map((p) => (
-                  <TableRow key={p.name}>
-                    <TableCell>
-                      <StatusDot tone='ok' className='mr-2' />
-                      <span className='text-foreground font-medium'>{p.name}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge>{p.tier}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge>{p.protection}</Badge>
-                    </TableCell>
-                    <TableCell className='mono'>
-                      {p.disks}× {p.device}
-                    </TableCell>
-                    <TableCell>
-                      <CapacityBar used={p.used} total={p.total} label={formatBytes(p.used)} />
-                    </TableCell>
-                    <TableCell className='mono text-right tnum'>{p.r} MB/s</TableCell>
-                    <TableCell className='mono text-right tnum'>{p.w} MB/s</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {pools.isLoading ? (
+              <div className='p-3 flex flex-col gap-2'>
+                <Skeleton className='h-6' />
+                <Skeleton className='h-6' />
+              </div>
+            ) : pools.isError ? (
+              <div className='p-3 text-sm text-danger'>
+                Unable to load pools.{' '}
+                <Button size='sm' variant='ghost' onClick={() => pools.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : (pools.data?.length ?? 0) === 0 ? (
+              <div className='p-6 text-sm text-foreground-subtle'>No pools configured.</div>
+            ) : (
+              <Table>
+                <TableHead>
+                  <tr>
+                    <TableHeaderCell>Name</TableHeaderCell>
+                    <TableHeaderCell>Tier</TableHeaderCell>
+                    <TableHeaderCell>Phase</TableHeaderCell>
+                    <TableHeaderCell>Disks</TableHeaderCell>
+                    <TableHeaderCell>Usage</TableHeaderCell>
+                  </tr>
+                </TableHead>
+                <TableBody>
+                  {pools.data!.map((p) => {
+                    const phase = p.status?.phase ?? 'Pending';
+                    const t =
+                      phase === 'Active'
+                        ? 'ok'
+                        : phase === 'Degraded'
+                          ? 'warn'
+                          : phase === 'Failed'
+                            ? 'err'
+                            : 'idle';
+                    const cap = p.status?.capacity;
+                    return (
+                      <TableRow key={p.metadata.name}>
+                        <TableCell>
+                          <StatusDot tone={t} className='mr-2' />
+                          <span className='text-foreground font-medium'>{p.metadata.name}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge>{p.spec.tier}</Badge>
+                        </TableCell>
+                        <TableCell className='mono text-xs text-foreground-muted'>
+                          {phase}
+                        </TableCell>
+                        <TableCell className='mono'>{p.status?.diskCount ?? 0}</TableCell>
+                        <TableCell>
+                          {cap ? (
+                            <CapacityBar
+                              used={cap.usedBytes}
+                              total={cap.totalBytes}
+                              label={formatBytes(cap.usedBytes)}
+                            />
+                          ) : (
+                            <span className='text-foreground-subtle text-xs'>—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardBody>
         </Card>
 
@@ -328,98 +312,101 @@ function DashboardPage() {
           <CardHeader>
             <CardTitle>Alerts & activity</CardTitle>
             <CardActions>
-              <Button variant='ghost' size='sm'>
-                View all
-              </Button>
+              <Activity size={14} className='text-foreground-subtle' />
             </CardActions>
           </CardHeader>
           <CardBody flush>
-            <div className='flex flex-col'>
-              {ACTIVITY.map((a, i) => (
-                <div
-                  key={i}
-                  className='grid grid-cols-[14px_1fr_auto] items-start gap-2.5 px-3.5 py-2 border-b border-border last:border-0 text-sm'
-                >
-                  <StatusDot tone={a.tone} className='mt-1' />
-                  <div className='text-foreground'>{a.text}</div>
-                  <div className='mono text-xs text-foreground-subtle'>{a.t}</div>
-                </div>
-              ))}
-            </div>
+            {alerts.isLoading || audit.isLoading ? (
+              <div className='p-3 flex flex-col gap-2'>
+                <Skeleton className='h-5' />
+                <Skeleton className='h-5' />
+                <Skeleton className='h-5' />
+              </div>
+            ) : (
+              <div className='flex flex-col'>
+                {(alerts.data ?? []).slice(0, 3).map((a) => (
+                  <div
+                    key={a.id}
+                    className='grid grid-cols-[14px_1fr_auto] items-start gap-2.5 px-3.5 py-2 border-b border-border text-sm'
+                  >
+                    <StatusDot
+                      tone={a.severity === 'err' ? 'err' : a.severity === 'warn' ? 'warn' : 'info'}
+                      className='mt-1'
+                    />
+                    <div className='text-foreground'>{a.title}</div>
+                    <div className='mono text-xs text-foreground-subtle'>
+                      {shortTime(a.createdAt)}
+                    </div>
+                  </div>
+                ))}
+                {(audit.data ?? []).slice(0, 6).map((ev) => (
+                  <div
+                    key={ev.id}
+                    className='grid grid-cols-[14px_1fr_auto] items-start gap-2.5 px-3.5 py-2 border-b border-border last:border-0 text-sm'
+                  >
+                    <StatusDot tone={ev.tone ?? 'info'} className='mt-1' />
+                    <div className='text-foreground'>{ev.message}</div>
+                    <div className='mono text-xs text-foreground-subtle'>
+                      {shortTime(ev.timestamp)}
+                    </div>
+                  </div>
+                ))}
+                {(alerts.data?.length ?? 0) === 0 && (audit.data?.length ?? 0) === 0 && (
+                  <div className='p-4 text-sm text-foreground-subtle text-center'>
+                    No recent activity.
+                  </div>
+                )}
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>
 
-      {/* Jobs + services */}
+      {/* Services */}
       <div className='grid grid-cols-12 gap-3'>
-        <Card className='col-span-12 md:col-span-6 xl:col-span-4'>
-          <CardHeader>
-            <CardTitle>In-progress jobs</CardTitle>
-            <CardDescription>3 running</CardDescription>
-          </CardHeader>
-          <CardBody className='flex flex-col gap-3'>
-            <JobRow
-              title='Scrub · pool bulk'
-              sub='4.2 TB / 23 TB · 18% · 2h 40m'
-              pct={18}
-              tone='accent'
-            />
-            <JobRow
-              title='Replication · photos → offsite'
-              sub='612 MB / 1.4 GB · 43% · 2m'
-              pct={43}
-              tone='ok'
-            />
-            <JobRow
-              title='Snapshot prune · family-media'
-              sub='schedule retention · running'
-              pct={72}
-              tone='warn'
-            />
-          </CardBody>
-        </Card>
-
-        <Card className='col-span-12 md:col-span-6 xl:col-span-4'>
+        <Card className='col-span-12 md:col-span-6 xl:col-span-8'>
           <CardHeader>
             <CardTitle>System services</CardTitle>
             <CardDescription>novanas-system</CardDescription>
           </CardHeader>
           <CardBody className='flex flex-col gap-2'>
-            {[
-              ['novanas-api', 'Running'],
-              ['novanas-operators', 'Running'],
-              ['chunk-engine (SPDK)', 'Running'],
-              ['keycloak', 'Running'],
-              ['openbao', 'Unsealed'],
-              ['postgres', 'Running'],
-              ['novaedge', 'Running'],
-              ['prometheus / loki / tempo', 'Running'],
-            ].map(([n, s]) => (
-              <div key={n} className='flex items-center justify-between py-0.5'>
-                <div className='flex items-center gap-2'>
-                  <StatusDot tone='ok' />
-                  <span className='mono text-sm'>{n}</span>
+            {h?.services && h.services.length > 0 ? (
+              h.services.map((s) => (
+                <div key={s.name} className='flex items-center justify-between py-0.5'>
+                  <div className='flex items-center gap-2'>
+                    <StatusDot tone={s.tone ?? 'ok'} />
+                    <span className='mono text-sm'>{s.name}</span>
+                  </div>
+                  <span className='mono text-xs text-foreground-subtle'>{s.status}</span>
                 </div>
-                <span className='mono text-xs text-foreground-subtle'>{s}</span>
+              ))
+            ) : (
+              <div className='text-sm text-foreground-subtle'>
+                {health.isLoading ? 'Loading services…' : 'No service data.'}
               </div>
-            ))}
+            )}
           </CardBody>
         </Card>
 
-        <Card className='col-span-12 xl:col-span-4'>
+        <Card className='col-span-12 md:col-span-6 xl:col-span-4'>
           <CardHeader>
-            <CardTitle>Protection summary</CardTitle>
+            <CardTitle>Protection</CardTitle>
             <CardActions>
-              <Activity size={14} className='text-foreground-subtle' />
+              <Shield size={14} className='text-foreground-subtle' />
             </CardActions>
           </CardHeader>
-          <CardBody className='flex flex-col gap-3'>
-            <SummaryRow label='Snapshots (24h)' value='142' />
-            <SummaryRow label='Replication targets' value='3' />
-            <SummaryRow label='Cloud backup last run' value='14:00 · ok' tone='ok' />
-            <SummaryRow label='Spare disks' value='1 (slot 8)' />
-            <div className='text-xs text-foreground-subtle flex items-center gap-1.5'>
-              <Shield size={12} /> All pools meet their declared protection policy.
+          <CardBody className='flex flex-col gap-3 text-sm'>
+            <div className='flex items-center justify-between'>
+              <span className='text-foreground-muted'>Active alerts</span>
+              <span className='mono text-foreground'>{alerts.data?.length ?? 0}</span>
+            </div>
+            <div className='flex items-center justify-between'>
+              <span className='text-foreground-muted'>Last scrub</span>
+              <span className='mono text-foreground'>{h?.lastScrubAt ?? '—'}</span>
+            </div>
+            <div className='flex items-center justify-between'>
+              <span className='text-foreground-muted'>Last config backup</span>
+              <span className='mono text-foreground'>{h?.lastConfigBackupAt ?? '—'}</span>
             </div>
           </CardBody>
         </Card>
@@ -428,54 +415,22 @@ function DashboardPage() {
   );
 }
 
-function JobRow({
-  title,
-  sub,
-  pct,
-  tone = 'accent',
-}: {
-  title: string;
-  sub: string;
-  pct: number;
-  tone?: 'accent' | 'ok' | 'warn' | 'err';
-}) {
-  return (
-    <div className='flex flex-col gap-1'>
-      <div className='flex items-center justify-between'>
-        <div className='text-sm font-medium text-foreground'>{title}</div>
-        <div className='mono text-xs text-foreground-subtle tnum'>{pct}%</div>
-      </div>
-      <Progress value={pct} tone={tone} />
-      <div className='text-xs text-foreground-subtle'>{sub}</div>
-    </div>
-  );
+function extractSeries(
+  series: Array<{ points: Array<{ t: number; v: number }> }> | undefined
+): number[] {
+  if (!series || series.length === 0) return [];
+  return series[0]!.points.map((p) => p.v);
 }
 
-function SummaryRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: 'ok' | 'warn' | 'err';
-}) {
-  return (
-    <div className='flex items-center justify-between text-sm'>
-      <span className='text-foreground-muted'>{label}</span>
-      <span
-        className={
-          tone === 'ok'
-            ? 'text-success mono'
-            : tone === 'warn'
-              ? 'text-warning mono'
-              : tone === 'err'
-                ? 'text-danger mono'
-                : 'text-foreground mono'
-        }
-      >
-        {value}
-      </span>
-    </div>
-  );
+function lastValue(series: number[]): number {
+  if (series.length === 0) return 0;
+  return series[series.length - 1] ?? 0;
+}
+
+function shortTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
 }

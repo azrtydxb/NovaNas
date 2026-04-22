@@ -8,294 +8,297 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root';
-import { Route as AuthRouteImport } from './routes/_auth';
-import { Route as AuthAppsRouteImport } from './routes/_auth.apps';
-import { Route as AuthDashboardRouteImport } from './routes/_auth.dashboard';
-import { Route as AuthDataProtectionCloudBackupRouteImport } from './routes/_auth.data-protection.cloud-backup';
-import { Route as AuthDataProtectionIndexRouteImport } from './routes/_auth.data-protection.index';
-import { Route as AuthDataProtectionReplicationRouteImport } from './routes/_auth.data-protection.replication';
-import { Route as AuthDataProtectionSchedulesRouteImport } from './routes/_auth.data-protection.schedules';
-import { Route as AuthIdentityGroupsRouteImport } from './routes/_auth.identity.groups';
-import { Route as AuthIdentityIndexRouteImport } from './routes/_auth.identity.index';
-import { Route as AuthIdentityUsersRouteImport } from './routes/_auth.identity.users';
-import { Route as AuthIndexRouteImport } from './routes/_auth.index';
-import { Route as AuthNetworkRouteImport } from './routes/_auth.network';
-import { Route as AuthSharingIndexRouteImport } from './routes/_auth.sharing.index';
-import { Route as AuthSharingIscsiRouteImport } from './routes/_auth.sharing.iscsi';
-import { Route as AuthSharingS3RouteImport } from './routes/_auth.sharing.s3';
-import { Route as AuthSharingSharesRouteImport } from './routes/_auth.sharing.shares';
-import { Route as AuthStorageDatasetsRouteImport } from './routes/_auth.storage.datasets';
-import { Route as AuthStorageDisksRouteImport } from './routes/_auth.storage.disks';
-import { Route as AuthStorageIndexRouteImport } from './routes/_auth.storage.index';
-import { Route as AuthStoragePoolsRouteImport } from './routes/_auth.storage.pools';
-import { Route as AuthStorageSnapshotsRouteImport } from './routes/_auth.storage.snapshots';
-import { Route as AuthSystemAlertsRouteImport } from './routes/_auth.system.alerts';
-import { Route as AuthSystemAuditRouteImport } from './routes/_auth.system.audit';
-import { Route as AuthSystemCertificatesRouteImport } from './routes/_auth.system.certificates';
-import { Route as AuthSystemIndexRouteImport } from './routes/_auth.system.index';
-import { Route as AuthSystemSettingsRouteImport } from './routes/_auth.system.settings';
-import { Route as AuthSystemSupportRouteImport } from './routes/_auth.system.support';
-import { Route as AuthSystemUpdatesRouteImport } from './routes/_auth.system.updates';
-import { Route as AuthVmsRouteImport } from './routes/_auth.vms';
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback';
-import { Route as LoginRouteImport } from './routes/login';
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthRouteImport } from './routes/_auth'
+import { Route as AuthIndexRouteImport } from './routes/_auth.index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthVmsRouteImport } from './routes/_auth.vms'
+import { Route as AuthNetworkRouteImport } from './routes/_auth.network'
+import { Route as AuthDashboardRouteImport } from './routes/_auth.dashboard'
+import { Route as AuthAppsRouteImport } from './routes/_auth.apps'
+import { Route as AuthSystemIndexRouteImport } from './routes/_auth.system.index'
+import { Route as AuthStorageIndexRouteImport } from './routes/_auth.storage.index'
+import { Route as AuthSharingIndexRouteImport } from './routes/_auth.sharing.index'
+import { Route as AuthIdentityIndexRouteImport } from './routes/_auth.identity.index'
+import { Route as AuthDataProtectionIndexRouteImport } from './routes/_auth.data-protection.index'
+import { Route as AuthSystemUpdatesRouteImport } from './routes/_auth.system.updates'
+import { Route as AuthSystemSupportRouteImport } from './routes/_auth.system.support'
+import { Route as AuthSystemSettingsRouteImport } from './routes/_auth.system.settings'
+import { Route as AuthSystemCertificatesRouteImport } from './routes/_auth.system.certificates'
+import { Route as AuthSystemAuditRouteImport } from './routes/_auth.system.audit'
+import { Route as AuthSystemAlertsRouteImport } from './routes/_auth.system.alerts'
+import { Route as AuthStorageSnapshotsRouteImport } from './routes/_auth.storage.snapshots'
+import { Route as AuthStoragePoolsRouteImport } from './routes/_auth.storage.pools'
+import { Route as AuthStorageDisksRouteImport } from './routes/_auth.storage.disks'
+import { Route as AuthStorageDatasetsRouteImport } from './routes/_auth.storage.datasets'
+import { Route as AuthSharingSharesRouteImport } from './routes/_auth.sharing.shares'
+import { Route as AuthSharingS3RouteImport } from './routes/_auth.sharing.s3'
+import { Route as AuthSharingIscsiRouteImport } from './routes/_auth.sharing.iscsi'
+import { Route as AuthIdentityUsersRouteImport } from './routes/_auth.identity.users'
+import { Route as AuthIdentityGroupsRouteImport } from './routes/_auth.identity.groups'
+import { Route as AuthDataProtectionSchedulesRouteImport } from './routes/_auth.data-protection.schedules'
+import { Route as AuthDataProtectionReplicationRouteImport } from './routes/_auth.data-protection.replication'
+import { Route as AuthDataProtectionCloudBackupRouteImport } from './routes/_auth.data-protection.cloud-backup'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthVmsRoute = AuthVmsRouteImport.update({
   id: '/vms',
   path: '/vms',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthNetworkRoute = AuthNetworkRouteImport.update({
   id: '/network',
   path: '/network',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthDashboardRoute = AuthDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthAppsRoute = AuthAppsRouteImport.update({
   id: '/apps',
   path: '/apps',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemIndexRoute = AuthSystemIndexRouteImport.update({
   id: '/system/',
   path: '/system/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthStorageIndexRoute = AuthStorageIndexRouteImport.update({
   id: '/storage/',
   path: '/storage/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSharingIndexRoute = AuthSharingIndexRouteImport.update({
   id: '/sharing/',
   path: '/sharing/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthIdentityIndexRoute = AuthIdentityIndexRouteImport.update({
   id: '/identity/',
   path: '/identity/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthDataProtectionIndexRoute = AuthDataProtectionIndexRouteImport.update({
   id: '/data-protection/',
   path: '/data-protection/',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemUpdatesRoute = AuthSystemUpdatesRouteImport.update({
   id: '/system/updates',
   path: '/system/updates',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemSupportRoute = AuthSystemSupportRouteImport.update({
   id: '/system/support',
   path: '/system/support',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemSettingsRoute = AuthSystemSettingsRouteImport.update({
   id: '/system/settings',
   path: '/system/settings',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemCertificatesRoute = AuthSystemCertificatesRouteImport.update({
   id: '/system/certificates',
   path: '/system/certificates',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemAuditRoute = AuthSystemAuditRouteImport.update({
   id: '/system/audit',
   path: '/system/audit',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSystemAlertsRoute = AuthSystemAlertsRouteImport.update({
   id: '/system/alerts',
   path: '/system/alerts',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthStorageSnapshotsRoute = AuthStorageSnapshotsRouteImport.update({
   id: '/storage/snapshots',
   path: '/storage/snapshots',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthStoragePoolsRoute = AuthStoragePoolsRouteImport.update({
   id: '/storage/pools',
   path: '/storage/pools',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthStorageDisksRoute = AuthStorageDisksRouteImport.update({
   id: '/storage/disks',
   path: '/storage/disks',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthStorageDatasetsRoute = AuthStorageDatasetsRouteImport.update({
   id: '/storage/datasets',
   path: '/storage/datasets',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSharingSharesRoute = AuthSharingSharesRouteImport.update({
   id: '/sharing/shares',
   path: '/sharing/shares',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSharingS3Route = AuthSharingS3RouteImport.update({
   id: '/sharing/s3',
   path: '/sharing/s3',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthSharingIscsiRoute = AuthSharingIscsiRouteImport.update({
   id: '/sharing/iscsi',
   path: '/sharing/iscsi',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthIdentityUsersRoute = AuthIdentityUsersRouteImport.update({
   id: '/identity/users',
   path: '/identity/users',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthIdentityGroupsRoute = AuthIdentityGroupsRouteImport.update({
   id: '/identity/groups',
   path: '/identity/groups',
   getParentRoute: () => AuthRoute,
-} as any);
-const AuthDataProtectionSchedulesRoute = AuthDataProtectionSchedulesRouteImport.update({
-  id: '/data-protection/schedules',
-  path: '/data-protection/schedules',
-  getParentRoute: () => AuthRoute,
-} as any);
-const AuthDataProtectionReplicationRoute = AuthDataProtectionReplicationRouteImport.update({
-  id: '/data-protection/replication',
-  path: '/data-protection/replication',
-  getParentRoute: () => AuthRoute,
-} as any);
-const AuthDataProtectionCloudBackupRoute = AuthDataProtectionCloudBackupRouteImport.update({
-  id: '/data-protection/cloud-backup',
-  path: '/data-protection/cloud-backup',
-  getParentRoute: () => AuthRoute,
-} as any);
+} as any)
+const AuthDataProtectionSchedulesRoute =
+  AuthDataProtectionSchedulesRouteImport.update({
+    id: '/data-protection/schedules',
+    path: '/data-protection/schedules',
+    getParentRoute: () => AuthRoute,
+  } as any)
+const AuthDataProtectionReplicationRoute =
+  AuthDataProtectionReplicationRouteImport.update({
+    id: '/data-protection/replication',
+    path: '/data-protection/replication',
+    getParentRoute: () => AuthRoute,
+  } as any)
+const AuthDataProtectionCloudBackupRoute =
+  AuthDataProtectionCloudBackupRouteImport.update({
+    id: '/data-protection/cloud-backup',
+    path: '/data-protection/cloud-backup',
+    getParentRoute: () => AuthRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AuthIndexRoute;
-  '/login': typeof LoginRoute;
-  '/apps': typeof AuthAppsRoute;
-  '/dashboard': typeof AuthDashboardRoute;
-  '/network': typeof AuthNetworkRoute;
-  '/vms': typeof AuthVmsRoute;
-  '/auth/callback': typeof AuthCallbackRoute;
-  '/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute;
-  '/data-protection/replication': typeof AuthDataProtectionReplicationRoute;
-  '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute;
-  '/identity/groups': typeof AuthIdentityGroupsRoute;
-  '/identity/users': typeof AuthIdentityUsersRoute;
-  '/sharing/iscsi': typeof AuthSharingIscsiRoute;
-  '/sharing/s3': typeof AuthSharingS3Route;
-  '/sharing/shares': typeof AuthSharingSharesRoute;
-  '/storage/datasets': typeof AuthStorageDatasetsRoute;
-  '/storage/disks': typeof AuthStorageDisksRoute;
-  '/storage/pools': typeof AuthStoragePoolsRoute;
-  '/storage/snapshots': typeof AuthStorageSnapshotsRoute;
-  '/system/alerts': typeof AuthSystemAlertsRoute;
-  '/system/audit': typeof AuthSystemAuditRoute;
-  '/system/certificates': typeof AuthSystemCertificatesRoute;
-  '/system/settings': typeof AuthSystemSettingsRoute;
-  '/system/support': typeof AuthSystemSupportRoute;
-  '/system/updates': typeof AuthSystemUpdatesRoute;
-  '/data-protection/': typeof AuthDataProtectionIndexRoute;
-  '/identity/': typeof AuthIdentityIndexRoute;
-  '/sharing/': typeof AuthSharingIndexRoute;
-  '/storage/': typeof AuthStorageIndexRoute;
-  '/system/': typeof AuthSystemIndexRoute;
+  '/': typeof AuthIndexRoute
+  '/login': typeof LoginRoute
+  '/apps': typeof AuthAppsRoute
+  '/dashboard': typeof AuthDashboardRoute
+  '/network': typeof AuthNetworkRoute
+  '/vms': typeof AuthVmsRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute
+  '/data-protection/replication': typeof AuthDataProtectionReplicationRoute
+  '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
+  '/identity/groups': typeof AuthIdentityGroupsRoute
+  '/identity/users': typeof AuthIdentityUsersRoute
+  '/sharing/iscsi': typeof AuthSharingIscsiRoute
+  '/sharing/s3': typeof AuthSharingS3Route
+  '/sharing/shares': typeof AuthSharingSharesRoute
+  '/storage/datasets': typeof AuthStorageDatasetsRoute
+  '/storage/disks': typeof AuthStorageDisksRoute
+  '/storage/pools': typeof AuthStoragePoolsRoute
+  '/storage/snapshots': typeof AuthStorageSnapshotsRoute
+  '/system/alerts': typeof AuthSystemAlertsRoute
+  '/system/audit': typeof AuthSystemAuditRoute
+  '/system/certificates': typeof AuthSystemCertificatesRoute
+  '/system/settings': typeof AuthSystemSettingsRoute
+  '/system/support': typeof AuthSystemSupportRoute
+  '/system/updates': typeof AuthSystemUpdatesRoute
+  '/data-protection/': typeof AuthDataProtectionIndexRoute
+  '/identity/': typeof AuthIdentityIndexRoute
+  '/sharing/': typeof AuthSharingIndexRoute
+  '/storage/': typeof AuthStorageIndexRoute
+  '/system/': typeof AuthSystemIndexRoute
 }
 export interface FileRoutesByTo {
-  '/login': typeof LoginRoute;
-  '/apps': typeof AuthAppsRoute;
-  '/dashboard': typeof AuthDashboardRoute;
-  '/network': typeof AuthNetworkRoute;
-  '/vms': typeof AuthVmsRoute;
-  '/auth/callback': typeof AuthCallbackRoute;
-  '/': typeof AuthIndexRoute;
-  '/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute;
-  '/data-protection/replication': typeof AuthDataProtectionReplicationRoute;
-  '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute;
-  '/identity/groups': typeof AuthIdentityGroupsRoute;
-  '/identity/users': typeof AuthIdentityUsersRoute;
-  '/sharing/iscsi': typeof AuthSharingIscsiRoute;
-  '/sharing/s3': typeof AuthSharingS3Route;
-  '/sharing/shares': typeof AuthSharingSharesRoute;
-  '/storage/datasets': typeof AuthStorageDatasetsRoute;
-  '/storage/disks': typeof AuthStorageDisksRoute;
-  '/storage/pools': typeof AuthStoragePoolsRoute;
-  '/storage/snapshots': typeof AuthStorageSnapshotsRoute;
-  '/system/alerts': typeof AuthSystemAlertsRoute;
-  '/system/audit': typeof AuthSystemAuditRoute;
-  '/system/certificates': typeof AuthSystemCertificatesRoute;
-  '/system/settings': typeof AuthSystemSettingsRoute;
-  '/system/support': typeof AuthSystemSupportRoute;
-  '/system/updates': typeof AuthSystemUpdatesRoute;
-  '/data-protection': typeof AuthDataProtectionIndexRoute;
-  '/identity': typeof AuthIdentityIndexRoute;
-  '/sharing': typeof AuthSharingIndexRoute;
-  '/storage': typeof AuthStorageIndexRoute;
-  '/system': typeof AuthSystemIndexRoute;
+  '/login': typeof LoginRoute
+  '/apps': typeof AuthAppsRoute
+  '/dashboard': typeof AuthDashboardRoute
+  '/network': typeof AuthNetworkRoute
+  '/vms': typeof AuthVmsRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/': typeof AuthIndexRoute
+  '/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute
+  '/data-protection/replication': typeof AuthDataProtectionReplicationRoute
+  '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
+  '/identity/groups': typeof AuthIdentityGroupsRoute
+  '/identity/users': typeof AuthIdentityUsersRoute
+  '/sharing/iscsi': typeof AuthSharingIscsiRoute
+  '/sharing/s3': typeof AuthSharingS3Route
+  '/sharing/shares': typeof AuthSharingSharesRoute
+  '/storage/datasets': typeof AuthStorageDatasetsRoute
+  '/storage/disks': typeof AuthStorageDisksRoute
+  '/storage/pools': typeof AuthStoragePoolsRoute
+  '/storage/snapshots': typeof AuthStorageSnapshotsRoute
+  '/system/alerts': typeof AuthSystemAlertsRoute
+  '/system/audit': typeof AuthSystemAuditRoute
+  '/system/certificates': typeof AuthSystemCertificatesRoute
+  '/system/settings': typeof AuthSystemSettingsRoute
+  '/system/support': typeof AuthSystemSupportRoute
+  '/system/updates': typeof AuthSystemUpdatesRoute
+  '/data-protection': typeof AuthDataProtectionIndexRoute
+  '/identity': typeof AuthIdentityIndexRoute
+  '/sharing': typeof AuthSharingIndexRoute
+  '/storage': typeof AuthStorageIndexRoute
+  '/system': typeof AuthSystemIndexRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/_auth': typeof AuthRouteWithChildren;
-  '/login': typeof LoginRoute;
-  '/_auth/apps': typeof AuthAppsRoute;
-  '/_auth/dashboard': typeof AuthDashboardRoute;
-  '/_auth/network': typeof AuthNetworkRoute;
-  '/_auth/vms': typeof AuthVmsRoute;
-  '/auth/callback': typeof AuthCallbackRoute;
-  '/_auth/': typeof AuthIndexRoute;
-  '/_auth/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute;
-  '/_auth/data-protection/replication': typeof AuthDataProtectionReplicationRoute;
-  '/_auth/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute;
-  '/_auth/identity/groups': typeof AuthIdentityGroupsRoute;
-  '/_auth/identity/users': typeof AuthIdentityUsersRoute;
-  '/_auth/sharing/iscsi': typeof AuthSharingIscsiRoute;
-  '/_auth/sharing/s3': typeof AuthSharingS3Route;
-  '/_auth/sharing/shares': typeof AuthSharingSharesRoute;
-  '/_auth/storage/datasets': typeof AuthStorageDatasetsRoute;
-  '/_auth/storage/disks': typeof AuthStorageDisksRoute;
-  '/_auth/storage/pools': typeof AuthStoragePoolsRoute;
-  '/_auth/storage/snapshots': typeof AuthStorageSnapshotsRoute;
-  '/_auth/system/alerts': typeof AuthSystemAlertsRoute;
-  '/_auth/system/audit': typeof AuthSystemAuditRoute;
-  '/_auth/system/certificates': typeof AuthSystemCertificatesRoute;
-  '/_auth/system/settings': typeof AuthSystemSettingsRoute;
-  '/_auth/system/support': typeof AuthSystemSupportRoute;
-  '/_auth/system/updates': typeof AuthSystemUpdatesRoute;
-  '/_auth/data-protection/': typeof AuthDataProtectionIndexRoute;
-  '/_auth/identity/': typeof AuthIdentityIndexRoute;
-  '/_auth/sharing/': typeof AuthSharingIndexRoute;
-  '/_auth/storage/': typeof AuthStorageIndexRoute;
-  '/_auth/system/': typeof AuthSystemIndexRoute;
+  __root__: typeof rootRouteImport
+  '/_auth': typeof AuthRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_auth/apps': typeof AuthAppsRoute
+  '/_auth/dashboard': typeof AuthDashboardRoute
+  '/_auth/network': typeof AuthNetworkRoute
+  '/_auth/vms': typeof AuthVmsRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/_auth/': typeof AuthIndexRoute
+  '/_auth/data-protection/cloud-backup': typeof AuthDataProtectionCloudBackupRoute
+  '/_auth/data-protection/replication': typeof AuthDataProtectionReplicationRoute
+  '/_auth/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
+  '/_auth/identity/groups': typeof AuthIdentityGroupsRoute
+  '/_auth/identity/users': typeof AuthIdentityUsersRoute
+  '/_auth/sharing/iscsi': typeof AuthSharingIscsiRoute
+  '/_auth/sharing/s3': typeof AuthSharingS3Route
+  '/_auth/sharing/shares': typeof AuthSharingSharesRoute
+  '/_auth/storage/datasets': typeof AuthStorageDatasetsRoute
+  '/_auth/storage/disks': typeof AuthStorageDisksRoute
+  '/_auth/storage/pools': typeof AuthStoragePoolsRoute
+  '/_auth/storage/snapshots': typeof AuthStorageSnapshotsRoute
+  '/_auth/system/alerts': typeof AuthSystemAlertsRoute
+  '/_auth/system/audit': typeof AuthSystemAuditRoute
+  '/_auth/system/certificates': typeof AuthSystemCertificatesRoute
+  '/_auth/system/settings': typeof AuthSystemSettingsRoute
+  '/_auth/system/support': typeof AuthSystemSupportRoute
+  '/_auth/system/updates': typeof AuthSystemUpdatesRoute
+  '/_auth/data-protection/': typeof AuthDataProtectionIndexRoute
+  '/_auth/identity/': typeof AuthIdentityIndexRoute
+  '/_auth/sharing/': typeof AuthSharingIndexRoute
+  '/_auth/storage/': typeof AuthStorageIndexRoute
+  '/_auth/system/': typeof AuthSystemIndexRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/login'
@@ -326,8 +329,8 @@ export interface FileRouteTypes {
     | '/identity/'
     | '/sharing/'
     | '/storage/'
-    | '/system/';
-  fileRoutesByTo: FileRoutesByTo;
+    | '/system/'
+  fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/apps'
@@ -358,7 +361,7 @@ export interface FileRouteTypes {
     | '/identity'
     | '/sharing'
     | '/storage'
-    | '/system';
+    | '/system'
   id:
     | '__root__'
     | '/_auth'
@@ -391,266 +394,266 @@ export interface FileRouteTypes {
     | '/_auth/identity/'
     | '/_auth/sharing/'
     | '/_auth/storage/'
-    | '/_auth/system/';
-  fileRoutesById: FileRoutesById;
+    | '/_auth/system/'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthRoute: typeof AuthRouteWithChildren;
-  LoginRoute: typeof LoginRoute;
-  AuthCallbackRoute: typeof AuthCallbackRoute;
+  AuthRoute: typeof AuthRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/login': {
-      id: '/login';
-      path: '/login';
-      fullPath: '/login';
-      preLoaderRoute: typeof LoginRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth': {
-      id: '/_auth';
-      path: '';
-      fullPath: '/';
-      preLoaderRoute: typeof AuthRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/_auth'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth/': {
-      id: '/_auth/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof AuthIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/auth/callback': {
-      id: '/auth/callback';
-      path: '/auth/callback';
-      fullPath: '/auth/callback';
-      preLoaderRoute: typeof AuthCallbackRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth/vms': {
-      id: '/_auth/vms';
-      path: '/vms';
-      fullPath: '/vms';
-      preLoaderRoute: typeof AuthVmsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/vms'
+      path: '/vms'
+      fullPath: '/vms'
+      preLoaderRoute: typeof AuthVmsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/network': {
-      id: '/_auth/network';
-      path: '/network';
-      fullPath: '/network';
-      preLoaderRoute: typeof AuthNetworkRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/network'
+      path: '/network'
+      fullPath: '/network'
+      preLoaderRoute: typeof AuthNetworkRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/dashboard': {
-      id: '/_auth/dashboard';
-      path: '/dashboard';
-      fullPath: '/dashboard';
-      preLoaderRoute: typeof AuthDashboardRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthDashboardRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/apps': {
-      id: '/_auth/apps';
-      path: '/apps';
-      fullPath: '/apps';
-      preLoaderRoute: typeof AuthAppsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/apps'
+      path: '/apps'
+      fullPath: '/apps'
+      preLoaderRoute: typeof AuthAppsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/': {
-      id: '/_auth/system/';
-      path: '/system';
-      fullPath: '/system/';
-      preLoaderRoute: typeof AuthSystemIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/'
+      path: '/system'
+      fullPath: '/system/'
+      preLoaderRoute: typeof AuthSystemIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/storage/': {
-      id: '/_auth/storage/';
-      path: '/storage';
-      fullPath: '/storage/';
-      preLoaderRoute: typeof AuthStorageIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/storage/'
+      path: '/storage'
+      fullPath: '/storage/'
+      preLoaderRoute: typeof AuthStorageIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/sharing/': {
-      id: '/_auth/sharing/';
-      path: '/sharing';
-      fullPath: '/sharing/';
-      preLoaderRoute: typeof AuthSharingIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/sharing/'
+      path: '/sharing'
+      fullPath: '/sharing/'
+      preLoaderRoute: typeof AuthSharingIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/identity/': {
-      id: '/_auth/identity/';
-      path: '/identity';
-      fullPath: '/identity/';
-      preLoaderRoute: typeof AuthIdentityIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/identity/'
+      path: '/identity'
+      fullPath: '/identity/'
+      preLoaderRoute: typeof AuthIdentityIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/data-protection/': {
-      id: '/_auth/data-protection/';
-      path: '/data-protection';
-      fullPath: '/data-protection/';
-      preLoaderRoute: typeof AuthDataProtectionIndexRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/data-protection/'
+      path: '/data-protection'
+      fullPath: '/data-protection/'
+      preLoaderRoute: typeof AuthDataProtectionIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/updates': {
-      id: '/_auth/system/updates';
-      path: '/system/updates';
-      fullPath: '/system/updates';
-      preLoaderRoute: typeof AuthSystemUpdatesRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/updates'
+      path: '/system/updates'
+      fullPath: '/system/updates'
+      preLoaderRoute: typeof AuthSystemUpdatesRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/support': {
-      id: '/_auth/system/support';
-      path: '/system/support';
-      fullPath: '/system/support';
-      preLoaderRoute: typeof AuthSystemSupportRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/support'
+      path: '/system/support'
+      fullPath: '/system/support'
+      preLoaderRoute: typeof AuthSystemSupportRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/settings': {
-      id: '/_auth/system/settings';
-      path: '/system/settings';
-      fullPath: '/system/settings';
-      preLoaderRoute: typeof AuthSystemSettingsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/settings'
+      path: '/system/settings'
+      fullPath: '/system/settings'
+      preLoaderRoute: typeof AuthSystemSettingsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/certificates': {
-      id: '/_auth/system/certificates';
-      path: '/system/certificates';
-      fullPath: '/system/certificates';
-      preLoaderRoute: typeof AuthSystemCertificatesRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/certificates'
+      path: '/system/certificates'
+      fullPath: '/system/certificates'
+      preLoaderRoute: typeof AuthSystemCertificatesRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/audit': {
-      id: '/_auth/system/audit';
-      path: '/system/audit';
-      fullPath: '/system/audit';
-      preLoaderRoute: typeof AuthSystemAuditRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/audit'
+      path: '/system/audit'
+      fullPath: '/system/audit'
+      preLoaderRoute: typeof AuthSystemAuditRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/system/alerts': {
-      id: '/_auth/system/alerts';
-      path: '/system/alerts';
-      fullPath: '/system/alerts';
-      preLoaderRoute: typeof AuthSystemAlertsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/system/alerts'
+      path: '/system/alerts'
+      fullPath: '/system/alerts'
+      preLoaderRoute: typeof AuthSystemAlertsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/storage/snapshots': {
-      id: '/_auth/storage/snapshots';
-      path: '/storage/snapshots';
-      fullPath: '/storage/snapshots';
-      preLoaderRoute: typeof AuthStorageSnapshotsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/storage/snapshots'
+      path: '/storage/snapshots'
+      fullPath: '/storage/snapshots'
+      preLoaderRoute: typeof AuthStorageSnapshotsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/storage/pools': {
-      id: '/_auth/storage/pools';
-      path: '/storage/pools';
-      fullPath: '/storage/pools';
-      preLoaderRoute: typeof AuthStoragePoolsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/storage/pools'
+      path: '/storage/pools'
+      fullPath: '/storage/pools'
+      preLoaderRoute: typeof AuthStoragePoolsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/storage/disks': {
-      id: '/_auth/storage/disks';
-      path: '/storage/disks';
-      fullPath: '/storage/disks';
-      preLoaderRoute: typeof AuthStorageDisksRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/storage/disks'
+      path: '/storage/disks'
+      fullPath: '/storage/disks'
+      preLoaderRoute: typeof AuthStorageDisksRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/storage/datasets': {
-      id: '/_auth/storage/datasets';
-      path: '/storage/datasets';
-      fullPath: '/storage/datasets';
-      preLoaderRoute: typeof AuthStorageDatasetsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/storage/datasets'
+      path: '/storage/datasets'
+      fullPath: '/storage/datasets'
+      preLoaderRoute: typeof AuthStorageDatasetsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/sharing/shares': {
-      id: '/_auth/sharing/shares';
-      path: '/sharing/shares';
-      fullPath: '/sharing/shares';
-      preLoaderRoute: typeof AuthSharingSharesRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/sharing/shares'
+      path: '/sharing/shares'
+      fullPath: '/sharing/shares'
+      preLoaderRoute: typeof AuthSharingSharesRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/sharing/s3': {
-      id: '/_auth/sharing/s3';
-      path: '/sharing/s3';
-      fullPath: '/sharing/s3';
-      preLoaderRoute: typeof AuthSharingS3RouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/sharing/s3'
+      path: '/sharing/s3'
+      fullPath: '/sharing/s3'
+      preLoaderRoute: typeof AuthSharingS3RouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/sharing/iscsi': {
-      id: '/_auth/sharing/iscsi';
-      path: '/sharing/iscsi';
-      fullPath: '/sharing/iscsi';
-      preLoaderRoute: typeof AuthSharingIscsiRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/sharing/iscsi'
+      path: '/sharing/iscsi'
+      fullPath: '/sharing/iscsi'
+      preLoaderRoute: typeof AuthSharingIscsiRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/identity/users': {
-      id: '/_auth/identity/users';
-      path: '/identity/users';
-      fullPath: '/identity/users';
-      preLoaderRoute: typeof AuthIdentityUsersRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/identity/users'
+      path: '/identity/users'
+      fullPath: '/identity/users'
+      preLoaderRoute: typeof AuthIdentityUsersRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/identity/groups': {
-      id: '/_auth/identity/groups';
-      path: '/identity/groups';
-      fullPath: '/identity/groups';
-      preLoaderRoute: typeof AuthIdentityGroupsRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/identity/groups'
+      path: '/identity/groups'
+      fullPath: '/identity/groups'
+      preLoaderRoute: typeof AuthIdentityGroupsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/data-protection/schedules': {
-      id: '/_auth/data-protection/schedules';
-      path: '/data-protection/schedules';
-      fullPath: '/data-protection/schedules';
-      preLoaderRoute: typeof AuthDataProtectionSchedulesRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/data-protection/schedules'
+      path: '/data-protection/schedules'
+      fullPath: '/data-protection/schedules'
+      preLoaderRoute: typeof AuthDataProtectionSchedulesRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/data-protection/replication': {
-      id: '/_auth/data-protection/replication';
-      path: '/data-protection/replication';
-      fullPath: '/data-protection/replication';
-      preLoaderRoute: typeof AuthDataProtectionReplicationRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/data-protection/replication'
+      path: '/data-protection/replication'
+      fullPath: '/data-protection/replication'
+      preLoaderRoute: typeof AuthDataProtectionReplicationRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/data-protection/cloud-backup': {
-      id: '/_auth/data-protection/cloud-backup';
-      path: '/data-protection/cloud-backup';
-      fullPath: '/data-protection/cloud-backup';
-      preLoaderRoute: typeof AuthDataProtectionCloudBackupRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/data-protection/cloud-backup'
+      path: '/data-protection/cloud-backup'
+      fullPath: '/data-protection/cloud-backup'
+      preLoaderRoute: typeof AuthDataProtectionCloudBackupRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
-  AuthAppsRoute: typeof AuthAppsRoute;
-  AuthDashboardRoute: typeof AuthDashboardRoute;
-  AuthNetworkRoute: typeof AuthNetworkRoute;
-  AuthVmsRoute: typeof AuthVmsRoute;
-  AuthIndexRoute: typeof AuthIndexRoute;
-  AuthDataProtectionCloudBackupRoute: typeof AuthDataProtectionCloudBackupRoute;
-  AuthDataProtectionReplicationRoute: typeof AuthDataProtectionReplicationRoute;
-  AuthDataProtectionSchedulesRoute: typeof AuthDataProtectionSchedulesRoute;
-  AuthIdentityGroupsRoute: typeof AuthIdentityGroupsRoute;
-  AuthIdentityUsersRoute: typeof AuthIdentityUsersRoute;
-  AuthSharingIscsiRoute: typeof AuthSharingIscsiRoute;
-  AuthSharingS3Route: typeof AuthSharingS3Route;
-  AuthSharingSharesRoute: typeof AuthSharingSharesRoute;
-  AuthStorageDatasetsRoute: typeof AuthStorageDatasetsRoute;
-  AuthStorageDisksRoute: typeof AuthStorageDisksRoute;
-  AuthStoragePoolsRoute: typeof AuthStoragePoolsRoute;
-  AuthStorageSnapshotsRoute: typeof AuthStorageSnapshotsRoute;
-  AuthSystemAlertsRoute: typeof AuthSystemAlertsRoute;
-  AuthSystemAuditRoute: typeof AuthSystemAuditRoute;
-  AuthSystemCertificatesRoute: typeof AuthSystemCertificatesRoute;
-  AuthSystemSettingsRoute: typeof AuthSystemSettingsRoute;
-  AuthSystemSupportRoute: typeof AuthSystemSupportRoute;
-  AuthSystemUpdatesRoute: typeof AuthSystemUpdatesRoute;
-  AuthDataProtectionIndexRoute: typeof AuthDataProtectionIndexRoute;
-  AuthIdentityIndexRoute: typeof AuthIdentityIndexRoute;
-  AuthSharingIndexRoute: typeof AuthSharingIndexRoute;
-  AuthStorageIndexRoute: typeof AuthStorageIndexRoute;
-  AuthSystemIndexRoute: typeof AuthSystemIndexRoute;
+  AuthAppsRoute: typeof AuthAppsRoute
+  AuthDashboardRoute: typeof AuthDashboardRoute
+  AuthNetworkRoute: typeof AuthNetworkRoute
+  AuthVmsRoute: typeof AuthVmsRoute
+  AuthIndexRoute: typeof AuthIndexRoute
+  AuthDataProtectionCloudBackupRoute: typeof AuthDataProtectionCloudBackupRoute
+  AuthDataProtectionReplicationRoute: typeof AuthDataProtectionReplicationRoute
+  AuthDataProtectionSchedulesRoute: typeof AuthDataProtectionSchedulesRoute
+  AuthIdentityGroupsRoute: typeof AuthIdentityGroupsRoute
+  AuthIdentityUsersRoute: typeof AuthIdentityUsersRoute
+  AuthSharingIscsiRoute: typeof AuthSharingIscsiRoute
+  AuthSharingS3Route: typeof AuthSharingS3Route
+  AuthSharingSharesRoute: typeof AuthSharingSharesRoute
+  AuthStorageDatasetsRoute: typeof AuthStorageDatasetsRoute
+  AuthStorageDisksRoute: typeof AuthStorageDisksRoute
+  AuthStoragePoolsRoute: typeof AuthStoragePoolsRoute
+  AuthStorageSnapshotsRoute: typeof AuthStorageSnapshotsRoute
+  AuthSystemAlertsRoute: typeof AuthSystemAlertsRoute
+  AuthSystemAuditRoute: typeof AuthSystemAuditRoute
+  AuthSystemCertificatesRoute: typeof AuthSystemCertificatesRoute
+  AuthSystemSettingsRoute: typeof AuthSystemSettingsRoute
+  AuthSystemSupportRoute: typeof AuthSystemSupportRoute
+  AuthSystemUpdatesRoute: typeof AuthSystemUpdatesRoute
+  AuthDataProtectionIndexRoute: typeof AuthDataProtectionIndexRoute
+  AuthIdentityIndexRoute: typeof AuthIdentityIndexRoute
+  AuthSharingIndexRoute: typeof AuthSharingIndexRoute
+  AuthStorageIndexRoute: typeof AuthStorageIndexRoute
+  AuthSystemIndexRoute: typeof AuthSystemIndexRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
@@ -682,15 +685,15 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthSharingIndexRoute: AuthSharingIndexRoute,
   AuthStorageIndexRoute: AuthStorageIndexRoute,
   AuthSystemIndexRoute: AuthSystemIndexRoute,
-};
+}
 
-const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren);
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()

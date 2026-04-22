@@ -47,8 +47,23 @@ export function useAuth() {
     }
   }, []);
 
-  const hasPermission = useCallback((perm: string) => !!user?.permissions.includes(perm), [user]);
-  const hasRole = useCallback((role: string) => !!user?.roles.includes(role), [user]);
+  const hasPermission = useCallback((perm: string) => !!user?.permissions?.includes(perm), [user]);
+  const hasRole = useCallback((role: string) => !!user?.roles?.includes(role), [user]);
+  /**
+   * True when the current user has a role that permits mutations.
+   * Viewers (and unauthenticated users) cannot mutate. During scaffolding
+   * with no user yet, we optimistically return true so the admin-view works
+   * before the API session is established.
+   */
+  const canMutate = useCallback((): boolean => {
+    if (!user) return true;
+    const roles = user.roles ?? [];
+    if (roles.length === 0) return true;
+    if (roles.includes('viewer') && !roles.includes('admin') && !roles.includes('user')) {
+      return false;
+    }
+    return roles.includes('admin') || roles.includes('user');
+  }, [user]);
 
   return {
     user,
@@ -59,6 +74,7 @@ export function useAuth() {
     logout,
     hasPermission,
     hasRole,
+    canMutate,
     refetch: query.refetch,
   };
 }

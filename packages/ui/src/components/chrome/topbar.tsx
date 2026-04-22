@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/cn';
 import { Bell, ChevronDown, LogOut, Search, Settings, User as UserIcon } from 'lucide-react';
 import { Brand } from './brand';
+import { ThemeToggle } from './theme-toggle';
 
 export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
   const { user, logout } = useAuth();
@@ -50,6 +51,8 @@ export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
       </div>
 
       <HealthPill tone='ok'>26.07.3</HealthPill>
+
+      <ThemeToggle />
 
       <button
         type='button'
