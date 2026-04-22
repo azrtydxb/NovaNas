@@ -1,0 +1,23 @@
+{
+  "name": "novanas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NovaNas — Kubernetes-native single-node NAS appliance",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "nx run-many -t build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "nx run-many -t test --output-style=stream",
+    "typecheck": "nx run-many -t typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "~1.9.0",
+    "nx": "~20.0.0",
+    "typescript": "~5.6.0"
+  }
+}

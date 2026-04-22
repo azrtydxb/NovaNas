@@ -1,0 +1,36 @@
+# Node
+node_modules/
+dist/
+build/
+.nx/
+coverage/
+*.tsbuildinfo
+
+# Rust
+target/
+
+# Go
+bin/
+vendor/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo

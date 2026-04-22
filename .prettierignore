@@ -1,0 +1,5 @@
+# This repo uses Biome (biome.json) for formatting/linting, not Prettier.
+# This file exists only so editor integrations that prefer Prettier
+# do not accidentally reformat the repo. Configure your editor to use
+# Biome instead.
+*

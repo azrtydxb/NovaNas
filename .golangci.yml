@@ -1,0 +1,29 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - gosimple
+    - unused
+    - gosec
+    - gofmt
+    - revive
+
+linters-settings:
+  revive:
+    severity: warning
+    rules:
+      - name: exported
+      - name: var-naming
+      - name: package-comments
+      - name: indent-error-flow
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-use-default: false
