@@ -36,6 +36,8 @@ import { Route as AuthSharingSharesRouteImport } from './routes/_auth.sharing.sh
 import { Route as AuthSharingS3RouteImport } from './routes/_auth.sharing.s3'
 import { Route as AuthSharingIscsiRouteImport } from './routes/_auth.sharing.iscsi'
 import { Route as AuthIdentityUsersRouteImport } from './routes/_auth.identity.users'
+import { Route as AuthIdentityTokensRouteImport } from './routes/_auth.identity.tokens'
+import { Route as AuthIdentityProvidersRouteImport } from './routes/_auth.identity.providers'
 import { Route as AuthIdentityGroupsRouteImport } from './routes/_auth.identity.groups'
 import { Route as AuthDataProtectionSchedulesRouteImport } from './routes/_auth.data-protection.schedules'
 import { Route as AuthDataProtectionReplicationRouteImport } from './routes/_auth.data-protection.replication'
@@ -175,6 +177,16 @@ const AuthIdentityUsersRoute = AuthIdentityUsersRouteImport.update({
   path: '/identity/users',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthIdentityTokensRoute = AuthIdentityTokensRouteImport.update({
+  id: '/identity/tokens',
+  path: '/identity/tokens',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthIdentityProvidersRoute = AuthIdentityProvidersRouteImport.update({
+  id: '/identity/providers',
+  path: '/identity/providers',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthIdentityGroupsRoute = AuthIdentityGroupsRouteImport.update({
   id: '/identity/groups',
   path: '/identity/groups',
@@ -211,6 +223,8 @@ export interface FileRoutesByFullPath {
   '/data-protection/replication': typeof AuthDataProtectionReplicationRoute
   '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
   '/identity/groups': typeof AuthIdentityGroupsRoute
+  '/identity/providers': typeof AuthIdentityProvidersRoute
+  '/identity/tokens': typeof AuthIdentityTokensRoute
   '/identity/users': typeof AuthIdentityUsersRoute
   '/sharing/iscsi': typeof AuthSharingIscsiRoute
   '/sharing/s3': typeof AuthSharingS3Route
@@ -243,6 +257,8 @@ export interface FileRoutesByTo {
   '/data-protection/replication': typeof AuthDataProtectionReplicationRoute
   '/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
   '/identity/groups': typeof AuthIdentityGroupsRoute
+  '/identity/providers': typeof AuthIdentityProvidersRoute
+  '/identity/tokens': typeof AuthIdentityTokensRoute
   '/identity/users': typeof AuthIdentityUsersRoute
   '/sharing/iscsi': typeof AuthSharingIscsiRoute
   '/sharing/s3': typeof AuthSharingS3Route
@@ -277,6 +293,8 @@ export interface FileRoutesById {
   '/_auth/data-protection/replication': typeof AuthDataProtectionReplicationRoute
   '/_auth/data-protection/schedules': typeof AuthDataProtectionSchedulesRoute
   '/_auth/identity/groups': typeof AuthIdentityGroupsRoute
+  '/_auth/identity/providers': typeof AuthIdentityProvidersRoute
+  '/_auth/identity/tokens': typeof AuthIdentityTokensRoute
   '/_auth/identity/users': typeof AuthIdentityUsersRoute
   '/_auth/sharing/iscsi': typeof AuthSharingIscsiRoute
   '/_auth/sharing/s3': typeof AuthSharingS3Route
@@ -311,6 +329,8 @@ export interface FileRouteTypes {
     | '/data-protection/replication'
     | '/data-protection/schedules'
     | '/identity/groups'
+    | '/identity/providers'
+    | '/identity/tokens'
     | '/identity/users'
     | '/sharing/iscsi'
     | '/sharing/s3'
@@ -343,6 +363,8 @@ export interface FileRouteTypes {
     | '/data-protection/replication'
     | '/data-protection/schedules'
     | '/identity/groups'
+    | '/identity/providers'
+    | '/identity/tokens'
     | '/identity/users'
     | '/sharing/iscsi'
     | '/sharing/s3'
@@ -376,6 +398,8 @@ export interface FileRouteTypes {
     | '/_auth/data-protection/replication'
     | '/_auth/data-protection/schedules'
     | '/_auth/identity/groups'
+    | '/_auth/identity/providers'
+    | '/_auth/identity/tokens'
     | '/_auth/identity/users'
     | '/_auth/sharing/iscsi'
     | '/_auth/sharing/s3'
@@ -594,6 +618,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthIdentityUsersRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/identity/tokens': {
+      id: '/_auth/identity/tokens'
+      path: '/identity/tokens'
+      fullPath: '/identity/tokens'
+      preLoaderRoute: typeof AuthIdentityTokensRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/identity/providers': {
+      id: '/_auth/identity/providers'
+      path: '/identity/providers'
+      fullPath: '/identity/providers'
+      preLoaderRoute: typeof AuthIdentityProvidersRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/identity/groups': {
       id: '/_auth/identity/groups'
       path: '/identity/groups'
@@ -635,6 +673,8 @@ interface AuthRouteChildren {
   AuthDataProtectionReplicationRoute: typeof AuthDataProtectionReplicationRoute
   AuthDataProtectionSchedulesRoute: typeof AuthDataProtectionSchedulesRoute
   AuthIdentityGroupsRoute: typeof AuthIdentityGroupsRoute
+  AuthIdentityProvidersRoute: typeof AuthIdentityProvidersRoute
+  AuthIdentityTokensRoute: typeof AuthIdentityTokensRoute
   AuthIdentityUsersRoute: typeof AuthIdentityUsersRoute
   AuthSharingIscsiRoute: typeof AuthSharingIscsiRoute
   AuthSharingS3Route: typeof AuthSharingS3Route
@@ -666,6 +706,8 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthDataProtectionReplicationRoute: AuthDataProtectionReplicationRoute,
   AuthDataProtectionSchedulesRoute: AuthDataProtectionSchedulesRoute,
   AuthIdentityGroupsRoute: AuthIdentityGroupsRoute,
+  AuthIdentityProvidersRoute: AuthIdentityProvidersRoute,
+  AuthIdentityTokensRoute: AuthIdentityTokensRoute,
   AuthIdentityUsersRoute: AuthIdentityUsersRoute,
   AuthSharingIscsiRoute: AuthSharingIscsiRoute,
   AuthSharingS3Route: AuthSharingS3Route,

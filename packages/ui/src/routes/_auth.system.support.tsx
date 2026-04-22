@@ -1,23 +1,133 @@
-import { ShellScreen } from '@/components/common/shell-screen';
+import { api } from '@/api/client';
+import { EmptyState } from '@/components/common/empty-state';
+import { PageHeader } from '@/components/common/page-header';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui/table';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { LifeBuoy } from 'lucide-react';
+import { Download, LifeBuoy } from 'lucide-react';
+
+interface SupportBundle {
+  id: string;
+  createdAt: string;
+  sizeBytes: number;
+  status: 'generating' | 'ready' | 'failed';
+  downloadUrl?: string;
+}
 
 export const Route = createFileRoute('/_auth/system/support')({
   component: SupportPage,
 });
 
 function SupportPage() {
+  const { canMutate } = useAuth();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const bundles = useQuery<SupportBundle[]>({
+    queryKey: ['support-bundles'],
+    queryFn: async () => {
+      const res = await api.get<{ items?: SupportBundle[] } | SupportBundle[]>(
+        '/system/support-bundles'
+      );
+      return Array.isArray(res) ? res : (res?.items ?? []);
+    },
+  });
+
+  const generate = useMutation({
+    mutationFn: () => api.post<SupportBundle>('/system/support-bundles', {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['support-bundles'] }),
+  });
+
+  const mayMutate = canMutate();
+
   return (
-    <ShellScreen
-      title='Support'
-      subtitle='Diagnostics, support bundle, shutdown / reboot.'
-      icon={<LifeBuoy size={28} />}
-      upcoming={[
-        'Support bundle generator (logs, state, config)',
-        'Community and commercial support links',
-        'Shutdown / reboot with safe drain',
-        'Remote support tunnel (operator-approved)',
-      ]}
-    />
+    <>
+      <PageHeader
+        title='Support'
+        subtitle='Generate diagnostic bundles for support.'
+        actions={
+          mayMutate ? (
+            <Button
+              variant='primary'
+              onClick={async () => {
+                try {
+                  await generate.mutateAsync();
+                  toast.success('Support bundle queued');
+                } catch (e) {
+                  toast.error('Failed to queue bundle', (e as Error).message);
+                }
+              }}
+              disabled={generate.isPending}
+            >
+              {generate.isPending ? 'Queuing…' : 'Generate bundle'}
+            </Button>
+          ) : null
+        }
+      />
+
+      {bundles.isLoading ? (
+        <Skeleton className='h-24' />
+      ) : bundles.isError ? (
+        <EmptyState
+          icon={<LifeBuoy size={28} />}
+          title='Unable to load bundles'
+          description={(bundles.error as Error)?.message}
+          action={<Button onClick={() => bundles.refetch()}>Retry</Button>}
+        />
+      ) : (bundles.data?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={<LifeBuoy size={28} />}
+          title='No support bundles yet'
+          description='Generate one to collect diagnostics, configuration, and recent logs.'
+        />
+      ) : (
+        <div className='border border-border rounded-md overflow-hidden'>
+          <Table>
+            <TableHead>
+              <tr>
+                <TableHeaderCell>ID</TableHeaderCell>
+                <TableHeaderCell>Created</TableHeaderCell>
+                <TableHeaderCell>Size</TableHeaderCell>
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell className='text-right'>Download</TableHeaderCell>
+              </tr>
+            </TableHead>
+            <TableBody>
+              {bundles.data!.map((b) => (
+                <TableRow key={b.id}>
+                  <TableCell className='mono text-xs'>{b.id}</TableCell>
+                  <TableCell className='mono text-xs'>{b.createdAt}</TableCell>
+                  <TableCell className='mono text-xs'>
+                    {(b.sizeBytes / 1e6).toFixed(1)} MB
+                  </TableCell>
+                  <TableCell className='text-xs'>{b.status}</TableCell>
+                  <TableCell className='text-right'>
+                    {b.status === 'ready' && b.downloadUrl ? (
+                      <a href={b.downloadUrl} download>
+                        <Button size='sm' variant='ghost'>
+                          <Download size={12} />
+                        </Button>
+                      </a>
+                    ) : (
+                      <span className='text-foreground-subtle text-xs'>—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </>
   );
 }

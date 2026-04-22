@@ -47,6 +47,8 @@ export const ADMIN_NAV: NavItem[] = [
     children: [
       { id: 'users', label: 'Users', to: '/identity/users' },
       { id: 'groups', label: 'Groups', to: '/identity/groups' },
+      { id: 'providers', label: 'Providers', to: '/identity/providers' },
+      { id: 'tokens', label: 'Tokens', to: '/identity/tokens' },
     ],
   },
   {
