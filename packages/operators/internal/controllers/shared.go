@@ -1,24 +1,34 @@
 // Package controllers holds one reconciler per NovaNas CRD kind.
 //
-// Every controller here is currently a no-op: Reconcile returns without
-// taking any action. Real logic lands in Wave 4+. The scaffolding exists so
-// the manager binary builds, leader election works, and CRD kinds can be
-// watched end-to-end in a local dev cluster before the hard work starts.
+// The reconcilers share a common minimal-viable pattern implemented through
+// helpers in packages/operators/internal/reconciler: finalizer management,
+// condition tracking with observedGeneration, a small set of external-system
+// adapter interfaces (KeycloakClient, StorageClient, CertificateIssuer), and
+// event emission. Individual controllers embed reconciler.BaseReconciler
+// and optionally accept concrete interface fields which default to no-op
+// implementations when un-wired.
 package controllers
 
-const (
-	// Finalizer is the common finalizer prefix for NovaNas-owned resources.
-	// Concrete controllers append their kind:
-	//
-	//   novanas.io/storagepool
-	//   novanas.io/dataset
-	//   ...
-	FinalizerPrefix = "novanas.io/"
+import "time"
 
+const (
 	// ConditionReady is the standard condition name controllers should use
-	// to summarise overall resource health.
+	// to summarise overall resource health. Kept for backward compatibility
+	// with callers that still reference controllers.ConditionReady; new code
+	// should use reconciler.ConditionReady directly.
 	ConditionReady = "Ready"
 
-	// ConditionReconciling indicates an in-flight reconcile.
+	// ConditionReconciling indicates an in-flight reconcile. Superseded by
+	// reconciler.ConditionProgressing but kept for source-compatibility.
 	ConditionReconciling = "Reconciling"
+
+	// FinalizerPrefix mirrors reconciler.FinalizerPrefix. Duplicated as a
+	// constant here so existing controllers can reference it without an
+	// extra import; the reconciler package is the source of truth.
+	FinalizerPrefix = "novanas.io/"
+
+	// defaultRequeue is the polling interval used by controllers whose
+	// resource depends on external-system state we cannot watch directly
+	// (e.g., Keycloak, storage-engine jobs).
+	defaultRequeue = 30 * time.Second
 )
