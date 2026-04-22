@@ -1,0 +1,198 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import type { Env } from '../env.js';
+import type { KeycloakClient } from '../services/keycloak.js';
+import { SESSION_TTL_SECONDS, SessionStore } from '../auth/session.js';
+import { userFromClaims } from '../auth/rbac.js';
+import { requireAuth } from '../auth/decorators.js';
+import type { SessionRecord } from '../types.js';
+
+const OIDC_STATE_PREFIX = 'oidc:state:';
+const OIDC_STATE_TTL = 10 * 60; // 10 minutes
+
+const CallbackQuery = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+
+const LoginBody = z.object({
+  redirectTo: z.string().optional(),
+});
+
+export interface AuthRouteDeps {
+  env: Env;
+  keycloak: KeycloakClient;
+  sessions: SessionStore;
+  redis: import('ioredis').Redis;
+}
+
+export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Promise<void> {
+  const { env, keycloak, sessions, redis } = deps;
+
+  const callbackUrl = `${env.API_PUBLIC_URL.replace(/\/$/, '')}/api/v1/auth/callback`;
+
+  // -- POST /api/v1/auth/login ------------------------------------------
+  app.post(
+    '/api/v1/auth/login',
+    {
+      schema: {
+        description: 'Begin OIDC login. Returns the authorization URL.',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          properties: { redirectTo: { type: 'string' } },
+          additionalProperties: false,
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: { url: { type: 'string' } },
+            required: ['url'],
+          },
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const body = LoginBody.parse(req.body ?? {});
+      const auth = keycloak.buildAuthUrl(callbackUrl);
+      await redis.setex(
+        `${OIDC_STATE_PREFIX}${auth.state}`,
+        OIDC_STATE_TTL,
+        JSON.stringify({
+          nonce: auth.nonce,
+          codeVerifier: auth.codeVerifier,
+          redirectTo: body.redirectTo ?? '/',
+        })
+      );
+      return reply.send({ url: auth.url.toString() });
+    }
+  );
+
+  // -- GET /api/v1/auth/callback ----------------------------------------
+  app.get(
+    '/api/v1/auth/callback',
+    {
+      schema: {
+        description: 'OIDC callback. Exchanges code for tokens, creates session.',
+        tags: ['auth'],
+        querystring: {
+          type: 'object',
+          required: ['code', 'state'],
+          properties: { code: { type: 'string' }, state: { type: 'string' } },
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const q = CallbackQuery.parse(req.query);
+      const raw = await redis.get(`${OIDC_STATE_PREFIX}${q.state}`);
+      if (!raw) {
+        return reply.code(400).send({ error: 'invalid_state' });
+      }
+      await redis.del(`${OIDC_STATE_PREFIX}${q.state}`);
+      const stored = JSON.parse(raw) as {
+        nonce: string;
+        codeVerifier: string;
+        redirectTo: string;
+      };
+
+      const currentUrl = new URL(callbackUrl);
+      currentUrl.searchParams.set('code', q.code);
+      currentUrl.searchParams.set('state', q.state);
+
+      const tokens = await keycloak.exchangeCode({
+        currentUrl,
+        state: q.state,
+        nonce: stored.nonce,
+        codeVerifier: stored.codeVerifier,
+      });
+
+      const claims = tokens.claims();
+      if (!claims) {
+        return reply.code(500).send({ error: 'no_id_token_claims' });
+      }
+
+      const user = userFromClaims(claims as Record<string, unknown>);
+      const now = Date.now();
+      const record: SessionRecord = {
+        userId: user.sub,
+        username: user.username,
+        createdAt: now,
+        expiresAt: now + SESSION_TTL_SECONDS * 1000,
+        idToken: tokens.id_token ?? '',
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        claims: claims as Record<string, unknown>,
+      };
+
+      const sid = await sessions.create(record);
+      reply.setCookie(env.SESSION_COOKIE_NAME, sid, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: env.NODE_ENV === 'production',
+        path: '/',
+        signed: true,
+        maxAge: SESSION_TTL_SECONDS,
+      });
+      return reply.redirect(stored.redirectTo || '/');
+    }
+  );
+
+  // -- POST /api/v1/auth/logout -----------------------------------------
+  app.post(
+    '/api/v1/auth/logout',
+    { schema: { description: 'Destroy session.', tags: ['auth'] } },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const sid = req.sessionId;
+      if (sid) {
+        const record = await sessions.get(sid);
+        if (record?.refreshToken) {
+          await keycloak.logout(record.refreshToken);
+        }
+        await sessions.destroy(sid);
+      }
+      reply.clearCookie(env.SESSION_COOKIE_NAME, { path: '/' });
+      return reply.send({ ok: true });
+    }
+  );
+
+  // -- GET /api/v1/me ---------------------------------------------------
+  app.get(
+    '/api/v1/me',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description: 'Return the current authenticated user.',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              sub: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              name: { type: 'string' },
+              roles: { type: 'array', items: { type: 'string' } },
+              groups: { type: 'array', items: { type: 'string' } },
+              tenant: { type: 'string' },
+            },
+            required: ['sub', 'username', 'roles', 'groups', 'tenant'],
+          },
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const u = req.user;
+      if (!u) return reply.code(401).send({ error: 'unauthorized' });
+      return reply.send({
+        sub: u.sub,
+        username: u.username,
+        email: u.email,
+        name: u.name,
+        roles: u.roles,
+        groups: u.groups,
+        tenant: u.tenant,
+      });
+    }
+  );
+}

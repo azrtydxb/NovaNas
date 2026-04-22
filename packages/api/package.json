@@ -1,0 +1,50 @@
+{
+  "name": "@novanas/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NovaNas domain API server: Fastify + WebSocket gateway, Keycloak OIDC, Drizzle Postgres, Redis.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "novanas-api": "./dist/index.js"
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/bundle.js --packages=external --sourcemap",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fastify/cookie": "~11.0.0",
+    "@fastify/cors": "~10.0.0",
+    "@fastify/helmet": "~12.0.0",
+    "@fastify/rate-limit": "~10.0.0",
+    "@fastify/swagger": "~9.0.0",
+    "@fastify/swagger-ui": "~5.0.0",
+    "@fastify/websocket": "~11.0.0",
+    "@kubernetes/client-node": "~0.22.0",
+    "@novanas/db": "workspace:*",
+    "@novanas/schemas": "workspace:*",
+    "@opentelemetry/api": "~1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "~0.52.0",
+    "@opentelemetry/sdk-node": "~0.55.0",
+    "fastify": "~5.0.0",
+    "ioredis": "~5.4.0",
+    "openid-client": "~6.0.0",
+    "pino": "~9.0.0",
+    "prom-client": "~15.0.0",
+    "zod": "~3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "~22.0.0",
+    "esbuild": "~0.24.0",
+    "pino-pretty": "~11.0.0",
+    "tsx": "~4.0.0",
+    "typescript": "~5.6.0",
+    "vitest": "~2.0.0"
+  }
+}
