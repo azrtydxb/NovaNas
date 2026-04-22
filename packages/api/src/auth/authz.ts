@@ -44,7 +44,49 @@ export type Kind =
   | 'AppCatalog'
   | 'App'
   | 'Vm'
-  | 'IsoLibrary';
+  | 'IsoLibrary'
+  // B2: crypto
+  | 'EncryptionPolicy'
+  | 'KmsKey'
+  | 'Certificate'
+  // B2: data protection
+  | 'SnapshotSchedule'
+  | 'ReplicationTarget'
+  | 'ReplicationJob'
+  | 'CloudBackupTarget'
+  | 'CloudBackupJob'
+  | 'ScrubSchedule'
+  // B2: networking
+  | 'Bond'
+  | 'Vlan'
+  | 'HostInterface'
+  | 'ClusterNetwork'
+  | 'VipPool'
+  | 'Ingress'
+  | 'RemoteAccessTunnel'
+  | 'CustomDomain'
+  | 'FirewallRule'
+  | 'TrafficPolicy'
+  | 'PhysicalInterface'
+  // B2: ops
+  | 'SmartPolicy'
+  | 'AlertChannel'
+  | 'AlertPolicy'
+  | 'AuditPolicy'
+  | 'UpsPolicy'
+  | 'ServiceLevelObjective'
+  | 'ConfigBackupPolicy'
+  // B2: system singletons
+  | 'SystemSettings'
+  | 'UpdatePolicy'
+  | 'ServicePolicy'
+  // B2: identity
+  | 'Group'
+  | 'KeycloakRealm'
+  | 'ApiToken'
+  | 'SshKey'
+  // B2: devices
+  | 'GpuDevice';
 
 /** Kinds that are cluster-scoped per our design. */
 const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
@@ -63,6 +105,42 @@ const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
   'AppCatalog',
   'App',
   'IsoLibrary',
+  // B2: all additional kinds are cluster-scoped
+  'EncryptionPolicy',
+  'KmsKey',
+  'Certificate',
+  'SnapshotSchedule',
+  'ReplicationTarget',
+  'ReplicationJob',
+  'CloudBackupTarget',
+  'CloudBackupJob',
+  'ScrubSchedule',
+  'Bond',
+  'Vlan',
+  'HostInterface',
+  'ClusterNetwork',
+  'VipPool',
+  'Ingress',
+  'RemoteAccessTunnel',
+  'CustomDomain',
+  'FirewallRule',
+  'TrafficPolicy',
+  'PhysicalInterface',
+  'SmartPolicy',
+  'AlertChannel',
+  'AlertPolicy',
+  'AuditPolicy',
+  'UpsPolicy',
+  'ServiceLevelObjective',
+  'ConfigBackupPolicy',
+  'SystemSettings',
+  'UpdatePolicy',
+  'ServicePolicy',
+  'Group',
+  'KeycloakRealm',
+  'ApiToken',
+  'SshKey',
+  'GpuDevice',
 ]);
 
 /** Kinds that only admins may mutate. */
@@ -77,6 +155,34 @@ const ADMIN_ONLY_WRITE: ReadonlySet<Kind> = new Set([
   'AppCatalog',
   'App',
   'IsoLibrary',
+  // B2 admin-only-write (system-wide / cluster-critical)
+  'EncryptionPolicy',
+  'KmsKey',
+  'Certificate',
+  'SnapshotSchedule',
+  'ScrubSchedule',
+  'Bond',
+  'Vlan',
+  'HostInterface',
+  'ClusterNetwork',
+  'VipPool',
+  'Ingress',
+  'RemoteAccessTunnel',
+  'CustomDomain',
+  'FirewallRule',
+  'TrafficPolicy',
+  'PhysicalInterface',
+  'SmartPolicy',
+  'AlertChannel',
+  'AlertPolicy',
+  'AuditPolicy',
+  'UpsPolicy',
+  'ConfigBackupPolicy',
+  'SystemSettings',
+  'UpdatePolicy',
+  'ServicePolicy',
+  'KeycloakRealm',
+  'GpuDevice',
 ]);
 
 export function ownNamespace(user: AuthenticatedUser): string {
