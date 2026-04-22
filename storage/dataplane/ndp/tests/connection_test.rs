@@ -1,3 +1,4 @@
+#![allow(clippy::while_let_loop)]
 use ndp::{NdpConnection, NdpHeader, NdpMessage, NdpOp};
 use tokio::net::TcpListener;
 

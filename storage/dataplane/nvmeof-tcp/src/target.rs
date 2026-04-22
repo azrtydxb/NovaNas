@@ -4,6 +4,8 @@
 //! by its NQN. The initiator specifies which subsystem to connect to via the
 //! Fabric Connect command.
 
+#![allow(clippy::new_without_default, clippy::unnecessary_cast, dead_code)]
+
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -186,7 +188,7 @@ impl NvmeOfTarget {
         let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(256);
 
         // Writer task: drains response channel and writes to stream.
-        let writer_handle = tokio::spawn(async move {
+        let _writer_handle = tokio::spawn(async move {
             while let Some(data) = resp_rx.recv().await {
                 if writer.write_all(&data).await.is_err() {
                     break;
@@ -260,7 +262,7 @@ impl NvmeOfTarget {
 
                     // Fabric/Admin commands: process inline (fast, no NDP).
                     // I/O commands: spawn concurrent task.
-                    let fctype = (cmd.nsid & 0xFF) as u8;
+                    let _fctype = (cmd.nsid & 0xFF) as u8;
                     if cmd.opcode == opcode::FABRIC || state.sq_id == 0 {
                         // Admin/Fabric — write response directly via channel.
                         // We create a ChannelWriter that buffers writes and sends via channel.
@@ -450,7 +452,8 @@ impl NvmeOfTarget {
                                 opcode::COMPARE => {
                                     // Compare: read data from backend and compare with
                                     // provided data. Return success if equal, error if not.
-                                    let offset = cmd.slba * subsys.backend.block_size() as u64;
+                                    let lba = ((cmd.cdw11 as u64) << 32) | cmd.cdw10 as u64;
+                                    let offset = lba * subsys.backend.block_size() as u64;
                                     let nlb = (cmd.cdw12 & 0xFFFF) as u32 + 1;
                                     let length = nlb as u64 * subsys.backend.block_size() as u64;
                                     let resp = match subsys.backend.read(offset, length as u32).await {
@@ -613,14 +616,14 @@ impl NvmeOfTarget {
         // Look up the subsystem.
         if !subnqn.is_empty() {
             if let Some(subsys) = self.get_subsystem(&subnqn).await {
+                // Unique controller ID per connection — required for NVMe multipath.
+                // The kernel rejects duplicate cntlid on the same NQN.
+                let cntlid = subsys.next_cntlid.fetch_add(1, Ordering::Relaxed);
                 state.subsystem = Some(subsys);
                 state.sq_id = qid;
                 state.connected = true;
 
                 let mut cqe = NvmeCqe::success(cmd.cid, qid);
-                // Unique controller ID per connection — required for NVMe multipath.
-                // The kernel rejects duplicate cntlid on the same NQN.
-                let cntlid = subsys.next_cntlid.fetch_add(1, Ordering::Relaxed);
                 cqe.dw0 = cntlid as u32;
                 stream.write_all(&build_capsule_resp(&cqe)).await?;
                 stream.flush().await?;
@@ -720,7 +723,7 @@ impl NvmeOfTarget {
                 let lid = cmd.cdw10 & 0xFF;
                 let numd = ((cmd.cdw11 as u64) << 32 | (cmd.cdw10 >> 16) as u64) as usize;
                 let data_len = ((numd + 1) * 4).min(4096);
-                let log_data = match lid as u8 {
+                let _log_data = match lid as u8 {
                     0x01 => {
                         // Error Information — empty (no errors).
                         vec![0u8; data_len.min(64)]

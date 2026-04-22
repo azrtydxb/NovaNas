@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{oneshot, Mutex};
 
@@ -133,15 +133,10 @@ impl NdpConnection {
         mut reader: R,
         pending: Arc<Mutex<HashMap<u64, oneshot::Sender<NdpMessage>>>>,
     ) {
-        loop {
-            match NdpMessage::read_from(&mut reader).await {
-                Ok(msg) => {
-                    let id = msg.header.request_id;
-                    if let Some(tx) = pending.lock().await.remove(&id) {
-                        let _ = tx.send(msg);
-                    }
-                }
-                Err(_) => break,
+        while let Ok(msg) = NdpMessage::read_from(&mut reader).await {
+            let id = msg.header.request_id;
+            if let Some(tx) = pending.lock().await.remove(&id) {
+                let _ = tx.send(msg);
             }
         }
         // Connection lost — clear all pending requests.

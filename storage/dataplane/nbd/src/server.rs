@@ -4,7 +4,7 @@
 //! The caller provides a [`BlockDevice`] implementation for I/O.
 
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::protocol::*;
@@ -198,7 +198,7 @@ impl<B: BlockDevice> NbdServer<B> {
                 )));
             }
 
-            let flags = stream.read_u16().await?;
+            let _flags = stream.read_u16().await?;
             let cmd_type = stream.read_u16().await?;
             let handle = stream.read_u64().await?;
             let offset = stream.read_u64().await?;
