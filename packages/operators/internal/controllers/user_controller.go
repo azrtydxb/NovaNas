@@ -17,14 +17,31 @@ import (
 // UserReconciler reconciles a User object by projecting the User into
 // Keycloak via the injected KeycloakClient. Unwired reconcilers fall
 // back to NoopKeycloakClient.
+//
+// In addition to Keycloak projection, the reconciler provisions a
+// per-tenant OpenBao policy and kubernetes-auth role at EnsureUser time
+// (and revokes them on DeleteUser). When OpenBao is nil, a no-op client
+// is used so the controller remains runnable in dev/test environments
+// without an OpenBao instance wired up.
 type UserReconciler struct {
 	reconciler.BaseReconciler
 	Keycloak reconciler.KeycloakClient
 	Realm    string
 	Recorder record.EventRecorder
+
+	// OpenBao (optional) provisions a per-tenant policy + kubernetes-auth
+	// role. When nil, NoopOpenBaoClient is used.
+	OpenBao reconciler.OpenBaoClient
+	// OpenBaoPolicyTemplate optionally overrides the default per-tenant
+	// policy HCL template; when empty DefaultTenantPolicyTemplate is used.
+	OpenBaoPolicyTemplate string
+	// OpenBaoBoundNamespace is the namespace the tenant service account
+	// lives in (defaults to the User object's namespace at reconcile time).
+	OpenBaoBoundNamespace string
 }
 
-// Reconcile ensures the user exists in Keycloak.
+// Reconcile ensures the user exists in Keycloak and has a per-tenant
+// OpenBao policy + kubernetes-auth role.
 func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	start := time.Now()
 	logger := log.FromContext(ctx).WithValues("controller", "User", "key", req.NamespacedName)
@@ -40,17 +57,30 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	if kc == nil {
 		kc = reconciler.NoopKeycloakClient{}
 	}
+	ob := r.OpenBao
+	if ob == nil {
+		ob = reconciler.NoopOpenBaoClient{}
+	}
 	realm := r.Realm
 	if realm == "" {
 		realm = "novanas"
 	}
+
+	policyName := reconciler.TenantPolicyName(obj.Name)
+	roleName := reconciler.TenantAuthRoleName(obj.Name)
 
 	if !obj.DeletionTimestamp.IsZero() {
 		logger.Info("User deleting")
 		if err := kc.DeleteUser(ctx, realm, obj.Name); err != nil {
 			logger.Error(err, "keycloak delete user failed")
 		}
-		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonDeleted, "user removed from keycloak")
+		if err := ob.DeleteAuthRole(ctx, roleName); err != nil {
+			logger.Error(err, "openbao delete auth role failed")
+		}
+		if err := ob.DeletePolicy(ctx, policyName); err != nil {
+			logger.Error(err, "openbao delete policy failed")
+		}
+		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonDeleted, "user removed from keycloak and openbao")
 		if err := reconciler.RemoveFinalizer(ctx, r.Client, &obj, reconciler.FinalizerUser); err != nil {
 			result = "error"
 			return ctrl.Result{}, err
@@ -72,8 +102,43 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
 	}
 
+	// Per-tenant OpenBao policy + auth role.
+	hcl, err := reconciler.RenderTenantPolicy(r.OpenBaoPolicyTemplate, obj.Name)
+	if err != nil {
+		obj.Status.Phase = "Failed"
+		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
+		_ = r.Client.Status().Update(ctx, &obj)
+		result = "error"
+		return ctrl.Result{RequeueAfter: defaultRequeue}, err
+	}
+	if err := ob.EnsurePolicy(ctx, reconciler.OpenBaoPolicy{Name: policyName, HCL: hcl}); err != nil {
+		obj.Status.Phase = "Failed"
+		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
+		_ = r.Client.Status().Update(ctx, &obj)
+		result = "error"
+		return ctrl.Result{RequeueAfter: defaultRequeue}, err
+	}
+	boundNS := r.OpenBaoBoundNamespace
+	if boundNS == "" {
+		boundNS = obj.Namespace
+	}
+	if err := ob.EnsureAuthRole(ctx, reconciler.OpenBaoAuthRole{
+		Name:                roleName,
+		BoundServiceAccount: obj.Name,
+		BoundNamespace:      boundNS,
+		Policies:            []string{policyName},
+		TTLSeconds:          3600,
+		MaxTTLSeconds:       86400,
+	}); err != nil {
+		obj.Status.Phase = "Failed"
+		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
+		_ = r.Client.Status().Update(ctx, &obj)
+		result = "error"
+		return ctrl.Result{RequeueAfter: defaultRequeue}, err
+	}
+
 	obj.Status.Phase = "Ready"
-	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "user synced to keycloak")
+	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "user synced to keycloak and openbao")
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {
 			return ctrl.Result{Requeue: true}, nil
@@ -81,7 +146,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		result = "error"
 		return ctrl.Result{}, err
 	}
-	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonExternalSync, "user ensured in keycloak")
+	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonExternalSync, "user ensured in keycloak and openbao")
 	return ctrl.Result{RequeueAfter: defaultRequeue}, nil
 }
 
@@ -89,7 +154,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "User"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("user-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "user-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.User{}).

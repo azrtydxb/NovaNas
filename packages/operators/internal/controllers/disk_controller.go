@@ -98,7 +98,7 @@ func (r *DiskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 func (r *DiskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Disk"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("disk-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "disk-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Disk{}).

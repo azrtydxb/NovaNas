@@ -102,7 +102,7 @@ func (r *ReplicationJobReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *ReplicationJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ReplicationJob"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("replicationjob-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "replicationjob-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ReplicationJob{}).

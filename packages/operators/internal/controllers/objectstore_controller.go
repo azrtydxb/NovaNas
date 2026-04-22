@@ -106,7 +106,7 @@ func (r *ObjectStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *ObjectStoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ObjectStore"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("objectstore-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "objectstore-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ObjectStore{}).

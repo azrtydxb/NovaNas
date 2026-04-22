@@ -119,7 +119,7 @@ func randomHex(n int) string {
 func (r *BucketUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "BucketUser"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("bucketuser-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "bucketuser-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.BucketUser{}).

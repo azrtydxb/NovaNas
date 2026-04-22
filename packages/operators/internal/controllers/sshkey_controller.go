@@ -95,7 +95,7 @@ func (r *SshKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 func (r *SshKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SshKey"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("sshkey-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "sshkey-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.SshKey{}).

@@ -69,7 +69,7 @@ func (r *NvmeofTargetReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *NvmeofTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "NvmeofTarget"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("nvmeoftarget-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "nvmeoftarget-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.NvmeofTarget{}).

@@ -1,0 +1,95 @@
+name: Perf Regression Nightly
+
+# Weekly performance regression suite against a QEMU-based full-stack
+# fixture. Compares fio/NFS/SMB throughput against perf/baseline.csv and
+# fails the job if any mode regresses by more than 10%.
+
+on:
+  schedule:
+    # 04:00 UTC every Sunday
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      threshold_pct:
+        description: "Regression threshold percentage (default 10)"
+        type: string
+        default: "10"
+
+concurrency:
+  group: perf-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  perf:
+    name: Perf regression
+    runs-on: ubuntu-latest-l
+    timeout-minutes: 240
+    env:
+      THRESHOLD_PCT: ${{ github.event.inputs.threshold_pct || '10' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install QEMU + fio + nfs-utils + smbclient
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils fio \
+            nfs-common smbclient python3 python3-pip
+          pip3 install --user pandas==2.2.*
+
+      - name: Boot QEMU fixture
+        run: bash e2e/qemu/boot.sh
+
+      - name: Run fio baseline
+        run: bash e2e/qemu/performance/fio-baseline.sh \
+          --out perf/results/fio.csv
+
+      - name: Run NFS throughput
+        run: bash e2e/qemu/performance/nfs-throughput.sh \
+          --out perf/results/nfs.csv
+
+      - name: Run SMB throughput
+        run: bash e2e/qemu/performance/smb-throughput.sh \
+          --out perf/results/smb.csv
+
+      - name: Diff vs baseline
+        id: diff
+        run: |
+          python3 perf/compare.py \
+            --baseline perf/baseline.csv \
+            --results perf/results/ \
+            --threshold-pct "${THRESHOLD_PCT}" \
+            --report perf/results/report.md
+          echo "report<<EOF" >> "$GITHUB_OUTPUT"
+          cat perf/results/report.md >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf/results/**
+          if-no-files-found: warn
+
+      - name: Open issue on regression
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            let report = "";
+            try { report = fs.readFileSync('perf/results/report.md', 'utf8'); } catch(e) {}
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner, repo,
+              title: `[perf] regression > ${process.env.THRESHOLD_PCT}% on ${context.sha.substring(0,7)}`,
+              body: `Weekly perf run regressed.\n\nRun: ${runUrl}\n\n${report}`,
+              labels: ["ci-failure", "perf", "nightly"],
+              assignees: ["azrtydxb"],
+            });

@@ -102,7 +102,7 @@ func (r *SnapshotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *SnapshotReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Snapshot"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("snapshot-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "snapshot-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Snapshot{}).

@@ -70,7 +70,7 @@ func (r *IscsiTargetReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *IscsiTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "IscsiTarget"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("iscsitarget-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "iscsitarget-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.IscsiTarget{}).

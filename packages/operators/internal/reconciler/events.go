@@ -2,8 +2,27 @@ package reconciler
 
 import (
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// NewRecorder returns an EventRecorder for the given controller name from
+// the manager. Centralised here so controllers do not call
+// mgr.GetEventRecorderFor directly -- when controller-runtime eventually
+// renames or replaces that API (see upstream issue to migrate to the v1
+// events recorder), the shim can be updated in one place.
+//
+// This helper abstracts the current GetEventRecorderFor API behind a name
+// the project controls.
+func NewRecorder(mgr ctrl.Manager, controllerName string) record.EventRecorder {
+	if mgr == nil {
+		return nil
+	}
+	// NOTE: when controller-runtime promotes the new events API
+	// (mgr.GetEventRecorder), swap the call below. The call sites in the
+	// controllers package are already routed through this shim.
+	return mgr.GetEventRecorderFor(controllerName)
+}
 
 // Event reason constants used across controllers.
 const (

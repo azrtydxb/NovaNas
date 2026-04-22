@@ -69,7 +69,7 @@ func (r *SnapshotScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 func (r *SnapshotScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SnapshotSchedule"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("snapshotschedule-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "snapshotschedule-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.SnapshotSchedule{}).

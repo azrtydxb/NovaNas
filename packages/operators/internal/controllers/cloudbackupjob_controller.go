@@ -100,7 +100,7 @@ func (r *CloudBackupJobReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *CloudBackupJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "CloudBackupJob"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("cloudbackupjob-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "cloudbackupjob-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.CloudBackupJob{}).

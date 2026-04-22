@@ -65,7 +65,7 @@ func (r *CloudBackupTargetReconciler) Reconcile(ctx context.Context, req ctrl.Re
 func (r *CloudBackupTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "CloudBackupTarget"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("cloudbackuptarget-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "cloudbackuptarget-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.CloudBackupTarget{}).

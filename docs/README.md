@@ -37,6 +37,20 @@ NovaNas is a Kubernetes-native single-node NAS appliance providing unified block
 - [Developer guide](developer/README.md) — onboarding, workflow, testing, debugging
 - [Architecture Decision Records](adr/README.md) — historical context for major decisions
 
+## Operations
+
+- [Production runbook](runbook/README.md) — hardware expansion, disk
+  replacement, off-site replication, OS upgrades, ransomware response,
+  disaster recovery
+- [Troubleshooting guide](troubleshooting/README.md) — storage,
+  networking, identity, performance diagnostics
+
+## Planning
+
+- [CRD consolidation plan](CRD-CONSOLIDATION-PLAN.md) — tracking doc
+  for unifying `storage/api/v1alpha1` and
+  `packages/operators/api/v1alpha1`
+
 ## Scope status
 
 **Out of scope for v1**: multi-box clustering.

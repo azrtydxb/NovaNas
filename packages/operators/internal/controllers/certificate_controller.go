@@ -118,7 +118,7 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *CertificateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Certificate"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("certificate-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "certificate-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Certificate{}).

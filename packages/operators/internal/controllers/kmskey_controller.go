@@ -86,7 +86,7 @@ func (r *KmsKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 func (r *KmsKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "KmsKey"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("kmskey-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "kmskey-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.KmsKey{}).

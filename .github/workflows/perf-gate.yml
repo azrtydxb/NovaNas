@@ -1,0 +1,37 @@
+name: Perf Gate
+
+# PR gate: when a PR touches storage/* or packages/dataplane/* the PR
+# must carry the `perf-regression-ok` label, confirming the author has
+# run (or explicitly waived) a perf baseline check.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    paths:
+      - "storage/**"
+      - "packages/dataplane/**"
+      - "e2e/qemu/performance/**"
+      - "perf/**"
+
+permissions:
+  pull-requests: read
+
+jobs:
+  gate:
+    name: Require perf-regression-ok label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (!labels.includes("perf-regression-ok")) {
+              core.setFailed(
+                "PR touches storage/dataplane paths. " +
+                "Run `e2e/qemu/performance/*.sh` locally (or rerun the " +
+                "nightly perf workflow on this branch) and add the " +
+                "`perf-regression-ok` label once results are within " +
+                "baseline tolerance."
+              );
+            }

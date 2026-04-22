@@ -66,7 +66,7 @@ func (r *EncryptionPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 func (r *EncryptionPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "EncryptionPolicy"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("encryptionpolicy-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "encryptionpolicy-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.EncryptionPolicy{}).

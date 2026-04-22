@@ -109,7 +109,7 @@ func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *ApiTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ApiToken"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("apitoken-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "apitoken-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ApiToken{}).

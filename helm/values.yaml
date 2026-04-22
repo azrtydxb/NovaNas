@@ -272,9 +272,33 @@ keycloak:
   resources:
     requests: { cpu: "250m", memory: "512Mi" }
     limits:   { cpu: "2",    memory: "2Gi" }
+  # Keycloak image used by the admin-password-rotation CronJob (must
+  # include kcadm.sh). Falls back to a sensible upstream default.
+  image: "quay.io/keycloak/keycloak:26.0"
+  # Internal URL the rotation Job uses to reach the Keycloak server.
+  internalURL: "http://novanas-keycloak:8080"
+  # Realm admin username — must match auth.adminUser.
+  adminUser: admin
+  # Bootstrap Secret name patched by the rotation CronJob so other
+  # components pick up the new admin password on their next restart.
+  bootstrapSecretName: novanas-bootstrap
+  # Admin-password rotation CronJob. Rotates the master-realm admin
+  # password on a fixed cadence, stores the new value in OpenBao under
+  # secret/data/novanas/keycloak/admin, and patches the bootstrap Secret.
+  adminPasswordRotation:
+    enabled: true
+    # Cron schedule (UTC). Default: 03:15 UTC on the 1st of every month.
+    schedule: "15 3 1 * *"
+    # Minimum age (days) before the CronJob actually rotates. If the
+    # existing secret is younger the run is a no-op. Provides a belt-and-
+    # braces gate against accidental over-rotation.
+    minAgeDays: 90
 
 openbao:
   enabled: true
+  # Internal address used by in-cluster clients (rotation CronJob,
+  # per-tenant policy provisioning in the operators).
+  address: "http://novanas-openbao:8200"
   # Policy provisioning. Controls policies-configmap.yaml + init-job.yaml.
   policies:
     enabled: true

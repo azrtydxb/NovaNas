@@ -110,7 +110,7 @@ func (r *NfsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 func (r *NfsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "NfsServer"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("nfsserver-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "nfsserver-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.NfsServer{}).

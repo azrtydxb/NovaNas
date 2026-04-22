@@ -95,7 +95,7 @@ func (r *StoragePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *StoragePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "StoragePool"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("storagepool-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "storagepool-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.StoragePool{}).

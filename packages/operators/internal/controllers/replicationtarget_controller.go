@@ -67,7 +67,7 @@ func (r *ReplicationTargetReconciler) Reconcile(ctx context.Context, req ctrl.Re
 func (r *ReplicationTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ReplicationTarget"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("replicationtarget-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "replicationtarget-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ReplicationTarget{}).

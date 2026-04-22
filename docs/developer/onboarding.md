@@ -89,3 +89,10 @@ stack. See [testing.md](testing.md).
   `pnpm install --frozen-lockfile` to diagnose.
 - **Missing generated code** — run `pnpm --filter @novanas/schemas build`
   first; several downstream packages depend on generated types.
+
+## CLI shell completion
+
+`novanasctl` and the `kubectl-novanas` plugin ship Cobra-generated
+completion scripts for bash, zsh, fish, and PowerShell. See
+[`packages/cli/README.md`](../../packages/cli/README.md#enabling-shell-completion)
+for copy-paste install snippets.

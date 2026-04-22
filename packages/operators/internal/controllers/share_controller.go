@@ -115,7 +115,7 @@ func (r *ShareReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *ShareReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Share"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("share-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "share-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Share{}).

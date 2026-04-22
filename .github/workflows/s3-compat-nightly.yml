@@ -1,0 +1,124 @@
+name: S3 Compat Nightly
+
+# Runs every night against a freshly-stood-up kind cluster with the
+# dev-image NovaNas helm chart. Executes the MinIO mint, Ceph s3-tests
+# and AWS SDK smoke suites and opens an auto-assigned issue on failure.
+
+on:
+  schedule:
+    # 02:00 UTC nightly
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: s3-compat-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  s3-compat:
+    name: S3 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      KIND_CLUSTER: novanas-s3-compat
+      S3_ENDPOINT: https://localhost:9000
+      S3_ACCESS_KEY: novanas
+      S3_SECRET_KEY: novanas-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: ${{ env.KIND_CLUSTER }}
+          wait: 120s
+
+      - name: Install helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy NovaNas (dev image)
+        run: |
+          helm dependency update ./helm || true
+          helm upgrade --install novanas ./helm \
+            --namespace novanas --create-namespace \
+            --set global.image.tag=dev \
+            --wait --timeout 15m
+
+      - name: Port-forward S3 endpoint
+        run: |
+          kubectl -n novanas port-forward svc/novanas-objectstore 9000:9000 \
+            > /tmp/pf.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sk https://localhost:9000/ && break || sleep 2
+          done
+
+      - name: Run MinIO mint suite
+        id: mint
+        continue-on-error: true
+        run: bash e2e/compat/s3/minio-mint.sh
+
+      - name: Run Ceph s3-tests
+        id: ceph
+        continue-on-error: true
+        run: bash e2e/compat/s3/ceph-s3-tests.sh
+
+      - name: Run AWS SDK smoke tests
+        id: awssdk
+        continue-on-error: true
+        run: |
+          for f in e2e/compat/s3/aws-sdk/*.sh; do
+            [ -x "$f" ] && bash "$f"
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-compat-reports
+          path: |
+            e2e/compat/s3/reports/**
+            /tmp/pf.log
+          if-no-files-found: warn
+
+      - name: Summarise
+        if: always()
+        id: summary
+        run: |
+          FAIL=0
+          [ "${{ steps.mint.outcome }}"   = "failure" ] && FAIL=1
+          [ "${{ steps.ceph.outcome }}"   = "failure" ] && FAIL=1
+          [ "${{ steps.awssdk.outcome }}" = "failure" ] && FAIL=1
+          echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue on failure
+        if: steps.summary.outputs.fail == '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const title = `[nightly] S3 compat regression on ${context.sha.substring(0,7)}`;
+            const body = [
+              `Nightly S3 compatibility run failed.`,
+              ``,
+              `Run: ${runUrl}`,
+              `Commit: ${context.sha}`,
+              ``,
+              `Artifacts: mint/ceph/aws-sdk reports attached to the run.`,
+              ``,
+              `Auto-filed by \`.github/workflows/s3-compat-nightly.yml\`.`,
+            ].join("\n");
+            await github.rest.issues.create({
+              owner, repo, title, body,
+              labels: ["ci-failure", "s3-compat", "nightly"],
+              assignees: ["azrtydxb"],
+            });
+
+      - name: Fail job on regression
+        if: steps.summary.outputs.fail == '1'
+        run: exit 1

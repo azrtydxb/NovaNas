@@ -83,7 +83,7 @@ func (r *KeycloakRealmReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *KeycloakRealmReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "KeycloakRealm"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("keycloakrealm-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "keycloakrealm-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.KeycloakRealm{}).

@@ -112,7 +112,7 @@ func (r *SmbServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 func (r *SmbServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SmbServer"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("smbserver-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "smbserver-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.SmbServer{}).

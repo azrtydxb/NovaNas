@@ -65,7 +65,7 @@ func (r *ScrubScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *ScrubScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ScrubSchedule"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("scrubschedule-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "scrubschedule-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ScrubSchedule{}).

@@ -87,7 +87,7 @@ func (r *GroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *GroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Group"
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("group-controller")
+		r.Recorder = reconciler.NewRecorder(mgr, "group-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Group{}).

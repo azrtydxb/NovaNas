@@ -154,3 +154,48 @@ kubectl -n novanas-system logs job/novanas-keycloak-setup
 - It does not configure the host OS (disk partitioning, TPM, hugepages);
   that is the responsibility of the `os/` chart shipped separately.
 - It does not run the first-boot installer; see `installer/`.
+
+## Keycloak admin password rotation
+
+The chart installs a `CronJob/novanas-keycloak-admin-rotate` (template
+`keycloak-setup/admin-password-rotation-cronjob.yaml`) that rotates the
+master-realm admin password on a fixed cadence.
+
+Configuration (`helm/values.yaml`, under `keycloak.adminPasswordRotation`):
+
+```yaml
+keycloak:
+  adminPasswordRotation:
+    enabled: true
+    schedule: "15 3 1 * *"   # 03:15 UTC on the 1st of every month
+    minAgeDays: 90           # belt-and-braces gate: skip if younger
+```
+
+What it does, in order:
+
+1. Reads the current admin password from OpenBao at
+   `secret/data/novanas/keycloak/admin` (via the vault-agent sidecar).
+2. Skips if the secret is younger than `minAgeDays`.
+3. Generates a fresh 32-byte base64url password and applies it through
+   `kcadm.sh set-password -r master --username admin`.
+4. Writes the new password back to OpenBao (kv v2).
+5. Patches the `novanas-bootstrap` Secret (key
+   `keycloak-admin-password`) so components that read the Secret on pod
+   start pick it up on their next restart.
+
+### Keycloak theme
+
+The login, error, and message overrides live in the
+`novanas-keycloak-theme` ConfigMap (template
+`keycloak-setup/theme-configmap.yaml`). It contains:
+
+- `login/theme.properties` — sets `parent=keycloak` so we inherit
+  everything and only override CSS and two FTL files.
+- `login/resources/css/novanas.css` — NovaNas dark palette + blue accent.
+- `login/login.ftl` — tiny wrapper over the base `template.ftl`; supplies
+  our branded page title and form layout.
+- `login/error.ftl` — inherited error layout with the NovaNas footer.
+- `login/messages/messages_en.properties` — user-facing string overrides.
+
+The theme is intentionally minimal: everything else falls back to the
+stock `keycloak` theme, so upgrades don't require theme-wide edits.
