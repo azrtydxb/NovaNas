@@ -1,3 +1,4 @@
+import { i18n } from '@/lib/i18n';
 import { Outlet, useRouterState } from '@tanstack/react-router';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -23,13 +24,17 @@ const LABELS: Record<string, string> = {
   '/system/updates': 'Updates',
   '/system/certificates': 'Certificates',
   '/system/alerts': 'Alerts',
+  '/system/jobs': 'Jobs',
   '/system/audit': 'Audit log',
   '/system/support': 'Support',
 };
 
 export function Chrome() {
   const { location } = useRouterState();
-  const title = LABELS[location.pathname] ?? 'Console';
+  // i18n-wave-12: run the static label through the i18n runtime so languages
+  // other than en can pick up a translation once catalogs are generated.
+  const rawTitle = LABELS[location.pathname] ?? 'Console';
+  const title = i18n._(rawTitle);
   return (
     <div className='grid grid-cols-[232px_1fr] grid-rows-[48px_1fr] h-screen min-h-0'>
       <Topbar currentPageTitle={title} />

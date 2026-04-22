@@ -28,7 +28,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatBytes } from '@/lib/format';
+import { i18n } from '@/lib/i18n';
 import type { StatusTone } from '@/types';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Activity, BarChart3, RefreshCw, Shield } from 'lucide-react';
 
@@ -70,11 +72,11 @@ function DashboardPage() {
   return (
     <>
       <PageHeader
-        title='Dashboard'
+        title={i18n._('Dashboard')}
         subtitle={
           info.data
             ? `${info.data.hostname} · NovaNas ${info.data.version} · ${info.data.timezone}`
-            : 'Loading system info…'
+            : i18n._('Loading system info…')
         }
         actions={
           <>
@@ -87,10 +89,10 @@ function DashboardPage() {
                 audit.refetch();
               }}
             >
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> <Trans id='Refresh' />
             </Button>
             <Button variant='default'>
-              <BarChart3 size={13} /> Open Grafana
+              <BarChart3 size={13} /> <Trans id='Open Grafana' />
             </Button>
           </>
         }
@@ -112,14 +114,17 @@ function DashboardPage() {
             }`}
           >
             <StatusDot tone={tone} />
-            {h?.status === 'err'
-              ? 'Attention required'
-              : h?.status === 'warn'
-                ? 'Degraded'
-                : 'Operational'}
+            {h?.status === 'err' ? (
+              <Trans id='Attention required' />
+            ) : h?.status === 'warn' ? (
+              <Trans id='Degraded' />
+            ) : (
+              <Trans id='Operational' />
+            )}
           </div>
           <div className='text-[28px] font-semibold text-foreground tracking-tight mt-1.5 mb-1'>
-            {h?.message ?? (health.isLoading ? 'Loading…' : 'All systems healthy')}
+            {h?.message ??
+              (health.isLoading ? <Trans id='Loading…' /> : <Trans id='All systems healthy' />)}
           </div>
           <div className='text-foreground-muted text-base max-w-[56ch]'>
             {h ? (
@@ -140,7 +145,9 @@ function DashboardPage() {
                 ) : null}
               </>
             ) : health.isError ? (
-              <span className='text-danger'>Unable to reach /system/health.</span>
+              <span className='text-danger'>
+                <Trans id='Unable to reach /system/health.' />
+              </span>
             ) : (
               <Skeleton className='h-4 w-64' />
             )}
@@ -148,7 +155,7 @@ function DashboardPage() {
           <div className='grid grid-cols-3 gap-3 mt-4'>
             <div>
               <div className='text-2xs uppercase tracking-wider text-foreground-subtle'>
-                Capacity
+                <Trans id='Capacity' />
               </div>
               <div className='mono text-lg text-foreground tnum'>
                 {h?.capacity ? formatBytes(h.capacity.usedBytes) : '—'}
@@ -161,7 +168,7 @@ function DashboardPage() {
             </div>
             <div>
               <div className='text-2xs uppercase tracking-wider text-foreground-subtle'>
-                Apps running
+                <Trans id='Apps running' />
               </div>
               <div className='mono text-lg text-foreground tnum'>
                 {h?.apps?.running ?? '—'}
@@ -173,7 +180,7 @@ function DashboardPage() {
             </div>
             <div>
               <div className='text-2xs uppercase tracking-wider text-foreground-subtle'>
-                VMs running
+                <Trans id='VMs running' />
               </div>
               <div className='mono text-lg text-foreground tnum'>
                 {h?.vms?.running ?? '—'}
@@ -200,27 +207,27 @@ function DashboardPage() {
       {/* Metric cards */}
       <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3'>
         <Stat
-          label='Read'
+          label={i18n._('Read')}
           value={lastValue(readSeries).toFixed(0)}
           unit='MB/s'
           data={readSeries}
           color='var(--accent)'
         />
         <Stat
-          label='Write'
+          label={i18n._('Write')}
           value={lastValue(writeSeries).toFixed(0)}
           unit='MB/s'
           data={writeSeries}
           color='oklch(0.72 0.14 320)'
         />
         <Stat
-          label='IOPS'
+          label={i18n._('IOPS')}
           value={Math.round(lastValue(iopsSeries)).toLocaleString()}
           data={iopsSeries}
           color='oklch(0.78 0.14 160)'
         />
         <Stat
-          label='Network'
+          label={i18n._('Network')}
           value={lastValue(netSeries).toFixed(1)}
           unit='Gb/s'
           data={netSeries}
@@ -232,7 +239,9 @@ function DashboardPage() {
       <div className='grid grid-cols-12 gap-3 mb-3'>
         <Card className='col-span-12 xl:col-span-8'>
           <CardHeader>
-            <CardTitle>Pools</CardTitle>
+            <CardTitle>
+              <Trans id='Pools' />
+            </CardTitle>
             <CardDescription>
               {pools.data ? `${pools.data.length} pool${pools.data.length === 1 ? '' : 's'}` : '…'}
             </CardDescription>
@@ -245,22 +254,34 @@ function DashboardPage() {
               </div>
             ) : pools.isError ? (
               <div className='p-3 text-sm text-danger'>
-                Unable to load pools.{' '}
+                <Trans id='Unable to load pools.' />{' '}
                 <Button size='sm' variant='ghost' onClick={() => pools.refetch()}>
-                  Retry
+                  <Trans id='Retry' />
                 </Button>
               </div>
             ) : (pools.data?.length ?? 0) === 0 ? (
-              <div className='p-6 text-sm text-foreground-subtle'>No pools configured.</div>
+              <div className='p-6 text-sm text-foreground-subtle'>
+                <Trans id='No pools configured.' />
+              </div>
             ) : (
               <Table>
                 <TableHead>
                   <tr>
-                    <TableHeaderCell>Name</TableHeaderCell>
-                    <TableHeaderCell>Tier</TableHeaderCell>
-                    <TableHeaderCell>Phase</TableHeaderCell>
-                    <TableHeaderCell>Disks</TableHeaderCell>
-                    <TableHeaderCell>Usage</TableHeaderCell>
+                    <TableHeaderCell>
+                      <Trans id='Name' />
+                    </TableHeaderCell>
+                    <TableHeaderCell>
+                      <Trans id='Tier' />
+                    </TableHeaderCell>
+                    <TableHeaderCell>
+                      <Trans id='Phase' />
+                    </TableHeaderCell>
+                    <TableHeaderCell>
+                      <Trans id='Disks' />
+                    </TableHeaderCell>
+                    <TableHeaderCell>
+                      <Trans id='Usage' />
+                    </TableHeaderCell>
                   </tr>
                 </TableHead>
                 <TableBody>
@@ -310,7 +331,9 @@ function DashboardPage() {
 
         <Card className='col-span-12 xl:col-span-4'>
           <CardHeader>
-            <CardTitle>Alerts & activity</CardTitle>
+            <CardTitle>
+              <Trans id='Alerts & activity' />
+            </CardTitle>
             <CardActions>
               <Activity size={14} className='text-foreground-subtle' />
             </CardActions>
@@ -353,7 +376,7 @@ function DashboardPage() {
                 ))}
                 {(alerts.data?.length ?? 0) === 0 && (audit.data?.length ?? 0) === 0 && (
                   <div className='p-4 text-sm text-foreground-subtle text-center'>
-                    No recent activity.
+                    <Trans id='No recent activity.' />
                   </div>
                 )}
               </div>
@@ -366,7 +389,9 @@ function DashboardPage() {
       <div className='grid grid-cols-12 gap-3'>
         <Card className='col-span-12 md:col-span-6 xl:col-span-8'>
           <CardHeader>
-            <CardTitle>System services</CardTitle>
+            <CardTitle>
+              <Trans id='System services' />
+            </CardTitle>
             <CardDescription>novanas-system</CardDescription>
           </CardHeader>
           <CardBody className='flex flex-col gap-2'>
@@ -382,7 +407,11 @@ function DashboardPage() {
               ))
             ) : (
               <div className='text-sm text-foreground-subtle'>
-                {health.isLoading ? 'Loading services…' : 'No service data.'}
+                {health.isLoading ? (
+                  <Trans id='Loading services…' />
+                ) : (
+                  <Trans id='No service data.' />
+                )}
               </div>
             )}
           </CardBody>
@@ -390,22 +419,30 @@ function DashboardPage() {
 
         <Card className='col-span-12 md:col-span-6 xl:col-span-4'>
           <CardHeader>
-            <CardTitle>Protection</CardTitle>
+            <CardTitle>
+              <Trans id='Protection' />
+            </CardTitle>
             <CardActions>
               <Shield size={14} className='text-foreground-subtle' />
             </CardActions>
           </CardHeader>
           <CardBody className='flex flex-col gap-3 text-sm'>
             <div className='flex items-center justify-between'>
-              <span className='text-foreground-muted'>Active alerts</span>
+              <span className='text-foreground-muted'>
+                <Trans id='Active alerts' />
+              </span>
               <span className='mono text-foreground'>{alerts.data?.length ?? 0}</span>
             </div>
             <div className='flex items-center justify-between'>
-              <span className='text-foreground-muted'>Last scrub</span>
+              <span className='text-foreground-muted'>
+                <Trans id='Last scrub' />
+              </span>
               <span className='mono text-foreground'>{h?.lastScrubAt ?? '—'}</span>
             </div>
             <div className='flex items-center justify-between'>
-              <span className='text-foreground-muted'>Last config backup</span>
+              <span className='text-foreground-muted'>
+                <Trans id='Last config backup' />
+              </span>
               <span className='mono text-foreground'>{h?.lastConfigBackupAt ?? '—'}</span>
             </div>
           </CardBody>

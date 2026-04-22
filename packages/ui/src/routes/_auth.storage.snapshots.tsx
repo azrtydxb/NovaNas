@@ -1,3 +1,4 @@
+// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDatasets } from '@/api/datasets';
 import {
   type SnapshotCreateBody,
@@ -38,6 +39,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { formatBytes } from '@/lib/format';
+import { maybeTrackJobFromResponse } from '@/stores/jobs';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Snapshot, VolumeSourceRef } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
@@ -224,7 +226,8 @@ function CreateSnapshotDialog({
       },
     };
     try {
-      await create.mutateAsync(body);
+      const resp = await create.mutateAsync(body);
+      maybeTrackJobFromResponse(resp, `Snapshot ${values.name}`);
       toast.success('Snapshot created', values.name);
       form.reset();
       onOpenChange(false);

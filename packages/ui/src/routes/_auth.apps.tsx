@@ -1,3 +1,4 @@
+// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   type AppInstanceCreateBody,
   useAppInstanceAction,
@@ -7,6 +8,7 @@ import {
 } from '@/api/app-instances';
 import { useAppsAvailable } from '@/api/apps-available';
 import { useDatasets } from '@/api/datasets';
+import { SchemaForm } from '@/components/apps/schema-form';
 import { EmptyState } from '@/components/common/empty-state';
 import { FormField } from '@/components/common/form-field';
 import { PageHeader } from '@/components/common/page-header';
@@ -42,10 +44,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { maybeTrackJobFromResponse } from '@/stores/jobs';
 import type { App, AppInstance, ExposureMode } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { AppWindow, Download, RefreshCw, Square, Trash2, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export const Route = createFileRoute('/_auth/apps')({
   component: AppsPage,
@@ -381,12 +384,35 @@ function InstallAppDialog({
   const toast = useToast();
   const [name, setName] = useState('');
   const [values, setValues] = useState<ValueEntry[]>([]);
+  const [schemaValues, setSchemaValues] = useState<Record<string, unknown>>({});
   const [storages, setStorages] = useState<StorageEntry[]>([]);
   const [expose, setExpose] = useState<ExposureMode>('lan');
+
+  // If the app declares a JSON-Schema, drive the Values tab from RJSF.
+  const appSchema = (app?.spec as { schema?: unknown } | undefined)?.schema as
+    | Record<string, unknown>
+    | undefined;
+  const hasSchema =
+    !!appSchema && typeof appSchema === 'object' && Object.keys(appSchema).length > 0;
+
+  // Seed schema defaults when the target app changes.
+  useEffect(() => {
+    if (!hasSchema) {
+      setSchemaValues({});
+      return;
+    }
+    const topDefault = (appSchema as { default?: unknown }).default;
+    if (topDefault && typeof topDefault === 'object') {
+      setSchemaValues({ ...(topDefault as Record<string, unknown>) });
+    } else {
+      setSchemaValues({});
+    }
+  }, [hasSchema, appSchema]);
 
   const reset = () => {
     setName('');
     setValues([]);
+    setSchemaValues({});
     setStorages([]);
     setExpose('lan');
   };
@@ -398,7 +424,9 @@ function InstallAppDialog({
       spec: {
         app: app.metadata.name,
         version: app.spec.version,
-        values: Object.fromEntries(values.filter((v) => v.key).map((v) => [v.key, v.value])),
+        values: hasSchema
+          ? schemaValues
+          : Object.fromEntries(values.filter((v) => v.key).map((v) => [v.key, v.value])),
         storage: storages.length
           ? storages.map((s) => ({
               name: s.name,
@@ -412,7 +440,8 @@ function InstallAppDialog({
       },
     };
     try {
-      await create.mutateAsync(body);
+      const resp = await create.mutateAsync(body);
+      maybeTrackJobFromResponse(resp, `Install ${app.spec.displayName}`);
       toast.success('App installed', name);
       reset();
       onOpenChange(false);
@@ -451,47 +480,58 @@ function InstallAppDialog({
           </TabsContent>
 
           <TabsContent value='values' className='pt-3'>
-            <div className='text-xs text-foreground-subtle mb-2'>
-              Free-form key/value overrides (Helm values). For structured forms, see docs.
-            </div>
-            <ul className='flex flex-col gap-1 mb-2'>
-              {values.map((v, i) => (
-                <li key={i} className='flex gap-2'>
-                  <Input
-                    placeholder='key'
-                    value={v.key}
-                    onChange={(e) => {
-                      const n = [...values];
-                      n[i] = { ...v, key: e.target.value };
-                      setValues(n);
-                    }}
-                  />
-                  <Input
-                    placeholder='value'
-                    value={v.value}
-                    onChange={(e) => {
-                      const n = [...values];
-                      n[i] = { ...v, value: e.target.value };
-                      setValues(n);
-                    }}
-                  />
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    onClick={() => setValues(values.filter((_, j) => j !== i))}
-                  >
-                    <X size={11} />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => setValues([...values, { key: '', value: '' }])}
-            >
-              Add value
-            </Button>
+            {hasSchema ? (
+              <>
+                <div className='text-xs text-foreground-subtle mb-2'>
+                  Configuration schema provided by the app.
+                </div>
+                <SchemaForm schema={appSchema} formData={schemaValues} onChange={setSchemaValues} />
+              </>
+            ) : (
+              <>
+                <div className='text-xs text-foreground-subtle mb-2'>
+                  Free-form key/value overrides (Helm values). For structured forms, see docs.
+                </div>
+                <ul className='flex flex-col gap-1 mb-2'>
+                  {values.map((v, i) => (
+                    <li key={i} className='flex gap-2'>
+                      <Input
+                        placeholder='key'
+                        value={v.key}
+                        onChange={(e) => {
+                          const n = [...values];
+                          n[i] = { ...v, key: e.target.value };
+                          setValues(n);
+                        }}
+                      />
+                      <Input
+                        placeholder='value'
+                        value={v.value}
+                        onChange={(e) => {
+                          const n = [...values];
+                          n[i] = { ...v, value: e.target.value };
+                          setValues(n);
+                        }}
+                      />
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => setValues(values.filter((_, j) => j !== i))}
+                      >
+                        <X size={11} />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => setValues([...values, { key: '', value: '' }])}
+                >
+                  Add value
+                </Button>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value='storage' className='pt-3'>

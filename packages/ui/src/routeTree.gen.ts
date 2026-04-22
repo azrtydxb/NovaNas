@@ -25,6 +25,7 @@ import { Route as AuthDataProtectionIndexRouteImport } from './routes/_auth.data
 import { Route as AuthSystemUpdatesRouteImport } from './routes/_auth.system.updates'
 import { Route as AuthSystemSupportRouteImport } from './routes/_auth.system.support'
 import { Route as AuthSystemSettingsRouteImport } from './routes/_auth.system.settings'
+import { Route as AuthSystemJobsRouteImport } from './routes/_auth.system.jobs'
 import { Route as AuthSystemCertificatesRouteImport } from './routes/_auth.system.certificates'
 import { Route as AuthSystemAuditRouteImport } from './routes/_auth.system.audit'
 import { Route as AuthSystemAlertsRouteImport } from './routes/_auth.system.alerts'
@@ -120,6 +121,11 @@ const AuthSystemSupportRoute = AuthSystemSupportRouteImport.update({
 const AuthSystemSettingsRoute = AuthSystemSettingsRouteImport.update({
   id: '/system/settings',
   path: '/system/settings',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSystemJobsRoute = AuthSystemJobsRouteImport.update({
+  id: '/system/jobs',
+  path: '/system/jobs',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthSystemCertificatesRoute = AuthSystemCertificatesRouteImport.update({
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/system/alerts': typeof AuthSystemAlertsRoute
   '/system/audit': typeof AuthSystemAuditRoute
   '/system/certificates': typeof AuthSystemCertificatesRoute
+  '/system/jobs': typeof AuthSystemJobsRoute
   '/system/settings': typeof AuthSystemSettingsRoute
   '/system/support': typeof AuthSystemSupportRoute
   '/system/updates': typeof AuthSystemUpdatesRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/system/alerts': typeof AuthSystemAlertsRoute
   '/system/audit': typeof AuthSystemAuditRoute
   '/system/certificates': typeof AuthSystemCertificatesRoute
+  '/system/jobs': typeof AuthSystemJobsRoute
   '/system/settings': typeof AuthSystemSettingsRoute
   '/system/support': typeof AuthSystemSupportRoute
   '/system/updates': typeof AuthSystemUpdatesRoute
@@ -306,6 +314,7 @@ export interface FileRoutesById {
   '/_auth/system/alerts': typeof AuthSystemAlertsRoute
   '/_auth/system/audit': typeof AuthSystemAuditRoute
   '/_auth/system/certificates': typeof AuthSystemCertificatesRoute
+  '/_auth/system/jobs': typeof AuthSystemJobsRoute
   '/_auth/system/settings': typeof AuthSystemSettingsRoute
   '/_auth/system/support': typeof AuthSystemSupportRoute
   '/_auth/system/updates': typeof AuthSystemUpdatesRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/system/alerts'
     | '/system/audit'
     | '/system/certificates'
+    | '/system/jobs'
     | '/system/settings'
     | '/system/support'
     | '/system/updates'
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | '/system/alerts'
     | '/system/audit'
     | '/system/certificates'
+    | '/system/jobs'
     | '/system/settings'
     | '/system/support'
     | '/system/updates'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/_auth/system/alerts'
     | '/_auth/system/audit'
     | '/_auth/system/certificates'
+    | '/_auth/system/jobs'
     | '/_auth/system/settings'
     | '/_auth/system/support'
     | '/_auth/system/updates'
@@ -539,6 +551,13 @@ declare module '@tanstack/react-router' {
       path: '/system/settings'
       fullPath: '/system/settings'
       preLoaderRoute: typeof AuthSystemSettingsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/system/jobs': {
+      id: '/_auth/system/jobs'
+      path: '/system/jobs'
+      fullPath: '/system/jobs'
+      preLoaderRoute: typeof AuthSystemJobsRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/system/certificates': {
@@ -686,6 +705,7 @@ interface AuthRouteChildren {
   AuthSystemAlertsRoute: typeof AuthSystemAlertsRoute
   AuthSystemAuditRoute: typeof AuthSystemAuditRoute
   AuthSystemCertificatesRoute: typeof AuthSystemCertificatesRoute
+  AuthSystemJobsRoute: typeof AuthSystemJobsRoute
   AuthSystemSettingsRoute: typeof AuthSystemSettingsRoute
   AuthSystemSupportRoute: typeof AuthSystemSupportRoute
   AuthSystemUpdatesRoute: typeof AuthSystemUpdatesRoute
@@ -719,6 +739,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthSystemAlertsRoute: AuthSystemAlertsRoute,
   AuthSystemAuditRoute: AuthSystemAuditRoute,
   AuthSystemCertificatesRoute: AuthSystemCertificatesRoute,
+  AuthSystemJobsRoute: AuthSystemJobsRoute,
   AuthSystemSettingsRoute: AuthSystemSettingsRoute,
   AuthSystemSupportRoute: AuthSystemSupportRoute,
   AuthSystemUpdatesRoute: AuthSystemUpdatesRoute,

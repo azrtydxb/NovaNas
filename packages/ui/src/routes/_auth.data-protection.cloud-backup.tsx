@@ -1,3 +1,4 @@
+// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { ShellScreen } from '@/components/common/shell-screen';
 import { Button } from '@/components/ui/button';
 import { createFileRoute } from '@tanstack/react-router';

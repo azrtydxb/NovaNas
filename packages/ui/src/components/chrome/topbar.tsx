@@ -13,9 +13,11 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/cn';
+import { Trans } from '@lingui/react';
 import { Bell, ChevronDown, LogOut, Search, Settings, User as UserIcon } from 'lucide-react';
 import { Brand } from './brand';
 import { ThemeToggle } from './theme-toggle';
+import { WsStatusDot } from './ws-status-dot';
 
 export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
   const { user, logout } = useAuth();
@@ -26,9 +28,11 @@ export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
       <Brand />
 
       <div className='flex items-center gap-1.5 text-xs text-foreground-subtle'>
-        <span>Console</span>
+        <span>
+          <Trans id='Console' />
+        </span>
         <span className='opacity-50'>/</span>
-        <span className='text-foreground'>{currentPageTitle ?? 'Dashboard'}</span>
+        <span className='text-foreground'>{currentPageTitle ?? <Trans id='Dashboard' />}</span>
       </div>
 
       <div className='flex-1' />
@@ -51,6 +55,8 @@ export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
       </div>
 
       <HealthPill tone='ok'>26.07.3</HealthPill>
+
+      <WsStatusDot />
 
       <ThemeToggle />
 
@@ -78,17 +84,17 @@ export function Topbar({ currentPageTitle }: { currentPageTitle?: string }) {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end'>
-          <DropdownMenuLabel>{user?.email ?? 'Signed out'}</DropdownMenuLabel>
+          <DropdownMenuLabel>{user?.email ?? <Trans id='Signed out' />}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem>
-            <UserIcon size={14} /> Profile
+            <UserIcon size={14} /> <Trans id='Profile' />
           </DropdownMenuItem>
           <DropdownMenuItem>
-            <Settings size={14} /> Preferences
+            <Settings size={14} /> <Trans id='Preferences' />
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void logout()}>
-            <LogOut size={14} /> Sign out
+            <LogOut size={14} /> <Trans id='Sign out' />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

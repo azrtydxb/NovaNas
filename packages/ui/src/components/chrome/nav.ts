@@ -61,6 +61,7 @@ export const ADMIN_NAV: NavItem[] = [
       { id: 'updates', label: 'Updates', to: '/system/updates' },
       { id: 'certificates', label: 'Certificates', to: '/system/certificates' },
       { id: 'alerts', label: 'Alerts', to: '/system/alerts' },
+      { id: 'jobs', label: 'Jobs', to: '/system/jobs' },
       { id: 'audit', label: 'Audit log', to: '/system/audit' },
       { id: 'support', label: 'Support', to: '/system/support' },
     ],

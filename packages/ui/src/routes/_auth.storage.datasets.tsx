@@ -39,7 +39,9 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Trans } from '@lingui/react';
 import type { Dataset, ProtectionPolicy } from '@novanas/schemas';
 import { BytesQuantitySchema, ProtectionPolicySchema } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
@@ -78,12 +80,12 @@ function DatasetsPage() {
   return (
     <>
       <PageHeader
-        title='Datasets'
-        subtitle='Logical volumes backed by pools, with their own protection and quota.'
+        title={i18n._('Datasets')}
+        subtitle={i18n._('Logical volumes backed by pools, with their own protection and quota.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New dataset
+              <Plus size={13} /> <Trans id='New dataset' />
             </Button>
           ) : null
         }

@@ -18,6 +18,8 @@ export * from './apps-available';
 export * from './app-instances';
 export * from './vms';
 export * from './iso-libraries';
+export * from './gpu-devices';
+export * from './jobs';
 // A11-UI-Rest — Network
 export * from './host-interfaces';
 export * from './bonds';

@@ -1,3 +1,5 @@
+import { i18n } from '@/lib/i18n';
+import { I18nProvider } from '@lingui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -14,7 +16,11 @@ export function makeQueryClient() {
 
 export function wrapper(qc: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(QueryClientProvider, { client: qc }, children);
+    return createElement(
+      I18nProvider,
+      { i18n },
+      createElement(QueryClientProvider, { client: qc }, children)
+    );
   };
 }
 

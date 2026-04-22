@@ -40,7 +40,9 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Trans } from '@lingui/react';
 import type { StoragePool } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Database, Plus, Trash2 } from 'lucide-react';
@@ -81,12 +83,12 @@ function PoolsPage() {
   return (
     <>
       <PageHeader
-        title='Pools'
-        subtitle='Hot / warm / cold storage tiers backed by the chunk engine.'
+        title={i18n._('Pools')}
+        subtitle={i18n._('Hot / warm / cold storage tiers backed by the chunk engine.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> Create pool
+              <Plus size={13} /> <Trans id='Create pool' />
             </Button>
           ) : null
         }
@@ -101,19 +103,19 @@ function PoolsPage() {
       ) : pools.isError ? (
         <EmptyState
           icon={<Database size={28} />}
-          title='Unable to load pools'
-          description={(pools.error as Error)?.message ?? 'Try again in a moment.'}
-          action={<Button onClick={() => pools.refetch()}>Retry</Button>}
+          title={i18n._('Unable to load pools')}
+          description={(pools.error as Error)?.message ?? i18n._('Try again in a moment.')}
+          action={<Button onClick={() => pools.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (pools.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Database size={28} />}
-          title='No pools yet'
-          description='Create your first pool to start allocating storage.'
+          title={i18n._('No pools yet')}
+          description={i18n._('Create your first pool to start allocating storage.')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> Create pool
+                <Plus size={13} /> <Trans id='Create pool' />
               </Button>
             ) : undefined
           }
@@ -123,12 +125,24 @@ function PoolsPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Tier</TableHeaderCell>
-                <TableHeaderCell>Phase</TableHeaderCell>
-                <TableHeaderCell>Disks</TableHeaderCell>
-                <TableHeaderCell>Usage</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Tier' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Phase' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Disks' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Usage' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>

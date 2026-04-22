@@ -1,5 +1,6 @@
 // TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDatasets } from '@/api/datasets';
+import { useGpuDevices } from '@/api/gpu-devices';
 import { useIsoLibraries } from '@/api/iso-libraries';
 import { type VmCreateBody, useCreateVm, useDeleteVm, useVmAction, useVms } from '@/api/vms';
 import { EmptyState } from '@/components/common/empty-state';
@@ -38,7 +39,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VncConsole } from '@/components/vm/vnc-console';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { Vm, VmDisk, VmOsType, VmSpec } from '@novanas/schemas';
+import { maybeTrackJobFromResponse } from '@/stores/jobs';
+import type { Vm, VmDisk, VmGpuPassthroughEntry, VmOsType, VmSpec } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Pause, Play, Plus, RotateCw, Server, Square, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
@@ -217,6 +219,8 @@ interface VmForm {
   bridge: string;
   graphicsEnabled: boolean;
   graphicsType: 'spice' | 'vnc';
+  /** Names of GpuDevice resources the user has selected for passthrough. */
+  gpuDeviceNames: string[];
 }
 
 const defaultVmForm: VmForm = {
@@ -230,6 +234,7 @@ const defaultVmForm: VmForm = {
   bridge: '',
   graphicsEnabled: true,
   graphicsType: 'spice',
+  gpuDeviceNames: [],
 };
 
 function CreateVmDialog({
@@ -242,6 +247,9 @@ function CreateVmDialog({
   const create = useCreateVm();
   const datasets = useDatasets();
   const isos = useIsoLibraries();
+  // Only fetch GpuDevices once the dialog is actually open, to avoid making
+  // an API call every time the VMs page mounts.
+  const gpuDevices = useGpuDevices({ enabled: open });
   const toast = useToast();
   const [form, setForm] = useState<VmForm>(defaultVmForm);
 
@@ -252,6 +260,17 @@ function CreateVmDialog({
       toast.error('Name required');
       return;
     }
+    // Build vm.spec.gpu.passthrough from the selected GpuDevice resources.
+    const gpuEntries: VmGpuPassthroughEntry[] = (gpuDevices.data ?? [])
+      .filter((g) => form.gpuDeviceNames.includes(g.metadata.name))
+      .map((g) => {
+        const entry: VmGpuPassthroughEntry = {
+          device: g.status?.deviceId ?? g.metadata.name,
+        };
+        if (g.status?.vendor) entry.vendor = g.status.vendor;
+        if (g.status?.model) entry.deviceName = g.status.model;
+        return entry;
+      });
     const spec: VmSpec = {
       os: {
         type: form.osType,
@@ -266,10 +285,12 @@ function CreateVmDialog({
         },
       ],
       graphics: { enabled: form.graphicsEnabled, type: form.graphicsType },
+      ...(gpuEntries.length ? { gpu: { passthrough: gpuEntries } } : {}),
     };
     const body: VmCreateBody = { metadata: { name: form.name }, spec };
     try {
-      await create.mutateAsync(body);
+      const resp = await create.mutateAsync(body);
+      maybeTrackJobFromResponse(resp, `Create VM ${form.name}`);
       toast.success('VM created', form.name);
       reset();
       onOpenChange(false);
@@ -404,9 +425,6 @@ function CreateVmDialog({
                 />
               </FormField>
             )}
-            <div className='text-xs text-foreground-subtle'>
-              GPU picker: no GpuDevice resources detected. TODO(wave-11).
-            </div>
           </TabsContent>
 
           <TabsContent value='graphics' className='pt-3 flex flex-col gap-3'>
@@ -433,6 +451,52 @@ function CreateVmDialog({
                 </Select>
               </FormField>
             )}
+
+            <div className='pt-2 border-t border-border'>
+              <div className='text-xs uppercase tracking-wider text-foreground-subtle mb-2'>
+                GPU passthrough
+              </div>
+              {gpuDevices.isLoading ? (
+                <Skeleton className='h-9' />
+              ) : gpuDevices.isError || (gpuDevices.data?.length ?? 0) === 0 ? (
+                <div className='text-xs text-foreground-subtle border border-border rounded-sm p-3'>
+                  No GPUs detected.
+                </div>
+              ) : (
+                <ul className='flex flex-col gap-1'>
+                  {gpuDevices.data!.map((g) => {
+                    const name = g.metadata.name;
+                    const selected = form.gpuDeviceNames.includes(name);
+                    const st = g.status ?? {};
+                    const assigned = st.assignedTo?.name;
+                    return (
+                      <li
+                        key={name}
+                        className='flex items-center gap-2 border border-border rounded-sm p-2 text-xs'
+                      >
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={(v) => {
+                            const next = v
+                              ? [...form.gpuDeviceNames, name]
+                              : form.gpuDeviceNames.filter((n) => n !== name);
+                            setForm({ ...form, gpuDeviceNames: next });
+                          }}
+                        />
+                        <div className='flex-1'>
+                          <div className='mono text-foreground'>{name}</div>
+                          <div className='text-foreground-subtle mono'>
+                            {st.vendor ?? '—'} {st.model ?? ''}{' '}
+                            {st.pciAddress ? `· ${st.pciAddress}` : ''}
+                          </div>
+                        </div>
+                        {assigned && <Badge>in use by {assigned}</Badge>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
 
