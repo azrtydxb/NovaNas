@@ -1,0 +1,101 @@
+/* NovaNas design tokens — CSS variables bound by Tailwind theme */
+
+:root {
+  --accent-h: 220;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  --row-h: 30px;
+  --pad-x: 14px;
+  --pad-y: 10px;
+  --gap: 10px;
+  --fs-body: 13px;
+  --fs-label: 11px;
+  --fs-num: 13px;
+}
+
+.density-spacious {
+  --row-h: 40px;
+  --pad-x: 18px;
+  --pad-y: 14px;
+  --gap: 14px;
+  --fs-body: 14px;
+  --fs-label: 12px;
+  --fs-num: 14px;
+}
+
+.theme-dark {
+  color-scheme: dark;
+
+  --bg-0: oklch(0.16 0.006 250);
+  --bg-1: oklch(0.19 0.007 250);
+  --bg-2: oklch(0.22 0.008 250);
+  --bg-3: oklch(0.26 0.009 250);
+  --bg-4: oklch(0.30 0.010 250);
+  --bg-inset: oklch(0.13 0.006 250);
+
+  --line: oklch(0.30 0.010 250 / 0.55);
+  --line-strong: oklch(0.36 0.012 250 / 0.75);
+
+  --fg-0: oklch(0.97 0.005 250);
+  --fg-1: oklch(0.86 0.006 250);
+  --fg-2: oklch(0.68 0.008 250);
+  --fg-3: oklch(0.52 0.009 250);
+  --fg-4: oklch(0.40 0.010 250);
+
+  --accent: oklch(0.78 0.14 var(--accent-h));
+  --accent-soft: oklch(0.78 0.14 var(--accent-h) / 0.18);
+  --accent-dim: oklch(0.68 0.12 var(--accent-h));
+  --accent-fg: oklch(0.18 0.02 var(--accent-h));
+
+  --ok: oklch(0.78 0.14 150);
+  --ok-soft: oklch(0.78 0.14 150 / 0.16);
+  --warn: oklch(0.82 0.14 80);
+  --warn-soft: oklch(0.82 0.14 80 / 0.18);
+  --err: oklch(0.72 0.17 25);
+  --err-soft: oklch(0.72 0.17 25 / 0.18);
+  --info: oklch(0.78 0.12 240);
+
+  --shadow-sm: 0 1px 0 oklch(1 0 0 / 0.03) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-md: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 6px 20px oklch(0 0 0 / 0.45);
+}
+
+.theme-light {
+  color-scheme: light;
+
+  --bg-0: oklch(0.985 0.004 85);
+  --bg-1: oklch(0.975 0.004 85);
+  --bg-2: oklch(0.995 0.003 85);
+  --bg-3: oklch(0.955 0.006 85);
+  --bg-4: oklch(0.935 0.008 85);
+  --bg-inset: oklch(0.945 0.006 85);
+
+  --line: oklch(0.86 0.008 85 / 0.9);
+  --line-strong: oklch(0.78 0.010 85 / 0.9);
+
+  --fg-0: oklch(0.22 0.010 250);
+  --fg-1: oklch(0.32 0.010 250);
+  --fg-2: oklch(0.46 0.010 250);
+  --fg-3: oklch(0.58 0.010 250);
+  --fg-4: oklch(0.70 0.010 250);
+
+  --accent: oklch(0.56 0.16 var(--accent-h));
+  --accent-soft: oklch(0.56 0.16 var(--accent-h) / 0.12);
+  --accent-dim: oklch(0.48 0.14 var(--accent-h));
+  --accent-fg: oklch(0.99 0.01 var(--accent-h));
+
+  --ok: oklch(0.55 0.14 150);
+  --ok-soft: oklch(0.55 0.14 150 / 0.12);
+  --warn: oklch(0.62 0.14 70);
+  --warn-soft: oklch(0.62 0.14 70 / 0.14);
+  --err: oklch(0.55 0.18 25);
+  --err-soft: oklch(0.55 0.18 25 / 0.10);
+  --info: oklch(0.55 0.14 240);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.06);
+  --shadow-md: 0 8px 24px oklch(0 0 0 / 0.08);
+}

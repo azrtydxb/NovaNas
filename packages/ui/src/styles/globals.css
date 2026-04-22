@@ -1,0 +1,58 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    font-family: theme('fontFamily.sans');
+    font-size: var(--fs-body);
+    color: var(--fg-1);
+    background: var(--bg-0);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+    letter-spacing: -0.005em;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--fg-0);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-3);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--bg-4);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .mono {
+    font-family: theme('fontFamily.mono');
+    font-feature-settings: 'tnum' 1, 'ss02' 1;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
