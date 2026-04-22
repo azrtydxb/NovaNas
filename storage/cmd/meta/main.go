@@ -60,6 +60,16 @@ func main() {
 	tlsRotationInterval := flag.Duration("tls-rotation-interval", 5*time.Minute, "Interval for TLS certificate rotation checks")
 	gcInterval := flag.Duration("gc-interval", 1*time.Hour, "Interval between metadata garbage collection runs")
 	gcNodeTTL := flag.Duration("gc-node-ttl", 24*time.Hour, "Time after which a node with no heartbeat is considered stale for GC")
+	// A4-Encryption: OpenBao Transit config (docs/02, docs/10). Meta
+	// server uses these when provisioning per-volume Dataset Keys.
+	openbaoAddr := flag.String("openbao-addr", "", "OpenBao base URL (e.g. https://openbao:8200). Empty disables encryption.")
+	openbaoTokenPath := flag.String("openbao-token-path", "/var/run/secrets/openbao/token", "Path to OpenBao token file")
+	masterKeyName := flag.String("master-key-name", "novanas/chunk-master", "OpenBao Transit master-key name used to wrap Dataset Keys")
+	encryptionMode := flag.String("encryption-mode", "off", "Encryption mode: off | mandatory (default off in v1; opt-in per volume via CRD)")
+	_ = openbaoAddr
+	_ = openbaoTokenPath
+	_ = masterKeyName
+	_ = encryptionMode
 	flag.Parse()
 
 	logging.Init(false)

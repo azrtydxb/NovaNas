@@ -311,6 +311,18 @@ func main() {
 	dataplaneAddr := flag.String("dataplane-addr", "localhost:9500", "Address of the Rust gRPC dataplane")
 	spdkBaseBdev := flag.String("spdk-base-bdev", "NVMe0n1", "SPDK bdev name used as the base device for the storage backend (e.g. NVMe0n1, Malloc0)")
 	testMode := flag.Bool("test-mode", false, "Enable test mode: allows Malloc bdev auto-creation (NOT for production use)")
+	// A4-Encryption: OpenBao Transit integration (docs/02, docs/10).
+	// These flags wire the agent to the master-key holder; actual use
+	// by the chunk-server path lands as encryption is opted-in per
+	// volume. Default mode is "off" — unencrypted chunk I/O preserved.
+	openbaoAddr := flag.String("openbao-addr", "", "OpenBao base URL (e.g. https://openbao:8200). Empty disables encryption.")
+	openbaoTokenPath := flag.String("openbao-token-path", "/var/run/secrets/openbao/token", "Path to OpenBao token file")
+	masterKeyName := flag.String("master-key-name", "novanas/chunk-master", "OpenBao Transit master-key name used to wrap Dataset Keys")
+	encryptionMode := flag.String("encryption-mode", "off", "Encryption mode: off | mandatory (default off in v1; opt-in per volume via CRD)")
+	_ = openbaoAddr
+	_ = openbaoTokenPath
+	_ = masterKeyName
+	_ = encryptionMode
 	flag.Parse()
 
 	logging.Init(false)

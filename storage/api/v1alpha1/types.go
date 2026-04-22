@@ -78,6 +78,36 @@ type ReplicationSpec struct {
 	WriteQuorum int `json:"writeQuorum,omitempty"`
 }
 
+// EncryptionSpec configures at-rest convergent encryption for a volume.
+// When Enabled, the controller generates a random 32-byte Dataset Key,
+// wraps it with the cluster master key in OpenBao Transit, and stores
+// the wrapped form in WrappedDK. The key is unwrapped on mount and
+// used to encrypt every chunk under AES-256-GCM with convergent key
+// derivation (preserving dedup within a DK scope).
+// See storage/internal/crypto and docs/02 for details.
+type EncryptionSpec struct {
+	// Enabled opts this volume into at-rest encryption.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// TransitKeyName is the OpenBao Transit master-key name to wrap
+	// this volume's Dataset Key under. Defaults to the agent's
+	// --master-key-name flag when empty.
+	// +optional
+	TransitKeyName string `json:"transitKeyName,omitempty"`
+
+	// WrappedDK is the Dataset Key wrapped under the master key. Set
+	// by the controller on first reconcile; opaque to the user.
+	// +optional
+	WrappedDK []byte `json:"wrappedDK,omitempty"`
+
+	// KeyVersion is the master-key version at wrap time, recorded so
+	// that rotation audit logs can reason about which volumes still
+	// reference which master-key version.
+	// +optional
+	KeyVersion uint64 `json:"keyVersion,omitempty"`
+}
+
 type ErasureCodingSpec struct {
 	// +kubebuilder:default=4
 	// +kubebuilder:validation:Minimum=2
@@ -129,6 +159,10 @@ type BlockVolumeSpec struct {
 	// When set, the volume cannot grow beyond this size.
 	// +optional
 	Quota *int64 `json:"quota,omitempty"`
+
+	// Encryption opts this volume into at-rest convergent encryption.
+	// +optional
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 type BlockVolumeStatus struct {
@@ -174,6 +208,10 @@ type SharedFilesystemSpec struct {
 	// Image overrides the NFS filer container image. Defaults to ghcr.io/azrtydxb/novanas/novanas-storage-filer:v0.1.0.
 	// +optional
 	Image string `json:"image,omitempty"`
+
+	// Encryption opts this filesystem into at-rest convergent encryption.
+	// +optional
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 type ExportSpec struct {
@@ -218,6 +256,12 @@ type ObjectStoreSpec struct {
 	// Image overrides the S3 gateway container image. Defaults to ghcr.io/azrtydxb/novanas/novanas-storage-s3gw:v0.1.0.
 	// +optional
 	Image string `json:"image,omitempty"`
+
+	// Encryption opts this object store into at-rest convergent encryption
+	// (default namespace). SSE-C objects are handled in a separate
+	// non-dedup namespace; full SSE-C wiring is TODO(wave-5).
+	// +optional
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 type ObjectEndpointSpec struct {

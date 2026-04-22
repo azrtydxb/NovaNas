@@ -10,6 +10,8 @@ pub mod backend;
 pub mod bdev;
 pub mod chunk;
 pub mod config;
+pub mod crypto;
+pub mod openbao;
 pub mod error;
 pub mod metadata;
 pub mod policy;

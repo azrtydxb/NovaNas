@@ -67,6 +67,8 @@ pub enum OpenChunkError {
     NotFound(OpenChunkId),
     #[error("invalid capacity {0}: must be > 0 and <= {max}", max = CHUNK_SIZE)]
     InvalidCapacity(usize),
+    #[error("chunk encryption failed")]
+    EncryptFailed,
 }
 
 /// A single mutable, append-only open chunk.
@@ -158,6 +160,26 @@ impl OpenChunk {
         self.sealed_as = Some(id);
         let out = std::mem::take(&mut self.buf);
         Ok((id, out))
+    }
+
+    /// Seal the chunk with convergent encryption under `dk` (32 bytes).
+    /// Returns (chunk_id, ciphertext, auth_tag, plaintext_hash) where
+    /// chunk_id = SHA-256(ciphertext || auth_tag). See
+    /// `crate::crypto` for the scheme.
+    pub fn seal_encrypted(
+        &mut self,
+        dk: &[u8],
+    ) -> Result<([u8; 32], Vec<u8>, [u8; 16], [u8; 32]), OpenChunkError> {
+        if self.state == OpenChunkState::Sealed {
+            return Err(OpenChunkError::Sealed);
+        }
+        let enc = crate::crypto::encrypt_chunk(dk, &self.buf)
+            .map_err(|_| OpenChunkError::EncryptFailed)?;
+        self.state = OpenChunkState::Sealed;
+        self.sealed_as = Some(enc.chunk_id);
+        // Drop plaintext buffer.
+        self.buf = Vec::new();
+        Ok((enc.chunk_id, enc.ciphertext, enc.auth_tag, enc.plaintext_hash))
     }
 
     /// Whether this open chunk should be sealed now (full or idle past
@@ -280,6 +302,26 @@ mod tests {
         assert!(!c.should_seal(Duration::from_secs(60)));
         c.append(0, b"abcd").unwrap();
         assert!(c.should_seal(Duration::ZERO));
+    }
+
+    #[test]
+    fn seal_encrypted_roundtrip() {
+        let dk = [0x42u8; 32];
+        let mut c = OpenChunk::new("p", 64).unwrap();
+        c.append(0, b"hello").unwrap();
+        c.append(5, b" world").unwrap();
+        let (id, ct, tag, ph) = c.seal_encrypted(&dk).unwrap();
+        assert_eq!(c.state(), OpenChunkState::Sealed);
+        assert_ne!(ct, b"hello world".to_vec(), "ciphertext must differ from plaintext");
+        // id = SHA-256(ct || tag)
+        let mut ctx = digest::Context::new(&digest::SHA256);
+        ctx.update(&ct);
+        ctx.update(&tag);
+        let expected = ctx.finish();
+        assert_eq!(&id[..], expected.as_ref());
+        // Roundtrip.
+        let got = crate::crypto::decrypt_chunk(&dk, &ct, &tag, &ph).unwrap();
+        assert_eq!(got, b"hello world");
     }
 
     #[test]

@@ -37,6 +37,8 @@ import (
 	"hash/crc32"
 	"sync"
 	"time"
+
+	"github.com/azrtydxb/novanas/storage/internal/crypto"
 )
 
 // DefaultOpenChunkCapacity is the default capacity for an open chunk.
@@ -224,6 +226,49 @@ func (o *OpenChunk) Seal() (*Chunk, error) {
 	return c, nil
 }
 
+// SealEncrypted transitions Open -> Sealed with convergent encryption.
+// The accumulated plaintext is encrypted under dk (32 bytes) before
+// the content hash is computed, so the resulting ChunkID is
+// SHA-256(ciphertext||auth_tag). This preserves dedup within the DK
+// scope while guaranteeing data-at-rest encryption from the moment
+// the chunk is sealed.
+//
+// For the open-chunk path we encrypt at seal time (rather than
+// per-append) for simplicity: the buffer is small (64 KiB default)
+// and seal-time encryption avoids the complexity of a streaming AEAD
+// across many small appends.
+func (o *OpenChunk) SealEncrypted(dk []byte) (*Chunk, error) {
+	if len(dk) != crypto.ChunkKeySize {
+		return nil, fmt.Errorf("open-chunk: dataset key must be %d bytes, got %d", crypto.ChunkKeySize, len(dk))
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.state == OpenChunkSealed {
+		return nil, ErrOpenChunkSealed
+	}
+	sealedData := make([]byte, len(o.buf))
+	copy(sealedData, o.buf)
+
+	enc, err := crypto.EncryptChunk(dk, sealedData)
+	if err != nil {
+		return nil, fmt.Errorf("open-chunk: encrypt: %w", err)
+	}
+	id := ChunkID(hex.EncodeToString(enc.ChunkID[:]))
+	table := crc32.MakeTable(crc32.Castagnoli)
+	c := &Chunk{
+		ID:            id,
+		Data:          enc.Ciphertext,
+		Checksum:      crc32.Checksum(enc.Ciphertext, table),
+		Encrypted:     true,
+		AuthTag:       enc.AuthTag,
+		PlaintextHash: enc.PlaintextHash,
+	}
+	o.state = OpenChunkSealed
+	o.sealedAs = id
+	return c, nil
+}
+
 // ShouldSeal reports whether the open chunk should be sealed given its
 // current fill level and an optional idle timeout. Sealing happens when
 // the chunk is full (len == capacity) OR it has been idle longer than
@@ -296,6 +341,24 @@ func (r *OpenChunkRegistry) Seal(id OpenChunkID) (*Chunk, error) {
 		return nil, err
 	}
 	sealed, err := c.Seal()
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	delete(r.chunks, id)
+	r.mu.Unlock()
+	return sealed, nil
+}
+
+// SealEncrypted seals the open chunk with convergent encryption under
+// the supplied dataset key, removes it from the registry, and returns
+// the resulting encrypted sealed Chunk.
+func (r *OpenChunkRegistry) SealEncrypted(id OpenChunkID, dk []byte) (*Chunk, error) {
+	c, err := r.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	sealed, err := c.SealEncrypted(dk)
 	if err != nil {
 		return nil, err
 	}

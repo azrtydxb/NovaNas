@@ -64,6 +64,41 @@ and `storage/dataplane/src/chunk/open_chunk.rs`.
 The `--data-dir` flag on `cmd/meta` is **deprecated**. It is retained as
 a fallback while the chunk-mount step is being wired.
 
+## Encryption
+
+NovaNas encrypts chunk data with AES-256-GCM using a convergent key
+derivation. A two-level key hierarchy keeps the Master Key inside
+OpenBao Transit (it never leaves), while per-volume Dataset Keys
+(DKs) are wrapped with the Master Key and stored in the volume's
+CRD spec. On mount, the agent unwraps the DK via OpenBao and caches
+it in memory for the lifetime of the mount (zeroised on unmount).
+
+Each chunk key is derived as
+`HMAC-SHA-256(DK, "novanas/chunk-key/v1" || SHA-256(plaintext))` and
+the 96-bit IV is derived with a distinct domain-separation prefix.
+Because the derivation is deterministic in `(DK, plaintext)`, the
+ciphertext is deterministic too — so dedup over `SHA-256(ciphertext||tag)`
+still works within a DK scope, while different DKs never cross-dedup.
+
+SSE-C (customer-supplied-key) objects live in a segregated non-dedup
+namespace (random per-chunk IV, "ssec:" chunk-id prefix); full S3
+SSE-C wiring is deferred to Wave 5.
+
+Encryption is **off by default** in v1 and opt-in per volume via
+`spec.encryption.enabled` on `BlockVolume`, `SharedFilesystem`, and
+`ObjectStore`. Global knobs on `cmd/agent` and `cmd/meta`:
+`--openbao-addr`, `--openbao-token-path`, `--master-key-name`,
+`--encryption-mode`.
+
+Primitives: `storage/internal/crypto/` (Go) and
+`storage/dataplane/src/crypto/` (Rust). Transit client:
+`storage/internal/openbao/` (Go) and
+`storage/dataplane/src/openbao/` (Rust, test-only fake).
+
+See `docs/02-storage-architecture.md` (Encryption section),
+`docs/10-identity-and-secrets.md`, and `docs/14-decision-log.md`
+(S16/S17/S18, A11/A12) for the authoritative design.
+
 ## Components
 
 | Binary                         | Package               | Role                              |
