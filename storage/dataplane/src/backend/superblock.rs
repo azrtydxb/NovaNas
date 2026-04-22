@@ -115,16 +115,30 @@ pub enum SuperblockError {
     #[error("unsupported superblock version {0}")]
     BadVersion(u32),
     #[error("field {name} exceeds on-disk capacity ({len} > {max})")]
-    FieldTooLong { name: &'static str, len: usize, max: usize },
+    FieldTooLong {
+        name: &'static str,
+        len: usize,
+        max: usize,
+    },
     #[error("buffer size {got} does not match SUPERBLOCK_SIZE {want}")]
     BadSize { got: usize, want: usize },
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 }
 
-fn put_fixed_str(buf: &mut [u8], offset: usize, len: usize, s: &str, name: &'static str) -> Result<(), SuperblockError> {
+fn put_fixed_str(
+    buf: &mut [u8],
+    offset: usize,
+    len: usize,
+    s: &str,
+    name: &'static str,
+) -> Result<(), SuperblockError> {
     if s.len() > len {
-        return Err(SuperblockError::FieldTooLong { name, len: s.len(), max: len });
+        return Err(SuperblockError::FieldTooLong {
+            name,
+            len: s.len(),
+            max: len,
+        });
     }
     let slot = &mut buf[offset..offset + len];
     for b in slot.iter_mut() {
@@ -151,8 +165,20 @@ impl Superblock {
         put_fixed_str(&mut buf, OFF_POOL_ID, POOL_ID_LEN, &self.pool_id, "pool_id")?;
         buf[OFF_ROLE..OFF_ROLE + 4].copy_from_slice(&(self.role as u32).to_le_bytes());
         buf[OFF_CRUSH_DIGEST..OFF_CRUSH_DIGEST + 32].copy_from_slice(&self.crush_digest);
-        put_fixed_str(&mut buf, OFF_META_VOL_NAME, META_VOL_NAME_LEN, &self.meta_volume_name, "meta_volume_name")?;
-        put_fixed_str(&mut buf, OFF_META_VOL_ROOT, META_VOL_ROOT_LEN, &self.meta_volume_root_chunk, "meta_volume_root_chunk")?;
+        put_fixed_str(
+            &mut buf,
+            OFF_META_VOL_NAME,
+            META_VOL_NAME_LEN,
+            &self.meta_volume_name,
+            "meta_volume_name",
+        )?;
+        put_fixed_str(
+            &mut buf,
+            OFF_META_VOL_ROOT,
+            META_VOL_ROOT_LEN,
+            &self.meta_volume_root_chunk,
+            "meta_volume_root_chunk",
+        )?;
         buf[OFF_META_VOL_VERSION..OFF_META_VOL_VERSION + 8]
             .copy_from_slice(&self.meta_volume_version.to_le_bytes());
         buf[OFF_CREATED..OFF_CREATED + 8].copy_from_slice(&self.created_unix_nanos.to_le_bytes());
@@ -165,7 +191,10 @@ impl Superblock {
 
     pub fn unmarshal(buf: &[u8]) -> Result<Self, SuperblockError> {
         if buf.len() != SUPERBLOCK_SIZE {
-            return Err(SuperblockError::BadSize { got: buf.len(), want: SUPERBLOCK_SIZE });
+            return Err(SuperblockError::BadSize {
+                got: buf.len(),
+                want: SUPERBLOCK_SIZE,
+            });
         }
         if buf[OFF_MAGIC..OFF_MAGIC + 8] != SUPERBLOCK_MAGIC {
             return Err(SuperblockError::BadMagic);
@@ -173,7 +202,10 @@ impl Superblock {
         let got_crc = u32::from_le_bytes(buf[OFF_CRC..OFF_CRC + 4].try_into().unwrap());
         let want_crc = crc32c(&buf[..OFF_CRC]);
         if got_crc != want_crc {
-            return Err(SuperblockError::BadCrc { got: got_crc, want: want_crc });
+            return Err(SuperblockError::BadCrc {
+                got: got_crc,
+                want: want_crc,
+            });
         }
         let version = u32::from_le_bytes(buf[OFF_VERSION..OFF_VERSION + 4].try_into().unwrap());
         if version != SUPERBLOCK_VERSION {
@@ -183,14 +215,22 @@ impl Superblock {
         let mut disk_uuid = [0u8; 16];
         disk_uuid.copy_from_slice(&buf[OFF_DISK_UUID..OFF_DISK_UUID + 16]);
         let pool_id = read_fixed_str(buf, OFF_POOL_ID, POOL_ID_LEN);
-        let role = DiskRole::from_u32(u32::from_le_bytes(buf[OFF_ROLE..OFF_ROLE + 4].try_into().unwrap()));
+        let role = DiskRole::from_u32(u32::from_le_bytes(
+            buf[OFF_ROLE..OFF_ROLE + 4].try_into().unwrap(),
+        ));
         let mut crush_digest = [0u8; 32];
         crush_digest.copy_from_slice(&buf[OFF_CRUSH_DIGEST..OFF_CRUSH_DIGEST + 32]);
         let meta_volume_name = read_fixed_str(buf, OFF_META_VOL_NAME, META_VOL_NAME_LEN);
         let meta_volume_root_chunk = read_fixed_str(buf, OFF_META_VOL_ROOT, META_VOL_ROOT_LEN);
-        let meta_volume_version = u64::from_le_bytes(buf[OFF_META_VOL_VERSION..OFF_META_VOL_VERSION + 8].try_into().unwrap());
-        let created_unix_nanos = i64::from_le_bytes(buf[OFF_CREATED..OFF_CREATED + 8].try_into().unwrap());
-        let updated_unix_nanos = i64::from_le_bytes(buf[OFF_UPDATED..OFF_UPDATED + 8].try_into().unwrap());
+        let meta_volume_version = u64::from_le_bytes(
+            buf[OFF_META_VOL_VERSION..OFF_META_VOL_VERSION + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let created_unix_nanos =
+            i64::from_le_bytes(buf[OFF_CREATED..OFF_CREATED + 8].try_into().unwrap());
+        let updated_unix_nanos =
+            i64::from_le_bytes(buf[OFF_UPDATED..OFF_UPDATED + 8].try_into().unwrap());
         Ok(Self {
             version,
             flags,
@@ -268,7 +308,10 @@ mod tests {
         let sb = sample();
         let mut buf = sb.marshal().unwrap();
         buf[0] ^= 0xff;
-        assert!(matches!(Superblock::unmarshal(&buf), Err(SuperblockError::BadMagic)));
+        assert!(matches!(
+            Superblock::unmarshal(&buf),
+            Err(SuperblockError::BadMagic)
+        ));
     }
 
     #[test]
@@ -276,14 +319,20 @@ mod tests {
         let sb = sample();
         let mut buf = sb.marshal().unwrap();
         buf[OFF_POOL_ID] ^= 0x01;
-        assert!(matches!(Superblock::unmarshal(&buf), Err(SuperblockError::BadCrc { .. })));
+        assert!(matches!(
+            Superblock::unmarshal(&buf),
+            Err(SuperblockError::BadCrc { .. })
+        ));
     }
 
     #[test]
     fn field_too_long() {
         let mut sb = sample();
         sb.pool_id = "x".repeat(POOL_ID_LEN + 1);
-        assert!(matches!(sb.marshal(), Err(SuperblockError::FieldTooLong { .. })));
+        assert!(matches!(
+            sb.marshal(),
+            Err(SuperblockError::FieldTooLong { .. })
+        ));
     }
 
     #[test]

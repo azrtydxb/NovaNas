@@ -270,12 +270,8 @@ async fn handle_write(header: &NdpHeader, data: Option<Vec<u8>>) -> NdpMessage {
         write_data.len(),
         base_off
     );
-    match crate::bdev::novanas_bdev::sub_block_write_local(
-        &volume_name,
-        header.offset,
-        &write_data,
-    )
-    .await
+    match crate::bdev::novanas_bdev::sub_block_write_local(&volume_name, header.offset, &write_data)
+        .await
     {
         Ok(()) => NdpMessage::new(NdpHeader::response(header, NdpOp::WriteResp, 0, 0), None),
         Err(e) => {

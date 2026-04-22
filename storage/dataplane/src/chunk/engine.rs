@@ -878,8 +878,7 @@ impl ChunkEngine {
                 // Local sub-block read via bdev layer.
                 #[cfg(feature = "spdk-sys")]
                 {
-                    crate::bdev::novanas_bdev::sub_block_read_local(volume_id, offset, length)
-                        .await
+                    crate::bdev::novanas_bdev::sub_block_read_local(volume_id, offset, length).await
                 }
                 #[cfg(not(feature = "spdk-sys"))]
                 {

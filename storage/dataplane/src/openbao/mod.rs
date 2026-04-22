@@ -28,7 +28,8 @@ pub enum TransitError {
 
 /// Minimal subset of the OpenBao Transit surface NovaNas uses.
 pub trait TransitClient: Send + Sync {
-    fn wrap_dk(&self, master_key_name: &str, raw_dk: &[u8]) -> Result<(Vec<u8>, u64), TransitError>;
+    fn wrap_dk(&self, master_key_name: &str, raw_dk: &[u8])
+        -> Result<(Vec<u8>, u64), TransitError>;
     fn unwrap_dk(&self, master_key_name: &str, wrapped: &[u8]) -> Result<Vec<u8>, TransitError>;
     fn rotate_master_key(&self, master_key_name: &str) -> Result<(), TransitError>;
     fn latest_version(&self, master_key_name: &str) -> Result<u64, TransitError>;
@@ -94,11 +95,13 @@ impl TransitClient for FakeTransit {
                     key: name.to_string(),
                     version: k.latest,
                 })?;
-            let unbound = UnboundKey::new(&AES_256_GCM, mk).map_err(|_| TransitError::CryptoFailed)?;
+            let unbound =
+                UnboundKey::new(&AES_256_GCM, mk).map_err(|_| TransitError::CryptoFailed)?;
             let sealing = LessSafeKey::new(unbound);
             let rng = SystemRandom::new();
             let mut nonce_bytes = [0u8; 12];
-            rng.fill(&mut nonce_bytes).map_err(|_| TransitError::RngFailed)?;
+            rng.fill(&mut nonce_bytes)
+                .map_err(|_| TransitError::RngFailed)?;
             let nonce = Nonce::assume_unique_for_key(nonce_bytes);
             let mut in_out = raw.to_vec();
             let tag = sealing
@@ -130,8 +133,11 @@ impl TransitClient for FakeTransit {
                     key: name.to_string(),
                     version,
                 })?;
-            let nonce_bytes: [u8; 12] = wrapped[9..21].try_into().map_err(|_| TransitError::MalformedBlob)?;
-            let unbound = UnboundKey::new(&AES_256_GCM, mk).map_err(|_| TransitError::CryptoFailed)?;
+            let nonce_bytes: [u8; 12] = wrapped[9..21]
+                .try_into()
+                .map_err(|_| TransitError::MalformedBlob)?;
+            let unbound =
+                UnboundKey::new(&AES_256_GCM, mk).map_err(|_| TransitError::CryptoFailed)?;
             let opening = LessSafeKey::new(unbound);
             let nonce = Nonce::assume_unique_for_key(nonce_bytes);
             let mut combined = wrapped[21..].to_vec();

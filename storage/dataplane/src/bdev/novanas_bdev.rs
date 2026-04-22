@@ -1629,10 +1629,7 @@ pub fn destroy(volume_name: &str) -> Result<()> {
     let bdev_addr = entry.bdev_ptr;
     let ctx_addr = entry.ctx_ptr;
 
-    info!(
-        "novanas_bdev: destroying bdev for volume '{}'",
-        volume_name
-    );
+    info!("novanas_bdev: destroying bdev for volume '{}'", volume_name);
 
     use crate::spdk::context::Completion;
     let completion = Arc::new(Completion::<i32>::new());

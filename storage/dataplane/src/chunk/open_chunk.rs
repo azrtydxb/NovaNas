@@ -179,7 +179,12 @@ impl OpenChunk {
         self.sealed_as = Some(enc.chunk_id);
         // Drop plaintext buffer.
         self.buf = Vec::new();
-        Ok((enc.chunk_id, enc.ciphertext, enc.auth_tag, enc.plaintext_hash))
+        Ok((
+            enc.chunk_id,
+            enc.ciphertext,
+            enc.auth_tag,
+            enc.plaintext_hash,
+        ))
     }
 
     /// Whether this open chunk should be sealed now (full or idle past
@@ -212,7 +217,11 @@ impl OpenChunkRegistry {
     }
 
     /// Allocate a new open chunk and return its id.
-    pub fn open(&self, pool_id: impl Into<String>, capacity: usize) -> Result<OpenChunkId, OpenChunkError> {
+    pub fn open(
+        &self,
+        pool_id: impl Into<String>,
+        capacity: usize,
+    ) -> Result<OpenChunkId, OpenChunkError> {
         let c = OpenChunk::new(pool_id, capacity)?;
         let id = c.id().clone();
         self.inner.lock().unwrap().insert(id.clone(), c);
@@ -220,9 +229,16 @@ impl OpenChunkRegistry {
     }
 
     /// Append to the chunk with the given id.
-    pub fn append(&self, id: &OpenChunkId, offset: usize, data: &[u8]) -> Result<usize, OpenChunkError> {
+    pub fn append(
+        &self,
+        id: &OpenChunkId,
+        offset: usize,
+        data: &[u8],
+    ) -> Result<usize, OpenChunkError> {
         let mut g = self.inner.lock().unwrap();
-        let c = g.get_mut(id).ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
+        let c = g
+            .get_mut(id)
+            .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
         c.append(offset, data)?;
         Ok(c.len())
     }
@@ -230,7 +246,9 @@ impl OpenChunkRegistry {
     /// Seal the chunk and remove it from the registry.
     pub fn seal(&self, id: &OpenChunkId) -> Result<([u8; 32], Vec<u8>), OpenChunkError> {
         let mut g = self.inner.lock().unwrap();
-        let mut c = g.remove(id).ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
+        let mut c = g
+            .remove(id)
+            .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
         c.seal()
     }
 
@@ -275,7 +293,10 @@ mod tests {
     fn full_rejected() {
         let mut c = OpenChunk::new("p", 4).unwrap();
         c.append(0, b"abcd").unwrap();
-        assert!(matches!(c.append(4, b"e"), Err(OpenChunkError::Full { .. })));
+        assert!(matches!(
+            c.append(4, b"e"),
+            Err(OpenChunkError::Full { .. })
+        ));
     }
 
     #[test]
@@ -289,7 +310,10 @@ mod tests {
 
     #[test]
     fn invalid_capacity() {
-        assert!(matches!(OpenChunk::new("p", 0), Err(OpenChunkError::InvalidCapacity(0))));
+        assert!(matches!(
+            OpenChunk::new("p", 0),
+            Err(OpenChunkError::InvalidCapacity(0))
+        ));
         assert!(matches!(
             OpenChunk::new("p", (CHUNK_SIZE as usize) + 1),
             Err(OpenChunkError::InvalidCapacity(_))
@@ -312,7 +336,11 @@ mod tests {
         c.append(5, b" world").unwrap();
         let (id, ct, tag, ph) = c.seal_encrypted(&dk).unwrap();
         assert_eq!(c.state(), OpenChunkState::Sealed);
-        assert_ne!(ct, b"hello world".to_vec(), "ciphertext must differ from plaintext");
+        assert_ne!(
+            ct,
+            b"hello world".to_vec(),
+            "ciphertext must differ from plaintext"
+        );
         // id = SHA-256(ct || tag)
         let mut ctx = digest::Context::new(&digest::SHA256);
         ctx.update(&ct);
@@ -335,6 +363,9 @@ mod tests {
         let (_, data) = reg.seal(&id).unwrap();
         assert_eq!(data, b"abcdef".to_vec());
         // After seal it must be gone.
-        assert!(matches!(reg.append(&id, 0, b"x"), Err(OpenChunkError::NotFound(_))));
+        assert!(matches!(
+            reg.append(&id, 0, b"x"),
+            Err(OpenChunkError::NotFound(_))
+        ));
     }
 }
