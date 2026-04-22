@@ -36,7 +36,7 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           for mod in installer packages/cli packages/operators storage; do
             echo "::group::golangci-lint $mod"
-            (cd "$mod" && "$(go env GOPATH)/bin/golangci-lint" run --timeout 5m)
+            (cd "$mod" && "$(go env GOPATH)/bin/golangci-lint" run --timeout 5m ./...)
             echo "::endgroup::"
           done
 
