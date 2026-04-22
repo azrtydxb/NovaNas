@@ -1,6 +1,7 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { ShellScreen } from '@/components/common/shell-screen';
 import { Button } from '@/components/ui/button';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { CloudUpload, Plus } from 'lucide-react';
 
@@ -11,19 +12,19 @@ export const Route = createFileRoute('/_auth/data-protection/cloud-backup')({
 function CloudBackupPage() {
   return (
     <ShellScreen
-      title='Cloud Backup'
-      subtitle='Ship encrypted snapshots to S3-compatible destinations.'
+      title={i18n._('Cloud Backup')}
+      subtitle={i18n._('Ship encrypted snapshots to S3-compatible destinations.')}
       icon={<CloudUpload size={28} />}
       actions={
         <Button variant='primary'>
-          <Plus size={13} /> New backup job
+          <Plus size={13} /> <Trans id='New backup job' />
         </Button>
       }
       upcoming={[
-        'Encrypted, deduplicated backups with immutable retention',
-        'Per-job schedule, bandwidth cap and destination',
-        'Restore browser and verification runs',
-        'Provider credentials managed via OpenBao',
+        i18n._('Encrypted, deduplicated backups with immutable retention'),
+        i18n._('Per-job schedule, bandwidth cap and destination'),
+        i18n._('Restore browser and verification runs'),
+        i18n._('Provider credentials managed via OpenBao'),
       ]}
     />
   );

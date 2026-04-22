@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   type ApiTokenCreateResponse,
   useApiTokens,
@@ -32,6 +31,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -43,11 +44,18 @@ export const Route = createFileRoute('/_auth/identity/tokens')({
 function TokensPage() {
   return (
     <>
-      <PageHeader title='Tokens & keys' subtitle='API tokens and SSH public keys.' />
+      <PageHeader
+        title={i18n._('Tokens & keys')}
+        subtitle={i18n._('API tokens and SSH public keys.')}
+      />
       <Tabs defaultValue='api'>
         <TabsList>
-          <TabsTrigger value='api'>API tokens</TabsTrigger>
-          <TabsTrigger value='ssh'>SSH keys</TabsTrigger>
+          <TabsTrigger value='api'>
+            <Trans id='API tokens' />
+          </TabsTrigger>
+          <TabsTrigger value='ssh'>
+            <Trans id='SSH keys' />
+          </TabsTrigger>
         </TabsList>
         <TabsContent value='api'>
           <ApiTokensTab />
@@ -74,7 +82,7 @@ function ApiTokensTab() {
       <div className='flex justify-end'>
         {mayMutate && (
           <Button variant='primary' onClick={() => setCreateOpen(true)}>
-            <Plus size={13} /> New token
+            <Plus size={13} /> <Trans id='New token' />
           </Button>
         )}
       </div>
@@ -83,23 +91,35 @@ function ApiTokensTab() {
       ) : q.isError ? (
         <EmptyState
           icon={<KeyRound size={28} />}
-          title='Unable to load tokens'
+          title={i18n._('Unable to load tokens')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <EmptyState icon={<KeyRound size={28} />} title='No API tokens yet' />
+        <EmptyState icon={<KeyRound size={28} />} title={i18n._('No API tokens yet')} />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Owner</TableHeaderCell>
-                <TableHeaderCell>Scopes</TableHeaderCell>
-                <TableHeaderCell>Expires</TableHeaderCell>
-                <TableHeaderCell>Last used</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Owner' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Scopes' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Expires' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Last used' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -114,7 +134,9 @@ function ApiTokensTab() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className='mono text-xs'>{t.spec.expiresAt ?? 'never'}</TableCell>
+                  <TableCell className='mono text-xs'>
+                    {t.spec.expiresAt ?? i18n._('never')}
+                  </TableCell>
                   <TableCell className='mono text-xs'>{t.status?.lastUsedAt ?? '—'}</TableCell>
                   <TableCell className='text-right'>
                     {mayMutate && (
@@ -124,9 +146,9 @@ function ApiTokensTab() {
                         onClick={async () => {
                           try {
                             await revoke.mutateAsync(t.metadata.name);
-                            toast.success('Token revoked', t.metadata.name);
+                            toast.success(i18n._('Token revoked'), t.metadata.name);
                           } catch (e) {
-                            toast.error('Revoke failed', (e as Error).message);
+                            toast.error(i18n._('Revoke failed'), (e as Error).message);
                           }
                         }}
                       >
@@ -164,7 +186,7 @@ function CreateApiTokenDialog({
 
   const submit = async () => {
     if (!name || !owner) {
-      toast.error('Missing fields', 'Name and owner required.');
+      toast.error(i18n._('Missing fields'), i18n._('Name and owner required.'));
       return;
     }
     try {
@@ -179,7 +201,7 @@ function CreateApiTokenDialog({
           expiresAt: expiresAt || undefined,
         },
       });
-      toast.success('Token created', name);
+      toast.success(i18n._('Token created'), name);
       onIssued(res);
       setName('');
       setOwner('');
@@ -187,7 +209,7 @@ function CreateApiTokenDialog({
       setExpiresAt('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -195,22 +217,24 @@ function CreateApiTokenDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New API token</DialogTitle>
+          <DialogTitle>
+            <Trans id='New API token' />
+          </DialogTitle>
           <DialogDescription>
-            The token secret is displayed once after creation. Copy it now.
+            <Trans id='The token secret is displayed once after creation. Copy it now.' />
           </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Owner' required>
+          <FormField label={i18n._('Owner')} required>
             <Input value={owner} onChange={(e) => setOwner(e.target.value)} />
           </FormField>
-          <FormField label='Scopes' hint='Comma-separated'>
+          <FormField label={i18n._('Scopes')} hint={i18n._('Comma-separated')}>
             <Input value={scopes} onChange={(e) => setScopes(e.target.value)} />
           </FormField>
-          <FormField label='Expires at (ISO 8601)'>
+          <FormField label={i18n._('Expires at (ISO 8601)')}>
             <Input
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
@@ -220,10 +244,10 @@ function CreateApiTokenDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create token'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create token' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -243,9 +267,11 @@ function IssuedTokenDialog({
     <Dialog open={!!issued} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Save your token</DialogTitle>
+          <DialogTitle>
+            <Trans id='Save your token' />
+          </DialogTitle>
           <DialogDescription>
-            This secret is shown only once. Store it somewhere safe.
+            <Trans id='This secret is shown only once. Store it somewhere safe.' />
           </DialogDescription>
         </DialogHeader>
         <div className='mono text-xs p-3 bg-elevated rounded-sm break-all select-all'>
@@ -258,15 +284,15 @@ function IssuedTokenDialog({
               if (issued?.secret) {
                 navigator.clipboard
                   ?.writeText(issued.secret)
-                  .then(() => toast.success('Copied'))
-                  .catch(() => toast.error('Copy failed'));
+                  .then(() => toast.success(i18n._('Copied')))
+                  .catch(() => toast.error(i18n._('Copy failed')));
               }
             }}
           >
-            Copy
+            <Trans id='Copy' />
           </Button>
           <Button variant='primary' onClick={onClose}>
-            I saved it
+            <Trans id='I saved it' />
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -287,7 +313,7 @@ function SshKeysTab() {
       <div className='flex justify-end'>
         {mayMutate && (
           <Button variant='primary' onClick={() => setCreateOpen(true)}>
-            <Plus size={13} /> Add SSH key
+            <Plus size={13} /> <Trans id='Add SSH key' />
           </Button>
         )}
       </div>
@@ -296,23 +322,35 @@ function SshKeysTab() {
       ) : q.isError ? (
         <EmptyState
           icon={<KeyRound size={28} />}
-          title='Unable to load SSH keys'
+          title={i18n._('Unable to load SSH keys')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <EmptyState icon={<KeyRound size={28} />} title='No SSH keys yet' />
+        <EmptyState icon={<KeyRound size={28} />} title={i18n._('No SSH keys yet')} />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Owner</TableHeaderCell>
-                <TableHeaderCell>Type</TableHeaderCell>
-                <TableHeaderCell>Fingerprint</TableHeaderCell>
-                <TableHeaderCell>Comment</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Owner' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Type' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Fingerprint' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Comment' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -333,9 +371,9 @@ function SshKeysTab() {
                         onClick={async () => {
                           try {
                             await del.mutateAsync(k.metadata.name);
-                            toast.success('Key deleted', k.metadata.name);
+                            toast.success(i18n._('Key deleted'), k.metadata.name);
                           } catch (e) {
-                            toast.error('Delete failed', (e as Error).message);
+                            toast.error(i18n._('Delete failed'), (e as Error).message);
                           }
                         }}
                       >
@@ -370,7 +408,7 @@ function CreateSshKeyDialog({
 
   const submit = async () => {
     if (!name || !owner || !publicKey) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -378,14 +416,14 @@ function CreateSshKeyDialog({
         metadata: { name },
         spec: { owner, publicKey: publicKey.trim(), comment: comment || undefined },
       });
-      toast.success('SSH key added', name);
+      toast.success(i18n._('SSH key added'), name);
       setName('');
       setOwner('');
       setPublicKey('');
       setComment('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -393,16 +431,18 @@ function CreateSshKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add SSH key</DialogTitle>
+          <DialogTitle>
+            <Trans id='Add SSH key' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Owner' required>
+          <FormField label={i18n._('Owner')} required>
             <Input value={owner} onChange={(e) => setOwner(e.target.value)} />
           </FormField>
-          <FormField label='Public key' required>
+          <FormField label={i18n._('Public key')} required>
             <textarea
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
@@ -411,16 +451,16 @@ function CreateSshKeyDialog({
               placeholder='ssh-ed25519 AAAA...'
             />
           </FormField>
-          <FormField label='Comment'>
+          <FormField label={i18n._('Comment')}>
             <Input value={comment} onChange={(e) => setComment(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Adding…' : 'Add key'}
+            {create.isPending ? <Trans id='Adding…' /> : <Trans id='Add key' />}
           </Button>
         </DialogFooter>
       </DialogContent>

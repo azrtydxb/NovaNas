@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useBucketUsers } from '@/api/bucket-users';
 import { type BucketCreateBody, useBuckets, useCreateBucket, useDeleteBucket } from '@/api/buckets';
 import { useObjectStores } from '@/api/object-stores';
@@ -36,7 +35,9 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Trans } from '@lingui/react';
 import type { Bucket, BucketSpec } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Cloud, Plus, Trash2 } from 'lucide-react';
@@ -55,9 +56,9 @@ const protectionOptions = ['none', 'replication', 'erasureCoding'] as const;
 const CreateBucketFormSchema = z.object({
   name: z
     .string()
-    .min(1, 'Name required')
-    .regex(/^[a-z0-9-]+$/, 'lowercase letters, digits and dashes only'),
-  store: z.string().min(1, 'ObjectStore required'),
+    .min(1, i18n._('Name required'))
+    .regex(/^[a-z0-9-]+$/, i18n._('lowercase letters, digits and dashes only')),
+  store: z.string().min(1, i18n._('ObjectStore required')),
   protection: z.enum(protectionOptions),
   replicationCopies: z.coerce.number().int().min(1).max(8).optional(),
   ecData: z.coerce.number().int().min(2).optional(),
@@ -82,16 +83,18 @@ function S3Page() {
   return (
     <>
       <PageHeader
-        title='S3 Buckets'
-        subtitle='Native chunk-engine object storage with object lock, versioning, and lifecycle.'
+        title={i18n._('S3 Buckets')}
+        subtitle={i18n._(
+          'Native chunk-engine object storage with object lock, versioning, and lifecycle.'
+        )}
         actions={
           <div className='flex gap-2'>
             <Button variant='ghost' onClick={() => setShowUsers(true)}>
-              Bucket users
+              <Trans id='Bucket users' />
             </Button>
             {mayMutate && (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> Create bucket
+                <Plus size={13} /> <Trans id='Create bucket' />
               </Button>
             )}
           </div>
@@ -107,19 +110,19 @@ function S3Page() {
       ) : buckets.isError ? (
         <EmptyState
           icon={<Cloud size={28} />}
-          title='Unable to load buckets'
-          description={(buckets.error as Error)?.message ?? 'Try again in a moment.'}
-          action={<Button onClick={() => buckets.refetch()}>Retry</Button>}
+          title={i18n._('Unable to load buckets')}
+          description={(buckets.error as Error)?.message ?? i18n._('Try again in a moment.')}
+          action={<Button onClick={() => buckets.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (buckets.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Cloud size={28} />}
-          title='No buckets yet'
-          description='Create a bucket on an ObjectStore to expose S3-compatible storage.'
+          title={i18n._('No buckets yet')}
+          description={i18n._('Create a bucket on an ObjectStore to expose S3-compatible storage.')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> Create bucket
+                <Plus size={13} /> <Trans id='Create bucket' />
               </Button>
             ) : undefined
           }
@@ -129,13 +132,27 @@ function S3Page() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Store</TableHeaderCell>
-                <TableHeaderCell>Versioning</TableHeaderCell>
-                <TableHeaderCell>Object lock</TableHeaderCell>
-                <TableHeaderCell>Encryption</TableHeaderCell>
-                <TableHeaderCell>Quota</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Store' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Versioning' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Object lock' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Encryption' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Quota' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -258,11 +275,11 @@ function CreateBucketDialog({
     const body: BucketCreateBody = { metadata: { name: values.name }, spec };
     try {
       await create.mutateAsync(body);
-      toast.success('Bucket created', values.name);
+      toast.success(i18n._('Bucket created'), values.name);
       form.reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error('Failed to create bucket', (err as Error)?.message);
+      toast.error(i18n._('Failed to create bucket'), (err as Error)?.message);
     }
   });
 
@@ -273,12 +290,16 @@ function CreateBucketDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create bucket</DialogTitle>
-          <DialogDescription>Expose an S3 bucket on an existing ObjectStore.</DialogDescription>
+          <DialogTitle>
+            <Trans id='Create bucket' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='Expose an S3 bucket on an existing ObjectStore.' />
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className='flex flex-col gap-3'>
           <FormField
-            label='Name'
+            label={i18n._('Name')}
             htmlFor='bucket-name'
             required
             error={form.formState.errors.name?.message}
@@ -286,14 +307,20 @@ function CreateBucketDialog({
             <Input id='bucket-name' placeholder='media' {...form.register('name')} />
           </FormField>
 
-          <FormField label='ObjectStore' required error={form.formState.errors.store?.message}>
+          <FormField
+            label={i18n._('ObjectStore')}
+            required
+            error={form.formState.errors.store?.message}
+          >
             <Controller
               control={form.control}
               name='store'
               render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder={stores.isLoading ? 'Loading…' : 'Select a store'} />
+                    <SelectValue
+                      placeholder={stores.isLoading ? i18n._('Loading…') : i18n._('Select a store')}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {stores.data?.map((s) => (
@@ -307,7 +334,7 @@ function CreateBucketDialog({
             />
           </FormField>
 
-          <FormField label='Protection'>
+          <FormField label={i18n._('Protection')}>
             <Controller
               control={form.control}
               name='protection'
@@ -317,9 +344,9 @@ function CreateBucketDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='none'>Default</SelectItem>
-                    <SelectItem value='replication'>Replication</SelectItem>
-                    <SelectItem value='erasureCoding'>Erasure coding</SelectItem>
+                    <SelectItem value='none'>{i18n._('Default')}</SelectItem>
+                    <SelectItem value='replication'>{i18n._('Replication')}</SelectItem>
+                    <SelectItem value='erasureCoding'>{i18n._('Erasure coding')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -327,22 +354,22 @@ function CreateBucketDialog({
           </FormField>
 
           {protection === 'replication' && (
-            <FormField label='Copies'>
+            <FormField label={i18n._('Copies')}>
               <Input type='number' min={1} max={8} {...form.register('replicationCopies')} />
             </FormField>
           )}
           {protection === 'erasureCoding' && (
             <div className='grid grid-cols-2 gap-3'>
-              <FormField label='Data shards'>
+              <FormField label={i18n._('Data shards')}>
                 <Input type='number' min={2} {...form.register('ecData')} />
               </FormField>
-              <FormField label='Parity shards'>
+              <FormField label={i18n._('Parity shards')}>
                 <Input type='number' min={1} {...form.register('ecParity')} />
               </FormField>
             </div>
           )}
 
-          <FormField label='Versioning'>
+          <FormField label={i18n._('Versioning')}>
             <Controller
               control={form.control}
               name='versioning'
@@ -369,7 +396,7 @@ function CreateBucketDialog({
             render={({ field }) => (
               <div className='flex items-center gap-2 text-sm'>
                 <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} />
-                Encryption at rest
+                <Trans id='Encryption at rest' />
               </div>
             )}
           />
@@ -379,19 +406,22 @@ function CreateBucketDialog({
             render={({ field }) => (
               <div className='flex items-center gap-2 text-sm'>
                 <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} />
-                Enable object lock
+                <Trans id='Enable object lock' />
               </div>
             )}
           />
           {objectLockEnabled && (
-            <FormField label='Object lock mode' hint='Compliance is permanent — cannot be reduced.'>
+            <FormField
+              label={i18n._('Object lock mode')}
+              hint={i18n._('Compliance is permanent — cannot be reduced.')}
+            >
               <Controller
                 control={form.control}
                 name='objectLockMode'
                 render={({ field }) => (
                   <Select value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder='Select mode' />
+                      <SelectValue placeholder={i18n._('Select mode')} />
                     </SelectTrigger>
                     <SelectContent>
                       {objectLockModeOptions.map((m) => (
@@ -406,20 +436,20 @@ function CreateBucketDialog({
             </FormField>
           )}
 
-          <FormField label='Quota (bytes)' hint='Optional — e.g. 1Ti'>
+          <FormField label={i18n._('Quota (bytes)')} hint={i18n._('Optional — e.g. 1Ti')}>
             <Input placeholder='1Ti' {...form.register('quotaBytes')} />
           </FormField>
 
           <DialogFooter>
             <Button type='button' variant='ghost' onClick={() => onOpenChange(false)}>
-              Cancel
+              <Trans id='Cancel' />
             </Button>
             <Button
               type='submit'
               variant='primary'
               disabled={!form.formState.isValid || create.isPending}
             >
-              {create.isPending ? 'Creating…' : 'Create bucket'}
+              {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create bucket' />}
             </Button>
           </DialogFooter>
         </form>
@@ -446,26 +476,28 @@ function DeleteBucketDialog({
     <Dialog open={!!bucket} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete bucket?</DialogTitle>
+          <DialogTitle>
+            <Trans id='Delete bucket?' />
+          </DialogTitle>
           <DialogDescription>
-            Bucket <span className='mono text-foreground'>{bucket?.metadata.name}</span> and all
-            objects in it will be removed.
+            <Trans id='Bucket' />{' '}
+            <span className='mono text-foreground'>{bucket?.metadata.name}</span>{' '}
+            <Trans id='and all objects in it will be removed.' />
           </DialogDescription>
         </DialogHeader>
         {compliance && (
           <div className='text-xs text-danger border border-danger/40 rounded-md p-2'>
-            This bucket is under <strong>compliance</strong> object lock — deletion is refused.
+            <Trans id='This bucket is under compliance object lock — deletion is refused.' />
           </div>
         )}
         {governance && !compliance && (
           <div className='text-xs text-warning border border-warning/40 rounded-md p-2'>
-            This bucket is under <strong>governance</strong> object lock. Retained objects may block
-            deletion until their retention period expires.
+            <Trans id='This bucket is under governance object lock. Retained objects may block deletion until their retention period expires.' />
           </div>
         )}
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='danger'
@@ -474,14 +506,14 @@ function DeleteBucketDialog({
               if (!bucket) return;
               try {
                 await del.mutateAsync(bucket.metadata.name);
-                toast.success('Bucket deleted', bucket.metadata.name);
+                toast.success(i18n._('Bucket deleted'), bucket.metadata.name);
                 onOpenChange(false);
               } catch (err) {
-                toast.error('Failed to delete bucket', (err as Error)?.message);
+                toast.error(i18n._('Failed to delete bucket'), (err as Error)?.message);
               }
             }}
           >
-            {del.isPending ? 'Deleting…' : 'Delete bucket'}
+            {del.isPending ? <Trans id='Deleting…' /> : <Trans id='Delete bucket' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -501,21 +533,23 @@ function BucketDetailDrawer({ bucket, onClose }: { bucket: Bucket | null; onClos
         <DialogHeader>
           <DialogTitle>{bucket?.metadata.name}</DialogTitle>
           <DialogDescription>
-            Store: <span className='mono'>{bucket?.spec.store}</span> · Phase:{' '}
-            <span className='mono'>{bucket?.status?.phase ?? 'Pending'}</span>
+            <Trans id='Store' />: <span className='mono'>{bucket?.spec.store}</span> ·{' '}
+            <Trans id='Phase' />: <span className='mono'>{bucket?.status?.phase ?? 'Pending'}</span>
           </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-3 text-xs'>
           <div className='grid grid-cols-2 gap-2'>
-            <Stat label='Objects' value={bucket?.status?.objectCount ?? 0} />
-            <Stat label='Used bytes' value={bucket?.status?.usedBytes ?? 0} />
+            <Stat label={i18n._('Objects')} value={bucket?.status?.objectCount ?? 0} />
+            <Stat label={i18n._('Used bytes')} value={bucket?.status?.usedBytes ?? 0} />
           </div>
           <div>
             <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
-              Lifecycle rules
+              <Trans id='Lifecycle rules' />
             </div>
             {(bucket?.spec.lifecycle?.length ?? 0) === 0 ? (
-              <div className='text-foreground-subtle'>No lifecycle rules.</div>
+              <div className='text-foreground-subtle'>
+                <Trans id='No lifecycle rules.' />
+              </div>
             ) : (
               <ul className='flex flex-col gap-0.5 mono'>
                 {bucket!.spec.lifecycle!.map((r, i) => (
@@ -528,9 +562,13 @@ function BucketDetailDrawer({ bucket, onClose }: { bucket: Bucket | null; onClos
             )}
           </div>
           <div>
-            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Bucket users</div>
+            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+              <Trans id='Bucket users' />
+            </div>
             {linkedUsers.length === 0 ? (
-              <div className='text-foreground-subtle'>No users scoped to this bucket.</div>
+              <div className='text-foreground-subtle'>
+                <Trans id='No users scoped to this bucket.' />
+              </div>
             ) : (
               <ul className='flex flex-col gap-0.5 mono'>
                 {linkedUsers.map((u) => (
@@ -544,7 +582,7 @@ function BucketDetailDrawer({ bucket, onClose }: { bucket: Bucket | null; onClos
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={onClose}>
-            Close
+            <Trans id='Close' />
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -573,22 +611,36 @@ function BucketUsersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Bucket users</DialogTitle>
-          <DialogDescription>S3 credentials scoped to buckets and prefixes.</DialogDescription>
+          <DialogTitle>
+            <Trans id='Bucket users' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='S3 credentials scoped to buckets and prefixes.' />
+          </DialogDescription>
         </DialogHeader>
         {users.isLoading ? (
           <Skeleton className='h-9' />
         ) : users.isError ? (
-          <div className='text-xs text-danger'>Failed to load bucket users.</div>
+          <div className='text-xs text-danger'>
+            <Trans id='Failed to load bucket users.' />
+          </div>
         ) : (users.data?.length ?? 0) === 0 ? (
-          <div className='text-sm text-foreground-subtle'>No bucket users yet.</div>
+          <div className='text-sm text-foreground-subtle'>
+            <Trans id='No bucket users yet.' />
+          </div>
         ) : (
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Access key</TableHeaderCell>
-                <TableHeaderCell>Policies</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Access key' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Policies' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -604,7 +656,7 @@ function BucketUsersDialog({
         )}
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Close
+            <Trans id='Close' />
           </Button>
         </DialogFooter>
       </DialogContent>

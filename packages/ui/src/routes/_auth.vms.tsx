@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDatasets } from '@/api/datasets';
 import { useGpuDevices } from '@/api/gpu-devices';
 import { useIsoLibraries } from '@/api/iso-libraries';
@@ -39,7 +38,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VncConsole } from '@/components/vm/vnc-console';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
 import { maybeTrackJobFromResponse } from '@/stores/jobs';
+import { Trans } from '@lingui/react';
 import type { Vm, VmDisk, VmGpuPassthroughEntry, VmOsType, VmSpec } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Pause, Play, Plus, RotateCw, Server, Square, Trash2, X } from 'lucide-react';
@@ -60,12 +61,12 @@ function VmsPage() {
   return (
     <>
       <PageHeader
-        title='Virtual Machines'
-        subtitle='KubeVirt-backed VMs with VNC console, ISO library and GPU passthrough.'
+        title={i18n._('Virtual Machines')}
+        subtitle={i18n._('KubeVirt-backed VMs with VNC console, ISO library and GPU passthrough.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New VM
+              <Plus size={13} /> <Trans id='New VM' />
             </Button>
           ) : null
         }
@@ -80,19 +81,19 @@ function VmsPage() {
       ) : vms.isError ? (
         <EmptyState
           icon={<Server size={28} />}
-          title='Unable to load VMs'
-          description={(vms.error as Error)?.message ?? 'Try again in a moment.'}
-          action={<Button onClick={() => vms.refetch()}>Retry</Button>}
+          title={i18n._('Unable to load VMs')}
+          description={(vms.error as Error)?.message ?? i18n._('Try again in a moment.')}
+          action={<Button onClick={() => vms.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (vms.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Server size={28} />}
-          title='No VMs yet'
-          description='Launch a VM from an ISO or existing dataset.'
+          title={i18n._('No VMs yet')}
+          description={i18n._('Launch a VM from an ISO or existing dataset.')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> New VM
+                <Plus size={13} /> <Trans id='New VM' />
               </Button>
             ) : undefined
           }
@@ -102,12 +103,24 @@ function VmsPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>OS</TableHeaderCell>
-                <TableHeaderCell>CPU / Mem</TableHeaderCell>
-                <TableHeaderCell>State</TableHeaderCell>
-                <TableHeaderCell>IP</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='OS' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='CPU / Mem' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='State' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='IP' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -151,9 +164,9 @@ function VmRow({
   const run = async (a: 'start' | 'stop' | 'reset' | 'pause' | 'resume') => {
     try {
       await action.mutateAsync(a);
-      toast.success(`${a} requested`, vm.metadata.name);
+      toast.success(`${a} ${i18n._('requested')}`, vm.metadata.name);
     } catch (err) {
-      toast.error(`${a} failed`, (err as Error)?.message);
+      toast.error(`${a} ${i18n._('failed')}`, (err as Error)?.message);
     }
   };
   return (
@@ -178,26 +191,51 @@ function VmRow({
           <div className='flex justify-end gap-1'>
             {phase === 'Running' ? (
               <>
-                <Button size='sm' variant='ghost' title='Pause' onClick={() => run('pause')}>
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  title={i18n._('Pause')}
+                  onClick={() => run('pause')}
+                >
                   <Pause size={11} />
                 </Button>
-                <Button size='sm' variant='ghost' title='Reset' onClick={() => run('reset')}>
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  title={i18n._('Reset')}
+                  onClick={() => run('reset')}
+                >
                   <RotateCw size={11} />
                 </Button>
-                <Button size='sm' variant='ghost' title='Stop' onClick={() => run('stop')}>
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  title={i18n._('Stop')}
+                  onClick={() => run('stop')}
+                >
                   <Square size={11} />
                 </Button>
               </>
             ) : phase === 'Paused' ? (
-              <Button size='sm' variant='ghost' title='Resume' onClick={() => run('resume')}>
+              <Button
+                size='sm'
+                variant='ghost'
+                title={i18n._('Resume')}
+                onClick={() => run('resume')}
+              >
                 <Play size={11} />
               </Button>
             ) : (
-              <Button size='sm' variant='ghost' title='Start' onClick={() => run('start')}>
+              <Button
+                size='sm'
+                variant='ghost'
+                title={i18n._('Start')}
+                onClick={() => run('start')}
+              >
                 <Play size={11} />
               </Button>
             )}
-            <Button size='sm' variant='danger' title='Delete' onClick={onDelete}>
+            <Button size='sm' variant='danger' title={i18n._('Delete')} onClick={onDelete}>
               <Trash2 size={11} />
             </Button>
           </div>
@@ -257,7 +295,7 @@ function CreateVmDialog({
 
   const submit = async () => {
     if (!form.name) {
-      toast.error('Name required');
+      toast.error(i18n._('Name required'));
       return;
     }
     // Build vm.spec.gpu.passthrough from the selected GpuDevice resources.
@@ -290,12 +328,12 @@ function CreateVmDialog({
     const body: VmCreateBody = { metadata: { name: form.name }, spec };
     try {
       const resp = await create.mutateAsync(body);
-      maybeTrackJobFromResponse(resp, `Create VM ${form.name}`);
-      toast.success('VM created', form.name);
+      maybeTrackJobFromResponse(resp, `${i18n._('Create VM')} ${form.name}`);
+      toast.success(i18n._('VM created'), form.name);
       reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error('Failed to create VM', (err as Error)?.message);
+      toast.error(i18n._('Failed to create VM'), (err as Error)?.message);
     }
   };
 
@@ -303,28 +341,40 @@ function CreateVmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-lg'>
         <DialogHeader>
-          <DialogTitle>New VM</DialogTitle>
-          <DialogDescription>Configure OS, resources, disks and network.</DialogDescription>
+          <DialogTitle>
+            <Trans id='New VM' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='Configure OS, resources, disks and network.' />
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue='os'>
           <TabsList>
             <TabsTrigger value='os'>OS</TabsTrigger>
-            <TabsTrigger value='resources'>Resources</TabsTrigger>
-            <TabsTrigger value='disks'>Disks</TabsTrigger>
-            <TabsTrigger value='network'>Network</TabsTrigger>
-            <TabsTrigger value='graphics'>Graphics</TabsTrigger>
+            <TabsTrigger value='resources'>
+              <Trans id='Resources' />
+            </TabsTrigger>
+            <TabsTrigger value='disks'>
+              <Trans id='Disks' />
+            </TabsTrigger>
+            <TabsTrigger value='network'>
+              <Trans id='Network' />
+            </TabsTrigger>
+            <TabsTrigger value='graphics'>
+              <Trans id='Graphics' />
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value='os' className='pt-3 flex flex-col gap-3'>
-            <FormField label='Name' required>
+            <FormField label={i18n._('Name')} required>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder='vm-01'
               />
             </FormField>
-            <FormField label='OS type'>
+            <FormField label={i18n._('OS type')}>
               <Select
                 value={form.osType}
                 onValueChange={(v) => setForm({ ...form, osType: v as VmOsType })}
@@ -339,7 +389,7 @@ function CreateVmDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Variant' hint='e.g. ubuntu2204, windows11'>
+            <FormField label={i18n._('Variant')} hint={i18n._('e.g. ubuntu2204, windows11')}>
               <Input
                 value={form.osVariant}
                 onChange={(e) => setForm({ ...form, osVariant: e.target.value })}
@@ -348,7 +398,7 @@ function CreateVmDialog({
           </TabsContent>
 
           <TabsContent value='resources' className='pt-3 flex flex-col gap-3'>
-            <FormField label='vCPU'>
+            <FormField label={i18n._('vCPU')}>
               <Input
                 type='number'
                 min={1}
@@ -356,7 +406,7 @@ function CreateVmDialog({
                 onChange={(e) => setForm({ ...form, cpu: Number(e.target.value) })}
               />
             </FormField>
-            <FormField label='Memory (MiB)'>
+            <FormField label={i18n._('Memory (MiB)')}>
               <Input
                 type='number'
                 min={256}
@@ -368,7 +418,9 @@ function CreateVmDialog({
 
           <TabsContent value='disks' className='pt-3 flex flex-col gap-2'>
             {form.disks.length === 0 && (
-              <div className='text-xs text-foreground-subtle'>No disks added yet.</div>
+              <div className='text-xs text-foreground-subtle'>
+                <Trans id='No disks added yet.' />
+              </div>
             )}
             <ul className='flex flex-col gap-1'>
               {form.disks.map((d, i) => (
@@ -401,7 +453,7 @@ function CreateVmDialog({
           </TabsContent>
 
           <TabsContent value='network' className='pt-3 flex flex-col gap-3'>
-            <FormField label='Type'>
+            <FormField label={i18n._('Type')}>
               <Select
                 value={form.networkType}
                 onValueChange={(v) => setForm({ ...form, networkType: v as VmForm['networkType'] })}
@@ -417,7 +469,7 @@ function CreateVmDialog({
               </Select>
             </FormField>
             {form.networkType === 'bridge' && (
-              <FormField label='Bridge interface'>
+              <FormField label={i18n._('Bridge interface')}>
                 <Input
                   value={form.bridge}
                   onChange={(e) => setForm({ ...form, bridge: e.target.value })}
@@ -433,10 +485,10 @@ function CreateVmDialog({
                 checked={form.graphicsEnabled}
                 onCheckedChange={(v) => setForm({ ...form, graphicsEnabled: !!v })}
               />
-              Enable graphics console
+              <Trans id='Enable graphics console' />
             </div>
             {form.graphicsEnabled && (
-              <FormField label='Protocol'>
+              <FormField label={i18n._('Protocol')}>
                 <Select
                   value={form.graphicsType}
                   onValueChange={(v) => setForm({ ...form, graphicsType: v as 'spice' | 'vnc' })}
@@ -454,13 +506,13 @@ function CreateVmDialog({
 
             <div className='pt-2 border-t border-border'>
               <div className='text-xs uppercase tracking-wider text-foreground-subtle mb-2'>
-                GPU passthrough
+                <Trans id='GPU passthrough' />
               </div>
               {gpuDevices.isLoading ? (
                 <Skeleton className='h-9' />
               ) : gpuDevices.isError || (gpuDevices.data?.length ?? 0) === 0 ? (
                 <div className='text-xs text-foreground-subtle border border-border rounded-sm p-3'>
-                  No GPUs detected.
+                  <Trans id='No GPUs detected.' />
                 </div>
               ) : (
                 <ul className='flex flex-col gap-1'>
@@ -490,7 +542,11 @@ function CreateVmDialog({
                             {st.pciAddress ? `· ${st.pciAddress}` : ''}
                           </div>
                         </div>
-                        {assigned && <Badge>in use by {assigned}</Badge>}
+                        {assigned && (
+                          <Badge>
+                            <Trans id='in use by' /> {assigned}
+                          </Badge>
+                        )}
                       </li>
                     );
                   })}
@@ -502,10 +558,10 @@ function CreateVmDialog({
 
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' disabled={!form.name || create.isPending} onClick={submit}>
-            {create.isPending ? 'Creating…' : 'Create VM'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create VM' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -537,24 +593,24 @@ function AddDiskRow({
   };
   return (
     <div className='grid grid-cols-4 gap-2 items-end'>
-      <FormField label='Name'>
+      <FormField label={i18n._('Name')}>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='root' />
       </FormField>
-      <FormField label='Source'>
+      <FormField label={i18n._('Source')}>
         <Select value={sourceType} onValueChange={(v) => setSourceType(v as 'dataset' | 'iso')}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value='dataset'>Dataset</SelectItem>
+            <SelectItem value='dataset'>{i18n._('Dataset')}</SelectItem>
             <SelectItem value='iso'>ISO</SelectItem>
           </SelectContent>
         </Select>
       </FormField>
-      <FormField label={sourceType === 'dataset' ? 'Dataset' : 'ISO Library'}>
+      <FormField label={sourceType === 'dataset' ? i18n._('Dataset') : i18n._('ISO Library')}>
         <Select value={sourceValue} onValueChange={setSourceValue}>
           <SelectTrigger>
-            <SelectValue placeholder='select' />
+            <SelectValue placeholder={i18n._('select')} />
           </SelectTrigger>
           <SelectContent>
             {sourceType === 'dataset'
@@ -572,7 +628,7 @@ function AddDiskRow({
         </Select>
       </FormField>
       <Button variant='ghost' size='sm' onClick={add} disabled={!name || !sourceValue}>
-        Add disk
+        <Trans id='Add disk' />
       </Button>
     </div>
   );
@@ -592,18 +648,21 @@ function DeleteVmDialog({
     <Dialog open={!!vm} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete VM?</DialogTitle>
+          <DialogTitle>
+            <Trans id='Delete VM?' />
+          </DialogTitle>
           <DialogDescription>
-            VM <span className='mono text-foreground'>{vm?.metadata.name}</span> will be removed.
+            <Trans id='VM' /> <span className='mono text-foreground'>{vm?.metadata.name}</span>{' '}
+            <Trans id='will be removed.' />
           </DialogDescription>
         </DialogHeader>
         <div className='flex items-center gap-2 text-sm'>
           <Checkbox checked={deleteDisks} onCheckedChange={(v) => setDeleteDisks(!!v)} />
-          Also delete disks
+          <Trans id='Also delete disks' />
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='danger'
@@ -612,14 +671,14 @@ function DeleteVmDialog({
               if (!vm) return;
               try {
                 await del.mutateAsync({ name: vm.metadata.name, deleteDisks });
-                toast.success('VM deleted', vm.metadata.name);
+                toast.success(i18n._('VM deleted'), vm.metadata.name);
                 onOpenChange(false);
               } catch (err) {
-                toast.error('Failed to delete VM', (err as Error)?.message);
+                toast.error(i18n._('Failed to delete VM'), (err as Error)?.message);
               }
             }}
           >
-            {del.isPending ? 'Deleting…' : 'Delete'}
+            {del.isPending ? <Trans id='Deleting…' /> : <Trans id='Delete' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -641,12 +700,18 @@ function VmDetailDrawer({ vm, onClose }: { vm: Vm | null; onClose: () => void })
         </DialogHeader>
         <div className='flex flex-col gap-3 text-xs'>
           <div>
-            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Status</div>
-            <div className='mono'>Phase: {vm?.status?.phase ?? 'Pending'}</div>
+            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+              <Trans id='Status' />
+            </div>
+            <div className='mono'>
+              <Trans id='Phase' />: {vm?.status?.phase ?? 'Pending'}
+            </div>
             {vm?.status?.ip && <div className='mono'>IP: {vm.status.ip}</div>}
           </div>
           <div>
-            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Disks</div>
+            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+              <Trans id='Disks' />
+            </div>
             <ul className='flex flex-col gap-0.5 mono'>
               {vm?.spec.disks?.map((d, i) => (
                 <li key={i}>
@@ -654,18 +719,22 @@ function VmDetailDrawer({ vm, onClose }: { vm: Vm | null; onClose: () => void })
                 </li>
               ))}
               {(vm?.spec.disks?.length ?? 0) === 0 && (
-                <li className='text-foreground-subtle'>No disks.</li>
+                <li className='text-foreground-subtle'>
+                  <Trans id='No disks.' />
+                </li>
               )}
             </ul>
           </div>
           <div>
-            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Console</div>
+            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+              <Trans id='Console' />
+            </div>
             {vm ? <VncConsole vm={vm} /> : null}
           </div>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={onClose}>
-            Close
+            <Trans id='Close' />
           </Button>
         </DialogFooter>
       </DialogContent>

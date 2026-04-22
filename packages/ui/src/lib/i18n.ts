@@ -1,15 +1,12 @@
 /**
  * Lingui i18n bootstrap.
  *
- * Wave 12 (B1-UI-Batch): Dashboard, Storage (pools + datasets), and Chrome
- * (sidebar/topbar) are migrated to use <Trans>/t`` from @lingui/react.
- *
- * English is currently the only locale. We activate an identity catalog (no
- * translations loaded) so `<Trans>` emits the source string untouched. This is
- * intentional — translation catalogs can be generated later via `lingui extract`
- * without any code changes.
- *
- * Other routes still have inline English. See `// TODO(i18n-wave-12)` markers.
+ * All routes and user-visible components use `<Trans>` / `i18n._()` from
+ * `@lingui/react`. English is currently the only locale; we activate an
+ * identity catalog (no translations loaded) so messages render as their
+ * source strings untouched. When real translations land, replace this with
+ * the output of `lingui compile` and call `i18n.load(locale, messages)`
+ * per locale.
  */
 import { i18n } from '@lingui/core';
 

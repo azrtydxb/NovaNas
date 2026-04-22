@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useGroups } from '@/api/groups';
 import { useCreateUser, useDeleteUser, useResetUserPassword, useUsers } from '@/api/users';
 import { EmptyState } from '@/components/common/empty-state';
@@ -28,6 +27,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import type { User } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { KeyRound, Plus, Trash2, Users } from 'lucide-react';
@@ -48,12 +49,12 @@ function UsersPage() {
   return (
     <>
       <PageHeader
-        title='Users'
-        subtitle='Accounts managed through Keycloak.'
+        title={i18n._('Users')}
+        subtitle={i18n._('Accounts managed through Keycloak.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New user
+              <Plus size={13} /> <Trans id='New user' />
             </Button>
           ) : null
         }
@@ -64,18 +65,18 @@ function UsersPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<Users size={28} />}
-          title='Unable to load users'
+          title={i18n._('Unable to load users')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Users size={28} />}
-          title='No users yet'
+          title={i18n._('No users yet')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> New user
+                <Plus size={13} /> <Trans id='New user' />
               </Button>
             ) : undefined
           }
@@ -85,13 +86,27 @@ function UsersPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Username</TableHeaderCell>
-                <TableHeaderCell>Email</TableHeaderCell>
-                <TableHeaderCell>Groups</TableHeaderCell>
-                <TableHeaderCell>Admin</TableHeaderCell>
-                <TableHeaderCell>Realm</TableHeaderCell>
-                <TableHeaderCell>Last login</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Username' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Email' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Groups' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Admin' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Realm' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Last login' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -162,7 +177,7 @@ function CreateUserDialog({
 
   const submit = async () => {
     if (!username) {
-      toast.error('Missing username');
+      toast.error(i18n._('Missing username'));
       return;
     }
     try {
@@ -176,7 +191,7 @@ function CreateUserDialog({
           groups: selectedGroups.length ? selectedGroups : undefined,
         },
       });
-      toast.success('User created', username);
+      toast.success(i18n._('User created'), username);
       setUsername('');
       setEmail('');
       setDisplayName('');
@@ -184,7 +199,7 @@ function CreateUserDialog({
       setSelectedGroups([]);
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -192,29 +207,37 @@ function CreateUserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New user</DialogTitle>
-          <DialogDescription>Creates a user and reconciles into Keycloak.</DialogDescription>
+          <DialogTitle>
+            <Trans id='New user' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='Creates a user and reconciles into Keycloak.' />
+          </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Username' required>
+          <FormField label={i18n._('Username')} required>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} />
           </FormField>
-          <FormField label='Email'>
+          <FormField label={i18n._('Email')}>
             <Input type='email' value={email} onChange={(e) => setEmail(e.target.value)} />
           </FormField>
-          <FormField label='Display name'>
+          <FormField label={i18n._('Display name')}>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </FormField>
           <div className='flex items-center gap-2 text-sm'>
             <Checkbox checked={admin} onCheckedChange={(v) => setAdmin(!!v)} />
-            Admin role
+            <Trans id='Admin role' />
           </div>
-          <FormField label='Groups'>
+          <FormField label={i18n._('Groups')}>
             <div className='flex flex-col gap-1 border border-border rounded-sm p-2 max-h-32 overflow-y-auto'>
               {groups.isLoading ? (
-                <span className='text-xs text-foreground-subtle'>Loading…</span>
+                <span className='text-xs text-foreground-subtle'>
+                  <Trans id='Loading…' />
+                </span>
               ) : (groups.data?.length ?? 0) === 0 ? (
-                <span className='text-xs text-foreground-subtle'>No groups available.</span>
+                <span className='text-xs text-foreground-subtle'>
+                  <Trans id='No groups available.' />
+                </span>
               ) : (
                 groups.data!.map((g) => (
                   <div key={g.metadata.name} className='flex items-center gap-2 text-xs'>
@@ -231,10 +254,10 @@ function CreateUserDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create user'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create user' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -255,14 +278,17 @@ function DeleteUserDialog({
     <Dialog open={!!user} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete user?</DialogTitle>
+          <DialogTitle>
+            <Trans id='Delete user?' />
+          </DialogTitle>
           <DialogDescription>
-            User <span className='mono'>{user?.spec.username}</span> will be removed.
+            <Trans id='User' /> <span className='mono'>{user?.spec.username}</span>{' '}
+            <Trans id='will be removed.' />
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='danger'
@@ -271,14 +297,14 @@ function DeleteUserDialog({
               if (!user) return;
               try {
                 await del.mutateAsync(user.metadata.name);
-                toast.success('Deleted', user.spec.username);
+                toast.success(i18n._('Deleted'), user.spec.username);
                 onOpenChange(false);
               } catch (e) {
-                toast.error('Delete failed', (e as Error).message);
+                toast.error(i18n._('Delete failed'), (e as Error).message);
               }
             }}
           >
-            {del.isPending ? 'Deleting…' : 'Delete'}
+            {del.isPending ? <Trans id='Deleting…' /> : <Trans id='Delete' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -300,17 +326,20 @@ function ResetPasswordDialog({
     <Dialog open={!!user} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reset password</DialogTitle>
+          <DialogTitle>
+            <Trans id='Reset password' />
+          </DialogTitle>
           <DialogDescription>
-            Set a new password for <span className='mono'>{user?.spec.username}</span>.
+            <Trans id='Set a new password for' />{' '}
+            <span className='mono'>{user?.spec.username}</span>.
           </DialogDescription>
         </DialogHeader>
-        <FormField label='New password' required>
+        <FormField label={i18n._('New password')} required>
           <Input type='password' value={password} onChange={(e) => setPassword(e.target.value)} />
         </FormField>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='primary'
@@ -319,15 +348,15 @@ function ResetPasswordDialog({
               if (!user) return;
               try {
                 await reset.mutateAsync({ name: user.metadata.name, password });
-                toast.success('Password reset', user.spec.username);
+                toast.success(i18n._('Password reset'), user.spec.username);
                 setPassword('');
                 onOpenChange(false);
               } catch (e) {
-                toast.error('Reset failed', (e as Error).message);
+                toast.error(i18n._('Reset failed'), (e as Error).message);
               }
             }}
           >
-            {reset.isPending ? 'Saving…' : 'Save'}
+            {reset.isPending ? <Trans id='Saving…' /> : <Trans id='Save' />}
           </Button>
         </DialogFooter>
       </DialogContent>

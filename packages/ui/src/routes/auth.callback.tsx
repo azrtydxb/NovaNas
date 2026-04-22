@@ -1,5 +1,7 @@
 import { ApiError, api } from '@/lib/api';
 import { getUserManager } from '@/lib/auth';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
@@ -34,7 +36,7 @@ function AuthCallback() {
         } else if (e instanceof Error) {
           setError(e.message);
         } else {
-          setError('Unknown sign-in error');
+          setError(i18n._('Unknown sign-in error'));
         }
       }
     })();
@@ -48,14 +50,18 @@ function AuthCallback() {
       <div className='flex flex-col items-center gap-3'>
         {error ? (
           <>
-            <div className='text-danger font-medium'>Sign-in failed</div>
+            <div className='text-danger font-medium'>
+              <Trans id='Sign-in failed' />
+            </div>
             <div className='text-sm text-foreground-muted'>{error}</div>
             <a href='/login' className='text-accent underline underline-offset-2 text-sm'>
-              Back to login
+              <Trans id='Back to login' />
             </a>
           </>
         ) : (
-          <div className='text-foreground-muted text-sm'>Completing sign-in…</div>
+          <div className='text-foreground-muted text-sm'>
+            <Trans id='Completing sign-in…' />
+          </div>
         )}
       </div>
     </div>

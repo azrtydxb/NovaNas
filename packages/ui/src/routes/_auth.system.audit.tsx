@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { type AuditQuery, useAuditSearch } from '@/api/audit';
 import { EmptyState } from '@/components/common/empty-state';
 import { FormField } from '@/components/common/form-field';
@@ -22,6 +21,8 @@ import {
   TableHeaderCell,
   TableRow,
 } from '@/components/ui/table';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { ScrollText } from 'lucide-react';
 import { useState } from 'react';
@@ -62,44 +63,47 @@ function AuditPage() {
 
   return (
     <>
-      <PageHeader title='Audit log' subtitle='System and user actions, filterable.' />
+      <PageHeader
+        title={i18n._('Audit log')}
+        subtitle={i18n._('System and user actions, filterable.')}
+      />
       <section className='grid grid-cols-5 gap-3 mb-3'>
-        <FormField label='Actor'>
+        <FormField label={i18n._('Actor')}>
           <Input value={actor} onChange={(e) => setActor(e.target.value)} placeholder='alice' />
         </FormField>
-        <FormField label='Kind'>
+        <FormField label={i18n._('Kind')}>
           <Input value={kind} onChange={(e) => setKind(e.target.value)} placeholder='Dataset' />
         </FormField>
-        <FormField label='Outcome'>
+        <FormField label={i18n._('Outcome')}>
           <Select value={outcome} onValueChange={(v) => setOutcome(v as typeof outcome)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value='all'>all</SelectItem>
+              <SelectItem value='all'>{i18n._('all')}</SelectItem>
               <SelectItem value='ok'>ok</SelectItem>
               <SelectItem value='warn'>warn</SelectItem>
               <SelectItem value='err'>err</SelectItem>
             </SelectContent>
           </Select>
         </FormField>
-        <FormField label='Since (ISO)'>
+        <FormField label={i18n._('Since (ISO)')}>
           <Input
             value={since}
             onChange={(e) => setSince(e.target.value)}
             placeholder='2026-01-01'
           />
         </FormField>
-        <FormField label='Until (ISO)'>
+        <FormField label={i18n._('Until (ISO)')}>
           <Input value={until} onChange={(e) => setUntil(e.target.value)} />
         </FormField>
       </section>
       <div className='flex gap-2 mb-3'>
         <Button variant='primary' onClick={apply}>
-          Apply filters
+          <Trans id='Apply filters' />
         </Button>
         <Button variant='ghost' onClick={clear}>
-          Clear
+          <Trans id='Clear' />
         </Button>
       </div>
 
@@ -108,22 +112,32 @@ function AuditPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<ScrollText size={28} />}
-          title='Unable to load audit log'
+          title={i18n._('Unable to load audit log')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <EmptyState icon={<ScrollText size={28} />} title='No matching events.' />
+        <EmptyState icon={<ScrollText size={28} />} title={i18n._('No matching events.')} />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Time</TableHeaderCell>
-                <TableHeaderCell>Actor</TableHeaderCell>
-                <TableHeaderCell>Verb</TableHeaderCell>
-                <TableHeaderCell>Resource</TableHeaderCell>
-                <TableHeaderCell>Message</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Time' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Actor' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Verb' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Resource' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Message' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>

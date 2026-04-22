@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   useCreateKeycloakRealm,
   useDeleteKeycloakRealm,
@@ -36,6 +35,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import type { KeycloakRealm } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
@@ -56,12 +57,12 @@ function ProvidersPage() {
   return (
     <>
       <PageHeader
-        title='Identity providers'
-        subtitle='Keycloak realms and upstream federation (AD / LDAP / OIDC).'
+        title={i18n._('Identity providers')}
+        subtitle={i18n._('Keycloak realms and upstream federation (AD / LDAP / OIDC).')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New realm
+              <Plus size={13} /> <Trans id='New realm' />
             </Button>
           ) : null
         }
@@ -71,19 +72,21 @@ function ProvidersPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<ShieldCheck size={28} />}
-          title='Unable to load realms'
+          title={i18n._('Unable to load realms')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<ShieldCheck size={28} />}
-          title='No realms configured'
-          description='Connect an upstream AD / LDAP / OIDC provider via a Keycloak realm.'
+          title={i18n._('No realms configured')}
+          description={i18n._(
+            'Connect an upstream AD / LDAP / OIDC provider via a Keycloak realm.'
+          )}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> New realm
+                <Plus size={13} /> <Trans id='New realm' />
               </Button>
             ) : undefined
           }
@@ -93,13 +96,27 @@ function ProvidersPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Display</TableHeaderCell>
-                <TableHeaderCell>Federations</TableHeaderCell>
-                <TableHeaderCell>Users</TableHeaderCell>
-                <TableHeaderCell>Groups</TableHeaderCell>
-                <TableHeaderCell>Last sync</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Display' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Federations' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Users' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Groups' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Last sync' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -131,9 +148,9 @@ function ProvidersPage() {
                         onClick={async () => {
                           try {
                             await del.mutateAsync(r.metadata.name);
-                            toast.success('Realm deleted', r.metadata.name);
+                            toast.success(i18n._('Realm deleted'), r.metadata.name);
                           } catch (e) {
-                            toast.error('Delete failed', (e as Error).message);
+                            toast.error(i18n._('Delete failed'), (e as Error).message);
                           }
                         }}
                       >
@@ -170,7 +187,7 @@ function CreateRealmDialog({
 
   const submit = async () => {
     if (!name) {
-      toast.error('Missing name');
+      toast.error(i18n._('Missing name'));
       return;
     }
     try {
@@ -189,7 +206,7 @@ function CreateRealmDialog({
               : undefined,
         },
       });
-      toast.success('Realm created', name);
+      toast.success(i18n._('Realm created'), name);
       setName('');
       setDisplayName('');
       setFedUrl('');
@@ -197,7 +214,7 @@ function CreateRealmDialog({
       setEnableFederation(false);
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -205,13 +222,15 @@ function CreateRealmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Keycloak realm</DialogTitle>
+          <DialogTitle>
+            <Trans id='New Keycloak realm' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Display name'>
+          <FormField label={i18n._('Display name')}>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </FormField>
           <div className='border border-border rounded-sm p-2 flex flex-col gap-2'>
@@ -221,11 +240,11 @@ function CreateRealmDialog({
                 checked={enableFederation}
                 onChange={(e) => setEnableFederation(e.target.checked)}
               />
-              Attach upstream federation
+              <Trans id='Attach upstream federation' />
             </label>
             {enableFederation && (
               <div className='flex flex-col gap-2 pl-4'>
-                <FormField label='Type'>
+                <FormField label={i18n._('Type')}>
                   <Select value={fedType} onValueChange={(v) => setFedType(v as typeof fedType)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -237,14 +256,14 @@ function CreateRealmDialog({
                     </SelectContent>
                   </Select>
                 </FormField>
-                <FormField label='URL' required>
+                <FormField label={i18n._('URL')} required>
                   <Input
                     value={fedUrl}
                     onChange={(e) => setFedUrl(e.target.value)}
                     placeholder='ldaps://ad.corp:636'
                   />
                 </FormField>
-                <FormField label='Base DN'>
+                <FormField label={i18n._('Base DN')}>
                   <Input value={baseDn} onChange={(e) => setBaseDn(e.target.value)} />
                 </FormField>
               </div>
@@ -253,10 +272,10 @@ function CreateRealmDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>

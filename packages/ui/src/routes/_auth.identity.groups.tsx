@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useCreateGroup, useDeleteGroup, useGroups, useUpdateGroup } from '@/api/groups';
 import { useUsers } from '@/api/users';
 import { EmptyState } from '@/components/common/empty-state';
@@ -26,6 +25,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import type { Group } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Trash2, UsersRound } from 'lucide-react';
@@ -46,12 +47,12 @@ function GroupsPage() {
   return (
     <>
       <PageHeader
-        title='Groups'
-        subtitle='Identity groups and membership.'
+        title={i18n._('Groups')}
+        subtitle={i18n._('Identity groups and membership.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New group
+              <Plus size={13} /> <Trans id='New group' />
             </Button>
           ) : null
         }
@@ -61,18 +62,18 @@ function GroupsPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<UsersRound size={28} />}
-          title='Unable to load groups'
+          title={i18n._('Unable to load groups')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<UsersRound size={28} />}
-          title='No groups yet'
+          title={i18n._('No groups yet')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> New group
+                <Plus size={13} /> <Trans id='New group' />
               </Button>
             ) : undefined
           }
@@ -82,11 +83,21 @@ function GroupsPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Display name</TableHeaderCell>
-                <TableHeaderCell>Members</TableHeaderCell>
-                <TableHeaderCell>GID</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Display name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Members' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='GID' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -102,7 +113,7 @@ function GroupsPage() {
                     {mayMutate && (
                       <div className='flex gap-1 justify-end'>
                         <Button size='sm' variant='ghost' onClick={() => setEditTarget(g)}>
-                          Edit
+                          <Trans id='Edit' />
                         </Button>
                         <Button size='sm' variant='danger' onClick={() => setDeleteTarget(g)}>
                           <Trash2 size={12} />
@@ -137,7 +148,7 @@ function CreateGroupDialog({
 
   const submit = async () => {
     if (!name) {
-      toast.error('Missing name');
+      toast.error(i18n._('Missing name'));
       return;
     }
     try {
@@ -145,12 +156,12 @@ function CreateGroupDialog({
         metadata: { name },
         spec: { name, displayName: displayName || undefined },
       });
-      toast.success('Group created', name);
+      toast.success(i18n._('Group created'), name);
       setName('');
       setDisplayName('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -158,22 +169,24 @@ function CreateGroupDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New group</DialogTitle>
+          <DialogTitle>
+            <Trans id='New group' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Display name'>
+          <FormField label={i18n._('Display name')}>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -204,10 +217,10 @@ function EditGroupDialog({
     if (!group) return;
     try {
       await update.mutateAsync({ spec: { members } });
-      toast.success('Group updated', group.metadata.name);
+      toast.success(i18n._('Group updated'), group.metadata.name);
       onOpenChange(false);
     } catch (e) {
-      toast.error('Update failed', (e as Error).message);
+      toast.error(i18n._('Update failed'), (e as Error).message);
     }
   };
 
@@ -215,13 +228,19 @@ function EditGroupDialog({
     <Dialog open={!!group} onOpenChange={(v) => !v && onOpenChange(false)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit members — {group?.metadata.name}</DialogTitle>
+          <DialogTitle>
+            <Trans id='Edit members' /> — {group?.metadata.name}
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-1 border border-border rounded-sm p-2 max-h-64 overflow-y-auto'>
           {users.isLoading ? (
-            <span className='text-xs text-foreground-subtle'>Loading users…</span>
+            <span className='text-xs text-foreground-subtle'>
+              <Trans id='Loading users…' />
+            </span>
           ) : (users.data?.length ?? 0) === 0 ? (
-            <span className='text-xs text-foreground-subtle'>No users available.</span>
+            <span className='text-xs text-foreground-subtle'>
+              <Trans id='No users available.' />
+            </span>
           ) : (
             users.data!.map((u) => (
               <div key={u.metadata.name} className='flex items-center gap-2 text-xs'>
@@ -236,14 +255,15 @@ function EditGroupDialog({
           )}
         </div>
         <div className='text-xs text-foreground-subtle'>
-          <Badge>{members.length}</Badge> member{members.length === 1 ? '' : 's'}
+          <Badge>{members.length}</Badge>{' '}
+          {members.length === 1 ? <Trans id='member' /> : <Trans id='members' />}
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={update.isPending}>
-            {update.isPending ? 'Saving…' : 'Save'}
+            {update.isPending ? <Trans id='Saving…' /> : <Trans id='Save' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -264,11 +284,13 @@ function DeleteGroupDialog({
     <Dialog open={!!group} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete group?</DialogTitle>
+          <DialogTitle>
+            <Trans id='Delete group?' />
+          </DialogTitle>
         </DialogHeader>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='danger'
@@ -277,14 +299,14 @@ function DeleteGroupDialog({
               if (!group) return;
               try {
                 await del.mutateAsync(group.metadata.name);
-                toast.success('Deleted', group.metadata.name);
+                toast.success(i18n._('Deleted'), group.metadata.name);
                 onOpenChange(false);
               } catch (e) {
-                toast.error('Delete failed', (e as Error).message);
+                toast.error(i18n._('Delete failed'), (e as Error).message);
               }
             }}
           >
-            {del.isPending ? 'Deleting…' : 'Delete'}
+            {del.isPending ? <Trans id='Deleting…' /> : <Trans id='Delete' />}
           </Button>
         </DialogFooter>
       </DialogContent>

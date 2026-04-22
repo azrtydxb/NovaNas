@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useBonds, useCreateBond, useDeleteBond } from '@/api/bonds';
 import {
   useCreateCustomDomain,
@@ -63,6 +62,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Network, Plus, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -74,12 +75,21 @@ export const Route = createFileRoute('/_auth/network')({
 function NetworkPage() {
   return (
     <>
-      <PageHeader title='Network' subtitle='Interfaces, routing, and firewall.' />
+      <PageHeader
+        title={i18n._('Network')}
+        subtitle={i18n._('Interfaces, routing, and firewall.')}
+      />
       <Tabs defaultValue='interfaces'>
         <TabsList>
-          <TabsTrigger value='interfaces'>Interfaces</TabsTrigger>
-          <TabsTrigger value='routing'>Routing</TabsTrigger>
-          <TabsTrigger value='security'>Security</TabsTrigger>
+          <TabsTrigger value='interfaces'>
+            <Trans id='Interfaces' />
+          </TabsTrigger>
+          <TabsTrigger value='routing'>
+            <Trans id='Routing' />
+          </TabsTrigger>
+          <TabsTrigger value='security'>
+            <Trans id='Security' />
+          </TabsTrigger>
         </TabsList>
         <TabsContent value='interfaces' className='flex flex-col gap-5'>
           <PhysicalInterfacesSection />
@@ -145,9 +155,9 @@ function Section<T>({
       ) : isError ? (
         <EmptyState
           icon={<Network size={22} />}
-          title={`Unable to load ${title.toLowerCase()}`}
-          description={(error as Error)?.message ?? 'Try again in a moment.'}
-          action={<Button onClick={onRetry}>Retry</Button>}
+          title={`${i18n._('Unable to load')} ${title.toLowerCase()}`}
+          description={(error as Error)?.message ?? i18n._('Try again in a moment.')}
+          action={<Button onClick={onRetry}>{i18n._('Retry')}</Button>}
         />
       ) : !items || items.length === 0 ? (
         <EmptyState icon={<Network size={22} />} title={empty} />
@@ -183,15 +193,22 @@ function PhysicalInterfacesSection() {
   const q = usePhysicalInterfaces();
   return (
     <Section
-      title='Physical interfaces'
-      subtitle='Observed NICs. Read-only.'
+      title={i18n._('Physical interfaces')}
+      subtitle={i18n._('Observed NICs. Read-only.')}
       items={q.data}
       isLoading={q.isLoading}
       isError={q.isError}
       error={q.error}
       onRetry={() => q.refetch()}
-      empty='No physical interfaces discovered.'
-      columns={['Name', 'Link', 'Speed', 'MAC', 'Driver', 'Used by']}
+      empty={i18n._('No physical interfaces discovered.')}
+      columns={[
+        i18n._('Name'),
+        i18n._('Link'),
+        i18n._('Speed'),
+        i18n._('MAC'),
+        i18n._('Driver'),
+        i18n._('Used by'),
+      ]}
       renderRow={(p) => (
         <TableRow key={p.metadata.name}>
           <TableCell>
@@ -223,18 +240,18 @@ function BondsSection() {
   return (
     <>
       <Section
-        title='Bonds'
+        title={i18n._('Bonds')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No bonds yet.'
-        columns={['Name', 'Mode', 'Members', 'Phase', '']}
+        empty={i18n._('No bonds yet.')}
+        columns={[i18n._('Name'), i18n._('Mode'), i18n._('Members'), i18n._('Phase'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New bond
+              <Plus size={13} /> <Trans id='New bond' />
             </Button>
           ) : null
         }
@@ -255,9 +272,9 @@ function BondsSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(b.metadata.name);
-                      toast.success('Bond deleted', b.metadata.name);
+                      toast.success(i18n._('Bond deleted'), b.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -288,7 +305,7 @@ function CreateBondDialog({
 
   const submit = async () => {
     if (!name || !interfaces) {
-      toast.error('Missing fields', 'Name and interfaces are required.');
+      toast.error(i18n._('Missing fields'), 'Name and interfaces are required.');
       return;
     }
     try {
@@ -302,12 +319,12 @@ function CreateBondDialog({
             .filter(Boolean),
         },
       });
-      toast.success('Bond created', name);
+      toast.success(i18n._('Bond created'), name);
       setName('');
       setInterfaces('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -315,13 +332,15 @@ function CreateBondDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New bond</DialogTitle>
+          <DialogTitle>
+            <Trans id='New bond' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='bond0' />
           </FormField>
-          <FormField label='Mode' required>
+          <FormField label={i18n._('Mode')} required>
             <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
               <SelectTrigger>
                 <SelectValue />
@@ -333,7 +352,7 @@ function CreateBondDialog({
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label='Interfaces' hint='Comma-separated' required>
+          <FormField label={i18n._('Interfaces')} hint={i18n._('Comma-separated')} required>
             <Input
               value={interfaces}
               onChange={(e) => setInterfaces(e.target.value)}
@@ -343,10 +362,10 @@ function CreateBondDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -366,18 +385,18 @@ function VlansSection() {
   return (
     <>
       <Section
-        title='VLANs'
+        title={i18n._('VLANs')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No VLANs configured.'
-        columns={['Name', 'Parent', 'VLAN ID', 'MTU', '']}
+        empty={i18n._('No VLANs configured.')}
+        columns={[i18n._('Name'), i18n._('Parent'), i18n._('VLAN ID'), i18n._('MTU'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New VLAN
+              <Plus size={13} /> <Trans id='New VLAN' />
             </Button>
           ) : null
         }
@@ -395,9 +414,9 @@ function VlansSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(v.metadata.name);
-                      toast.success('VLAN deleted', v.metadata.name);
+                      toast.success(i18n._('VLAN deleted'), v.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -429,34 +448,36 @@ function CreateVlanDialog({
   const submit = async () => {
     const id = Number.parseInt(vlanId, 10);
     if (!name || !parent || !id) {
-      toast.error('Missing fields', 'Name, parent, and VLAN ID are required.');
+      toast.error(i18n._('Missing fields'), 'Name, parent, and VLAN ID are required.');
       return;
     }
     try {
       await create.mutateAsync({ metadata: { name }, spec: { parent, vlanId: id } });
-      toast.success('VLAN created', name);
+      toast.success(i18n._('VLAN created'), name);
       setName('');
       setParent('');
       setVlanId('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New VLAN</DialogTitle>
+          <DialogTitle>
+            <Trans id='New VLAN' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Parent interface' required>
+          <FormField label={i18n._('Parent interface')} required>
             <Input value={parent} onChange={(e) => setParent(e.target.value)} />
           </FormField>
-          <FormField label='VLAN ID' required>
+          <FormField label={i18n._('VLAN ID')} required>
             <Input
               type='number'
               value={vlanId}
@@ -467,10 +488,10 @@ function CreateVlanDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -490,19 +511,26 @@ function HostInterfacesSection() {
   return (
     <>
       <Section
-        title='Host interfaces'
-        subtitle='Logical layer-3 assignments and usage bindings.'
+        title={i18n._('Host interfaces')}
+        subtitle={i18n._('Logical layer-3 assignments and usage bindings.')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No host interfaces yet.'
-        columns={['Name', 'Backing', 'Addresses', 'Usage', 'Link', '']}
+        empty={i18n._('No host interfaces yet.')}
+        columns={[
+          i18n._('Name'),
+          i18n._('Backing'),
+          i18n._('Addresses'),
+          i18n._('Usage'),
+          i18n._('Link'),
+          '',
+        ]}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New host interface
+              <Plus size={13} /> <Trans id='New host interface' />
             </Button>
           ) : null
         }
@@ -534,9 +562,9 @@ function HostInterfacesSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(h.metadata.name);
-                      toast.success('Deleted', h.metadata.name);
+                      toast.success(i18n._('Deleted'), h.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -570,7 +598,7 @@ function CreateHostInterfaceDialog({
 
   const submit = async () => {
     if (!name || !backing) {
-      toast.error('Missing fields', 'Name and backing are required.');
+      toast.error(i18n._('Missing fields'), 'Name and backing are required.');
       return;
     }
     try {
@@ -582,13 +610,13 @@ function CreateHostInterfaceDialog({
           addresses: cidr ? [{ cidr, type: 'static' }] : undefined,
         },
       });
-      toast.success('Host interface created', name);
+      toast.success(i18n._('Host interface created'), name);
       setName('');
       setBacking('');
       setCidr('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -596,23 +624,29 @@ function CreateHostInterfaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New host interface</DialogTitle>
+          <DialogTitle>
+            <Trans id='New host interface' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Backing' hint='Physical, bond, or VLAN name' required>
+          <FormField
+            label={i18n._('Backing')}
+            hint={i18n._('Physical, bond, or VLAN name')}
+            required
+          >
             <Input value={backing} onChange={(e) => setBacking(e.target.value)} />
           </FormField>
-          <FormField label='Static CIDR'>
+          <FormField label={i18n._('Static CIDR')}>
             <Input
               value={cidr}
               onChange={(e) => setCidr(e.target.value)}
               placeholder='10.0.0.2/24'
             />
           </FormField>
-          <FormField label='Usage' required>
+          <FormField label={i18n._('Usage')} required>
             <Select value={usage} onValueChange={(v) => setUsage(v as typeof usage)}>
               <SelectTrigger>
                 <SelectValue />
@@ -629,10 +663,10 @@ function CreateHostInterfaceDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -652,19 +686,19 @@ function VipPoolsSection() {
   return (
     <>
       <Section
-        title='VIP pools'
-        subtitle='Floating address pools announced via ARP/BGP.'
+        title={i18n._('VIP pools')}
+        subtitle={i18n._('Floating address pools announced via ARP/BGP.')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No VIP pools yet.'
-        columns={['Name', 'Range', 'Interface', 'Allocated', '']}
+        empty={i18n._('No VIP pools yet.')}
+        columns={[i18n._('Name'), i18n._('Range'), i18n._('Interface'), i18n._('Allocated'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New VIP pool
+              <Plus size={13} /> <Trans id='New VIP pool' />
             </Button>
           ) : null
         }
@@ -687,9 +721,9 @@ function VipPoolsSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(v.metadata.name);
-                      toast.success('Deleted', v.metadata.name);
+                      toast.success(i18n._('Deleted'), v.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -720,18 +754,18 @@ function CreateVipPoolDialog({
 
   const submit = async () => {
     if (!name || !range || !iface) {
-      toast.error('Missing fields', 'Name, range, and interface are required.');
+      toast.error(i18n._('Missing fields'), 'Name, range, and interface are required.');
       return;
     }
     try {
       await create.mutateAsync({ metadata: { name }, spec: { range, interface: iface } });
-      toast.success('VIP pool created', name);
+      toast.success(i18n._('VIP pool created'), name);
       setName('');
       setRange('');
       setIface('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -739,29 +773,31 @@ function CreateVipPoolDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New VIP pool</DialogTitle>
+          <DialogTitle>
+            <Trans id='New VIP pool' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Range (CIDR)' required>
+          <FormField label={i18n._('Range (CIDR)')} required>
             <Input
               value={range}
               onChange={(e) => setRange(e.target.value)}
               placeholder='10.0.0.240/28'
             />
           </FormField>
-          <FormField label='Interface' required>
+          <FormField label={i18n._('Interface')} required>
             <Input value={iface} onChange={(e) => setIface(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -781,18 +817,18 @@ function IngressesSection() {
   return (
     <>
       <Section
-        title='Ingresses'
+        title={i18n._('Ingresses')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No ingresses yet.'
-        columns={['Name', 'Hostname', 'Rules', 'VIP', '']}
+        empty={i18n._('No ingresses yet.')}
+        columns={[i18n._('Name'), i18n._('Hostname'), i18n._('Rules'), i18n._('VIP'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New ingress
+              <Plus size={13} /> <Trans id='New ingress' />
             </Button>
           ) : null
         }
@@ -813,9 +849,9 @@ function IngressesSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(i.metadata.name);
-                      toast.success('Deleted', i.metadata.name);
+                      toast.success(i18n._('Deleted'), i.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -846,7 +882,7 @@ function CreateIngressDialog({
 
   const submit = async () => {
     if (!name || !hostname || !backend) {
-      toast.error('Missing fields', 'Name, hostname, and backend are required.');
+      toast.error(i18n._('Missing fields'), 'Name, hostname, and backend are required.');
       return;
     }
     try {
@@ -854,13 +890,13 @@ function CreateIngressDialog({
         metadata: { name },
         spec: { hostname, rules: [{ host: hostname, backend }] },
       });
-      toast.success('Ingress created', name);
+      toast.success(i18n._('Ingress created'), name);
       setName('');
       setHostname('');
       setBackend('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -868,29 +904,31 @@ function CreateIngressDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New ingress</DialogTitle>
+          <DialogTitle>
+            <Trans id='New ingress' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Hostname' required>
+          <FormField label={i18n._('Hostname')} required>
             <Input
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
               placeholder='photos.example.com'
             />
           </FormField>
-          <FormField label='Backend' required>
+          <FormField label={i18n._('Backend')} required>
             <Input value={backend} onChange={(e) => setBackend(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -910,18 +948,18 @@ function CustomDomainsSection() {
   return (
     <>
       <Section
-        title='Custom domains'
+        title={i18n._('Custom domains')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No custom domains yet.'
-        columns={['Name', 'Hostname', 'TLS', 'Cert status', '']}
+        empty={i18n._('No custom domains yet.')}
+        columns={[i18n._('Name'), i18n._('Hostname'), i18n._('TLS'), i18n._('Cert status'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New domain
+              <Plus size={13} /> <Trans id='New domain' />
             </Button>
           ) : null
         }
@@ -942,9 +980,9 @@ function CustomDomainsSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(d.metadata.name);
-                      toast.success('Deleted', d.metadata.name);
+                      toast.success(i18n._('Deleted'), d.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -977,7 +1015,7 @@ function CreateCustomDomainDialog({
 
   const submit = async () => {
     if (!name || !hostname || !targetName) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -989,13 +1027,13 @@ function CreateCustomDomainDialog({
           tls: { provider },
         },
       });
-      toast.success('Custom domain created', name);
+      toast.success(i18n._('Custom domain created'), name);
       setName('');
       setHostname('');
       setTargetName('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -1003,17 +1041,19 @@ function CreateCustomDomainDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New custom domain</DialogTitle>
+          <DialogTitle>
+            <Trans id='New custom domain' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Hostname' required>
+          <FormField label={i18n._('Hostname')} required>
             <Input value={hostname} onChange={(e) => setHostname(e.target.value)} />
           </FormField>
           <div className='grid grid-cols-2 gap-3'>
-            <FormField label='Target kind'>
+            <FormField label={i18n._('Target kind')}>
               <Select value={targetKind} onValueChange={setTargetKind}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1025,11 +1065,11 @@ function CreateCustomDomainDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Target name' required>
+            <FormField label={i18n._('Target name')} required>
               <Input value={targetName} onChange={(e) => setTargetName(e.target.value)} />
             </FormField>
           </div>
-          <FormField label='TLS provider' required>
+          <FormField label={i18n._('TLS provider')} required>
             <Select value={provider} onValueChange={(v) => setProvider(v as typeof provider)}>
               <SelectTrigger>
                 <SelectValue />
@@ -1044,10 +1084,10 @@ function CreateCustomDomainDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1067,18 +1107,18 @@ function RemoteAccessTunnelsSection() {
   return (
     <>
       <Section
-        title='Remote access tunnels'
+        title={i18n._('Remote access tunnels')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No remote tunnels yet.'
-        columns={['Name', 'Type', 'Endpoint', 'Phase', '']}
+        empty={i18n._('No remote tunnels yet.')}
+        columns={[i18n._('Name'), i18n._('Type'), i18n._('Endpoint'), i18n._('Phase'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New tunnel
+              <Plus size={13} /> <Trans id='New tunnel' />
             </Button>
           ) : null
         }
@@ -1102,9 +1142,9 @@ function RemoteAccessTunnelsSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(t.metadata.name);
-                      toast.success('Deleted', t.metadata.name);
+                      toast.success(i18n._('Deleted'), t.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -1136,7 +1176,7 @@ function CreateTunnelDialog({
 
   const submit = async () => {
     if (!name || !hostname) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -1148,13 +1188,13 @@ function CreateTunnelDialog({
           auth: { secretRef: secretRef || undefined },
         },
       });
-      toast.success('Tunnel created', name);
+      toast.success(i18n._('Tunnel created'), name);
       setName('');
       setHostname('');
       setSecretRef('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -1162,13 +1202,15 @@ function CreateTunnelDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New remote access tunnel</DialogTitle>
+          <DialogTitle>
+            <Trans id='New remote access tunnel' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Type'>
+          <FormField label={i18n._('Type')}>
             <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
               <SelectTrigger>
                 <SelectValue />
@@ -1180,19 +1222,19 @@ function CreateTunnelDialog({
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label='Endpoint hostname' required>
+          <FormField label={i18n._('Endpoint hostname')} required>
             <Input value={hostname} onChange={(e) => setHostname(e.target.value)} />
           </FormField>
-          <FormField label='Secret ref' hint='Name of a stored secret'>
+          <FormField label={i18n._('Secret ref')} hint={i18n._('Name of a stored secret')}>
             <Input value={secretRef} onChange={(e) => setSecretRef(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1212,18 +1254,25 @@ function FirewallRulesSection() {
   return (
     <>
       <Section
-        title='Firewall rules'
+        title={i18n._('Firewall rules')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No firewall rules yet.'
-        columns={['Name', 'Scope', 'Direction', 'Action', 'Priority', '']}
+        empty={i18n._('No firewall rules yet.')}
+        columns={[
+          i18n._('Name'),
+          i18n._('Scope'),
+          i18n._('Direction'),
+          i18n._('Action'),
+          i18n._('Priority'),
+          '',
+        ]}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New rule
+              <Plus size={13} /> <Trans id='New rule' />
             </Button>
           ) : null
         }
@@ -1247,9 +1296,9 @@ function FirewallRulesSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(r.metadata.name);
-                      toast.success('Deleted', r.metadata.name);
+                      toast.success(i18n._('Deleted'), r.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -1284,7 +1333,7 @@ function CreateFirewallRuleDialog({
 
   const submit = async () => {
     if (!name) {
-      toast.error('Missing name');
+      toast.error(i18n._('Missing name'));
       return;
     }
     try {
@@ -1313,14 +1362,14 @@ function CreateFirewallRuleDialog({
             : undefined,
         },
       });
-      toast.success('Rule created', name);
+      toast.success(i18n._('Rule created'), name);
       setName('');
       setPriority('');
       setSourceCidrs('');
       setDestPorts('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -1328,14 +1377,16 @@ function CreateFirewallRuleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New firewall rule</DialogTitle>
+          <DialogTitle>
+            <Trans id='New firewall rule' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
           <div className='grid grid-cols-3 gap-3'>
-            <FormField label='Scope'>
+            <FormField label={i18n._('Scope')}>
               <Select value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1346,7 +1397,7 @@ function CreateFirewallRuleDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Direction'>
+            <FormField label={i18n._('Direction')}>
               <Select value={direction} onValueChange={(v) => setDirection(v as typeof direction)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1357,7 +1408,7 @@ function CreateFirewallRuleDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Action'>
+            <FormField label={i18n._('Action')}>
               <Select value={action} onValueChange={(v) => setAction(v as typeof action)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1371,7 +1422,7 @@ function CreateFirewallRuleDialog({
               </Select>
             </FormField>
           </div>
-          <FormField label='Priority'>
+          <FormField label={i18n._('Priority')}>
             <Input
               type='number'
               value={priority}
@@ -1379,19 +1430,19 @@ function CreateFirewallRuleDialog({
               placeholder='100'
             />
           </FormField>
-          <FormField label='Source CIDRs' hint='Comma-separated'>
+          <FormField label={i18n._('Source CIDRs')} hint={i18n._('Comma-separated')}>
             <Input value={sourceCidrs} onChange={(e) => setSourceCidrs(e.target.value)} />
           </FormField>
-          <FormField label='Destination ports' hint='Comma-separated'>
+          <FormField label={i18n._('Destination ports')} hint={i18n._('Comma-separated')}>
             <Input value={destPorts} onChange={(e) => setDestPorts(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1411,18 +1462,18 @@ function TrafficPoliciesSection() {
   return (
     <>
       <Section
-        title='Traffic policies'
+        title={i18n._('Traffic policies')}
         items={q.data}
         isLoading={q.isLoading}
         isError={q.isError}
         error={q.error}
         onRetry={() => q.refetch()}
-        empty='No traffic policies yet.'
-        columns={['Name', 'Scope', 'Egress max', 'Ingress max', '']}
+        empty={i18n._('No traffic policies yet.')}
+        columns={[i18n._('Name'), i18n._('Scope'), i18n._('Egress max'), i18n._('Ingress max'), '']}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New policy
+              <Plus size={13} /> <Trans id='New policy' />
             </Button>
           ) : null
         }
@@ -1445,9 +1496,9 @@ function TrafficPoliciesSection() {
                   onClick={async () => {
                     try {
                       await del.mutateAsync(t.metadata.name);
-                      toast.success('Deleted', t.metadata.name);
+                      toast.success(i18n._('Deleted'), t.metadata.name);
                     } catch (e) {
-                      toast.error('Delete failed', (e as Error).message);
+                      toast.error(i18n._('Delete failed'), (e as Error).message);
                     }
                   }}
                 >
@@ -1482,7 +1533,7 @@ function CreateTrafficPolicyDialog({
 
   const submit = async () => {
     if (!name || !scopeName) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -1496,14 +1547,14 @@ function CreateTrafficPolicyDialog({
           },
         },
       });
-      toast.success('Policy created', name);
+      toast.success(i18n._('Policy created'), name);
       setName('');
       setScopeName('');
       setEgressMax('');
       setIngressMax('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -1511,14 +1562,16 @@ function CreateTrafficPolicyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New traffic policy</DialogTitle>
+          <DialogTitle>
+            <Trans id='New traffic policy' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
           <div className='grid grid-cols-2 gap-3'>
-            <FormField label='Scope kind'>
+            <FormField label={i18n._('Scope kind')}>
               <Select value={scopeKind} onValueChange={(v) => setScopeKind(v as typeof scopeKind)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1533,23 +1586,23 @@ function CreateTrafficPolicyDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Scope name' required>
+            <FormField label={i18n._('Scope name')} required>
               <Input value={scopeName} onChange={(e) => setScopeName(e.target.value)} />
             </FormField>
           </div>
-          <FormField label='Egress max' hint='e.g. 100Mbps'>
+          <FormField label={i18n._('Egress max')} hint={i18n._('e.g. 100Mbps')}>
             <Input value={egressMax} onChange={(e) => setEgressMax(e.target.value)} />
           </FormField>
-          <FormField label='Ingress max' hint='e.g. 100Mbps'>
+          <FormField label={i18n._('Ingress max')} hint={i18n._('e.g. 100Mbps')}>
             <Input value={ingressMax} onChange={(e) => setIngressMax(e.target.value)} />
           </FormField>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>

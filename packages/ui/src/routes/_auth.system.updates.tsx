@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   useCheckForUpdates,
   useSaveUpdatePolicy,
@@ -31,6 +30,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Download, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -74,34 +75,34 @@ function UpdatesPage() {
           ? { cron, durationMinutes: Number.parseInt(durationMinutes, 10) || 60 }
           : undefined,
       });
-      toast.success('Update policy saved');
+      toast.success(i18n._('Update policy saved'));
     } catch (e) {
-      toast.error('Save failed', (e as Error).message);
+      toast.error(i18n._('Save failed'), (e as Error).message);
     }
   };
 
   const runCheck = async () => {
     try {
       await check.mutateAsync();
-      toast.success('Checking for updates…');
+      toast.success(i18n._('Checking for updates…'));
     } catch (e) {
-      toast.error('Check failed', (e as Error).message);
+      toast.error(i18n._('Check failed'), (e as Error).message);
     }
   };
 
   return (
     <>
       <PageHeader
-        title='Updates'
-        subtitle='Channel, maintenance window, and version history.'
+        title={i18n._('Updates')}
+        subtitle={i18n._('Channel, maintenance window, and version history.')}
         actions={
           mayMutate ? (
             <div className='flex gap-2'>
               <Button variant='ghost' onClick={runCheck} disabled={check.isPending}>
-                <RefreshCw size={13} /> Check for updates
+                <RefreshCw size={13} /> <Trans id='Check for updates' />
               </Button>
               <Button variant='primary' onClick={submit} disabled={save.isPending}>
-                {save.isPending ? 'Saving…' : 'Save'}
+                {save.isPending ? <Trans id='Saving…' /> : <Trans id='Save' />}
               </Button>
             </div>
           ) : null
@@ -112,15 +113,17 @@ function UpdatesPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<Download size={28} />}
-          title='Unable to load update policy'
+          title={i18n._('Unable to load update policy')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (
         <div className='flex flex-col gap-5'>
           <section className='grid grid-cols-3 gap-3 text-xs'>
             <div className='border border-border rounded-md p-3'>
-              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Phase</div>
+              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+                <Trans id='Phase' />
+              </div>
               <div className='flex items-center gap-2'>
                 <StatusDot
                   tone={
@@ -135,11 +138,15 @@ function UpdatesPage() {
               </div>
             </div>
             <div className='border border-border rounded-md p-3'>
-              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Current</div>
+              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+                <Trans id='Current' />
+              </div>
               <div className='mono'>{q.data?.status?.currentVersion ?? '—'}</div>
             </div>
             <div className='border border-border rounded-md p-3'>
-              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Available</div>
+              <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+                <Trans id='Available' />
+              </div>
               <div className='mono'>
                 {q.data?.status?.availableVersion ? (
                   <Badge>{q.data.status.availableVersion}</Badge>
@@ -150,9 +157,11 @@ function UpdatesPage() {
             </div>
           </section>
           <section className='flex flex-col gap-3'>
-            <h2 className='text-md font-semibold'>Policy</h2>
+            <h2 className='text-md font-semibold'>
+              <Trans id='Policy' />
+            </h2>
             <div className='grid grid-cols-2 gap-3'>
-              <FormField label='Channel'>
+              <FormField label={i18n._('Channel')}>
                 <Select
                   value={channel}
                   onValueChange={(v) => setChannel(v as typeof channel)}
@@ -176,7 +185,9 @@ function UpdatesPage() {
                     onCheckedChange={(v) => setAutoUpdate(!!v)}
                     disabled={!mayMutate}
                   />
-                  <span>Auto-update</span>
+                  <span>
+                    <Trans id='Auto-update' />
+                  </span>
                 </div>
                 <div className='flex items-center gap-2 text-sm'>
                   <Checkbox
@@ -184,17 +195,19 @@ function UpdatesPage() {
                     onCheckedChange={(v) => setAutoReboot(!!v)}
                     disabled={!mayMutate}
                   />
-                  <span>Auto-reboot</span>
+                  <span>
+                    <Trans id='Auto-reboot' />
+                  </span>
                 </div>
               </div>
-              <FormField label='Maintenance cron' hint='e.g. 0 3 * * SUN'>
+              <FormField label={i18n._('Maintenance cron')} hint={i18n._('e.g. 0 3 * * SUN')}>
                 <Input
                   value={cron}
                   onChange={(e) => setCron(e.target.value)}
                   disabled={!mayMutate}
                 />
               </FormField>
-              <FormField label='Window duration (minutes)'>
+              <FormField label={i18n._('Window duration (minutes)')}>
                 <Input
                   type='number'
                   value={durationMinutes}
@@ -205,22 +218,32 @@ function UpdatesPage() {
             </div>
           </section>
           <section className='flex flex-col gap-2'>
-            <h2 className='text-md font-semibold'>History</h2>
+            <h2 className='text-md font-semibold'>
+              <Trans id='History' />
+            </h2>
             {history.isLoading ? (
               <Skeleton className='h-24' />
             ) : history.isError ? (
-              <EmptyState title='Unable to load history' />
+              <EmptyState title={i18n._('Unable to load history')} />
             ) : (history.data?.length ?? 0) === 0 ? (
-              <EmptyState title='No update history' />
+              <EmptyState title={i18n._('No update history')} />
             ) : (
               <div className='border border-border rounded-md overflow-hidden'>
                 <Table>
                   <TableHead>
                     <tr>
-                      <TableHeaderCell>Version</TableHeaderCell>
-                      <TableHeaderCell>Applied at</TableHeaderCell>
-                      <TableHeaderCell>Status</TableHeaderCell>
-                      <TableHeaderCell>Notes</TableHeaderCell>
+                      <TableHeaderCell>
+                        <Trans id='Version' />
+                      </TableHeaderCell>
+                      <TableHeaderCell>
+                        <Trans id='Applied at' />
+                      </TableHeaderCell>
+                      <TableHeaderCell>
+                        <Trans id='Status' />
+                      </TableHeaderCell>
+                      <TableHeaderCell>
+                        <Trans id='Notes' />
+                      </TableHeaderCell>
                     </tr>
                   </TableHead>
                   <TableBody>

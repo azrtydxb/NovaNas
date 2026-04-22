@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   type AppInstanceCreateBody,
   useAppInstanceAction,
@@ -44,7 +43,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
 import { maybeTrackJobFromResponse } from '@/stores/jobs';
+import { Trans } from '@lingui/react';
 import type { App, AppInstance, ExposureMode } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { AppWindow, Download, RefreshCw, Square, Trash2, X } from 'lucide-react';
@@ -83,12 +84,15 @@ function AppsPage() {
 
   return (
     <>
-      <PageHeader title='Apps' subtitle='Curated catalog + installed apps running on k3s.' />
+      <PageHeader
+        title={i18n._('Apps')}
+        subtitle={i18n._('Curated catalog + installed apps running on k3s.')}
+      />
 
       <div className='flex flex-col gap-3 mb-4'>
         <div className='flex gap-2 items-center flex-wrap'>
           <Input
-            placeholder='Search catalog…'
+            placeholder={i18n._('Search catalog…')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className='max-w-xs'
@@ -98,7 +102,7 @@ function AppsPage() {
             size='sm'
             onClick={() => setCategory(null)}
           >
-            All
+            <Trans id='All' />
           </Button>
           {categories.map((c) => (
             <Button
@@ -121,15 +125,15 @@ function AppsPage() {
         ) : apps.isError ? (
           <EmptyState
             icon={<AppWindow size={28} />}
-            title='Unable to load catalog'
-            description={(apps.error as Error)?.message ?? 'Try again in a moment.'}
-            action={<Button onClick={() => apps.refetch()}>Retry</Button>}
+            title={i18n._('Unable to load catalog')}
+            description={(apps.error as Error)?.message ?? i18n._('Try again in a moment.')}
+            action={<Button onClick={() => apps.refetch()}>{i18n._('Retry')}</Button>}
           />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<AppWindow size={28} />}
-            title='No apps match'
-            description='Try a different category or search term.'
+            title={i18n._('No apps match')}
+            description={i18n._('Try a different category or search term.')}
           />
         ) : (
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
@@ -167,7 +171,7 @@ function AppsPage() {
                 <div className='flex justify-end'>
                   {mayMutate && (
                     <Button size='sm' variant='primary' onClick={() => setInstallTarget(a)}>
-                      <Download size={11} /> Install
+                      <Download size={11} /> <Trans id='Install' />
                     </Button>
                   )}
                 </div>
@@ -178,23 +182,39 @@ function AppsPage() {
       </div>
 
       <div className='mt-6'>
-        <h2 className='text-md font-semibold mb-2'>Installed apps</h2>
+        <h2 className='text-md font-semibold mb-2'>
+          <Trans id='Installed apps' />
+        </h2>
         {instances.isLoading ? (
           <Skeleton className='h-9' />
         ) : instances.isError ? (
-          <div className='text-xs text-danger'>Failed to load installed apps.</div>
+          <div className='text-xs text-danger'>
+            <Trans id='Failed to load installed apps.' />
+          </div>
         ) : (instances.data?.length ?? 0) === 0 ? (
-          <div className='text-sm text-foreground-subtle'>No apps installed yet.</div>
+          <div className='text-sm text-foreground-subtle'>
+            <Trans id='No apps installed yet.' />
+          </div>
         ) : (
           <div className='border border-border rounded-md overflow-hidden'>
             <Table>
               <TableHead>
                 <tr>
-                  <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>App</TableHeaderCell>
-                  <TableHeaderCell>Version</TableHeaderCell>
-                  <TableHeaderCell>State</TableHeaderCell>
-                  <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                  <TableHeaderCell>
+                    <Trans id='Name' />
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <Trans id='App' />
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <Trans id='Version' />
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <Trans id='State' />
+                  </TableHeaderCell>
+                  <TableHeaderCell className='text-right'>
+                    <Trans id='Actions' />
+                  </TableHeaderCell>
                 </tr>
               </TableHead>
               <TableBody>
@@ -246,14 +266,14 @@ function InstanceRow({ inst, mayMutate }: { inst: AppInstance; mayMutate: boolea
                 <Button
                   size='sm'
                   variant='ghost'
-                  title='Stop'
+                  title={i18n._('Stop')}
                   disabled={action.isPending}
                   onClick={async () => {
                     try {
                       await action.mutateAsync('stop');
-                      toast.success('Stop requested', inst.metadata.name);
+                      toast.success(i18n._('Stop requested'), inst.metadata.name);
                     } catch (err) {
-                      toast.error('Stop failed', (err as Error)?.message);
+                      toast.error(i18n._('Stop failed'), (err as Error)?.message);
                     }
                   }}
                 >
@@ -263,13 +283,13 @@ function InstanceRow({ inst, mayMutate }: { inst: AppInstance; mayMutate: boolea
                 <Button
                   size='sm'
                   variant='ghost'
-                  title='Start'
+                  title={i18n._('Start')}
                   disabled={action.isPending}
                   onClick={async () => {
                     try {
                       await action.mutateAsync('start');
                     } catch (err) {
-                      toast.error('Start failed', (err as Error)?.message);
+                      toast.error(i18n._('Start failed'), (err as Error)?.message);
                     }
                   }}
                 >
@@ -279,14 +299,14 @@ function InstanceRow({ inst, mayMutate }: { inst: AppInstance; mayMutate: boolea
               <Button
                 size='sm'
                 variant='ghost'
-                title='Update'
+                title={i18n._('Update')}
                 disabled={action.isPending}
                 onClick={async () => {
                   try {
                     await action.mutateAsync('update');
-                    toast.success('Update requested', inst.metadata.name);
+                    toast.success(i18n._('Update requested'), inst.metadata.name);
                   } catch (err) {
-                    toast.error('Update failed', (err as Error)?.message);
+                    toast.error(i18n._('Update failed'), (err as Error)?.message);
                   }
                 }}
               >
@@ -295,7 +315,7 @@ function InstanceRow({ inst, mayMutate }: { inst: AppInstance; mayMutate: boolea
               <Button
                 size='sm'
                 variant='danger'
-                title='Uninstall'
+                title={i18n._('Uninstall')}
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 size={11} />
@@ -308,9 +328,11 @@ function InstanceRow({ inst, mayMutate }: { inst: AppInstance; mayMutate: boolea
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Uninstall app?</DialogTitle>
+            <DialogTitle>
+              <Trans id='Uninstall app?' />
+            </DialogTitle>
             <DialogDescription>
-              Uninstall <span className='mono'>{inst.metadata.name}</span>.
+              <Trans id='Uninstall' /> <span className='mono'>{inst.metadata.name}</span>.
             </DialogDescription>
           </DialogHeader>
           <UninstallBody name={inst.metadata.name} onDone={() => setDeleteOpen(false)} del={del} />
@@ -335,11 +357,11 @@ function UninstallBody({
     <>
       <div className='flex items-center gap-2 text-sm'>
         <Checkbox checked={deleteData} onCheckedChange={(v) => setDeleteData(!!v)} />
-        Also delete persistent data
+        <Trans id='Also delete persistent data' />
       </div>
       <DialogFooter>
         <Button variant='ghost' onClick={onDone}>
-          Cancel
+          <Trans id='Cancel' />
         </Button>
         <Button
           variant='danger'
@@ -347,14 +369,14 @@ function UninstallBody({
           onClick={async () => {
             try {
               await del.mutateAsync({ name, deleteData });
-              toast.success('Uninstalled', name);
+              toast.success(i18n._('Uninstalled'), name);
               onDone();
             } catch (err) {
-              toast.error('Uninstall failed', (err as Error)?.message);
+              toast.error(i18n._('Uninstall failed'), (err as Error)?.message);
             }
           }}
         >
-          {del.isPending ? 'Uninstalling…' : 'Uninstall'}
+          {del.isPending ? <Trans id='Uninstalling…' /> : <Trans id='Uninstall' />}
         </Button>
       </DialogFooter>
     </>
@@ -441,12 +463,12 @@ function InstallAppDialog({
     };
     try {
       const resp = await create.mutateAsync(body);
-      maybeTrackJobFromResponse(resp, `Install ${app.spec.displayName}`);
-      toast.success('App installed', name);
+      maybeTrackJobFromResponse(resp, `${i18n._('Install')} ${app.spec.displayName}`);
+      toast.success(i18n._('App installed'), name);
       reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error('Install failed', (err as Error)?.message);
+      toast.error(i18n._('Install failed'), (err as Error)?.message);
     }
   };
 
@@ -454,7 +476,9 @@ function InstallAppDialog({
     <Dialog open={!!app} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-lg'>
         <DialogHeader>
-          <DialogTitle>Install {app?.spec.displayName}</DialogTitle>
+          <DialogTitle>
+            <Trans id='Install' /> {app?.spec.displayName}
+          </DialogTitle>
           <DialogDescription>
             v{app?.spec.version}
             {app?.spec.description ? ` — ${app.spec.description}` : ''}
@@ -463,14 +487,22 @@ function InstallAppDialog({
 
         <Tabs defaultValue='basic'>
           <TabsList>
-            <TabsTrigger value='basic'>Basic</TabsTrigger>
-            <TabsTrigger value='values'>Values</TabsTrigger>
-            <TabsTrigger value='storage'>Storage</TabsTrigger>
-            <TabsTrigger value='network'>Network</TabsTrigger>
+            <TabsTrigger value='basic'>
+              <Trans id='Basic' />
+            </TabsTrigger>
+            <TabsTrigger value='values'>
+              <Trans id='Values' />
+            </TabsTrigger>
+            <TabsTrigger value='storage'>
+              <Trans id='Storage' />
+            </TabsTrigger>
+            <TabsTrigger value='network'>
+              <Trans id='Network' />
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value='basic' className='pt-3'>
-            <FormField label='Instance name' required>
+            <FormField label={i18n._('Instance name')} required>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -483,20 +515,20 @@ function InstallAppDialog({
             {hasSchema ? (
               <>
                 <div className='text-xs text-foreground-subtle mb-2'>
-                  Configuration schema provided by the app.
+                  <Trans id='Configuration schema provided by the app.' />
                 </div>
                 <SchemaForm schema={appSchema} formData={schemaValues} onChange={setSchemaValues} />
               </>
             ) : (
               <>
                 <div className='text-xs text-foreground-subtle mb-2'>
-                  Free-form key/value overrides (Helm values). For structured forms, see docs.
+                  <Trans id='Free-form key/value overrides (Helm values). For structured forms, see docs.' />
                 </div>
                 <ul className='flex flex-col gap-1 mb-2'>
                   {values.map((v, i) => (
                     <li key={i} className='flex gap-2'>
                       <Input
-                        placeholder='key'
+                        placeholder={i18n._('key')}
                         value={v.key}
                         onChange={(e) => {
                           const n = [...values];
@@ -505,7 +537,7 @@ function InstallAppDialog({
                         }}
                       />
                       <Input
-                        placeholder='value'
+                        placeholder={i18n._('value')}
                         value={v.value}
                         onChange={(e) => {
                           const n = [...values];
@@ -528,7 +560,7 @@ function InstallAppDialog({
                   size='sm'
                   onClick={() => setValues([...values, { key: '', value: '' }])}
                 >
-                  Add value
+                  <Trans id='Add value' />
                 </Button>
               </>
             )}
@@ -538,7 +570,7 @@ function InstallAppDialog({
             <ul className='flex flex-col gap-2 mb-2'>
               {storages.map((s, i) => (
                 <li key={i} className='grid grid-cols-3 gap-2 items-end'>
-                  <FormField label='Name'>
+                  <FormField label={i18n._('Name')}>
                     <Input
                       value={s.name}
                       onChange={(e) => {
@@ -548,7 +580,7 @@ function InstallAppDialog({
                       }}
                     />
                   </FormField>
-                  <FormField label='Dataset'>
+                  <FormField label={i18n._('Dataset')}>
                     <Select
                       value={s.dataset}
                       onValueChange={(v) => {
@@ -558,7 +590,7 @@ function InstallAppDialog({
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder='select' />
+                        <SelectValue placeholder={i18n._('select')} />
                       </SelectTrigger>
                       <SelectContent>
                         {datasets.data?.map((d) => (
@@ -600,12 +632,12 @@ function InstallAppDialog({
                 ])
               }
             >
-              Add storage
+              <Trans id='Add storage' />
             </Button>
           </TabsContent>
 
           <TabsContent value='network' className='pt-3'>
-            <FormField label='Exposure'>
+            <FormField label={i18n._('Exposure')}>
               <Select value={expose} onValueChange={(v) => setExpose(v as ExposureMode)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -623,10 +655,10 @@ function InstallAppDialog({
 
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' disabled={!name || create.isPending} onClick={submit}>
-            {create.isPending ? 'Installing…' : 'Install'}
+            {create.isPending ? <Trans id='Installing…' /> : <Trans id='Install' />}
           </Button>
         </DialogFooter>
       </DialogContent>

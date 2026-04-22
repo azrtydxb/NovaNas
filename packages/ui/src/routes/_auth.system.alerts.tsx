@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   useAlertChannels,
   useCreateAlertChannel,
@@ -37,6 +36,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { BellRing, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -48,11 +49,15 @@ export const Route = createFileRoute('/_auth/system/alerts')({
 function AlertsPage() {
   return (
     <>
-      <PageHeader title='Alerts' subtitle='Channels and policies.' />
+      <PageHeader title={i18n._('Alerts')} subtitle={i18n._('Channels and policies.')} />
       <Tabs defaultValue='channels'>
         <TabsList>
-          <TabsTrigger value='channels'>Channels</TabsTrigger>
-          <TabsTrigger value='policies'>Policies</TabsTrigger>
+          <TabsTrigger value='channels'>
+            <Trans id='Channels' />
+          </TabsTrigger>
+          <TabsTrigger value='policies'>
+            <Trans id='Policies' />
+          </TabsTrigger>
         </TabsList>
         <TabsContent value='channels'>
           <ChannelsTab />
@@ -78,7 +83,7 @@ function ChannelsTab() {
       <div className='flex justify-end'>
         {mayMutate && (
           <Button variant='primary' onClick={() => setCreateOpen(true)}>
-            <Plus size={13} /> New channel
+            <Plus size={13} /> <Trans id='New channel' />
           </Button>
         )}
       </div>
@@ -87,22 +92,32 @@ function ChannelsTab() {
       ) : q.isError ? (
         <EmptyState
           icon={<BellRing size={28} />}
-          title='Unable to load channels'
+          title={i18n._('Unable to load channels')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <EmptyState icon={<BellRing size={28} />} title='No alert channels yet' />
+        <EmptyState icon={<BellRing size={28} />} title={i18n._('No alert channels yet')} />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Type</TableHeaderCell>
-                <TableHeaderCell>Min severity</TableHeaderCell>
-                <TableHeaderCell>Last delivery</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Type' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Min severity' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Last delivery' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -122,9 +137,9 @@ function ChannelsTab() {
                         onClick={async () => {
                           try {
                             await del.mutateAsync(c.metadata.name);
-                            toast.success('Deleted', c.metadata.name);
+                            toast.success(i18n._('Deleted'), c.metadata.name);
                           } catch (e) {
-                            toast.error('Delete failed', (e as Error).message);
+                            toast.error(i18n._('Delete failed'), (e as Error).message);
                           }
                         }}
                       >
@@ -161,7 +176,7 @@ function CreateChannelDialog({
 
   const submit = async () => {
     if (!name) {
-      toast.error('Missing name');
+      toast.error(i18n._('Missing name'));
       return;
     }
     try {
@@ -183,14 +198,14 @@ function CreateChannelDialog({
           ntfy: type === 'ntfy' ? { topic: ntfyTopic } : undefined,
         },
       });
-      toast.success('Channel created', name);
+      toast.success(i18n._('Channel created'), name);
       setName('');
       setTo('');
       setWebhookUrl('');
       setNtfyTopic('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -198,13 +213,15 @@ function CreateChannelDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New alert channel</DialogTitle>
+          <DialogTitle>
+            <Trans id='New alert channel' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Type'>
+          <FormField label={i18n._('Type')}>
             <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
               <SelectTrigger>
                 <SelectValue />
@@ -216,7 +233,7 @@ function CreateChannelDialog({
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label='Minimum severity'>
+          <FormField label={i18n._('Minimum severity')}>
             <Select
               value={minSeverity}
               onValueChange={(v) => setMinSeverity(v as typeof minSeverity)}
@@ -232,27 +249,27 @@ function CreateChannelDialog({
             </Select>
           </FormField>
           {type === 'email' && (
-            <FormField label='To' hint='Comma-separated emails'>
+            <FormField label={i18n._('To')} hint={i18n._('Comma-separated emails')}>
               <Input value={to} onChange={(e) => setTo(e.target.value)} />
             </FormField>
           )}
           {type === 'webhook' && (
-            <FormField label='Webhook URL' required>
+            <FormField label={i18n._('Webhook URL')} required>
               <Input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} />
             </FormField>
           )}
           {type === 'ntfy' && (
-            <FormField label='Topic' required>
+            <FormField label={i18n._('Topic')} required>
               <Input value={ntfyTopic} onChange={(e) => setNtfyTopic(e.target.value)} />
             </FormField>
           )}
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -273,7 +290,7 @@ function PoliciesTab() {
       <div className='flex justify-end'>
         {mayMutate && (
           <Button variant='primary' onClick={() => setCreateOpen(true)}>
-            <Plus size={13} /> New policy
+            <Plus size={13} /> <Trans id='New policy' />
           </Button>
         )}
       </div>
@@ -282,23 +299,35 @@ function PoliciesTab() {
       ) : q.isError ? (
         <EmptyState
           icon={<BellRing size={28} />}
-          title='Unable to load policies'
+          title={i18n._('Unable to load policies')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <EmptyState icon={<BellRing size={28} />} title='No alert policies yet' />
+        <EmptyState icon={<BellRing size={28} />} title={i18n._('No alert policies yet')} />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Severity</TableHeaderCell>
-                <TableHeaderCell>Condition</TableHeaderCell>
-                <TableHeaderCell>Channels</TableHeaderCell>
-                <TableHeaderCell>Last fired</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Severity' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Condition' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Channels' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Last fired' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -328,9 +357,9 @@ function PoliciesTab() {
                         onClick={async () => {
                           try {
                             await del.mutateAsync(p.metadata.name);
-                            toast.success('Deleted', p.metadata.name);
+                            toast.success(i18n._('Deleted'), p.metadata.name);
                           } catch (e) {
-                            toast.error('Delete failed', (e as Error).message);
+                            toast.error(i18n._('Delete failed'), (e as Error).message);
                           }
                         }}
                       >
@@ -368,7 +397,7 @@ function CreatePolicyDialog({
 
   const submit = async () => {
     if (!name || !query || !channel) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -380,13 +409,13 @@ function CreatePolicyDialog({
           channels: [channel],
         },
       });
-      toast.success('Policy created', name);
+      toast.success(i18n._('Policy created'), name);
       setName('');
       setQuery('');
       setThreshold('0');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -394,13 +423,15 @@ function CreatePolicyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New alert policy</DialogTitle>
+          <DialogTitle>
+            <Trans id='New alert policy' />
+          </DialogTitle>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Severity'>
+          <FormField label={i18n._('Severity')}>
             <Select value={severity} onValueChange={(v) => setSeverity(v as typeof severity)}>
               <SelectTrigger>
                 <SelectValue />
@@ -412,11 +443,11 @@ function CreatePolicyDialog({
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label='Metric query (PromQL)' required>
+          <FormField label={i18n._('Metric query (PromQL)')} required>
             <Input value={query} onChange={(e) => setQuery(e.target.value)} />
           </FormField>
           <div className='grid grid-cols-2 gap-3'>
-            <FormField label='Operator'>
+            <FormField label={i18n._('Operator')}>
               <Select value={operator} onValueChange={(v) => setOperator(v as typeof operator)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -430,7 +461,7 @@ function CreatePolicyDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Threshold'>
+            <FormField label={i18n._('Threshold')}>
               <Input
                 type='number'
                 value={threshold}
@@ -438,10 +469,12 @@ function CreatePolicyDialog({
               />
             </FormField>
           </div>
-          <FormField label='Notify channel' required>
+          <FormField label={i18n._('Notify channel')} required>
             <Select value={channel} onValueChange={setChannel}>
               <SelectTrigger>
-                <SelectValue placeholder={channels.isLoading ? 'Loading…' : 'Select'} />
+                <SelectValue
+                  placeholder={channels.isLoading ? i18n._('Loading…') : i18n._('Select')}
+                />
               </SelectTrigger>
               <SelectContent>
                 {channels.data?.map((c) => (
@@ -455,10 +488,10 @@ function CreatePolicyDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create' />}
           </Button>
         </DialogFooter>
       </DialogContent>

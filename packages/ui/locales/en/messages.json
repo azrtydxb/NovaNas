@@ -1,0 +1,1850 @@
+{
+  "ACME is the easiest; internal PKI avoids DNS.": {
+    "message": "ACME is the easiest; internal PKI avoids DNS."
+  },
+  "ACME issuer": {
+    "message": "ACME issuer"
+  },
+  "API tokens": {
+    "message": "API tokens"
+  },
+  "API tokens and SSH public keys.": {
+    "message": "API tokens and SSH public keys."
+  },
+  "Access": {
+    "message": "Access"
+  },
+  "Access key": {
+    "message": "Access key"
+  },
+  "Access rules": {
+    "message": "Access rules"
+  },
+  "Accounts managed through Keycloak.": {
+    "message": "Accounts managed through Keycloak."
+  },
+  "Action": {
+    "message": "Action"
+  },
+  "Actions": {
+    "message": "Actions"
+  },
+  "Active alerts": {
+    "message": "Active alerts"
+  },
+  "Actor": {
+    "message": "Actor"
+  },
+  "Add": {
+    "message": "Add"
+  },
+  "Add SSH key": {
+    "message": "Add SSH key"
+  },
+  "Add disk": {
+    "message": "Add disk"
+  },
+  "Add key": {
+    "message": "Add key"
+  },
+  "Add storage": {
+    "message": "Add storage"
+  },
+  "Add value": {
+    "message": "Add value"
+  },
+  "Adding…": {
+    "message": "Adding…"
+  },
+  "Addresses": {
+    "message": "Addresses"
+  },
+  "Admin": {
+    "message": "Admin"
+  },
+  "Admin role": {
+    "message": "Admin role"
+  },
+  "Alerts": {
+    "message": "Alerts"
+  },
+  "Alerts & activity": {
+    "message": "Alerts & activity"
+  },
+  "All": {
+    "message": "All"
+  },
+  "All states": {
+    "message": "All states"
+  },
+  "All systems healthy": {
+    "message": "All systems healthy"
+  },
+  "Allocated": {
+    "message": "Allocated"
+  },
+  "Allowed networks": {
+    "message": "Allowed networks"
+  },
+  "Also delete disks": {
+    "message": "Also delete disks"
+  },
+  "Also delete persistent data": {
+    "message": "Also delete persistent data"
+  },
+  "App": {
+    "message": "App"
+  },
+  "App installed": {
+    "message": "App installed"
+  },
+  "Applied at": {
+    "message": "Applied at"
+  },
+  "Apply filters": {
+    "message": "Apply filters"
+  },
+  "Apps": {
+    "message": "Apps"
+  },
+  "Apps running": {
+    "message": "Apps running"
+  },
+  "Attach upstream federation": {
+    "message": "Attach upstream federation"
+  },
+  "Attention required": {
+    "message": "Attention required"
+  },
+  "Audit log": {
+    "message": "Audit log"
+  },
+  "Authenticate with your Keycloak account to manage storage, shares, apps and VMs.": {
+    "message": "Authenticate with your Keycloak account to manage storage, shares, apps and VMs."
+  },
+  "Auto-reboot": {
+    "message": "Auto-reboot"
+  },
+  "Auto-update": {
+    "message": "Auto-update"
+  },
+  "Available": {
+    "message": "Available"
+  },
+  "Back to login": {
+    "message": "Back to login"
+  },
+  "Backend": {
+    "message": "Backend"
+  },
+  "Backing": {
+    "message": "Backing"
+  },
+  "Base DN": {
+    "message": "Base DN"
+  },
+  "Basic": {
+    "message": "Basic"
+  },
+  "Block targets for VM disks and bare-metal iSCSI initiators.": {
+    "message": "Block targets for VM disks and bare-metal iSCSI initiators."
+  },
+  "Bond created": {
+    "message": "Bond created"
+  },
+  "Bond deleted": {
+    "message": "Bond deleted"
+  },
+  "Bonds": {
+    "message": "Bonds"
+  },
+  "Bound servers": {
+    "message": "Bound servers"
+  },
+  "Bridge interface": {
+    "message": "Bridge interface"
+  },
+  "Bucket": {
+    "message": "Bucket"
+  },
+  "Bucket created": {
+    "message": "Bucket created"
+  },
+  "Bucket deleted": {
+    "message": "Bucket deleted"
+  },
+  "Bucket users": {
+    "message": "Bucket users"
+  },
+  "CPU / Mem": {
+    "message": "CPU / Mem"
+  },
+  "Cancel": {
+    "message": "Cancel"
+  },
+  "Cancel failed": {
+    "message": "Cancel failed"
+  },
+  "Cancel requested": {
+    "message": "Cancel requested"
+  },
+  "Canceled": {
+    "message": "Canceled"
+  },
+  "Capacity": {
+    "message": "Capacity"
+  },
+  "Capacity used": {
+    "message": "Capacity used"
+  },
+  "Case sensitive": {
+    "message": "Case sensitive"
+  },
+  "Cert status": {
+    "message": "Cert status"
+  },
+  "Certificate requested": {
+    "message": "Certificate requested"
+  },
+  "Certificates": {
+    "message": "Certificates"
+  },
+  "Channel": {
+    "message": "Channel"
+  },
+  "Channel created": {
+    "message": "Channel created"
+  },
+  "Channel, maintenance window, and version history.": {
+    "message": "Channel, maintenance window, and version history."
+  },
+  "Channels": {
+    "message": "Channels"
+  },
+  "Channels and policies.": {
+    "message": "Channels and policies."
+  },
+  "Check failed": {
+    "message": "Check failed"
+  },
+  "Check for updates": {
+    "message": "Check for updates"
+  },
+  "Checking for updates…": {
+    "message": "Checking for updates…"
+  },
+  "Clear": {
+    "message": "Clear"
+  },
+  "Close": {
+    "message": "Close"
+  },
+  "Cloud Backup": {
+    "message": "Cloud Backup"
+  },
+  "Comma-separated": {
+    "message": "Comma-separated"
+  },
+  "Comma-separated CIDRs": {
+    "message": "Comma-separated CIDRs"
+  },
+  "Comma-separated SANs": {
+    "message": "Comma-separated SANs"
+  },
+  "Comma-separated emails": {
+    "message": "Comma-separated emails"
+  },
+  "Comment": {
+    "message": "Comment"
+  },
+  "Common name": {
+    "message": "Common name"
+  },
+  "Completing sign-in…": {
+    "message": "Completing sign-in…"
+  },
+  "Compliance is permanent — cannot be reduced.": {
+    "message": "Compliance is permanent — cannot be reduced."
+  },
+  "Condition": {
+    "message": "Condition"
+  },
+  "Configuration schema provided by the app.": {
+    "message": "Configuration schema provided by the app."
+  },
+  "Configure OS, resources, disks and network.": {
+    "message": "Configure OS, resources, disks and network."
+  },
+  "Connect an upstream AD / LDAP / OIDC provider via a Keycloak realm.": {
+    "message": "Connect an upstream AD / LDAP / OIDC provider via a Keycloak realm."
+  },
+  "Console": {
+    "message": "Console"
+  },
+  "Copied": {
+    "message": "Copied"
+  },
+  "Copies": {
+    "message": "Copies"
+  },
+  "Copy": {
+    "message": "Copy"
+  },
+  "Copy failed": {
+    "message": "Copy failed"
+  },
+  "Create": {
+    "message": "Create"
+  },
+  "Create VM": {
+    "message": "Create VM"
+  },
+  "Create a bucket on an ObjectStore to expose S3-compatible storage.": {
+    "message": "Create a bucket on an ObjectStore to expose S3-compatible storage."
+  },
+  "Create bucket": {
+    "message": "Create bucket"
+  },
+  "Create failed": {
+    "message": "Create failed"
+  },
+  "Create pool": {
+    "message": "Create pool"
+  },
+  "Create share": {
+    "message": "Create share"
+  },
+  "Create token": {
+    "message": "Create token"
+  },
+  "Create user": {
+    "message": "Create user"
+  },
+  "Create your first pool to start allocating storage.": {
+    "message": "Create your first pool to start allocating storage."
+  },
+  "Created": {
+    "message": "Created"
+  },
+  "Creates a user and reconciles into Keycloak.": {
+    "message": "Creates a user and reconciles into Keycloak."
+  },
+  "Creating…": {
+    "message": "Creating…"
+  },
+  "Curated catalog + installed apps running on k3s.": {
+    "message": "Curated catalog + installed apps running on k3s."
+  },
+  "Current": {
+    "message": "Current"
+  },
+  "Custom domain created": {
+    "message": "Custom domain created"
+  },
+  "Custom domains": {
+    "message": "Custom domains"
+  },
+  "DNS names": {
+    "message": "DNS names"
+  },
+  "Danger zone": {
+    "message": "Danger zone"
+  },
+  "Dashboard": {
+    "message": "Dashboard"
+  },
+  "Data shards": {
+    "message": "Data shards"
+  },
+  "Dataset": {
+    "message": "Dataset"
+  },
+  "Datasets": {
+    "message": "Datasets"
+  },
+  "Default": {
+    "message": "Default"
+  },
+  "Degraded": {
+    "message": "Degraded"
+  },
+  "Delete": {
+    "message": "Delete"
+  },
+  "Delete VM?": {
+    "message": "Delete VM?"
+  },
+  "Delete bucket": {
+    "message": "Delete bucket"
+  },
+  "Delete bucket?": {
+    "message": "Delete bucket?"
+  },
+  "Delete failed": {
+    "message": "Delete failed"
+  },
+  "Delete group?": {
+    "message": "Delete group?"
+  },
+  "Delete share?": {
+    "message": "Delete share?"
+  },
+  "Delete user?": {
+    "message": "Delete user?"
+  },
+  "Deleted": {
+    "message": "Deleted"
+  },
+  "Deleting…": {
+    "message": "Deleting…"
+  },
+  "Destination ports": {
+    "message": "Destination ports"
+  },
+  "Destroys all pools, datasets, VMs, apps and configuration. The appliance will reboot into the first-run wizard.": {
+    "message": "Destroys all pools, datasets, VMs, apps and configuration. The appliance will reboot into the first-run wizard."
+  },
+  "Direction": {
+    "message": "Direction"
+  },
+  "Disks": {
+    "message": "Disks"
+  },
+  "Display": {
+    "message": "Display"
+  },
+  "Display name": {
+    "message": "Display name"
+  },
+  "Download": {
+    "message": "Download"
+  },
+  "Driver": {
+    "message": "Driver"
+  },
+  "Dry-run preview showing which snapshots would be pruned": {
+    "message": "Dry-run preview showing which snapshots would be pruned"
+  },
+  "Edit": {
+    "message": "Edit"
+  },
+  "Edit members": {
+    "message": "Edit members"
+  },
+  "Egress max": {
+    "message": "Egress max"
+  },
+  "Email": {
+    "message": "Email"
+  },
+  "Enable SMB or NFS.": {
+    "message": "Enable SMB or NFS."
+  },
+  "Enable graphics console": {
+    "message": "Enable graphics console"
+  },
+  "Enable object lock": {
+    "message": "Enable object lock"
+  },
+  "Encrypted, deduplicated backups with immutable retention": {
+    "message": "Encrypted, deduplicated backups with immutable retention"
+  },
+  "Encryption": {
+    "message": "Encryption"
+  },
+  "Encryption at rest": {
+    "message": "Encryption at rest"
+  },
+  "End-to-end encryption configuration": {
+    "message": "End-to-end encryption configuration"
+  },
+  "Endpoint": {
+    "message": "Endpoint"
+  },
+  "Endpoint hostname": {
+    "message": "Endpoint hostname"
+  },
+  "Erasure coding": {
+    "message": "Erasure coding"
+  },
+  "Expires": {
+    "message": "Expires"
+  },
+  "Expires at (ISO 8601)": {
+    "message": "Expires at (ISO 8601)"
+  },
+  "Exported": {
+    "message": "Exported"
+  },
+  "Expose a dataset over SMB and/or NFS.": {
+    "message": "Expose a dataset over SMB and/or NFS."
+  },
+  "Expose a dataset over SMB, NFS, or both.": {
+    "message": "Expose a dataset over SMB, NFS, or both."
+  },
+  "Expose an S3 bucket on an existing ObjectStore.": {
+    "message": "Expose an S3 bucket on an existing ObjectStore."
+  },
+  "Exposure": {
+    "message": "Exposure"
+  },
+  "Factory reset": {
+    "message": "Factory reset"
+  },
+  "Factory reset — erase everything": {
+    "message": "Factory reset — erase everything"
+  },
+  "Failed": {
+    "message": "Failed"
+  },
+  "Failed to create VM": {
+    "message": "Failed to create VM"
+  },
+  "Failed to create bucket": {
+    "message": "Failed to create bucket"
+  },
+  "Failed to create share": {
+    "message": "Failed to create share"
+  },
+  "Failed to delete VM": {
+    "message": "Failed to delete VM"
+  },
+  "Failed to delete bucket": {
+    "message": "Failed to delete bucket"
+  },
+  "Failed to delete share": {
+    "message": "Failed to delete share"
+  },
+  "Failed to load bucket users.": {
+    "message": "Failed to load bucket users."
+  },
+  "Failed to load installed apps.": {
+    "message": "Failed to load installed apps."
+  },
+  "Failed to queue bundle": {
+    "message": "Failed to queue bundle"
+  },
+  "Failed to start sign-in": {
+    "message": "Failed to start sign-in"
+  },
+  "Failover / failback controls": {
+    "message": "Failover / failback controls"
+  },
+  "Federations": {
+    "message": "Federations"
+  },
+  "Fingerprint": {
+    "message": "Fingerprint"
+  },
+  "Firewall rules": {
+    "message": "Firewall rules"
+  },
+  "Floating address pools announced via ARP/BGP.": {
+    "message": "Floating address pools announced via ARP/BGP."
+  },
+  "Free-form key/value overrides (Helm values). For structured forms, see docs.": {
+    "message": "Free-form key/value overrides (Helm values). For structured forms, see docs."
+  },
+  "From": {
+    "message": "From"
+  },
+  "Fullscreen": {
+    "message": "Fullscreen"
+  },
+  "GID": {
+    "message": "GID"
+  },
+  "GPU passthrough": {
+    "message": "GPU passthrough"
+  },
+  "General": {
+    "message": "General"
+  },
+  "Generate bundle": {
+    "message": "Generate bundle"
+  },
+  "Generate diagnostic bundles for support.": {
+    "message": "Generate diagnostic bundles for support."
+  },
+  "Generate one to collect diagnostics, configuration, and recent logs.": {
+    "message": "Generate one to collect diagnostics, configuration, and recent logs."
+  },
+  "Graphics": {
+    "message": "Graphics"
+  },
+  "Group created": {
+    "message": "Group created"
+  },
+  "Group updated": {
+    "message": "Group updated"
+  },
+  "Groups": {
+    "message": "Groups"
+  },
+  "History": {
+    "message": "History"
+  },
+  "Host": {
+    "message": "Host"
+  },
+  "Host interface created": {
+    "message": "Host interface created"
+  },
+  "Host interfaces": {
+    "message": "Host interfaces"
+  },
+  "Hostname": {
+    "message": "Hostname"
+  },
+  "Hot / warm / cold storage tiers backed by the chunk engine.": {
+    "message": "Hot / warm / cold storage tiers backed by the chunk engine."
+  },
+  "I saved it": {
+    "message": "I saved it"
+  },
+  "ID": {
+    "message": "ID"
+  },
+  "IOPS": {
+    "message": "IOPS"
+  },
+  "IP": {
+    "message": "IP"
+  },
+  "ISO Library": {
+    "message": "ISO Library"
+  },
+  "Identity groups and membership.": {
+    "message": "Identity groups and membership."
+  },
+  "Identity providers": {
+    "message": "Identity providers"
+  },
+  "Ingress created": {
+    "message": "Ingress created"
+  },
+  "Ingress max": {
+    "message": "Ingress max"
+  },
+  "Ingresses": {
+    "message": "Ingresses"
+  },
+  "Initiator access control and active sessions": {
+    "message": "Initiator access control and active sessions"
+  },
+  "Install": {
+    "message": "Install"
+  },
+  "Install failed": {
+    "message": "Install failed"
+  },
+  "Installed apps": {
+    "message": "Installed apps"
+  },
+  "Installing…": {
+    "message": "Installing…"
+  },
+  "Instance name": {
+    "message": "Instance name"
+  },
+  "Interface": {
+    "message": "Interface"
+  },
+  "Interfaces": {
+    "message": "Interfaces"
+  },
+  "Interfaces, routing, and firewall.": {
+    "message": "Interfaces, routing, and firewall."
+  },
+  "Jobs": {
+    "message": "Jobs"
+  },
+  "Key deleted": {
+    "message": "Key deleted"
+  },
+  "Keycloak realms and upstream federation (AD / LDAP / OIDC).": {
+    "message": "Keycloak realms and upstream federation (AD / LDAP / OIDC)."
+  },
+  "Kind": {
+    "message": "Kind"
+  },
+  "KubeVirt-backed VMs with VNC console, ISO library and GPU passthrough.": {
+    "message": "KubeVirt-backed VMs with VNC console, ISO library and GPU passthrough."
+  },
+  "LUN-to-dataset mapping": {
+    "message": "LUN-to-dataset mapping"
+  },
+  "Last applied": {
+    "message": "Last applied"
+  },
+  "Last config backup": {
+    "message": "Last config backup"
+  },
+  "Last delivery": {
+    "message": "Last delivery"
+  },
+  "Last fired": {
+    "message": "Last fired"
+  },
+  "Last login": {
+    "message": "Last login"
+  },
+  "Last scrub": {
+    "message": "Last scrub"
+  },
+  "Last sync": {
+    "message": "Last sync"
+  },
+  "Last used": {
+    "message": "Last used"
+  },
+  "Launch a VM from an ISO or existing dataset.": {
+    "message": "Launch a VM from an ISO or existing dataset."
+  },
+  "Lifecycle rules": {
+    "message": "Lifecycle rules"
+  },
+  "Link": {
+    "message": "Link"
+  },
+  "Live progress, lag and last successful run": {
+    "message": "Live progress, lag and last successful run"
+  },
+  "Loading services…": {
+    "message": "Loading services…"
+  },
+  "Loading system info…": {
+    "message": "Loading system info…"
+  },
+  "Loading users…": {
+    "message": "Loading users…"
+  },
+  "Loading…": {
+    "message": "Loading…"
+  },
+  "Locale": {
+    "message": "Locale"
+  },
+  "Logical layer-3 assignments and usage bindings.": {
+    "message": "Logical layer-3 assignments and usage bindings."
+  },
+  "Logical volumes backed by pools, with their own protection and quota.": {
+    "message": "Logical volumes backed by pools, with their own protection and quota."
+  },
+  "Long-running background tasks (installs, snapshots, replication, etc.).": {
+    "message": "Long-running background tasks (installs, snapshots, replication, etc.)."
+  },
+  "MAC": {
+    "message": "MAC"
+  },
+  "MTU": {
+    "message": "MTU"
+  },
+  "Maintenance cron": {
+    "message": "Maintenance cron"
+  },
+  "Members": {
+    "message": "Members"
+  },
+  "Memory (MiB)": {
+    "message": "Memory (MiB)"
+  },
+  "Message": {
+    "message": "Message"
+  },
+  "Metric query (PromQL)": {
+    "message": "Metric query (PromQL)"
+  },
+  "Min severity": {
+    "message": "Min severity"
+  },
+  "Minimum severity": {
+    "message": "Minimum severity"
+  },
+  "Missing fields": {
+    "message": "Missing fields"
+  },
+  "Missing name": {
+    "message": "Missing name"
+  },
+  "Missing username": {
+    "message": "Missing username"
+  },
+  "Mode": {
+    "message": "Mode"
+  },
+  "NFS server": {
+    "message": "NFS server"
+  },
+  "NTP servers": {
+    "message": "NTP servers"
+  },
+  "NVMe-oF (TCP) subsystem management": {
+    "message": "NVMe-oF (TCP) subsystem management"
+  },
+  "Name": {
+    "message": "Name"
+  },
+  "Name and owner required.": {
+    "message": "Name and owner required."
+  },
+  "Name of a stored secret": {
+    "message": "Name of a stored secret"
+  },
+  "Name required": {
+    "message": "Name required"
+  },
+  "Name, dataset, and path are required.": {
+    "message": "Name, dataset, and path are required."
+  },
+  "Native chunk-engine object storage with object lock, versioning, and lifecycle.": {
+    "message": "Native chunk-engine object storage with object lock, versioning, and lifecycle."
+  },
+  "Network": {
+    "message": "Network"
+  },
+  "New API token": {
+    "message": "New API token"
+  },
+  "New Keycloak realm": {
+    "message": "New Keycloak realm"
+  },
+  "New VIP pool": {
+    "message": "New VIP pool"
+  },
+  "New VLAN": {
+    "message": "New VLAN"
+  },
+  "New VM": {
+    "message": "New VM"
+  },
+  "New alert channel": {
+    "message": "New alert channel"
+  },
+  "New alert policy": {
+    "message": "New alert policy"
+  },
+  "New backup job": {
+    "message": "New backup job"
+  },
+  "New bond": {
+    "message": "New bond"
+  },
+  "New channel": {
+    "message": "New channel"
+  },
+  "New custom domain": {
+    "message": "New custom domain"
+  },
+  "New dataset": {
+    "message": "New dataset"
+  },
+  "New domain": {
+    "message": "New domain"
+  },
+  "New firewall rule": {
+    "message": "New firewall rule"
+  },
+  "New group": {
+    "message": "New group"
+  },
+  "New host interface": {
+    "message": "New host interface"
+  },
+  "New ingress": {
+    "message": "New ingress"
+  },
+  "New password": {
+    "message": "New password"
+  },
+  "New policy": {
+    "message": "New policy"
+  },
+  "New realm": {
+    "message": "New realm"
+  },
+  "New remote access tunnel": {
+    "message": "New remote access tunnel"
+  },
+  "New replication": {
+    "message": "New replication"
+  },
+  "New rule": {
+    "message": "New rule"
+  },
+  "New schedule": {
+    "message": "New schedule"
+  },
+  "New share": {
+    "message": "New share"
+  },
+  "New token": {
+    "message": "New token"
+  },
+  "New traffic policy": {
+    "message": "New traffic policy"
+  },
+  "New tunnel": {
+    "message": "New tunnel"
+  },
+  "New user": {
+    "message": "New user"
+  },
+  "Next/last run and produced snapshot counts": {
+    "message": "Next/last run and produced snapshot counts"
+  },
+  "No API tokens yet": {
+    "message": "No API tokens yet"
+  },
+  "No GPUs detected.": {
+    "message": "No GPUs detected."
+  },
+  "No SSH keys yet": {
+    "message": "No SSH keys yet"
+  },
+  "No VIP pools yet.": {
+    "message": "No VIP pools yet."
+  },
+  "No VLANs configured.": {
+    "message": "No VLANs configured."
+  },
+  "No VMs yet": {
+    "message": "No VMs yet"
+  },
+  "No alert channels yet": {
+    "message": "No alert channels yet"
+  },
+  "No alert policies yet": {
+    "message": "No alert policies yet"
+  },
+  "No apps installed yet.": {
+    "message": "No apps installed yet."
+  },
+  "No apps match": {
+    "message": "No apps match"
+  },
+  "No bonds yet.": {
+    "message": "No bonds yet."
+  },
+  "No bucket users yet.": {
+    "message": "No bucket users yet."
+  },
+  "No buckets yet": {
+    "message": "No buckets yet"
+  },
+  "No certificates yet": {
+    "message": "No certificates yet"
+  },
+  "No custom domains yet.": {
+    "message": "No custom domains yet."
+  },
+  "No disks added yet.": {
+    "message": "No disks added yet."
+  },
+  "No disks.": {
+    "message": "No disks."
+  },
+  "No firewall rules yet.": {
+    "message": "No firewall rules yet."
+  },
+  "No groups available.": {
+    "message": "No groups available."
+  },
+  "No groups yet": {
+    "message": "No groups yet"
+  },
+  "No host interfaces yet.": {
+    "message": "No host interfaces yet."
+  },
+  "No ingresses yet.": {
+    "message": "No ingresses yet."
+  },
+  "No jobs match": {
+    "message": "No jobs match"
+  },
+  "No lifecycle rules.": {
+    "message": "No lifecycle rules."
+  },
+  "No matching events.": {
+    "message": "No matching events."
+  },
+  "No physical interfaces discovered.": {
+    "message": "No physical interfaces discovered."
+  },
+  "No pools configured.": {
+    "message": "No pools configured."
+  },
+  "No pools yet": {
+    "message": "No pools yet"
+  },
+  "No realms configured": {
+    "message": "No realms configured"
+  },
+  "No recent activity.": {
+    "message": "No recent activity."
+  },
+  "No remote tunnels yet.": {
+    "message": "No remote tunnels yet."
+  },
+  "No rules — inherits dataset ACL.": {
+    "message": "No rules — inherits dataset ACL."
+  },
+  "No service data.": {
+    "message": "No service data."
+  },
+  "No shares yet": {
+    "message": "No shares yet"
+  },
+  "No support bundles yet": {
+    "message": "No support bundles yet"
+  },
+  "No traffic policies yet.": {
+    "message": "No traffic policies yet."
+  },
+  "No update history": {
+    "message": "No update history"
+  },
+  "No users available.": {
+    "message": "No users available."
+  },
+  "No users scoped to this bucket.": {
+    "message": "No users scoped to this bucket."
+  },
+  "No users yet": {
+    "message": "No users yet"
+  },
+  "Not after": {
+    "message": "Not after"
+  },
+  "Notes": {
+    "message": "Notes"
+  },
+  "Notify channel": {
+    "message": "Notify channel"
+  },
+  "NovaNas · Kubernetes-native NAS appliance": {
+    "message": "NovaNas · Kubernetes-native NAS appliance"
+  },
+  "OS": {
+    "message": "OS"
+  },
+  "OS type": {
+    "message": "OS type"
+  },
+  "Object lock": {
+    "message": "Object lock"
+  },
+  "Object lock mode": {
+    "message": "Object lock mode"
+  },
+  "ObjectStore": {
+    "message": "ObjectStore"
+  },
+  "ObjectStore required": {
+    "message": "ObjectStore required"
+  },
+  "Objects": {
+    "message": "Objects"
+  },
+  "Observed NICs. Read-only.": {
+    "message": "Observed NICs. Read-only."
+  },
+  "Open Grafana": {
+    "message": "Open Grafana"
+  },
+  "Operational": {
+    "message": "Operational"
+  },
+  "Operator": {
+    "message": "Operator"
+  },
+  "Optional — e.g. 1Ti": {
+    "message": "Optional — e.g. 1Ti"
+  },
+  "Outcome": {
+    "message": "Outcome"
+  },
+  "Owner": {
+    "message": "Owner"
+  },
+  "Parent": {
+    "message": "Parent"
+  },
+  "Parent interface": {
+    "message": "Parent interface"
+  },
+  "Parity shards": {
+    "message": "Parity shards"
+  },
+  "Password reset": {
+    "message": "Password reset"
+  },
+  "Paste (Ctrl/Cmd+V) forwards clipboard to guest.": {
+    "message": "Paste (Ctrl/Cmd+V) forwards clipboard to guest."
+  },
+  "Path": {
+    "message": "Path"
+  },
+  "Pause": {
+    "message": "Pause"
+  },
+  "Pause/resume and on-demand trigger": {
+    "message": "Pause/resume and on-demand trigger"
+  },
+  "Peer-to-peer replication to another NovaNas or compatible target.": {
+    "message": "Peer-to-peer replication to another NovaNas or compatible target."
+  },
+  "Pending": {
+    "message": "Pending"
+  },
+  "Per-job schedule, bandwidth cap and destination": {
+    "message": "Per-job schedule, bandwidth cap and destination"
+  },
+  "Phase": {
+    "message": "Phase"
+  },
+  "Physical interfaces": {
+    "message": "Physical interfaces"
+  },
+  "Physical, bond, or VLAN name": {
+    "message": "Physical, bond, or VLAN name"
+  },
+  "Policies": {
+    "message": "Policies"
+  },
+  "Policy": {
+    "message": "Policy"
+  },
+  "Policy created": {
+    "message": "Policy created"
+  },
+  "Pools": {
+    "message": "Pools"
+  },
+  "Port": {
+    "message": "Port"
+  },
+  "Preferences": {
+    "message": "Preferences"
+  },
+  "Priority": {
+    "message": "Priority"
+  },
+  "Profile": {
+    "message": "Profile"
+  },
+  "Progress": {
+    "message": "Progress"
+  },
+  "Protection": {
+    "message": "Protection"
+  },
+  "Protocol": {
+    "message": "Protocol"
+  },
+  "Protocols": {
+    "message": "Protocols"
+  },
+  "Provider": {
+    "message": "Provider"
+  },
+  "Provider credentials managed via OpenBao": {
+    "message": "Provider credentials managed via OpenBao"
+  },
+  "Public key": {
+    "message": "Public key"
+  },
+  "Queuing…": {
+    "message": "Queuing…"
+  },
+  "Quota": {
+    "message": "Quota"
+  },
+  "Quota (bytes)": {
+    "message": "Quota (bytes)"
+  },
+  "Range": {
+    "message": "Range"
+  },
+  "Range (CIDR)": {
+    "message": "Range (CIDR)"
+  },
+  "Read": {
+    "message": "Read"
+  },
+  "Read only": {
+    "message": "Read only"
+  },
+  "Realm": {
+    "message": "Realm"
+  },
+  "Realm created": {
+    "message": "Realm created"
+  },
+  "Realm deleted": {
+    "message": "Realm deleted"
+  },
+  "Reconnect": {
+    "message": "Reconnect"
+  },
+  "Recurring snapshots with tiered retention.": {
+    "message": "Recurring snapshots with tiered retention."
+  },
+  "Redirecting…": {
+    "message": "Redirecting…"
+  },
+  "Refresh": {
+    "message": "Refresh"
+  },
+  "Remote access tunnels": {
+    "message": "Remote access tunnels"
+  },
+  "Renew failed": {
+    "message": "Renew failed"
+  },
+  "Renewal requested": {
+    "message": "Renewal requested"
+  },
+  "Replication": {
+    "message": "Replication"
+  },
+  "Request": {
+    "message": "Request"
+  },
+  "Request certificate": {
+    "message": "Request certificate"
+  },
+  "Requesting…": {
+    "message": "Requesting…"
+  },
+  "Reset": {
+    "message": "Reset"
+  },
+  "Reset configuration": {
+    "message": "Reset configuration"
+  },
+  "Reset failed": {
+    "message": "Reset failed"
+  },
+  "Reset password": {
+    "message": "Reset password"
+  },
+  "Reset requested": {
+    "message": "Reset requested"
+  },
+  "Resource": {
+    "message": "Resource"
+  },
+  "Resources": {
+    "message": "Resources"
+  },
+  "Restart system services and clear transient caches. User data, datasets and pools are preserved.": {
+    "message": "Restart system services and clear transient caches. User data, datasets and pools are preserved."
+  },
+  "Restore browser and verification runs": {
+    "message": "Restore browser and verification runs"
+  },
+  "Resume": {
+    "message": "Resume"
+  },
+  "Retry": {
+    "message": "Retry"
+  },
+  "Reverts all settings (network, identity, SMTP, alerts…) to defaults. Datasets and pools are preserved, but apps/VMs may become unreachable until reconfigured.": {
+    "message": "Reverts all settings (network, identity, SMTP, alerts…) to defaults. Datasets and pools are preserved, but apps/VMs may become unreachable until reconfigured."
+  },
+  "Revoke failed": {
+    "message": "Revoke failed"
+  },
+  "Routing": {
+    "message": "Routing"
+  },
+  "Rule created": {
+    "message": "Rule created"
+  },
+  "Rules": {
+    "message": "Rules"
+  },
+  "Running": {
+    "message": "Running"
+  },
+  "S3 Buckets": {
+    "message": "S3 Buckets"
+  },
+  "S3 credentials scoped to buckets and prefixes.": {
+    "message": "S3 credentials scoped to buckets and prefixes."
+  },
+  "SMB + NFS exports on top of datasets.": {
+    "message": "SMB + NFS exports on top of datasets."
+  },
+  "SMB server": {
+    "message": "SMB server"
+  },
+  "SSH key added": {
+    "message": "SSH key added"
+  },
+  "SSH keys": {
+    "message": "SSH keys"
+  },
+  "Save": {
+    "message": "Save"
+  },
+  "Save failed": {
+    "message": "Save failed"
+  },
+  "Save your token": {
+    "message": "Save your token"
+  },
+  "Saving…": {
+    "message": "Saving…"
+  },
+  "Schedule list with cron, retention and dataset scope": {
+    "message": "Schedule list with cron, retention and dataset scope"
+  },
+  "Scope": {
+    "message": "Scope"
+  },
+  "Scope kind": {
+    "message": "Scope kind"
+  },
+  "Scope name": {
+    "message": "Scope name"
+  },
+  "Scopes": {
+    "message": "Scopes"
+  },
+  "Search catalog…": {
+    "message": "Search catalog…"
+  },
+  "Secret ref": {
+    "message": "Secret ref"
+  },
+  "Security": {
+    "message": "Security"
+  },
+  "Select": {
+    "message": "Select"
+  },
+  "Select a protocol": {
+    "message": "Select a protocol"
+  },
+  "Select a store": {
+    "message": "Select a store"
+  },
+  "Select mode": {
+    "message": "Select mode"
+  },
+  "Send Ctrl+Alt+Del": {
+    "message": "Send Ctrl+Alt+Del"
+  },
+  "Set a new password for": {
+    "message": "Set a new password for"
+  },
+  "Settings": {
+    "message": "Settings"
+  },
+  "Settings saved": {
+    "message": "Settings saved"
+  },
+  "Severity": {
+    "message": "Severity"
+  },
+  "Shadow copies (snapshots visible via VSS)": {
+    "message": "Shadow copies (snapshots visible via VSS)"
+  },
+  "Share": {
+    "message": "Share"
+  },
+  "Share created": {
+    "message": "Share created"
+  },
+  "Share deleted": {
+    "message": "Share deleted"
+  },
+  "Shares": {
+    "message": "Shares"
+  },
+  "Ship encrypted snapshots to S3-compatible destinations.": {
+    "message": "Ship encrypted snapshots to S3-compatible destinations."
+  },
+  "Sign in to NovaNas": {
+    "message": "Sign in to NovaNas"
+  },
+  "Sign in with Keycloak": {
+    "message": "Sign in with Keycloak"
+  },
+  "Sign out": {
+    "message": "Sign out"
+  },
+  "Sign-in failed": {
+    "message": "Sign-in failed"
+  },
+  "Signed out": {
+    "message": "Signed out"
+  },
+  "Since (ISO)": {
+    "message": "Since (ISO)"
+  },
+  "Size": {
+    "message": "Size"
+  },
+  "Snapshot schedules": {
+    "message": "Snapshot schedules"
+  },
+  "Soft reset": {
+    "message": "Soft reset"
+  },
+  "Source": {
+    "message": "Source"
+  },
+  "Source CIDRs": {
+    "message": "Source CIDRs"
+  },
+  "Source dataset, target endpoint and throttle": {
+    "message": "Source dataset, target endpoint and throttle"
+  },
+  "Speed": {
+    "message": "Speed"
+  },
+  "Squash": {
+    "message": "Squash"
+  },
+  "Start": {
+    "message": "Start"
+  },
+  "Start failed": {
+    "message": "Start failed"
+  },
+  "Started": {
+    "message": "Started"
+  },
+  "State": {
+    "message": "State"
+  },
+  "Static CIDR": {
+    "message": "Static CIDR"
+  },
+  "Status": {
+    "message": "Status"
+  },
+  "Stop": {
+    "message": "Stop"
+  },
+  "Stop failed": {
+    "message": "Stop failed"
+  },
+  "Stop requested": {
+    "message": "Stop requested"
+  },
+  "Storage": {
+    "message": "Storage"
+  },
+  "Store": {
+    "message": "Store"
+  },
+  "Submitting…": {
+    "message": "Submitting…"
+  },
+  "Succeeded": {
+    "message": "Succeeded"
+  },
+  "Support": {
+    "message": "Support"
+  },
+  "Support bundle queued": {
+    "message": "Support bundle queued"
+  },
+  "System and user actions, filterable.": {
+    "message": "System and user actions, filterable."
+  },
+  "System services": {
+    "message": "System services"
+  },
+  "System-wide configuration.": {
+    "message": "System-wide configuration."
+  },
+  "TLS": {
+    "message": "TLS"
+  },
+  "TLS certificates issued via ACME, internal PKI, or uploaded.": {
+    "message": "TLS certificates issued via ACME, internal PKI, or uploaded."
+  },
+  "TLS provider": {
+    "message": "TLS provider"
+  },
+  "Target kind": {
+    "message": "Target kind"
+  },
+  "Target name": {
+    "message": "Target name"
+  },
+  "Targets, portals and CHAP auth configuration": {
+    "message": "Targets, portals and CHAP auth configuration"
+  },
+  "The token secret is displayed once after creation. Copy it now.": {
+    "message": "The token secret is displayed once after creation. Copy it now."
+  },
+  "These actions are destructive. Each tier has its own confirmation flow.": {
+    "message": "These actions are destructive. Each tier has its own confirmation flow."
+  },
+  "This bucket is under compliance object lock — deletion is refused.": {
+    "message": "This bucket is under compliance object lock — deletion is refused."
+  },
+  "This bucket is under governance object lock. Retained objects may block deletion until their retention period expires.": {
+    "message": "This bucket is under governance object lock. Retained objects may block deletion until their retention period expires."
+  },
+  "This endpoint is not yet implemented on the appliance.": {
+    "message": "This endpoint is not yet implemented on the appliance."
+  },
+  "This secret is shown only once. Store it somewhere safe.": {
+    "message": "This secret is shown only once. Store it somewhere safe."
+  },
+  "This surface will include:": {
+    "message": "This surface will include:"
+  },
+  "Threshold": {
+    "message": "Threshold"
+  },
+  "Tier": {
+    "message": "Tier"
+  },
+  "Time": {
+    "message": "Time"
+  },
+  "Timezone": {
+    "message": "Timezone"
+  },
+  "Title": {
+    "message": "Title"
+  },
+  "To": {
+    "message": "To"
+  },
+  "Token created": {
+    "message": "Token created"
+  },
+  "Token revoked": {
+    "message": "Token revoked"
+  },
+  "Tokens & keys": {
+    "message": "Tokens & keys"
+  },
+  "Topic": {
+    "message": "Topic"
+  },
+  "Track issue #33": {
+    "message": "Track issue #33"
+  },
+  "Traffic policies": {
+    "message": "Traffic policies"
+  },
+  "Trouble signing in? Contact your NovaNas administrator.": {
+    "message": "Trouble signing in? Contact your NovaNas administrator."
+  },
+  "Try a different category or search term.": {
+    "message": "Try a different category or search term."
+  },
+  "Try again in a moment.": {
+    "message": "Try again in a moment."
+  },
+  "Tunnel created": {
+    "message": "Tunnel created"
+  },
+  "Type": {
+    "message": "Type"
+  },
+  "Type the hostname": {
+    "message": "Type the hostname"
+  },
+  "URL": {
+    "message": "URL"
+  },
+  "Unable to load": {
+    "message": "Unable to load"
+  },
+  "Unable to load SSH keys": {
+    "message": "Unable to load SSH keys"
+  },
+  "Unable to load VMs": {
+    "message": "Unable to load VMs"
+  },
+  "Unable to load audit log": {
+    "message": "Unable to load audit log"
+  },
+  "Unable to load buckets": {
+    "message": "Unable to load buckets"
+  },
+  "Unable to load bundles": {
+    "message": "Unable to load bundles"
+  },
+  "Unable to load catalog": {
+    "message": "Unable to load catalog"
+  },
+  "Unable to load certificates": {
+    "message": "Unable to load certificates"
+  },
+  "Unable to load channels": {
+    "message": "Unable to load channels"
+  },
+  "Unable to load groups": {
+    "message": "Unable to load groups"
+  },
+  "Unable to load history": {
+    "message": "Unable to load history"
+  },
+  "Unable to load jobs": {
+    "message": "Unable to load jobs"
+  },
+  "Unable to load policies": {
+    "message": "Unable to load policies"
+  },
+  "Unable to load pools": {
+    "message": "Unable to load pools"
+  },
+  "Unable to load pools.": {
+    "message": "Unable to load pools."
+  },
+  "Unable to load realms": {
+    "message": "Unable to load realms"
+  },
+  "Unable to load settings": {
+    "message": "Unable to load settings"
+  },
+  "Unable to load shares": {
+    "message": "Unable to load shares"
+  },
+  "Unable to load tokens": {
+    "message": "Unable to load tokens"
+  },
+  "Unable to load update policy": {
+    "message": "Unable to load update policy"
+  },
+  "Unable to load users": {
+    "message": "Unable to load users"
+  },
+  "Unable to reach /system/health.": {
+    "message": "Unable to reach /system/health."
+  },
+  "Uninstall": {
+    "message": "Uninstall"
+  },
+  "Uninstall app?": {
+    "message": "Uninstall app?"
+  },
+  "Uninstall failed": {
+    "message": "Uninstall failed"
+  },
+  "Uninstalled": {
+    "message": "Uninstalled"
+  },
+  "Uninstalling…": {
+    "message": "Uninstalling…"
+  },
+  "Unknown sign-in error": {
+    "message": "Unknown sign-in error"
+  },
+  "Until (ISO)": {
+    "message": "Until (ISO)"
+  },
+  "Update": {
+    "message": "Update"
+  },
+  "Update failed": {
+    "message": "Update failed"
+  },
+  "Update policy saved": {
+    "message": "Update policy saved"
+  },
+  "Update requested": {
+    "message": "Update requested"
+  },
+  "Updates": {
+    "message": "Updates"
+  },
+  "Uptime": {
+    "message": "Uptime"
+  },
+  "Usage": {
+    "message": "Usage"
+  },
+  "Used by": {
+    "message": "Used by"
+  },
+  "Used bytes": {
+    "message": "Used bytes"
+  },
+  "User": {
+    "message": "User"
+  },
+  "User created": {
+    "message": "User created"
+  },
+  "Username": {
+    "message": "Username"
+  },
+  "Users": {
+    "message": "Users"
+  },
+  "VIP": {
+    "message": "VIP"
+  },
+  "VIP pool created": {
+    "message": "VIP pool created"
+  },
+  "VIP pools": {
+    "message": "VIP pools"
+  },
+  "VLAN ID": {
+    "message": "VLAN ID"
+  },
+  "VLAN created": {
+    "message": "VLAN created"
+  },
+  "VLAN deleted": {
+    "message": "VLAN deleted"
+  },
+  "VLANs": {
+    "message": "VLANs"
+  },
+  "VM": {
+    "message": "VM"
+  },
+  "VM created": {
+    "message": "VM created"
+  },
+  "VM deleted": {
+    "message": "VM deleted"
+  },
+  "VMs running": {
+    "message": "VMs running"
+  },
+  "VNC console for": {
+    "message": "VNC console for"
+  },
+  "Values": {
+    "message": "Values"
+  },
+  "Variant": {
+    "message": "Variant"
+  },
+  "Verb": {
+    "message": "Verb"
+  },
+  "Version": {
+    "message": "Version"
+  },
+  "Versioning": {
+    "message": "Versioning"
+  },
+  "Virtual Machines": {
+    "message": "Virtual Machines"
+  },
+  "Webhook URL": {
+    "message": "Webhook URL"
+  },
+  "Window duration (minutes)": {
+    "message": "Window duration (minutes)"
+  },
+  "Write": {
+    "message": "Write"
+  },
+  "all": {
+    "message": "all"
+  },
+  "and all objects in it will be removed.": {
+    "message": "and all objects in it will be removed."
+  },
+  "coming soon": {
+    "message": "coming soon"
+  },
+  "connected": {
+    "message": "connected"
+  },
+  "connecting…": {
+    "message": "connecting…"
+  },
+  "connection failed": {
+    "message": "connection failed"
+  },
+  "connection lost": {
+    "message": "connection lost"
+  },
+  "credentials required": {
+    "message": "credentials required"
+  },
+  "disconnected": {
+    "message": "disconnected"
+  },
+  "e.g. 0 3 * * SUN": {
+    "message": "e.g. 0 3 * * SUN"
+  },
+  "e.g. 100Mbps": {
+    "message": "e.g. 100Mbps"
+  },
+  "e.g. install-app": {
+    "message": "e.g. install-app"
+  },
+  "e.g. ubuntu2204, windows11": {
+    "message": "e.g. ubuntu2204, windows11"
+  },
+  "error": {
+    "message": "error"
+  },
+  "failed": {
+    "message": "failed"
+  },
+  "for progress.": {
+    "message": "for progress."
+  },
+  "iSCSI / NVMe-oF": {
+    "message": "iSCSI / NVMe-oF"
+  },
+  "in use by": {
+    "message": "in use by"
+  },
+  "key": {
+    "message": "key"
+  },
+  "lowercase letters, digits and dashes only": {
+    "message": "lowercase letters, digits and dashes only"
+  },
+  "member": {
+    "message": "member"
+  },
+  "members": {
+    "message": "members"
+  },
+  "never": {
+    "message": "never"
+  },
+  "requested": {
+    "message": "requested"
+  },
+  "security failure": {
+    "message": "security failure"
+  },
+  "select": {
+    "message": "select"
+  },
+  "to confirm.": {
+    "message": "to confirm."
+  },
+  "user": {
+    "message": "user"
+  },
+  "user:alice or group:staff": {
+    "message": "user:alice or group:staff"
+  },
+  "vCPU": {
+    "message": "vCPU"
+  },
+  "value": {
+    "message": "value"
+  },
+  "will be removed.": {
+    "message": "will be removed."
+  },
+  "will be unexported. Data is untouched.": {
+    "message": "will be unexported. Data is untouched."
+  }
+}

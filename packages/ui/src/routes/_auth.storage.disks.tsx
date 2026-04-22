@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDisk, useDisksLive, useUpdateDisk } from '@/api/disks';
 import { usePools } from '@/api/pools';
 import { EmptyState } from '@/components/common/empty-state';

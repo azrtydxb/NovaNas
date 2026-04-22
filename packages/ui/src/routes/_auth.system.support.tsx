@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { api } from '@/api/client';
 import { EmptyState } from '@/components/common/empty-state';
 import { PageHeader } from '@/components/common/page-header';
@@ -14,6 +13,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { Download, LifeBuoy } from 'lucide-react';
@@ -54,8 +55,8 @@ function SupportPage() {
   return (
     <>
       <PageHeader
-        title='Support'
-        subtitle='Generate diagnostic bundles for support.'
+        title={i18n._('Support')}
+        subtitle={i18n._('Generate diagnostic bundles for support.')}
         actions={
           mayMutate ? (
             <Button
@@ -63,14 +64,14 @@ function SupportPage() {
               onClick={async () => {
                 try {
                   await generate.mutateAsync();
-                  toast.success('Support bundle queued');
+                  toast.success(i18n._('Support bundle queued'));
                 } catch (e) {
-                  toast.error('Failed to queue bundle', (e as Error).message);
+                  toast.error(i18n._('Failed to queue bundle'), (e as Error).message);
                 }
               }}
               disabled={generate.isPending}
             >
-              {generate.isPending ? 'Queuing…' : 'Generate bundle'}
+              {generate.isPending ? <Trans id='Queuing…' /> : <Trans id='Generate bundle' />}
             </Button>
           ) : null
         }
@@ -81,26 +82,38 @@ function SupportPage() {
       ) : bundles.isError ? (
         <EmptyState
           icon={<LifeBuoy size={28} />}
-          title='Unable to load bundles'
+          title={i18n._('Unable to load bundles')}
           description={(bundles.error as Error)?.message}
-          action={<Button onClick={() => bundles.refetch()}>Retry</Button>}
+          action={<Button onClick={() => bundles.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (bundles.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<LifeBuoy size={28} />}
-          title='No support bundles yet'
-          description='Generate one to collect diagnostics, configuration, and recent logs.'
+          title={i18n._('No support bundles yet')}
+          description={i18n._(
+            'Generate one to collect diagnostics, configuration, and recent logs.'
+          )}
         />
       ) : (
         <div className='border border-border rounded-md overflow-hidden'>
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>ID</TableHeaderCell>
-                <TableHeaderCell>Created</TableHeaderCell>
-                <TableHeaderCell>Size</TableHeaderCell>
-                <TableHeaderCell>Status</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Download</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='ID' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Created' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Size' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Status' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Download' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>

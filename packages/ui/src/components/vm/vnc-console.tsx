@@ -1,4 +1,6 @@
 import { Button } from '@/components/ui/button';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import type { Vm } from '@novanas/schemas';
 import RFB from '@novnc/novnc/lib/rfb';
 import { Clipboard, Loader2, Maximize2, Minimize2, Power, WifiOff } from 'lucide-react';
@@ -74,7 +76,7 @@ export function VncConsole({ vm, wsUrl, rfbFactory }: VncConsoleProps) {
     try {
       rfb = (rfbFactory ?? defaultRfbFactory)(target, url);
     } catch (err) {
-      setLastMessage((err as Error)?.message ?? 'connection failed');
+      setLastMessage((err as Error)?.message ?? i18n._('connection failed'));
       setState('error');
       return;
     }
@@ -90,16 +92,16 @@ export function VncConsole({ vm, wsUrl, rfbFactory }: VncConsoleProps) {
     const onDisconnect = (evt: CustomEvent) => {
       const detail = (evt as CustomEvent<{ clean?: boolean }>).detail;
       setState(detail?.clean ? 'disconnected' : 'error');
-      if (!detail?.clean) setLastMessage('connection lost');
+      if (!detail?.clean) setLastMessage(i18n._('connection lost'));
     };
     const onCredentialsRequired = () => {
       setState('error');
-      setLastMessage('credentials required');
+      setLastMessage(i18n._('credentials required'));
     };
     const onSecurityFailure = (evt: CustomEvent) => {
       const detail = (evt as CustomEvent<{ reason?: string }>).detail;
       setState('error');
-      setLastMessage(detail?.reason ?? 'security failure');
+      setLastMessage(detail?.reason ?? i18n._('security failure'));
     };
 
     rfb.addEventListener('connect', onConnect);
@@ -175,25 +177,25 @@ export function VncConsole({ vm, wsUrl, rfbFactory }: VncConsoleProps) {
         <div
           ref={canvasRef}
           className='h-full w-full outline-none'
-          aria-label={`VNC console for ${name}`}
+          aria-label={`${i18n._('VNC console for')} ${name}`}
         />
         <div className='absolute top-1 right-1 flex gap-1 pointer-events-auto'>
           <Button
             size='sm'
             variant='ghost'
-            title='Send Ctrl+Alt+Del'
+            title={i18n._('Send Ctrl+Alt+Del')}
             onClick={sendCtrlAltDel}
             disabled={state !== 'connected'}
           >
             <Power size={11} /> Ctrl-Alt-Del
           </Button>
-          <Button size='sm' variant='ghost' title='Fullscreen' onClick={toggleFullscreen}>
+          <Button size='sm' variant='ghost' title={i18n._('Fullscreen')} onClick={toggleFullscreen}>
             {fullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
           </Button>
         </div>
       </div>
       <div className='text-xs text-foreground-subtle flex items-center gap-2'>
-        <Clipboard size={11} /> Paste (Ctrl/Cmd+V) forwards clipboard to guest.
+        <Clipboard size={11} /> <Trans id='Paste (Ctrl/Cmd+V) forwards clipboard to guest.' />
       </div>
     </div>
   );
@@ -211,23 +213,23 @@ function StateBanner({
   if (state === 'connected') {
     return (
       <div className='text-[11px] mono flex items-center gap-2 text-ok-fg'>
-        <span className='inline-block h-1.5 w-1.5 rounded-full bg-ok' /> connected
+        <span className='inline-block h-1.5 w-1.5 rounded-full bg-ok' /> <Trans id='connected' />
       </div>
     );
   }
   if (state === 'connecting') {
     return (
       <div className='text-[11px] mono flex items-center gap-2 text-foreground-subtle'>
-        <Loader2 size={11} className='animate-spin' /> connecting…
+        <Loader2 size={11} className='animate-spin' /> <Trans id='connecting…' />
       </div>
     );
   }
   return (
     <div className='text-[11px] mono flex items-center gap-2 text-warn'>
-      <WifiOff size={11} /> {state === 'error' ? 'error' : 'disconnected'}
+      <WifiOff size={11} /> {state === 'error' ? i18n._('error') : i18n._('disconnected')}
       {lastMessage ? ` — ${lastMessage}` : ''}
       <Button size='sm' variant='ghost' onClick={onRetry}>
-        Reconnect
+        <Trans id='Reconnect' />
       </Button>
     </div>
   );

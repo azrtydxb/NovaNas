@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import {
   useCertificates,
   useCreateCertificate,
@@ -38,6 +37,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Lock, Plus, RefreshCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -58,12 +59,12 @@ function CertificatesPage() {
   return (
     <>
       <PageHeader
-        title='Certificates'
-        subtitle='TLS certificates issued via ACME, internal PKI, or uploaded.'
+        title={i18n._('Certificates')}
+        subtitle={i18n._('TLS certificates issued via ACME, internal PKI, or uploaded.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> Request certificate
+              <Plus size={13} /> <Trans id='Request certificate' />
             </Button>
           ) : null
         }
@@ -73,18 +74,18 @@ function CertificatesPage() {
       ) : q.isError ? (
         <EmptyState
           icon={<Lock size={28} />}
-          title='Unable to load certificates'
+          title={i18n._('Unable to load certificates')}
           description={(q.error as Error)?.message}
-          action={<Button onClick={() => q.refetch()}>Retry</Button>}
+          action={<Button onClick={() => q.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (q.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Lock size={28} />}
-          title='No certificates yet'
+          title={i18n._('No certificates yet')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> Request certificate
+                <Plus size={13} /> <Trans id='Request certificate' />
               </Button>
             ) : undefined
           }
@@ -94,12 +95,24 @@ function CertificatesPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Common name</TableHeaderCell>
-                <TableHeaderCell>Provider</TableHeaderCell>
-                <TableHeaderCell>Phase</TableHeaderCell>
-                <TableHeaderCell>Not after</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Common name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Provider' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Phase' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Not after' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -133,9 +146,9 @@ function CertificatesPage() {
                           onClick={async () => {
                             try {
                               await renew.mutateAsync(c.metadata.name);
-                              toast.success('Renewal requested');
+                              toast.success(i18n._('Renewal requested'));
                             } catch (e) {
-                              toast.error('Renew failed', (e as Error).message);
+                              toast.error(i18n._('Renew failed'), (e as Error).message);
                             }
                           }}
                         >
@@ -147,9 +160,9 @@ function CertificatesPage() {
                           onClick={async () => {
                             try {
                               await del.mutateAsync(c.metadata.name);
-                              toast.success('Deleted', c.metadata.name);
+                              toast.success(i18n._('Deleted'), c.metadata.name);
                             } catch (e) {
-                              toast.error('Delete failed', (e as Error).message);
+                              toast.error(i18n._('Delete failed'), (e as Error).message);
                             }
                           }}
                         >
@@ -189,7 +202,7 @@ function CreateCertificateDialog({
 
   const submit = async () => {
     if (!name || !commonName) {
-      toast.error('Missing fields');
+      toast.error(i18n._('Missing fields'));
       return;
     }
     try {
@@ -208,14 +221,14 @@ function CreateCertificateDialog({
             provider === 'acme' ? { issuer: acmeIssuer, email: acmeEmail || undefined } : undefined,
         },
       });
-      toast.success('Certificate requested', name);
+      toast.success(i18n._('Certificate requested'), name);
       setName('');
       setCommonName('');
       setDnsNames('');
       setAcmeEmail('');
       onOpenChange(false);
     } catch (e) {
-      toast.error('Create failed', (e as Error).message);
+      toast.error(i18n._('Create failed'), (e as Error).message);
     }
   };
 
@@ -223,14 +236,18 @@ function CreateCertificateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Request certificate</DialogTitle>
-          <DialogDescription>ACME is the easiest; internal PKI avoids DNS.</DialogDescription>
+          <DialogTitle>
+            <Trans id='Request certificate' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='ACME is the easiest; internal PKI avoids DNS.' />
+          </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </FormField>
-          <FormField label='Provider'>
+          <FormField label={i18n._('Provider')}>
             <Select value={provider} onValueChange={(v) => setProvider(v as typeof provider)}>
               <SelectTrigger>
                 <SelectValue />
@@ -242,15 +259,15 @@ function CreateCertificateDialog({
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label='Common name' required>
+          <FormField label={i18n._('Common name')} required>
             <Input value={commonName} onChange={(e) => setCommonName(e.target.value)} />
           </FormField>
-          <FormField label='DNS names' hint='Comma-separated SANs'>
+          <FormField label={i18n._('DNS names')} hint={i18n._('Comma-separated SANs')}>
             <Input value={dnsNames} onChange={(e) => setDnsNames(e.target.value)} />
           </FormField>
           {provider === 'acme' && (
             <>
-              <FormField label='ACME issuer'>
+              <FormField label={i18n._('ACME issuer')}>
                 <Select
                   value={acmeIssuer}
                   onValueChange={(v) => setAcmeIssuer(v as typeof acmeIssuer)}
@@ -266,7 +283,7 @@ function CreateCertificateDialog({
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label='Email'>
+              <FormField label={i18n._('Email')}>
                 <Input
                   type='email'
                   value={acmeEmail}
@@ -278,10 +295,10 @@ function CreateCertificateDialog({
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' onClick={submit} disabled={create.isPending}>
-            {create.isPending ? 'Requesting…' : 'Request'}
+            {create.isPending ? <Trans id='Requesting…' /> : <Trans id='Request' />}
           </Button>
         </DialogFooter>
       </DialogContent>

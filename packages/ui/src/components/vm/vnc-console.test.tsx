@@ -1,7 +1,12 @@
+import { i18n } from '@/lib/i18n';
+import { I18nProvider } from '@lingui/react';
 import type { Vm } from '@novanas/schemas';
-import { act, render } from '@testing-library/react';
+import { act, render as rtlRender } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type RfbFactory, VncConsole } from './vnc-console';
+
+const render = (ui: ReactElement) => rtlRender(<I18nProvider i18n={i18n}>{ui}</I18nProvider>);
 
 const vm: Vm = {
   apiVersion: 'novanas.io/v1alpha1',

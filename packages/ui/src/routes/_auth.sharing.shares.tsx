@@ -1,4 +1,3 @@
-// TODO(i18n-wave-12): strings on this page are still raw English. Migrate to <Trans>/i18n._() once wave 12 is green.
 import { useDatasets } from '@/api/datasets';
 import { useNfsServers } from '@/api/nfs-servers';
 import { type ShareCreateBody, useCreateShare, useDeleteShare, useShares } from '@/api/shares';
@@ -37,6 +36,8 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { i18n } from '@/lib/i18n';
+import { Trans } from '@lingui/react';
 import type { Share, ShareAccessEntry, ShareSpec } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Share2, Trash2, X } from 'lucide-react';
@@ -57,12 +58,12 @@ function SharesPage() {
   return (
     <>
       <PageHeader
-        title='Shares'
-        subtitle='SMB + NFS exports on top of datasets.'
+        title={i18n._('Shares')}
+        subtitle={i18n._('SMB + NFS exports on top of datasets.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              <Plus size={13} /> New share
+              <Plus size={13} /> <Trans id='New share' />
             </Button>
           ) : null
         }
@@ -77,19 +78,19 @@ function SharesPage() {
       ) : shares.isError ? (
         <EmptyState
           icon={<Share2 size={28} />}
-          title='Unable to load shares'
-          description={(shares.error as Error)?.message ?? 'Try again in a moment.'}
-          action={<Button onClick={() => shares.refetch()}>Retry</Button>}
+          title={i18n._('Unable to load shares')}
+          description={(shares.error as Error)?.message ?? i18n._('Try again in a moment.')}
+          action={<Button onClick={() => shares.refetch()}>{i18n._('Retry')}</Button>}
         />
       ) : (shares.data?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<Share2 size={28} />}
-          title='No shares yet'
-          description='Expose a dataset over SMB, NFS, or both.'
+          title={i18n._('No shares yet')}
+          description={i18n._('Expose a dataset over SMB, NFS, or both.')}
           action={
             mayMutate ? (
               <Button variant='primary' onClick={() => setCreateOpen(true)}>
-                <Plus size={13} /> New share
+                <Plus size={13} /> <Trans id='New share' />
               </Button>
             ) : undefined
           }
@@ -99,12 +100,24 @@ function SharesPage() {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Dataset</TableHeaderCell>
-                <TableHeaderCell>Path</TableHeaderCell>
-                <TableHeaderCell>Protocols</TableHeaderCell>
-                <TableHeaderCell>Read only</TableHeaderCell>
-                <TableHeaderCell className='text-right'>Actions</TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Name' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Dataset' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Path' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Protocols' />
+                </TableHeaderCell>
+                <TableHeaderCell>
+                  <Trans id='Read only' />
+                </TableHeaderCell>
+                <TableHeaderCell className='text-right'>
+                  <Trans id='Actions' />
+                </TableHeaderCell>
               </tr>
             </TableHead>
             <TableBody>
@@ -218,11 +231,11 @@ function CreateShareDialog({
 
   const submit = async () => {
     if (!form.name || !form.dataset || !form.path) {
-      toast.error('Missing fields', 'Name, dataset, and path are required.');
+      toast.error(i18n._('Missing fields'), i18n._('Name, dataset, and path are required.'));
       return;
     }
     if (!form.smbEnabled && !form.nfsEnabled) {
-      toast.error('Select a protocol', 'Enable SMB or NFS.');
+      toast.error(i18n._('Select a protocol'), i18n._('Enable SMB or NFS.'));
       return;
     }
     const spec: ShareSpec = {
@@ -253,11 +266,11 @@ function CreateShareDialog({
     const body: ShareCreateBody = { metadata: { name: form.name }, spec };
     try {
       await create.mutateAsync(body);
-      toast.success('Share created', form.name);
+      toast.success(i18n._('Share created'), form.name);
       reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error('Failed to create share', (err as Error)?.message);
+      toast.error(i18n._('Failed to create share'), (err as Error)?.message);
     }
   };
 
@@ -277,11 +290,15 @@ function CreateShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-lg'>
         <DialogHeader>
-          <DialogTitle>New share</DialogTitle>
-          <DialogDescription>Expose a dataset over SMB and/or NFS.</DialogDescription>
+          <DialogTitle>
+            <Trans id='New share' />
+          </DialogTitle>
+          <DialogDescription>
+            <Trans id='Expose a dataset over SMB and/or NFS.' />
+          </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-3'>
-          <FormField label='Name' required>
+          <FormField label={i18n._('Name')} required>
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -289,10 +306,12 @@ function CreateShareDialog({
             />
           </FormField>
           <div className='grid grid-cols-2 gap-3'>
-            <FormField label='Dataset' required>
+            <FormField label={i18n._('Dataset')} required>
               <Select value={form.dataset} onValueChange={(v) => setForm({ ...form, dataset: v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder={datasets.isLoading ? 'Loading…' : 'Select'} />
+                  <SelectValue
+                    placeholder={datasets.isLoading ? i18n._('Loading…') : i18n._('Select')}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {datasets.data?.map((d) => (
@@ -303,7 +322,7 @@ function CreateShareDialog({
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label='Path' required>
+            <FormField label={i18n._('Path')} required>
               <Input
                 value={form.path}
                 onChange={(e) => setForm({ ...form, path: e.target.value })}
@@ -322,13 +341,15 @@ function CreateShareDialog({
             </div>
             {form.smbEnabled && (
               <div className='flex flex-col gap-2 pl-6'>
-                <FormField label='SMB server'>
+                <FormField label={i18n._('SMB server')}>
                   <Select
                     value={form.smbServer}
                     onValueChange={(v) => setForm({ ...form, smbServer: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={smbServers.isLoading ? 'Loading…' : 'Select'} />
+                      <SelectValue
+                        placeholder={smbServers.isLoading ? i18n._('Loading…') : i18n._('Select')}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {smbServers.data?.map((s) => (
@@ -344,14 +365,14 @@ function CreateShareDialog({
                     checked={form.smbCaseSensitive}
                     onCheckedChange={(v) => setForm({ ...form, smbCaseSensitive: !!v })}
                   />
-                  Case sensitive
+                  <Trans id='Case sensitive' />
                 </div>
                 <div className='flex items-center gap-2 text-xs'>
                   <Checkbox
                     checked={form.smbShadowCopies}
                     onCheckedChange={(v) => setForm({ ...form, smbShadowCopies: !!v })}
                   />
-                  Shadow copies (snapshots visible via VSS)
+                  <Trans id='Shadow copies (snapshots visible via VSS)' />
                 </div>
               </div>
             )}
@@ -367,13 +388,15 @@ function CreateShareDialog({
             </div>
             {form.nfsEnabled && (
               <div className='flex flex-col gap-2 pl-6'>
-                <FormField label='NFS server'>
+                <FormField label={i18n._('NFS server')}>
                   <Select
                     value={form.nfsServer}
                     onValueChange={(v) => setForm({ ...form, nfsServer: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={nfsServers.isLoading ? 'Loading…' : 'Select'} />
+                      <SelectValue
+                        placeholder={nfsServers.isLoading ? i18n._('Loading…') : i18n._('Select')}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {nfsServers.data?.map((s) => (
@@ -384,7 +407,7 @@ function CreateShareDialog({
                     </SelectContent>
                   </Select>
                 </FormField>
-                <FormField label='Squash'>
+                <FormField label={i18n._('Squash')}>
                   <Select
                     value={form.nfsSquash}
                     onValueChange={(v) =>
@@ -404,7 +427,10 @@ function CreateShareDialog({
                     </SelectContent>
                   </Select>
                 </FormField>
-                <FormField label='Allowed networks' hint='Comma-separated CIDRs'>
+                <FormField
+                  label={i18n._('Allowed networks')}
+                  hint={i18n._('Comma-separated CIDRs')}
+                >
                   <Input
                     value={form.nfsAllowedNetworks}
                     onChange={(e) => setForm({ ...form, nfsAllowedNetworks: e.target.value })}
@@ -417,11 +443,13 @@ function CreateShareDialog({
 
           <div className='border border-border rounded-md p-2 flex flex-col gap-2'>
             <div className='text-xs uppercase tracking-wider text-foreground-subtle'>
-              Access rules
+              <Trans id='Access rules' />
             </div>
             <ul className='flex flex-col gap-1'>
               {form.access.length === 0 && (
-                <li className='text-xs text-foreground-subtle'>No rules — inherits dataset ACL.</li>
+                <li className='text-xs text-foreground-subtle'>
+                  <Trans id='No rules — inherits dataset ACL.' />
+                </li>
               )}
               {form.access.map((a, i) => (
                 <li
@@ -449,7 +477,7 @@ function CreateShareDialog({
             </ul>
             <div className='flex gap-2'>
               <Input
-                placeholder='user:alice or group:staff'
+                placeholder={i18n._('user:alice or group:staff')}
                 value={newPrincipal}
                 onChange={(e) => setNewPrincipal(e.target.value)}
               />
@@ -464,17 +492,17 @@ function CreateShareDialog({
                 </SelectContent>
               </Select>
               <Button type='button' variant='ghost' onClick={addAccess}>
-                Add
+                <Trans id='Add' />
               </Button>
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button variant='primary' disabled={create.isPending} onClick={submit}>
-            {create.isPending ? 'Creating…' : 'Create share'}
+            {create.isPending ? <Trans id='Creating…' /> : <Trans id='Create share' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -495,15 +523,18 @@ function DeleteShareDialog({
     <Dialog open={!!share} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete share?</DialogTitle>
+          <DialogTitle>
+            <Trans id='Delete share?' />
+          </DialogTitle>
           <DialogDescription>
-            Share <span className='mono text-foreground'>{share?.metadata.name}</span> will be
-            unexported. Data is untouched.
+            <Trans id='Share' />{' '}
+            <span className='mono text-foreground'>{share?.metadata.name}</span>{' '}
+            <Trans id='will be unexported. Data is untouched.' />
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant='ghost' onClick={() => onOpenChange(false)}>
-            Cancel
+            <Trans id='Cancel' />
           </Button>
           <Button
             variant='danger'
@@ -512,14 +543,14 @@ function DeleteShareDialog({
               if (!share) return;
               try {
                 await del.mutateAsync(share.metadata.name);
-                toast.success('Share deleted', share.metadata.name);
+                toast.success(i18n._('Share deleted'), share.metadata.name);
                 onOpenChange(false);
               } catch (err) {
-                toast.error('Failed to delete share', (err as Error)?.message);
+                toast.error(i18n._('Failed to delete share'), (err as Error)?.message);
               }
             }}
           >
-            {del.isPending ? 'Deleting…' : 'Delete'}
+            {del.isPending ? <Trans id='Deleting…' /> : <Trans id='Delete' />}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -541,7 +572,7 @@ function ShareDetailDrawer({ share, onClose }: { share: Share | null; onClose: (
         <div className='flex flex-col gap-3 text-xs'>
           <div>
             <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
-              Bound servers
+              <Trans id='Bound servers' />
             </div>
             <ul className='flex flex-col gap-0.5 mono'>
               {share?.spec.protocols.smb?.server && (
@@ -553,15 +584,21 @@ function ShareDetailDrawer({ share, onClose }: { share: Share | null; onClose: (
             </ul>
           </div>
           <div>
-            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Status</div>
-            <div className='mono'>Phase: {share?.status?.phase ?? 'Pending'}</div>
+            <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
+              <Trans id='Status' />
+            </div>
+            <div className='mono'>
+              <Trans id='Phase' />: {share?.status?.phase ?? 'Pending'}
+            </div>
             {share?.status?.exportedAt && (
-              <div className='mono'>Exported: {share.status.exportedAt}</div>
+              <div className='mono'>
+                <Trans id='Exported' />: {share.status.exportedAt}
+              </div>
             )}
           </div>
           <div>
             <div className='text-foreground-subtle uppercase tracking-wider mb-1'>
-              Access ({share?.spec.access?.length ?? 0})
+              <Trans id='Access' /> ({share?.spec.access?.length ?? 0})
             </div>
             <ul className='flex flex-col gap-0.5 mono'>
               {share?.spec.access?.map((a, i) => (
@@ -575,7 +612,7 @@ function ShareDetailDrawer({ share, onClose }: { share: Share | null; onClose: (
         </div>
         <DialogFooter>
           <Button variant='ghost' onClick={onClose}>
-            Close
+            <Trans id='Close' />
           </Button>
         </DialogFooter>
       </DialogContent>
