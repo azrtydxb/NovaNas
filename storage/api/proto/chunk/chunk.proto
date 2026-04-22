@@ -22,11 +22,17 @@ service ChunkService {
 }
 
 // PutChunkRequest is sent as a stream. The first message MUST contain
-// chunk_id and checksum; subsequent messages carry data fragments.
+// chunk_id, checksum and (for encrypted volumes) volume_id; subsequent
+// messages carry data fragments.
 message PutChunkRequest {
-  string chunk_id = 1;
-  bytes  data     = 2;
-  uint32 checksum = 3;
+  string chunk_id  = 1;
+  bytes  data      = 2;
+  uint32 checksum  = 3;
+  // volume_id identifies the logical volume this chunk belongs to. The
+  // server uses it to look up a per-volume Dataset Key (DK) for
+  // transparent AES-GCM encryption. If empty, or if the volume has no DK
+  // cached, the chunk is stored as-is (unencrypted).
+  string volume_id = 4;
 }
 
 message PutChunkResponse {
@@ -35,7 +41,10 @@ message PutChunkResponse {
 }
 
 message GetChunkRequest {
-  string chunk_id = 1;
+  string chunk_id  = 1;
+  // volume_id is required to decrypt chunks stored on encrypted volumes.
+  // When empty, the chunk is returned as-stored (unencrypted path).
+  string volume_id = 2;
 }
 
 // GetChunkResponse is streamed back to the caller. The first message

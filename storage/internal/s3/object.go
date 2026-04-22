@@ -31,6 +31,21 @@ func (g *Gateway) handlePutObject(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
+	// Parse + validate SSE headers. For SSE-KMS we require a resolvable
+	// KmsKey CRD; if none is configured or the key is unknown, reject
+	// the request rather than silently falling back to SSE-S3.
+	sseReq, sseErr := ParseSSEHeaders(r.Header)
+	if sseErr != nil {
+		writeS3Error(w, "InvalidRequest", sseErr.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, rerr := RouteSSE(sseReq, g.kmsKeyLookup); rerr != nil {
+		// SSE-KMS requested but not resolvable: AWS returns 501
+		// NotImplemented when the service cannot honor a specified KMS key.
+		writeS3Error(w, "NotImplemented", rerr.Error(), http.StatusNotImplemented)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeS3Error(w, "InternalError", "failed to read request body", http.StatusInternalServerError)

@@ -45,9 +45,6 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		logger.V(1).Info("BlockVolume unencrypted, skipping key provisioning")
 		return ctrl.Result{}, nil
 	}
-	if bv.Status.Encryption != nil && bv.Status.Encryption.Provisioned {
-		return ctrl.Result{}, nil
-	}
 
 	kp := r.KeyProvisioner
 	if kp == nil {
@@ -58,6 +55,18 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	volumeID := string(bv.UID)
 	if volumeID == "" {
 		volumeID = bv.Name
+	}
+
+	// Crypto-finalizer: DestroyVolume on delete, then drop finalizer.
+	if handled, err := reconciler.HandleCryptoFinalizerOnDelete(ctx, r.Client, &bv, kp, volumeID); handled || err != nil {
+		return ctrl.Result{}, err
+	}
+	if _, err := reconciler.EnsureCryptoFinalizer(ctx, r.Client, &bv); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if bv.Status.Encryption != nil && bv.Status.Encryption.Provisioned {
+		return ctrl.Result{}, nil
 	}
 
 	wrapped, version, err := kp.ProvisionVolume(ctx, volumeID)

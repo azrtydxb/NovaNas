@@ -14,6 +14,10 @@ type Gateway struct {
 	quota      QuotaChecker
 	accessKey  string
 	secretKey  string
+	// kmsKeyLookup resolves x-amz-server-side-encryption-aws-kms-key-id
+	// values to raw Dataset Keys for SSE-KMS. Nil disables SSE-KMS (any
+	// such request is rejected with a 501).
+	kmsKeyLookup func(keyID string) ([]byte, bool)
 }
 
 // NewGateway creates a new S3 gateway with the provided stores and credentials.
@@ -29,6 +33,18 @@ func NewGateway(buckets BucketStore, objects ObjectStore, chunks ChunkStore, mul
 		secretKey:  secretKey,
 	}
 }
+
+// WithKMSKeyLookup configures the SSE-KMS resolver. The resolver is
+// typically backed by packages/operators/internal/reconciler.KmsResolver
+// which looks up a KmsKey CRD and unwraps the stored ciphertext via
+// OpenBao Transit.
+func (g *Gateway) WithKMSKeyLookup(fn func(keyID string) ([]byte, bool)) *Gateway {
+	g.kmsKeyLookup = fn
+	return g
+}
+
+// KMSKeyLookup returns the configured SSE-KMS resolver (may be nil).
+func (g *Gateway) KMSKeyLookup() func(keyID string) ([]byte, bool) { return g.kmsKeyLookup }
 
 // ServeHTTP dispatches incoming requests to the appropriate S3 handler.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {

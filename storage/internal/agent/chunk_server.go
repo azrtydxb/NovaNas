@@ -77,6 +77,10 @@ type ChunkServer struct {
 	// TODO(wave-7): wire chunk_server to the metadata service so read paths
 	// fetch the persisted PlaintextHash rather than relying on this cache.
 	plaintextHashes map[string][]byte
+	// authTags is an in-memory map from chunk id -> AES-GCM auth tag for
+	// encrypted chunks. Same caveat as plaintextHashes: in production this
+	// must flow through the metadata store.
+	authTags map[string][crypto.AuthTagSize]byte
 }
 
 // NewChunkServer creates a ChunkServer that routes chunk operations to the SPDK
@@ -86,6 +90,7 @@ func NewChunkServer(dpClient *dataplane.Client, bdevName string) *ChunkServer {
 		dpClient:        dpClient,
 		bdevName:        bdevName,
 		plaintextHashes: make(map[string][]byte),
+		authTags:        make(map[string][crypto.AuthTagSize]byte),
 	}
 }
 
@@ -149,11 +154,16 @@ func (s *ChunkServer) maybeDecrypt(volumeID, chunkID string, payload []byte, aut
 }
 
 // PutChunk receives a stream of chunk data fragments, assembles them, and writes
-// the chunk to the Rust dataplane via the gRPC WriteChunk method.
+// the chunk to the Rust dataplane via the gRPC WriteChunk method. If the
+// request carries a volume_id and a DK is cached for that volume, the
+// payload is AES-GCM-encrypted transparently before being handed to the
+// dataplane; the plaintext hash is recorded in the server's local index so
+// that GetChunk can decrypt.
 func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequest, pb.PutChunkResponse]) error {
 	var (
-		chunkID string
-		data    []byte
+		chunkID  string
+		volumeID string
+		data     []byte
 	)
 
 	for {
@@ -171,6 +181,7 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 			if chunkID == "" {
 				return status.Error(codes.InvalidArgument, "first message must contain chunk_id")
 			}
+			volumeID = req.GetVolumeId()
 		}
 
 		if len(req.GetData()) > 0 {
@@ -182,12 +193,24 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 		return status.Error(codes.InvalidArgument, "no chunk data received")
 	}
 
+	// Transparent encryption for volumes with a cached DK.
+	payload, plaintextHash, authTag, encrypted := s.maybeEncrypt(volumeID, data)
+	if encrypted {
+		// Record chunk id -> plaintext hash and auth tag so GetChunk can
+		// decrypt. In production this belongs in VolumeMeta.ChunkPlaintextHashes;
+		// the local map is the fallback used by tests.
+		s.plaintextHashes[chunkID] = plaintextHash
+		s.authTags[chunkID] = authTag
+	}
+
 	logging.L.Debug("chunk_server: writing chunk via gRPC dataplane",
 		zap.String("chunkID", chunkID),
-		zap.Int("dataLen", len(data)),
+		zap.String("volumeID", volumeID),
+		zap.Bool("encrypted", encrypted),
+		zap.Int("dataLen", len(payload)),
 	)
 
-	resultChunkID, bytesWritten, err := s.dpClient.WriteChunk(s.bdevName, data)
+	resultChunkID, bytesWritten, err := s.dpClient.WriteChunk(s.bdevName, payload)
 	if err != nil {
 		logging.L.Error("chunk_server: write_chunk failed",
 			zap.String("chunkID", chunkID),
@@ -199,29 +222,48 @@ func (s *ChunkServer) PutChunk(stream grpc.ClientStreamingServer[pb.PutChunkRequ
 
 	return stream.SendAndClose(&pb.PutChunkResponse{
 		ChunkId:      resultChunkID,
-		BytesWritten: int64(len(data)),
+		BytesWritten: int64(len(payload)),
 	})
 }
 
 // GetChunk reads a chunk from the Rust dataplane via the gRPC ReadChunk method
-// and streams it back to the caller.
+// and streams it back to the caller. If the request carries a volume_id and
+// the chunk was stored encrypted, the payload is transparently decrypted
+// before streaming.
 func (s *ChunkServer) GetChunk(req *pb.GetChunkRequest, stream grpc.ServerStreamingServer[pb.GetChunkResponse]) error {
 	chunkID := req.GetChunkId()
 	if chunkID == "" {
 		return status.Error(codes.InvalidArgument, "chunk_id is required")
 	}
+	volumeID := req.GetVolumeId()
 
 	logging.L.Debug("chunk_server: reading chunk via gRPC dataplane",
 		zap.String("chunkID", chunkID),
+		zap.String("volumeID", volumeID),
 	)
 
-	data, err := s.dpClient.ReadChunk(s.bdevName, chunkID)
+	stored, err := s.dpClient.ReadChunk(s.bdevName, chunkID)
 	if err != nil {
 		logging.L.Error("chunk_server: read_chunk failed",
 			zap.String("chunkID", chunkID),
 			zap.Error(err),
 		)
 		return status.Errorf(codes.Internal, "reading chunk from dataplane: %v", err)
+	}
+
+	// Transparent decryption for volumes with a cached DK and a recorded
+	// plaintext hash.
+	var authTag [crypto.AuthTagSize]byte
+	if t, ok := s.authTags[chunkID]; ok {
+		authTag = t
+	}
+	data, err := s.maybeDecrypt(volumeID, chunkID, stored, authTag)
+	if err != nil {
+		logging.L.Error("chunk_server: decrypt failed",
+			zap.String("chunkID", chunkID),
+			zap.Error(err),
+		)
+		return status.Errorf(codes.Internal, "decrypting chunk: %v", err)
 	}
 
 	// Stream the data back. For chunks up to 4MB we send in a single message;

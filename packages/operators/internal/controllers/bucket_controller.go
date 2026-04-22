@@ -37,9 +37,6 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if b.Spec.Encryption == nil || !b.Spec.Encryption.Enabled {
 		return ctrl.Result{}, nil
 	}
-	if b.Status.Encryption != nil && b.Status.Encryption.Provisioned {
-		return ctrl.Result{}, nil
-	}
 
 	kp := r.KeyProvisioner
 	if kp == nil {
@@ -50,6 +47,17 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	volumeID := string(b.UID)
 	if volumeID == "" {
 		volumeID = b.Name
+	}
+
+	if handled, err := reconciler.HandleCryptoFinalizerOnDelete(ctx, r.Client, &b, kp, volumeID); handled || err != nil {
+		return ctrl.Result{}, err
+	}
+	if _, err := reconciler.EnsureCryptoFinalizer(ctx, r.Client, &b); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if b.Status.Encryption != nil && b.Status.Encryption.Provisioned {
+		return ctrl.Result{}, nil
 	}
 
 	wrapped, version, err := kp.ProvisionVolume(ctx, volumeID)

@@ -15,13 +15,39 @@ import (
 // GRPCServer implements the MetadataService using typed protobuf RPCs.
 type GRPCServer struct {
 	pb.UnimplementedMetadataServiceServer
-	store *RaftStore
+	store     *RaftStore
+	sbs       *SuperblockRegistry
+	sbsMinDks int
 }
 
 // NewGRPCServer creates a new GRPCServer backed by the given RaftStore.
+// The server exposes an in-memory SuperblockRegistry for ReportSuperblocks;
+// callers that need to inspect bootstrap state can fetch it via
+// SuperblockRegistry(). MinMetadataDisks defaults to 1.
 func NewGRPCServer(store *RaftStore) *GRPCServer {
-	return &GRPCServer{store: store}
+	return &GRPCServer{
+		store:     store,
+		sbs:       NewSuperblockRegistry(),
+		sbsMinDks: 1,
+	}
 }
+
+// WithSuperblockRegistry overrides the server's in-memory registry. Use
+// this when bootstrap code needs to share the same registry across the
+// gRPC server and the metadata bootstrap path.
+func (s *GRPCServer) WithSuperblockRegistry(r *SuperblockRegistry, minMetadataDisks int) *GRPCServer {
+	if r != nil {
+		s.sbs = r
+	}
+	if minMetadataDisks > 0 {
+		s.sbsMinDks = minMetadataDisks
+	}
+	return s
+}
+
+// SuperblockRegistry returns the server's in-memory registry so callers
+// (e.g. the bootstrap path) can reuse it as a SuperblockSource.
+func (s *GRPCServer) SuperblockRegistry() *SuperblockRegistry { return s.sbs }
 
 // Register adds the MetadataService to a gRPC server.
 func (s *GRPCServer) Register(srv *grpc.Server) {
@@ -667,4 +693,32 @@ func (s *GRPCServer) JoinCluster(_ context.Context, req *pb.JoinClusterRequest) 
 		return nil, status.Error(codes.InvalidArgument, "node_id and raft_address required")
 	}
 	return &pb.JoinClusterResponse{Success: true}, nil
+}
+
+// ---- Bootstrap ----
+
+// ReportSuperblocks accepts a batch of per-disk superblock descriptors
+// from an agent at startup and records them in the server's in-memory
+// SuperblockRegistry. The metadata bootstrap code reads from the same
+// registry (SuperblockSource), resolving the chicken-and-egg problem
+// documented in bootstrap.go.
+func (s *GRPCServer) ReportSuperblocks(_ context.Context, req *pb.ReportSuperblocksRequest) (*pb.ReportSuperblocksResponse, error) {
+	metrics.MetadataOpsTotal.WithLabelValues("ReportSuperblocks").Inc()
+	if req.GetNodeId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id is required")
+	}
+	if s.sbs == nil {
+		return nil, status.Error(codes.FailedPrecondition, "superblock registry not configured")
+	}
+	reports := superblockProtosToScanResults(req.GetSuperblocks())
+	accepted, total := s.sbs.Ingest(req.GetNodeId(), reports)
+	min := s.sbsMinDks
+	if min <= 0 {
+		min = 1
+	}
+	return &pb.ReportSuperblocksResponse{
+		AcceptedCount:     uint32(accepted),
+		QuorumReached:     total >= min,
+		MetadataDisksSeen: uint32(total),
+	}, nil
 }

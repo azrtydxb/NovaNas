@@ -32,7 +32,7 @@ func TestChunkServer_EncryptDecryptRoundtrip(t *testing.T) {
 	plaintext := []byte("the quick brown fox jumps over the lazy dog")
 
 	t.Run("encrypted roundtrip", func(t *testing.T) {
-		srv := &ChunkServer{plaintextHashes: map[string][]byte{}}
+		srv := &ChunkServer{plaintextHashes: map[string][]byte{}, authTags: map[string][crypto.AuthTagSize]byte{}}
 		srv.WithVolumeKeys(fakeKeyProvider{volumeID: "vol-a", dk: dk})
 
 		ct, ph, tag, encrypted := srv.maybeEncrypt("vol-a", plaintext)
@@ -61,7 +61,7 @@ func TestChunkServer_EncryptDecryptRoundtrip(t *testing.T) {
 	})
 
 	t.Run("unknown volume falls through unencrypted", func(t *testing.T) {
-		srv := &ChunkServer{plaintextHashes: map[string][]byte{}}
+		srv := &ChunkServer{plaintextHashes: map[string][]byte{}, authTags: map[string][crypto.AuthTagSize]byte{}}
 		srv.WithVolumeKeys(fakeKeyProvider{volumeID: "vol-a", dk: dk})
 
 		ct, _, _, encrypted := srv.maybeEncrypt("vol-other", plaintext)
@@ -73,8 +73,49 @@ func TestChunkServer_EncryptDecryptRoundtrip(t *testing.T) {
 		}
 	})
 
+	t.Run("put-get simulation persists hash and tag", func(t *testing.T) {
+		// Simulates the PutChunk write path by invoking maybeEncrypt,
+		// storing the resulting (hash, tag) in the server's indices, and
+		// then exercising the GetChunk read path via maybeDecrypt. This
+		// is the closest we can get to an end-to-end roundtrip without a
+		// real dataplane backend.
+		srv := &ChunkServer{
+			plaintextHashes: map[string][]byte{},
+			authTags:        map[string][crypto.AuthTagSize]byte{},
+		}
+		srv.WithVolumeKeys(fakeKeyProvider{volumeID: "vol-x", dk: dk})
+
+		for i, pt := range [][]byte{
+			plaintext,
+			bytes.Repeat([]byte{0x01}, 1024),
+			[]byte(""), // empty — but ChunkServer rejects empty data at the RPC layer;
+			// here we just drive the helpers to prove hash/tag bookkeeping is stable.
+		} {
+			if len(pt) == 0 {
+				continue
+			}
+			cid := "chunk-" + string(rune('a'+i))
+			ct, ph, tag, encrypted := srv.maybeEncrypt("vol-x", pt)
+			if !encrypted {
+				t.Fatalf("expected encrypted=true for chunk %d", i)
+			}
+			srv.plaintextHashes[cid] = ph
+			srv.authTags[cid] = tag
+
+			// Read back via the same code path GetChunk uses.
+			storedTag := srv.authTags[cid]
+			got, err := srv.maybeDecrypt("vol-x", cid, ct, storedTag)
+			if err != nil {
+				t.Fatalf("decrypt chunk %d: %v", i, err)
+			}
+			if !bytes.Equal(got, pt) {
+				t.Fatalf("chunk %d roundtrip mismatch", i)
+			}
+		}
+	})
+
 	t.Run("nil key provider is a no-op", func(t *testing.T) {
-		srv := &ChunkServer{plaintextHashes: map[string][]byte{}}
+		srv := &ChunkServer{plaintextHashes: map[string][]byte{}, authTags: map[string][crypto.AuthTagSize]byte{}}
 
 		ct, _, tag, encrypted := srv.maybeEncrypt("any", plaintext)
 		if encrypted {

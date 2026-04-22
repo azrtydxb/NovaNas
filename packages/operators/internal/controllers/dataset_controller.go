@@ -38,9 +38,6 @@ func (r *DatasetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if ds.Spec.Encryption == nil || !ds.Spec.Encryption.Enabled {
 		return ctrl.Result{}, nil
 	}
-	if ds.Status.Encryption != nil && ds.Status.Encryption.Provisioned {
-		return ctrl.Result{}, nil
-	}
 
 	kp := r.KeyProvisioner
 	if kp == nil {
@@ -51,6 +48,17 @@ func (r *DatasetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	volumeID := string(ds.UID)
 	if volumeID == "" {
 		volumeID = ds.Name
+	}
+
+	if handled, err := reconciler.HandleCryptoFinalizerOnDelete(ctx, r.Client, &ds, kp, volumeID); handled || err != nil {
+		return ctrl.Result{}, err
+	}
+	if _, err := reconciler.EnsureCryptoFinalizer(ctx, r.Client, &ds); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if ds.Status.Encryption != nil && ds.Status.Encryption.Provisioned {
+		return ctrl.Result{}, nil
 	}
 
 	wrapped, version, err := kp.ProvisionVolume(ctx, volumeID)

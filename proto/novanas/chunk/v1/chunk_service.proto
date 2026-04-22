@@ -113,6 +113,9 @@ message PutChunkRequest {
   novanas.common.v1.RequestContext context = 1;
   // data frame. The first frame MUST set id and total_size.
   ChunkData data = 2;
+  // volume_id identifies the logical volume; used for per-volume DK
+  // lookup to transparently encrypt chunks on encrypted volumes.
+  string volume_id = 3;
 }
 
 message PutChunkResponse {
@@ -128,6 +131,8 @@ message GetChunkRequest {
   // offset / length allow ranged reads; length == 0 means "to end".
   uint64 offset = 3;
   uint64 length = 4;
+  // volume_id is required to decrypt chunks stored on encrypted volumes.
+  string volume_id = 5;
 }
 
 message DeleteChunkRequest {

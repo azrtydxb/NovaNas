@@ -42,7 +42,14 @@ func (c *Client) Close() error {
 }
 
 // PutChunk stores a chunk with the given ID, data, and CRC-32C checksum.
+// Equivalent to PutChunkOnVolume with an empty volumeID (unencrypted path).
 func (c *Client) PutChunk(ctx context.Context, chunkID string, data []byte, checksum uint32) error {
+	return c.PutChunkOnVolume(ctx, "", chunkID, data, checksum)
+}
+
+// PutChunkOnVolume stores a chunk and associates it with a volume so the
+// server can transparently encrypt using the volume's Dataset Key.
+func (c *Client) PutChunkOnVolume(ctx context.Context, volumeID, chunkID string, data []byte, checksum uint32) error {
 	stream, err := c.client.PutChunk(ctx)
 	if err != nil {
 		return fmt.Errorf("opening PutChunk stream: %w", err)
@@ -52,6 +59,7 @@ func (c *Client) PutChunk(ctx context.Context, chunkID string, data []byte, chec
 		ChunkId:  chunkID,
 		Data:     data,
 		Checksum: checksum,
+		VolumeId: volumeID,
 	}); err != nil {
 		return fmt.Errorf("sending PutChunkRequest: %w", err)
 	}
@@ -66,7 +74,13 @@ func (c *Client) PutChunk(ctx context.Context, chunkID string, data []byte, chec
 // GetChunk retrieves a chunk by ID. It returns the concatenated data and the
 // checksum from the first streaming response message.
 func (c *Client) GetChunk(ctx context.Context, chunkID string) (data []byte, checksum uint32, err error) {
-	stream, err := c.client.GetChunk(ctx, &pb.GetChunkRequest{ChunkId: chunkID})
+	return c.GetChunkOnVolume(ctx, "", chunkID)
+}
+
+// GetChunkOnVolume retrieves a chunk and passes the volume id to the server
+// so it can transparently decrypt before streaming.
+func (c *Client) GetChunkOnVolume(ctx context.Context, volumeID, chunkID string) (data []byte, checksum uint32, err error) {
+	stream, err := c.client.GetChunk(ctx, &pb.GetChunkRequest{ChunkId: chunkID, VolumeId: volumeID})
 	if err != nil {
 		return nil, 0, fmt.Errorf("calling GetChunk: %w", err)
 	}

@@ -96,6 +96,14 @@ service MetadataService {
   // ---- Quota operations ----
   rpc SetQuota(SetQuotaRequest) returns (google.protobuf.Empty);
   rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+
+  // ---- Bootstrap (A4-Metadata-As-Chunks) ----
+  //
+  // ReportSuperblocks is called by agents at startup to push the per-disk
+  // superblock descriptors for metadata-role disks. The metadata service
+  // aggregates these reports, validates CRUSH-map agreement across the
+  // quorum, and exposes the result via the bootstrap SuperblockSource.
+  rpc ReportSuperblocks(ReportSuperblocksRequest) returns (ReportSuperblocksResponse);
 }
 
 // ============================================================================
@@ -723,6 +731,38 @@ message FsmSnapshot {
 // FsmBucket holds all key-value entries within a single logical bucket.
 message FsmBucket {
   map<string, bytes> entries = 1;
+}
+
+// ============================================================================
+// Bootstrap (A4-Metadata-As-Chunks)
+// ============================================================================
+
+// SuperblockInfo is the per-disk bootstrap descriptor reported by agents.
+message SuperblockInfo {
+  bytes  disk_uuid             = 1;
+  string pool_id               = 2;
+  string role                  = 3; // "metadata" | "chunk" | "both"
+  bytes  crush_digest          = 4; // 32-byte blake3 of the cluster crush map
+  string meta_volume_name      = 5;
+  string meta_volume_root      = 6;
+  uint64 meta_volume_version   = 7;
+  string device_path           = 8;
+}
+
+message ReportSuperblocksRequest {
+  string node_id = 1;
+  repeated SuperblockInfo superblocks = 2;
+}
+
+message ReportSuperblocksResponse {
+  // accepted_count is how many superblocks the meta service ingested.
+  uint32 accepted_count = 1;
+  // quorum_reached is true once the aggregated report includes at least
+  // MinMetadataDisks metadata-role entries that agree on a crush digest.
+  bool quorum_reached = 2;
+  // metadata_disks_seen is the current aggregate count of metadata-role
+  // disks known to the service.
+  uint32 metadata_disks_seen = 3;
 }
 
 // BadgerSnapshotEntry is a single key-value pair in the BadgerFSM snapshot stream.

@@ -1,8 +1,10 @@
 package s3
 
 import (
+	"bytes"
 	"encoding/base64"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -70,6 +72,55 @@ func TestParseSSEHeaders_DecisionTree(t *testing.T) {
 				t.Fatalf("mode: want %d got %d", tc.wantMode, got.Mode)
 			}
 		})
+	}
+}
+
+// TestGateway_PutObject_SSEKMS exercises the end-to-end wiring:
+// SSE-KMS header → RouteSSE → Gateway-level kmsKeyLookup. A missing
+// resolver must 501; a resolver that returns a key must allow the PUT.
+func TestGateway_PutObject_SSEKMS(t *testing.T) {
+	g, bs := newTestGateway()
+	seedBucket(t, bs, "sse-bucket")
+	payload := []byte("hello kms")
+
+	// 1) Without a resolver configured, SSE-KMS → 501.
+	req := httptest.NewRequest(http.MethodPut, "/sse-bucket/o", bytes.NewReader(payload))
+	req.Header.Set("x-amz-server-side-encryption", "aws:kms")
+	req.Header.Set("x-amz-server-side-encryption-aws-kms-key-id", "arn:novanas:kms:::key/finance")
+	setAuthHeaders(req, req.Method, req.URL.Path)
+	w := httptest.NewRecorder()
+	g.ServeHTTP(w, req)
+	if w.Result().StatusCode != http.StatusNotImplemented {
+		t.Fatalf("want 501, got %d: %s", w.Result().StatusCode, w.Body.String())
+	}
+
+	// 2) With a resolver that hits, PUT succeeds.
+	rawDK := bytes.Repeat([]byte{0xFF}, 32)
+	g.WithKMSKeyLookup(func(keyID string) ([]byte, bool) {
+		if keyID == "arn:novanas:kms:::key/finance" {
+			return rawDK, true
+		}
+		return nil, false
+	})
+	req2 := httptest.NewRequest(http.MethodPut, "/sse-bucket/o", bytes.NewReader(payload))
+	req2.Header.Set("x-amz-server-side-encryption", "aws:kms")
+	req2.Header.Set("x-amz-server-side-encryption-aws-kms-key-id", "arn:novanas:kms:::key/finance")
+	setAuthHeaders(req2, req2.Method, req2.URL.Path)
+	w2 := httptest.NewRecorder()
+	g.ServeHTTP(w2, req2)
+	if w2.Result().StatusCode/100 != 2 {
+		t.Fatalf("want 2xx, got %d: %s", w2.Result().StatusCode, w2.Body.String())
+	}
+
+	// 3) Resolver that misses → still 501 for unknown keys.
+	req3 := httptest.NewRequest(http.MethodPut, "/sse-bucket/o2", bytes.NewReader(payload))
+	req3.Header.Set("x-amz-server-side-encryption", "aws:kms")
+	req3.Header.Set("x-amz-server-side-encryption-aws-kms-key-id", "arn:novanas:kms:::key/unknown")
+	setAuthHeaders(req3, req3.Method, req3.URL.Path)
+	w3 := httptest.NewRecorder()
+	g.ServeHTTP(w3, req3)
+	if w3.Result().StatusCode != http.StatusNotImplemented {
+		t.Fatalf("want 501 for unknown key, got %d", w3.Result().StatusCode)
 	}
 }
 
