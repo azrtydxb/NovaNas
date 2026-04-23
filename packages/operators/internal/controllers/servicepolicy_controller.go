@@ -2,8 +2,11 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,18 +49,36 @@ func (r *ServicePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "publishing service policy")
 	obj.Status.Phase = "Reconciling"
 
-	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "service-policy"), &obj, map[string]string{"policy": obj.Name, "enabled": "true"}, map[string]string{"novanas.io/kind": "ServicePolicy"}); err != nil {
+	data := renderServicePolicy(&obj)
+	// Compute hash over a deterministically-ordered concatenation.
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	blob := ""
+	for _, k := range keys {
+		blob += fmt.Sprintf("%s=%s\n", k, data[k])
+	}
+	h := hashBytes([]byte(blob))
+	data["hash"] = h
+
+	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "service-policy"), &obj, data, map[string]string{"novanas.io/kind": "ServicePolicy"}); err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ConfigMapFailed", err.Error())
 		obj.Status.Phase = "Failed"
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
-	logger.V(1).Info("service policy published")
+	logger.V(1).Info("service policy published", "hash", h)
+	now := metav1.Now()
+	obj.Status.AppliedAt = &now
+	obj.Status.AppliedConfigHash = h
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "service policy ready")
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Applied"
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

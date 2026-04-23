@@ -16,10 +16,20 @@ spec:
     singular: bond
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Bond — LACP / active-backup / balance interface
+        description: Bond — LACP / active-backup / balance interface.
         properties:
           apiVersion:
             description: |-
@@ -39,11 +49,76 @@ spec:
           metadata:
             type: object
           spec:
-            description: BondSpec defines the desired state of Bond.
+            description: BondSpec defines the desired state of Bond. Mirrors BondSpecSchema.
+            properties:
+              interfaces:
+                description: Interfaces is the ordered list of member NIC names.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              lacp:
+                description: Lacp is the LACP tuning block (only meaningful when Mode=802.3ad).
+                properties:
+                  aggregatorSelect:
+                    enum:
+                    - stable
+                    - bandwidth
+                    - count
+                    type: string
+                  rate:
+                    enum:
+                    - slow
+                    - fast
+                    type: string
+                type: object
+              miimon:
+                description: Miimon is the MII link-check interval in milliseconds.
+                format: int32
+                minimum: 0
+                type: integer
+              mode:
+                description: Mode is the kernel bonding mode.
+                enum:
+                - active-backup
+                - balance-alb
+                - balance-tlb
+                - 802.3ad
+                - balance-rr
+                - balance-xor
+                - broadcast
+                type: string
+              mtu:
+                description: Mtu overrides the aggregate interface MTU.
+                format: int32
+                minimum: 1
+                type: integer
+              xmitHashPolicy:
+                description: XmitHashPolicy selects the transmit hash algorithm.
+                enum:
+                - layer2
+                - layer2+3
+                - layer3+4
+                - encap2+3
+                - encap3+4
+                type: string
+            required:
+            - interfaces
+            - mode
             type: object
           status:
             description: BondStatus defines observed state of Bond.
             properties:
+              activeMembers:
+                description: ActiveMembers lists members currently up/carrying traffic.
+                items:
+                  type: string
+                type: array
+              appliedConfigHash:
+                description: |-
+                  AppliedConfigHash is the sha256 of the nmstate YAML last applied to
+                  the host for this bond. Used to detect drift.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +175,19 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Degraded
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

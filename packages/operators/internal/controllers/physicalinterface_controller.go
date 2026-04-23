@@ -17,10 +17,10 @@ const finalizerPhysicalInterface = reconciler.FinalizerPrefix + "physicalinterfa
 
 // PhysicalInterfaceReconciler observes a physical NIC from the host.
 //
-// Wave-4 scope: status-only. Real host observers push MAC / speed / operState
-// via a NodeNetworkState reflector (pluggable NetworkClient). When no
-// network client is wired, the reconciler emits a deterministic "Observed"
-// placeholder so the UI has something to render.
+// Status-only: a host-side observer DaemonSet reports MAC / speed /
+// operState. When no observer is wired the reconciler emits a
+// deterministic "Observed" placeholder with UsedBy populated from owner
+// references so the UI has something to render.
 type PhysicalInterfaceReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -56,7 +56,16 @@ func (r *PhysicalInterfaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	observed, _ := net.ObservedState(ctx, obj.Name)
 	if observed == nil {
 		logger.V(1).Info("no network observer wired -- recording placeholder")
+		if obj.Status.Link == "" {
+			obj.Status.Link = "up"
+		}
+		if obj.Status.Duplex == "" {
+			obj.Status.Duplex = "unknown"
+		}
+		// LinkSpeed == 0 implicitly means unknown until a real reflector
+		// overwrites it; nothing to do here.
 	}
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "observed")
 	obj.Status.Phase = "Observed"
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {

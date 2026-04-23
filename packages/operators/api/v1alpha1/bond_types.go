@@ -4,7 +4,7 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // BondMode is the kernel bond mode string (see bonding.txt in the Linux
 // kernel tree). The enum mirrors packages/schemas/src/networking/bond.ts.
-// +kubebuilder:validation:Enum=active-backup;balance-alb;balance-tlb;802.3ad;balance-rr;balance-xor;broadcast
+// +kubebuilder:validation:Enum="active-backup";"balance-alb";"balance-tlb";"802.3ad";"balance-rr";"balance-xor";"broadcast"
 type BondMode string
 
 // BondLacp configures LACP-specific parameters when Mode is 802.3ad.

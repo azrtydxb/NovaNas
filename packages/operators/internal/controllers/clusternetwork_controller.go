@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"k8s.io/client-go/tools/record"
@@ -45,11 +46,35 @@ func (r *ClusterNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "rendering cluster network snapshot")
 	obj.Status.Phase = "Reconciling"
 
+	// Resolve an effective MTU. "auto" and unset both map to 1450 — the
+	// standard Geneve-compatible value assumed by novaedge when no
+	// explicit size is configured.
+	var effectiveMTU int32 = 1450
+	if obj.Spec.Mtu != nil {
+		if obj.Spec.Mtu.Type == 0 /*intstr.Int*/ && obj.Spec.Mtu.IntValue() > 0 {
+			effectiveMTU = int32(obj.Spec.Mtu.IntValue())
+		}
+	}
+
+	overlay := "none"
+	egress := ""
+	if obj.Spec.Overlay != nil {
+		overlay = string(obj.Spec.Overlay.Type)
+		egress = obj.Spec.Overlay.EgressInterface
+	}
+	defaultDeny := false
+	if obj.Spec.Policy != nil {
+		defaultDeny = obj.Spec.Policy.DefaultDeny
+	}
+	rendered := fmt.Sprintf("name: %s\npodCidr: %s\nserviceCidr: %s\noverlay: %s\negress: %s\nmtu: %d\ndefaultDeny: %t\n",
+		obj.Name, obj.Spec.PodCidr, obj.Spec.ServiceCidr, overlay, egress, effectiveMTU, defaultDeny)
 	data := map[string]string{
-		"cluster-network.yaml": "name: " + obj.Name + "\n",
+		"cluster-network.yaml": rendered,
+		"hash":                 hashBytes([]byte(rendered)),
 	}
 	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "clusternet"), &obj, data, map[string]string{"novanas.io/kind": "ClusterNetwork"}); err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ConfigMapFailed", err.Error())
@@ -57,9 +82,11 @@ func (r *ClusterNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
-	logger.V(1).Info("cluster network snapshot written")
+	logger.V(1).Info("cluster network snapshot written", "effectiveMTU", effectiveMTU)
+	obj.Status.EffectiveMtu = effectiveMTU
+	obj.Status.AppliedConfigHash = hashBytes([]byte(rendered))
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "cluster network snapshot current")
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

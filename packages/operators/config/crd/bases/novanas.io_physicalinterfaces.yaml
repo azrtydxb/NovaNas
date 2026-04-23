@@ -16,10 +16,23 @@ spec:
     singular: physicalinterface
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.macAddress
+      name: MAC
+      type: string
+    - jsonPath: .status.linkSpeed
+      name: Speed
+      type: integer
+    - jsonPath: .status.link
+      name: Link
+      type: string
+    - jsonPath: .status.driver
+      name: Driver
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: PhysicalInterface — Observed NIC (status-only)
+        description: PhysicalInterface represents a NIC observed from the host.
         properties:
           apiVersion:
             description: |-
@@ -39,11 +52,19 @@ spec:
           metadata:
             type: object
           spec:
-            description: PhysicalInterfaceSpec defines the desired state of PhysicalInterface.
+            description: |-
+              PhysicalInterfaceSpec is intentionally empty — PhysicalInterface is an
+              observed resource populated by the host agent, not user-authored.
             type: object
           status:
-            description: PhysicalInterfaceStatus defines observed state of PhysicalInterface.
+            description: PhysicalInterfaceStatus is the observed state of a physical
+              NIC.
             properties:
+              capabilities:
+                description: Capabilities exposes ethtool feature flags.
+                items:
+                  type: string
+                type: array
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +121,42 @@ spec:
                   - type
                   type: object
                 type: array
+              driver:
+                description: Driver is the kernel driver name.
+                type: string
+              duplex:
+                description: Duplex reports the negotiated duplex mode.
+                enum:
+                - full
+                - half
+                - unknown
+                type: string
+              link:
+                description: Link reports the operational link state.
+                enum:
+                - up
+                - down
+                type: string
+              linkSpeed:
+                description: LinkSpeed in Mbps. 0 means unknown / link down.
+                format: int64
+                type: integer
+              macAddress:
+                description: MacAddress is the hardware address.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
+              pcieSlot:
+                description: PcieSlot is the PCI address (e.g. 0000:03:00.0).
+                type: string
               phase:
+                type: string
+              usedBy:
+                description: UsedBy names the HostInterface / Bond / Vlan that claims
+                  this NIC.
                 type: string
             type: object
         type: object

@@ -16,10 +16,23 @@ spec:
     singular: vippool
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.range
+      name: Range
+      type: string
+    - jsonPath: .spec.interface
+      name: Interface
+      type: string
+    - jsonPath: .status.allocated
+      name: Allocated
+      type: integer
+    - jsonPath: .status.available
+      name: Available
+      type: integer
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: VipPool — novaedge LAN VIP range
+        description: VipPool is a pool of virtual IPs announced via MetalLB/keepalived.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +53,57 @@ spec:
             type: object
           spec:
             description: VipPoolSpec defines the desired state of VipPool.
+            properties:
+              announce:
+                description: Announce selects the announcement protocol. Defaults
+                  to "arp".
+                enum:
+                - arp
+                - bgp
+                - ndp
+                type: string
+              interface:
+                description: Interface is the NIC used to announce VIPs.
+                minLength: 1
+                type: string
+              range:
+                description: Range is a CIDR or "start-end" IP range.
+                minLength: 1
+                type: string
+            required:
+            - interface
+            - range
             type: object
           status:
             description: VipPoolStatus defines observed state of VipPool.
             properties:
+              allocated:
+                description: Allocated is the number of VIPs currently assigned.
+                format: int32
+                type: integer
+              allocations:
+                description: Allocations is the set of active VIP bindings.
+                items:
+                  description: VipAllocation records which IP is bound to which target.
+                  properties:
+                    ip:
+                      type: string
+                    owner:
+                      type: string
+                    ownerUid:
+                      type: string
+                  required:
+                  - ip
+                  type: object
+                type: array
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the projected IPAddressPool
+                  spec.
+                type: string
+              available:
+                description: Available is the number of VIPs still free to allocate.
+                format: int32
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +160,18 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object
