@@ -837,6 +837,59 @@ impl NvmfManager {
         Ok(())
     }
 
+    /// Add a namespace (bdev) to an existing NVMe-oF subsystem.
+    ///
+    /// Returns the NSID assigned by SPDK (>= 1 on success). The subsystem
+    /// must be in a state where adding a namespace is allowed — this means
+    /// the subsystem was created with room in `num_ns` (the `create_target`
+    /// path uses num_ns=1 so this method only works against subsystems
+    /// that were explicitly sized for multiple namespaces).
+    pub fn add_namespace(&self, nqn: &str, bdev_name: &str, nsid: u32) -> Result<u32> {
+        info!(
+            "adding namespace to subsystem: nqn={}, bdev={}, requested_nsid={}",
+            nqn, bdev_name, nsid
+        );
+        let nqn_c = std::ffi::CString::new(nqn)
+            .map_err(|e| DataPlaneError::NvmfTargetError(format!("invalid NQN: {e}")))?;
+        let bdev_c = std::ffi::CString::new(bdev_name)
+            .map_err(|e| DataPlaneError::NvmfTargetError(format!("invalid bdev name: {e}")))?;
+        let tgt_ptr = self.get_tgt_ptr()?;
+
+        let assigned = reactor_dispatch::dispatch_sync(move || -> Result<u32> {
+            unsafe {
+                let tgt = tgt_ptr.as_ptr() as *mut ffi::spdk_nvmf_tgt;
+                let subsystem =
+                    ffi::spdk_nvmf_tgt_find_subsystem(tgt, nqn_c.as_ptr() as *const c_char);
+                if subsystem.is_null() {
+                    return Err(DataPlaneError::NvmfTargetError(format!(
+                        "subsystem not found: {}",
+                        nqn_c.to_str().unwrap_or("?")
+                    )));
+                }
+                let mut ns_opts: ffi::spdk_nvmf_ns_opts = std::mem::zeroed();
+                ffi::spdk_nvmf_ns_opts_get_defaults(&mut ns_opts, std::mem::size_of_val(&ns_opts));
+                // Respect the caller's requested NSID if non-zero; SPDK allocates
+                // one automatically otherwise.
+                ns_opts.nsid = nsid;
+                let assigned = ffi::spdk_nvmf_subsystem_add_ns_ext(
+                    subsystem,
+                    bdev_c.as_ptr() as *const c_char,
+                    &ns_opts,
+                    std::mem::size_of_val(&ns_opts),
+                    std::ptr::null(),
+                );
+                if assigned == 0 {
+                    return Err(DataPlaneError::NvmfTargetError(format!(
+                        "spdk_nvmf_subsystem_add_ns_ext failed for bdev={}",
+                        bdev_c.to_str().unwrap_or("?")
+                    )));
+                }
+                Ok(assigned)
+            }
+        })?;
+        Ok(assigned)
+    }
+
     pub fn get_ana_state(&self, nqn: &str) -> Result<(u32, String)> {
         let subsystems = self.subsystems.lock().unwrap();
         let info = subsystems.get(nqn).ok_or_else(|| {

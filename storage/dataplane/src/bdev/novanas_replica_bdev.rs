@@ -168,6 +168,21 @@ pub fn create(replica: Arc<ReplicaBdev>, size_bytes: u64) -> Result<String> {
     Ok(bdev_name)
 }
 
+/// Look up the live `ReplicaBdev` backing a registered replica SPDK bdev.
+/// Returns `None` if no such replica bdev exists.
+pub fn get(volume_id: &str) -> Option<Arc<ReplicaBdev>> {
+    bdev_registry()
+        .lock()
+        .unwrap()
+        .get(volume_id)
+        .map(|e| e._replica.clone())
+}
+
+/// List the volume IDs of all registered replica bdevs.
+pub fn list_volumes() -> Vec<String> {
+    bdev_registry().lock().unwrap().keys().cloned().collect()
+}
+
 /// Remove a replica SPDK bdev and unregister it from SPDK.
 pub fn destroy(volume_id: &str) -> Result<()> {
     let entry = bdev_registry()

@@ -450,15 +450,32 @@ impl DataplaneService for DataplaneServiceImpl {
 
     async fn export_bdev(
         &self,
-        _request: Request<ExportBdevRequest>,
+        request: Request<ExportBdevRequest>,
     ) -> Result<Response<ExportBdevResponse>, Status> {
-        // ExportBdev adds a namespace to an existing subsystem.
-        // Currently handled internally during create_target. Exposed as a
-        // separate RPC for future use when subsystem and namespace management
-        // are decoupled.
-        Err(Status::unimplemented(
-            "export_bdev is handled internally during create_nvmf_target",
-        ))
+        if is_fenced() {
+            return Err(Status::unavailable(
+                "dataplane is fenced — no mutations accepted",
+            ));
+        }
+        let req = request.into_inner();
+        if req.nqn.is_empty() {
+            return Err(Status::invalid_argument("nqn must not be empty"));
+        }
+        if req.bdev_name.is_empty() {
+            return Err(Status::invalid_argument("bdev_name must not be empty"));
+        }
+        // Verify the bdev actually exists before poking SPDK.
+        if self.bdev_manager.get_bdev(&req.bdev_name).is_none() {
+            return Err(Status::not_found(format!(
+                "bdev '{}' not found",
+                req.bdev_name
+            )));
+        }
+        let assigned = self
+            .nvmf_manager
+            .add_namespace(&req.nqn, &req.bdev_name, req.nsid)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(Response::new(ExportBdevResponse { nsid: assigned }))
     }
 
     // ========================================================================
@@ -516,20 +533,128 @@ impl DataplaneService for DataplaneServiceImpl {
 
     async fn create_replica_bdev(
         &self,
-        _request: Request<CreateReplicaBdevRequest>,
+        request: Request<CreateReplicaBdevRequest>,
     ) -> Result<Response<CreateReplicaBdevResponse>, Status> {
-        Err(Status::unimplemented(
-            "replica bdev creation via gRPC not yet implemented — use chunk engine replication",
-        ))
+        if is_fenced() {
+            return Err(Status::unavailable(
+                "dataplane is fenced — no mutations accepted",
+            ));
+        }
+        let req = request.into_inner();
+        if req.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id must not be empty"));
+        }
+        if req.targets.is_empty() {
+            return Err(Status::invalid_argument("at least one target is required"));
+        }
+        if req.size_bytes == 0 {
+            return Err(Status::invalid_argument("size_bytes must be > 0"));
+        }
+
+        // Map proto ReplicaTargets → config::ReplicaTargets. Proto targets
+        // carry only (bdev_name, is_local); local targets resolve against
+        // the BdevManager, remote targets are expected to already be attached
+        // as initiator bdevs (the Go agent wires NVMe-oF initiators via
+        // connect_initiator before calling this RPC).
+        let mut replicas = Vec::with_capacity(req.targets.len());
+        for t in &req.targets {
+            if t.bdev_name.is_empty() {
+                return Err(Status::invalid_argument(
+                    "every replica target must have a bdev_name",
+                ));
+            }
+            if self.bdev_manager.get_bdev(&t.bdev_name).is_none() {
+                return Err(Status::failed_precondition(format!(
+                    "replica target bdev '{}' not present — attach it first",
+                    t.bdev_name
+                )));
+            }
+            replicas.push(crate::config::ReplicaTarget {
+                // Proto targets don't carry address/port/nqn — those are
+                // captured by the initiator bdev itself. Leave address
+                // empty; the ReplicaBdev uses `bdev_name` for dispatch.
+                address: String::new(),
+                port: 0,
+                nqn: String::new(),
+                bdev_name: Some(t.bdev_name.clone()),
+            });
+        }
+
+        // Parse read policy. "round_robin" / "local_first" / "latency_aware"
+        // are the accepted values; empty defaults to round-robin.
+        let read_policy = match req.read_policy.as_str() {
+            "" | "round_robin" | "round-robin" => crate::config::ReadPolicy::RoundRobin,
+            "latency_aware" | "latency-aware" => crate::config::ReadPolicy::LatencyAware,
+            other if other.starts_with("local_first:") || other.starts_with("local-first:") => {
+                let local = other.split_once(':').map(|p| p.1).unwrap_or("").to_string();
+                crate::config::ReadPolicy::LocalFirst {
+                    local_address: local,
+                }
+            }
+            other => {
+                return Err(Status::invalid_argument(format!(
+                    "unknown read_policy '{}' (expected round_robin | latency_aware | local_first:<addr>)",
+                    other
+                )));
+            }
+        };
+
+        let replica_count = replicas.len() as u32;
+        // Majority quorum: ceil((N+1)/2). This matches the ReplicaBdev
+        // default and gives correct behaviour for N=1 (quorum=1), N=2
+        // (quorum=2 — both), N=3 (quorum=2), etc.
+        let write_quorum = replica_count.div_ceil(2).max(1);
+
+        let config = crate::config::ReplicaBdevConfig {
+            volume_id: req.volume_id.clone(),
+            replicas,
+            write_quorum,
+            read_policy,
+            protection: Some(crate::config::Protection::Replication {
+                factor: replica_count,
+            }),
+        };
+
+        let replica = std::sync::Arc::new(crate::bdev::replica::ReplicaBdev::new(config));
+        let bdev_name = crate::bdev::novanas_replica_bdev::create(replica, req.size_bytes)
+            .map_err(|e| Status::internal(format!("replica bdev registration failed: {e}")))?;
+
+        Ok(Response::new(CreateReplicaBdevResponse { bdev_name }))
     }
 
     async fn replica_status(
         &self,
-        _request: Request<ReplicaStatusRequest>,
+        request: Request<ReplicaStatusRequest>,
     ) -> Result<Response<ReplicaStatusResponse>, Status> {
-        Err(Status::unimplemented(
-            "replica status via gRPC not yet implemented",
-        ))
+        let req = request.into_inner();
+        if req.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id must not be empty"));
+        }
+        let replica = crate::bdev::novanas_replica_bdev::get(&req.volume_id).ok_or_else(|| {
+            Status::not_found(format!(
+                "no replica bdev registered for volume '{}'",
+                req.volume_id
+            ))
+        })?;
+        let replicas = replica.replicas.read().unwrap();
+        let num_targets = replicas.len() as u32;
+        let healthy = replicas.iter().filter(|r| r.is_healthy()).count() as u32;
+        let status = if healthy == 0 {
+            "offline"
+        } else if healthy < replica.write_quorum {
+            "degraded"
+        } else if healthy < num_targets {
+            "degraded"
+        } else {
+            "healthy"
+        }
+        .to_string();
+        Ok(Response::new(ReplicaStatusResponse {
+            volume_id: req.volume_id,
+            bdev_name: replica.bdev_name.clone(),
+            num_targets,
+            status,
+        }))
     }
 
     // ========================================================================
@@ -662,6 +787,7 @@ impl DataplaneService for DataplaneServiceImpl {
 
             // Spawn a background reconciliation loop that runs every 30 seconds.
             let reconcile_engine = policy_engine;
+            let shard_replicator_engine = reconcile_engine.clone();
             let reconcile_bdev = req.bdev_name.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
@@ -688,6 +814,31 @@ impl DataplaneService for DataplaneServiceImpl {
                     }
                 }
             });
+
+            // Spawn the EC shard replicator worker. It drains degraded
+            // shard reports (emitted by ErasureBdev::mark_shard_*) on a
+            // 30-second interval, looks up geometry in the erasure bdev
+            // registry, and invokes Reed-Solomon reconstruction via the
+            // policy engine. Running one replicator per policy engine keeps
+            // queue drainage scoped to the bdev that reported the degradation.
+            {
+                use crate::policy::shard_replicator::{
+                    ErasureBdevGeometryProvider, ShardReplicator, ShardReplicatorConfig,
+                };
+                let replicator = std::sync::Arc::new(ShardReplicator::new(
+                    shard_replicator_engine,
+                    std::sync::Arc::new(ErasureBdevGeometryProvider),
+                    ShardReplicatorConfig::default(),
+                ));
+                let handle = replicator.spawn();
+                // Retain the handle for the lifetime of the process so the
+                // Drop-cancel path doesn't fire prematurely.
+                std::mem::forget(handle);
+                log::info!(
+                    "init_chunk_store: EC shard replicator started for bdev '{}'",
+                    req.bdev_name
+                );
+            }
 
             log::info!(
                 "init_chunk_store: ChunkEngine + PolicyEngine initialised for bdev '{}' (reconcile loop started)",

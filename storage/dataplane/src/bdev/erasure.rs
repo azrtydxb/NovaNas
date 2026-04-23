@@ -11,9 +11,40 @@ use crate::config::{ErasureBdevConfig, ReplicaTarget};
 use crate::error::{DataPlaneError, Result};
 use crate::spdk::reactor_dispatch;
 use log::{debug, info, warn};
-use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use crate::policy::engine::{DegradedShardState, PolicyEngine};
+
+/// Global registry of live `ErasureBdev`s keyed by `volume_id`. The shard
+/// replicator worker looks up bdevs here to resolve degraded shard reports
+/// into concrete chunk_id / shard geometry.
+static ERASURE_REGISTRY: OnceLock<Mutex<HashMap<String, Arc<ErasureBdev>>>> = OnceLock::new();
+
+fn erasure_registry() -> &'static Mutex<HashMap<String, Arc<ErasureBdev>>> {
+    ERASURE_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Register an erasure bdev so the shard replicator can find it by volume_id.
+pub fn register_erasure_bdev(bdev: Arc<ErasureBdev>) {
+    let vol = bdev.volume_id.clone();
+    erasure_registry().lock().unwrap().insert(vol, bdev);
+}
+
+/// Unregister an erasure bdev — called on delete.
+pub fn unregister_erasure_bdev(volume_id: &str) -> Option<Arc<ErasureBdev>> {
+    erasure_registry().lock().unwrap().remove(volume_id)
+}
+
+/// Look up an erasure bdev by volume_id.
+pub fn get_erasure_bdev(volume_id: &str) -> Option<Arc<ErasureBdev>> {
+    erasure_registry().lock().unwrap().get(volume_id).cloned()
+}
+
+/// Snapshot of all volume_ids currently registered.
+pub fn list_erasure_volumes() -> Vec<String> {
+    erasure_registry().lock().unwrap().keys().cloned().collect()
+}
 
 /// An erasure-coded bdev that distributes shards across multiple targets.
 pub struct ErasureBdev {
