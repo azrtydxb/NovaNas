@@ -373,6 +373,18 @@ mod tests {
         ) -> Result<Response<SyncChunkMapsResponse>, Status> {
             Err(Status::unimplemented("test stub"))
         }
+        async fn export_metadata_volume_nbd(
+            &self,
+            _: Request<ExportMetadataVolumeNbdRequest>,
+        ) -> Result<Response<ExportMetadataVolumeNbdResponse>, Status> {
+            Err(Status::unimplemented("test stub"))
+        }
+        async fn release_metadata_volume_nbd(
+            &self,
+            _: Request<ReleaseMetadataVolumeNbdRequest>,
+        ) -> Result<Response<ReleaseMetadataVolumeNbdResponse>, Status> {
+            Err(Status::unimplemented("test stub"))
+        }
     }
 
     async fn start_server() -> (SocketAddr, tokio::task::JoinHandle<()>) {
