@@ -309,72 +309,44 @@ impl PolicyEngine {
                     source_node,
                     target_node,
                 } => {
-                    let source_addr = self.node_addr(&topology, source_node);
-                    let target_addr = self.node_addr(&topology, target_node);
-
-                    if let (Some(src), Some(tgt)) = (source_addr, target_addr) {
-                        match self
-                            .operations
-                            .replicate_chunk(chunk_id, source_node, &src, target_node, &tgt)
-                            .await
-                        {
-                            Ok(()) => {
-                                if let Err(e) =
-                                    self.location_store.add_node_to_chunk(chunk_id, target_node)
-                                {
-                                    warn!(
-                                        "failed to record chunk location for {}: {}",
-                                        chunk_id, e
-                                    );
-                                }
-                                info!(
-                                    "replicated chunk {} from {} to {}",
-                                    chunk_id, source_node, target_node
-                                );
+                    match self
+                        .operations
+                        .replicate_chunk(chunk_id, source_node, target_node)
+                        .await
+                    {
+                        Ok(()) => {
+                            if let Err(e) =
+                                self.location_store.add_node_to_chunk(chunk_id, target_node)
+                            {
+                                warn!("failed to record chunk location for {}: {}", chunk_id, e);
                             }
-                            Err(e) => {
-                                warn!("failed to replicate chunk {}: {}", chunk_id, e);
-                            }
+                            info!(
+                                "replicated chunk {} from {} to {}",
+                                chunk_id, source_node, target_node
+                            );
                         }
-                    } else {
-                        warn!(
-                            "cannot replicate chunk {}: missing address for source={} or target={}",
-                            chunk_id, source_node, target_node
-                        );
+                        Err(e) => {
+                            warn!("failed to replicate chunk {}: {}", chunk_id, e);
+                        }
                     }
                 }
                 PolicyAction::RemoveReplica { chunk_id, node_id } => {
-                    let node_addr = self.node_addr(&topology, node_id);
-                    if let Some(addr) = node_addr {
-                        match self
-                            .operations
-                            .remove_replica(chunk_id, node_id, &addr)
-                            .await
-                        {
-                            Ok(()) => {
-                                if let Err(e) = self
-                                    .location_store
-                                    .remove_node_from_chunk(chunk_id, node_id)
-                                {
-                                    warn!(
-                                        "failed to remove chunk location for {}: {}",
-                                        chunk_id, e
-                                    );
-                                }
-                                info!("removed replica of chunk {} from {}", chunk_id, node_id);
+                    match self.operations.remove_replica(chunk_id, node_id).await {
+                        Ok(()) => {
+                            if let Err(e) = self
+                                .location_store
+                                .remove_node_from_chunk(chunk_id, node_id)
+                            {
+                                warn!("failed to remove chunk location for {}: {}", chunk_id, e);
                             }
-                            Err(e) => {
-                                warn!(
-                                    "failed to remove replica of chunk {} from {}: {}",
-                                    chunk_id, node_id, e
-                                );
-                            }
+                            info!("removed replica of chunk {} from {}", chunk_id, node_id);
                         }
-                    } else {
-                        warn!(
-                            "cannot remove replica of chunk {}: missing address for node {}",
-                            chunk_id, node_id
-                        );
+                        Err(e) => {
+                            warn!(
+                                "failed to remove replica of chunk {} from {}: {}",
+                                chunk_id, node_id, e
+                            );
+                        }
                     }
                 }
                 PolicyAction::ReconstructShard {
@@ -385,68 +357,53 @@ impl PolicyEngine {
                     source_nodes: _,
                     target_node,
                 } => {
-                    let target_addr = self.node_addr(&topology, target_node);
-                    if let Some(tgt_addr) = target_addr {
-                        // Build (shard_idx, node_id, addr) for all surviving
-                        // shards by scanning location store.
-                        let total = (*data_shards + *parity_shards) as usize;
-                        let mut shard_addrs: Vec<(usize, String, String)> = Vec::new();
-                        for idx in 0..total {
-                            if idx == *shard_index {
-                                continue; // This is the missing one.
-                            }
-                            let shard_id = format!("{chunk_id}:shard:{idx}");
-                            if let Ok(Some(loc)) = self.location_store.get_location(&shard_id) {
-                                for nid in &loc.node_ids {
-                                    if let Some(addr) = self.node_addr(&topology, nid) {
-                                        shard_addrs.push((idx, nid.clone(), addr));
-                                        break; // One source per shard is enough.
-                                    }
-                                }
+                    // Build (shard_idx, node_id) for all surviving shards by
+                    // scanning the location store.
+                    let total = (*data_shards + *parity_shards) as usize;
+                    let mut surviving: Vec<(usize, String)> = Vec::new();
+                    for idx in 0..total {
+                        if idx == *shard_index {
+                            continue; // This is the missing one.
+                        }
+                        let shard_id = format!("{chunk_id}:shard:{idx}");
+                        if let Ok(Some(loc)) = self.location_store.get_location(&shard_id) {
+                            if let Some(nid) = loc.node_ids.first() {
+                                surviving.push((idx, nid.clone()));
                             }
                         }
+                    }
 
-                        match self
-                            .operations
-                            .reconstruct_shard(
-                                chunk_id,
-                                *shard_index,
-                                *data_shards,
-                                *parity_shards,
-                                &shard_addrs,
-                                target_node,
-                                &tgt_addr,
-                            )
-                            .await
-                        {
-                            Ok(()) => {
-                                let shard_id = format!("{chunk_id}:shard:{shard_index}");
-                                if let Err(e) = self
-                                    .location_store
-                                    .add_node_to_chunk(&shard_id, target_node)
-                                {
-                                    warn!(
-                                        "failed to record shard location for {}: {}",
-                                        shard_id, e
-                                    );
-                                }
-                                info!(
-                                    "reconstructed EC shard {} index {} on {}",
-                                    chunk_id, shard_index, target_node
-                                );
+                    match self
+                        .operations
+                        .reconstruct_shard(
+                            chunk_id,
+                            *shard_index,
+                            *data_shards,
+                            *parity_shards,
+                            &surviving,
+                            target_node,
+                        )
+                        .await
+                    {
+                        Ok(()) => {
+                            let shard_id = format!("{chunk_id}:shard:{shard_index}");
+                            if let Err(e) = self
+                                .location_store
+                                .add_node_to_chunk(&shard_id, target_node)
+                            {
+                                warn!("failed to record shard location for {}: {}", shard_id, e);
                             }
-                            Err(e) => {
-                                warn!(
-                                    "failed to reconstruct EC shard {} index {}: {}",
-                                    chunk_id, shard_index, e
-                                );
-                            }
+                            info!(
+                                "reconstructed EC shard {} index {} on {}",
+                                chunk_id, shard_index, target_node
+                            );
                         }
-                    } else {
-                        warn!(
-                            "cannot reconstruct shard {} index {}: missing address for target {}",
-                            chunk_id, shard_index, target_node
-                        );
+                        Err(e) => {
+                            warn!(
+                                "failed to reconstruct EC shard {} index {}: {}",
+                                chunk_id, shard_index, e
+                            );
+                        }
                     }
                 }
             }
@@ -487,13 +444,6 @@ impl PolicyEngine {
         Ok(action_count)
     }
 
-    /// Resolve a node's data-path address from the topology.
-    fn node_addr(&self, topology: &ClusterMap, node_id: &str) -> Option<String> {
-        topology
-            .get_node(node_id)
-            .map(|n| format!("http://{}:{}", n.address, n.port))
-    }
-
     /// Reconstruct a reported degraded shard.
     ///
     /// Looks up surviving shards in the location store, picks a healthy
@@ -518,10 +468,10 @@ impl PolicyEngine {
         let topology = self.topology.read().await;
         let total = (data_shards + parity_shards) as usize;
 
-        // Collect (idx, node_id, addr) for each surviving shard from the
-        // location store. A shard is considered surviving if ANY node in its
-        // ChunkLocation list is resolvable in the current topology.
-        let mut shard_addrs: Vec<(usize, String, String)> = Vec::new();
+        // Collect (idx, node_id) for each surviving shard from the location
+        // store. A shard is considered surviving if any node in its
+        // ChunkLocation list exists in the current topology.
+        let mut surviving: Vec<(usize, String)> = Vec::new();
         let mut excluded_nodes: HashSet<String> = HashSet::new();
         for idx in 0..total {
             if idx == report.shard_index {
@@ -530,8 +480,8 @@ impl PolicyEngine {
             let shard_id = format!("{chunk_id}:shard:{idx}");
             if let Ok(Some(loc)) = self.location_store.get_location(&shard_id) {
                 for nid in &loc.node_ids {
-                    if let Some(addr) = self.node_addr(&topology, nid) {
-                        shard_addrs.push((idx, nid.clone(), addr));
+                    if topology.get_node(nid).is_some() {
+                        surviving.push((idx, nid.clone()));
                         excluded_nodes.insert(nid.clone());
                         break;
                     }
@@ -539,12 +489,12 @@ impl PolicyEngine {
             }
         }
 
-        if shard_addrs.len() < data_shards as usize {
+        if surviving.len() < data_shards as usize {
             return Err(crate::error::DataPlaneError::ChunkEngineError(format!(
                 "quorum lost for {}:shard:{}: only {} of {} data shards reachable",
                 chunk_id,
                 report.shard_index,
-                shard_addrs.len(),
+                surviving.len(),
                 data_shards
             )));
         }
@@ -568,13 +518,6 @@ impl PolicyEngine {
             .find(|nid| !excluded_nodes.contains(nid))
             .unwrap_or_else(|| candidates[0].0.clone());
 
-        let target_addr = self.node_addr(&topology, &target_node_id).ok_or_else(|| {
-            crate::error::DataPlaneError::ChunkEngineError(format!(
-                "chosen target {} has no address in topology",
-                target_node_id
-            ))
-        })?;
-
         // Drop the topology read lock before the (potentially slow) I/O.
         drop(topology);
 
@@ -584,9 +527,8 @@ impl PolicyEngine {
                 report.shard_index,
                 data_shards,
                 parity_shards,
-                &shard_addrs,
+                &surviving,
                 &target_node_id,
-                &target_addr,
             )
             .await?;
 
