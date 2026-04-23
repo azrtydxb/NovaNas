@@ -122,19 +122,14 @@ jobs:
           tags: novanas-dataplane:ci-${{ github.sha }}
           load: true
 
-      # SPDK-linked unit tests are currently broken by Wave 4 test-code
-      # drift (145 compile errors in tests despite the release binary
-      # building + linking cleanly). Tracked in #37; re-enable once the
-      # test modules are updated to match the post-Wave-4 production API.
-      #
-      # - name: Run SPDK-linked unit tests
-      #   uses: docker/build-push-action@v6
-      #   with:
-      #     context: storage/dataplane
-      #     file: storage/dataplane/Dockerfile.build
-      #     target: test
-      #     cache-from: type=gha,scope=spdk-dataplane
-      #     cache-to: type=gha,scope=spdk-dataplane,mode=max
+      - name: Run SPDK-linked unit tests
+        uses: docker/build-push-action@v6
+        with:
+          context: storage/dataplane
+          file: storage/dataplane/Dockerfile.build
+          target: test
+          cache-from: type=gha,scope=spdk-dataplane
+          cache-to: type=gha,scope=spdk-dataplane,mode=max
 
       - name: Runtime smoke (binary exists + SPDK libs linked)
         run: |

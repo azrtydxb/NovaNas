@@ -88,6 +88,9 @@ mod tests {
     use tempfile::TempDir;
     use tokio_stream::Stream;
     use tonic::{Request, Response, Status, Streaming};
+    // Shadow the crate-level `Result` alias (1 generic) with `std::result::Result`
+    // so tonic service method signatures `Result<Response<_>, Status>` compile.
+    use std::result::Result;
 
     fn make_chunk_data(data: &[u8]) -> Vec<u8> {
         let header = ChunkHeader {
