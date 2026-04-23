@@ -47,7 +47,8 @@ jobs:
             debootstrap mmdebstrap qemu-utils qemu-system-x86 \
             rauc squashfs-tools xorriso ovmf \
             systemd-container arch-install-scripts \
-            dosfstools e2fsprogs parted
+            dosfstools e2fsprogs parted \
+            debian-archive-keyring
 
       - name: Build base rootfs (mmdebstrap)
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os base
