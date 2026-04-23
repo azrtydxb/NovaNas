@@ -7,6 +7,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	novanasv1alpha1 "github.com/azrtydxb/novanas/packages/operators/api/v1alpha1"
+	"github.com/azrtydxb/novanas/packages/operators/internal/reconciler"
 )
 
 // The tests in this file exercise the happy path of each A7-Operators-Part1
@@ -154,7 +155,7 @@ func TestKmsKeyReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
 	cr := &novanasv1alpha1.KmsKey{ObjectMeta: newClusterMeta("k1")}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &KmsKeyReconciler{BaseReconciler: newPart2Base(c, s, "KmsKey"), Recorder: newPart2Recorder()}
+	r := &KmsKeyReconciler{BaseReconciler: newPart2Base(c, s, "KmsKey"), Recorder: newPart2Recorder(), KeyProvisioner: reconciler.NoopKeyProvisioner{}}
 	mustReconcileOK(t, context.Background(), r, part2Request("k1"))
 	var got novanasv1alpha1.KmsKey
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "k1"}, &got)

@@ -41,8 +41,8 @@ func (r *DatasetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	kp := r.KeyProvisioner
 	if kp == nil {
-		logger.Info("Dataset: no KeyProvisioner wired -- using noop (dev only)")
-		kp = reconciler.NoopKeyProvisioner{}
+		logger.Error(errNoKeyProvisioner, "Dataset: refusing to reconcile encrypted dataset without KeyProvisioner")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, errNoKeyProvisioner
 	}
 
 	volumeID := string(ds.UID)

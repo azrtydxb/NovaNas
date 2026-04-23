@@ -39,7 +39,9 @@ func (r *KmsKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	kp := r.KeyProvisioner
 	if kp == nil {
-		kp = reconciler.NoopKeyProvisioner{}
+		logger.Error(errNoKeyProvisioner, "KmsKey: refusing to reconcile without KeyProvisioner")
+		result = "error"
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, errNoKeyProvisioner
 	}
 
 	if !obj.DeletionTimestamp.IsZero() {
