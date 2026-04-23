@@ -67,7 +67,9 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 		network:    reconciler.NoopNetworkClient{},
 		updater:    reconciler.NoopUpdateClient{},
 		vmEngine:   reconciler.NoopVmEngine{},
-		keyProv:    reconciler.NoopKeyProvisioner{},
+		// keyProv intentionally starts nil: populated only when a real
+		// provisioner is wired, or when NOVANAS_DEV=1 overrides.
+		keyProv: nil,
 		openbao:    reconciler.NoopOpenBaoClient{},
 	}
 
@@ -143,6 +145,11 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 	setupLog.Info("kubevirt engine wired (unstructured VirtualMachine client)")
 
 	// --- Volume-key provisioner ---
+	//
+	// Encryption is security-critical: refuse to start with a NoopKeyProvisioner
+	// unless NOVANAS_DEV=1 is explicitly set. A silent noop would write a
+	// placeholder wrapped-DK to CR status and permanently prevent later
+	// recovery of the data.
 	if os.Getenv("OPENBAO_ADDR") != "" {
 		tp, err := reconciler.NewTransitKeyProvisioner(reconciler.TransitKeyProvisionerConfig{
 			Addr:          os.Getenv("OPENBAO_ADDR"),
@@ -153,13 +160,23 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 			MasterKeyName: envDefault("OPENBAO_MASTER_KEY", "novanas/chunk-master"),
 		})
 		if err != nil {
-			setupLog.Error(err, "transit key provisioner init failed; falling back to no-op")
+			setupLog.Error(err, "transit key provisioner init failed")
+			if os.Getenv("NOVANAS_DEV") != "1" {
+				setupLog.Error(err, "refusing to start without a working key provisioner (set NOVANAS_DEV=1 for dev override)")
+				os.Exit(1)
+			}
+			setupLog.Info("NOVANAS_DEV=1 set; using no-op key provisioner (dev only; encrypted resources will fail to reconcile)")
+			ec.keyProv = nil
 		} else {
 			setupLog.Info("transit key provisioner wired (OpenBao Transit)")
 			ec.keyProv = tp
 		}
+	} else if os.Getenv("NOVANAS_DEV") == "1" {
+		setupLog.Info("OPENBAO_ADDR not set and NOVANAS_DEV=1; no key provisioner wired (encrypted resources will error)")
+		ec.keyProv = nil
 	} else {
-		setupLog.Info("OPENBAO_ADDR not set; using no-op key provisioner (dev mode)")
+		setupLog.Error(nil, "OPENBAO_ADDR not set; refusing to start without a volume-key provisioner. Set OPENBAO_ADDR, or NOVANAS_DEV=1 for explicit dev override.")
+		os.Exit(1)
 	}
 
 	// --- OpenBao admin client (policies + kubernetes-auth roles) ---

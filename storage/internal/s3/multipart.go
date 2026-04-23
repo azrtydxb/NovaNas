@@ -85,6 +85,21 @@ func (g *Gateway) handleUploadPart(w http.ResponseWriter, r *http.Request, _ str
 		return
 	}
 
+	// SSE-C carries customer key headers on each UploadPart request — the
+	// part ciphertext must land in the ssec namespace so its content-addressed
+	// chunk IDs never collide with other callers' chunks (which are encrypted
+	// under different customer keys).
+	sseReq, sseErr := ParseSSEHeaders(r.Header)
+	if sseErr != nil {
+		writeS3Error(w, "InvalidRequest", sseErr.Error(), http.StatusBadRequest)
+		return
+	}
+	namespace, rerr := RouteSSE(sseReq, g.kmsKeyLookup)
+	if rerr != nil {
+		writeS3Error(w, "NotImplemented", rerr.Error(), http.StatusNotImplemented)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeS3Error(w, "InternalError", "failed to read request body", http.StatusInternalServerError)
@@ -98,7 +113,7 @@ func (g *Gateway) handleUploadPart(w http.ResponseWriter, r *http.Request, _ str
 		if end > len(body) {
 			end = len(body)
 		}
-		chunkID, err := g.chunks.PutChunkData(ctx, body[offset:end])
+		chunkID, err := putChunkInNamespace(ctx, g.chunks, namespace, body[offset:end])
 		if err != nil {
 			writeS3Error(w, "InternalError", "failed to store chunk data", http.StatusInternalServerError)
 			return

@@ -62,6 +62,9 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		ob = reconciler.NoopOpenBaoClient{}
 	}
 	realm := r.Realm
+	if obj.Spec.Realm != "" {
+		realm = obj.Spec.Realm
+	}
 	if realm == "" {
 		realm = "novanas"
 	}
@@ -94,12 +97,28 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if _, err := kc.EnsureUser(ctx, reconciler.KeycloakUser{Realm: realm, Username: obj.Name, Enabled: true}); err != nil {
+	enabled := true
+	if obj.Spec.Enabled != nil {
+		enabled = *obj.Spec.Enabled
+	}
+	userID, err := kc.EnsureUser(ctx, reconciler.KeycloakUser{
+		Realm:     realm,
+		Username:  obj.Name,
+		Email:     obj.Spec.Email,
+		FirstName: obj.Spec.FirstName,
+		LastName:  obj.Spec.LastName,
+		Groups:    obj.Spec.Groups,
+		Enabled:   enabled,
+	})
+	if err != nil {
 		obj.Status.Phase = "Failed"
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
 		_ = r.Client.Status().Update(ctx, &obj)
 		result = "error"
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
+	}
+	if userID != "" {
+		obj.Status.KeycloakUserID = userID
 	}
 
 	// Per-tenant OpenBao policy + auth role.

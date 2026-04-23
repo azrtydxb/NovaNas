@@ -40,8 +40,8 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	kp := r.KeyProvisioner
 	if kp == nil {
-		logger.Info("Bucket: no KeyProvisioner wired -- using noop (dev only)")
-		kp = reconciler.NoopKeyProvisioner{}
+		logger.Error(errNoKeyProvisioner, "Bucket: refusing to reconcile encrypted bucket without KeyProvisioner")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, errNoKeyProvisioner
 	}
 
 	volumeID := string(b.UID)

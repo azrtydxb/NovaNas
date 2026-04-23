@@ -116,23 +116,29 @@ func main() {
 	if *chunkBacked {
 		log.Printf("chunk-backed metadata enabled (bootstrap-timeout=%s, min-metadata-disks=%d, mount-path=%s)",
 			*bootstrapTimeout, *minMetaDisks, *metaMountPath)
-		log.Printf("TODO(integration): chunk-mount + BadgerDB-on-mount path not yet wired; falling back to --data-dir=%s", *dataDir)
 		bootCtx, bootCancel := context.WithTimeout(context.Background(), *bootstrapTimeout)
-		_, report, bootErr := metadata.NewRaftStoreChunkBacked(bootCtx, *nodeID, metadata.BootstrapConfig{
+		// Mounter is NoopMetadataVolumeMounter until an ExporterFunc is
+		// wired into this process (dev-loopback or production gRPC-backed).
+		// NewRaftStoreChunkBackedMounted detects ErrMountNotSupported and
+		// falls back to --data-dir automatically.
+		var mounter metadata.MetadataVolumeMounter = metadata.NoopMetadataVolumeMounter{}
+		var report *metadata.BootstrapReport
+		store, report, err = metadata.NewRaftStoreChunkBackedMounted(bootCtx, *nodeID, metadata.BootstrapConfig{
 			LocalDataDir:       *dataDir,
 			ChunkBackedEnabled: true,
 			MetaMountPath:      *metaMountPath,
 			BootstrapTimeout:   *bootstrapTimeout,
 			MinMetadataDisks:   *minMetaDisks,
-		}, sbRegistry)
+		}, sbRegistry, mounter)
 		bootCancel()
-		if bootErr != nil {
-			log.Printf("chunk-backed bootstrap did not succeed (%v); continuing with --data-dir fallback", bootErr)
-		} else if report != nil {
+		if report != nil {
 			log.Printf("chunk-backed bootstrap report: disks=%d meta-volume=%s root=%s ver=%d",
 				report.MetadataDisks, report.MetadataVolumeName, report.MetadataVolumeRoot, report.MetadataVolumeVer)
 		}
-		store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})
+		if err != nil {
+			log.Printf("chunk-backed bootstrap did not succeed (%v); using --data-dir fallback", err)
+			store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})
+		}
 	} else {
 		log.Printf("--data-dir=%s (legacy local-disk mode; --chunk-backed=false)", *dataDir)
 		store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})

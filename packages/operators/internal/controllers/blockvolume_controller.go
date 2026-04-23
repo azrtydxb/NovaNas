@@ -48,8 +48,14 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	kp := r.KeyProvisioner
 	if kp == nil {
-		logger.Info("BlockVolume: no KeyProvisioner wired -- using noop (dev only)")
-		kp = reconciler.NoopKeyProvisioner{}
+		// Encryption is a security-critical code path. Refuse to fall back
+		// to a noop provisioner in production — a silent placeholder wrap
+		// would render the volume unrecoverable later. The operator MUST be
+		// constructed with a real VolumeKeyProvisioner (TransitKeyProvisioner
+		// or an in-process VolumeKeyManager shim).
+		err := errNoKeyProvisioner
+		logger.Error(err, "BlockVolume: refusing to reconcile encrypted volume without KeyProvisioner")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
 	volumeID := string(bv.UID)
