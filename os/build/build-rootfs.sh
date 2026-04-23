@@ -126,6 +126,19 @@ build_layered() {
   mount --bind /sys  "$work/sys"
 
   log "apt install layered packages"
+  # Force a complete sources.list covering main + contrib + non-free +
+  # non-free-firmware + security + updates. mmdebstrap's generated file
+  # historically omits some components depending on its own version, so
+  # we overwrite it before running apt-get update.
+  cat > "$work/etc/apt/sources.list" <<EOF
+deb $MIRROR $SUITE main contrib non-free non-free-firmware
+deb $MIRROR $SUITE-updates main contrib non-free non-free-firmware
+deb $SECURITY_MIRROR $SUITE-security main contrib non-free non-free-firmware
+EOF
+  # Remove the DEB822 file mmdebstrap may have written so the classic
+  # list above is authoritative.
+  rm -f "$work/etc/apt/sources.list.d/debian.sources"
+
   chroot "$work" /bin/bash -eu -o pipefail -c "
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
