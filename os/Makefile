@@ -14,7 +14,7 @@ RECIPE_DIR   ?= $(CURDIR)/recipes
 RAUC_DIR     ?= $(CURDIR)/rauc
 PACKER_DIR   ?= $(CURDIR)/packer
 
-INSTALLER_BINARY ?= $(CURDIR)/../installer/target/release/novanas-installer
+INSTALLER_BINARY ?= $(CURDIR)/../installer/bin/novanas-installer
 
 BASE_TAR     := $(BUILD_DIR)/base-rootfs-$(VERSION).tar
 LAYERED_IMG  := $(BUILD_DIR)/rootfs-$(VERSION).img
