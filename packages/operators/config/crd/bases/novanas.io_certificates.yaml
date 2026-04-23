@@ -13,13 +13,25 @@ spec:
     kind: Certificate
     listKind: CertificateList
     plural: certificates
+    shortNames:
+    - cert
     singular: certificate
-  scope: Cluster
+  scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.commonName
+      name: CN
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.notAfter
+      name: NotAfter
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Certificate — TLS certificate
+        description: Certificate — Namespaced TLS certificate managed by the operator.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +51,122 @@ spec:
           metadata:
             type: object
           spec:
-            description: CertificateSpec defines the desired state of Certificate.
+            description: |-
+              CertificateSpec mirrors packages/schemas/src/crypto/certificate.ts. A
+              Certificate is issued either by an ACME-compliant CA (via cert-manager
+              where available) or by the internal OpenBao PKI. Uploaded bundles are
+              consumed verbatim. The resulting material lands in a child Secret
+              named "<cert-name>-tls" with an owner reference for GC.
+            properties:
+              acme:
+                description: CertificateACMESpec configures an ACME-based issuance.
+                properties:
+                  directoryUrl:
+                    type: string
+                  email:
+                    pattern: ^[^@\s]+@[^@\s]+\.[^@\s]+$
+                    type: string
+                  issuer:
+                    enum:
+                    - letsencrypt
+                    - letsencrypt-staging
+                    - zerossl
+                    - custom
+                    type: string
+                required:
+                - issuer
+                type: object
+              commonName:
+                description: CommonName is the primary subject CN.
+                minLength: 1
+                type: string
+              dnsNames:
+                description: DNSNames are additional SAN DNS entries.
+                items:
+                  type: string
+                type: array
+              ipAddresses:
+                description: IPAddresses are additional SAN IP entries.
+                items:
+                  type: string
+                type: array
+              provider:
+                description: CertificateProvider is one of the supported issuance
+                  backends.
+                enum:
+                - acme
+                - internalPki
+                - upload
+                type: string
+              renewBeforeDays:
+                default: 30
+                description: RenewBeforeDays triggers a renew this many days before
+                  NotAfter.
+                format: int32
+                minimum: 1
+                type: integer
+              upload:
+                description: CertificateUploadSpec points at Secrets holding a pre-issued
+                  bundle.
+                properties:
+                  certSecret:
+                    description: |-
+                      SecretKeyReference names a Secret (optionally in a specific namespace)
+                      plus an optional key. It mirrors packages/schemas common
+                      SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                      AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                      auth material, and ACME/upload bundles.
+                    properties:
+                      key:
+                        description: |-
+                          Key selects a specific key inside the Secret. When empty, the
+                          consumer picks a type-appropriate default (e.g. "tls.crt").
+                        type: string
+                      name:
+                        description: Name is the Secret name.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace defaults to the referencing CR's namespace
+                          when empty.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  keySecret:
+                    description: |-
+                      SecretKeyReference names a Secret (optionally in a specific namespace)
+                      plus an optional key. It mirrors packages/schemas common
+                      SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                      AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                      auth material, and ACME/upload bundles.
+                    properties:
+                      key:
+                        description: |-
+                          Key selects a specific key inside the Secret. When empty, the
+                          consumer picks a type-appropriate default (e.g. "tls.crt").
+                        type: string
+                      name:
+                        description: Name is the Secret name.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace defaults to the referencing CR's namespace
+                          when empty.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - certSecret
+                - keySecret
+                type: object
+            required:
+            - commonName
+            - provider
             type: object
           status:
-            description: CertificateStatus defines observed state of Certificate.
+            description: CertificateStatus reports issuance state.
             properties:
               conditions:
                 items:
@@ -100,7 +224,34 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              issuer:
+                description: Issuer is the issuing CA's subject DN.
+                type: string
+              notAfter:
+                description: NotAfter is the cert's NotAfter validity instant (expiry).
+                format: date-time
+                type: string
+              notBefore:
+                description: NotBefore is the cert's NotBefore validity instant.
+                format: date-time
+                type: string
               phase:
+                enum:
+                - Pending
+                - Issued
+                - Renewing
+                - Expired
+                - Failed
+                type: string
+              secretRef:
+                description: SecretRef names the TLS Secret holding the issued material.
+                type: string
+              serialNumber:
+                description: SerialNumber is the hex serial of the currently-installed
+                  cert.
                 type: string
             type: object
         type: object

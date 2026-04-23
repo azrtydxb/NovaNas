@@ -210,7 +210,7 @@ func TestKmsKeyReconciler_StatusPopulated(t *testing.T) {
 		Spec:       novanasv1alpha1.KmsKeySpec{Description: "test key"},
 	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &KmsKeyReconciler{BaseReconciler: newPart2Base(c, s, "KmsKey"), Recorder: newPart2Recorder()}
+	r := &KmsKeyReconciler{BaseReconciler: newPart2Base(c, s, "KmsKey"), Recorder: newPart2Recorder(), KeyProvisioner: reconciler.NoopKeyProvisioner{}}
 	mustReconcileOK(t, context.Background(), r, part2Request("k-status"))
 	var got novanasv1alpha1.KmsKey
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "k-status"}, &got)

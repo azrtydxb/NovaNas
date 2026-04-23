@@ -92,20 +92,22 @@ spec:
                     type: integer
                 type: object
               source:
-                description: VolumeSourceRef refers to a source volume for a backup
-                  job.
+                description: |-
+                  VolumeSourceRef is a discriminated reference to a snapshottable source.
+                  Kind must be one of BlockVolume, Dataset, Bucket, AppInstance, Vm.
                 properties:
                   kind:
-                    description: Kind is one of "BlockVolume", "Dataset", "Snapshot".
                     enum:
                     - BlockVolume
                     - Dataset
-                    - Snapshot
+                    - Bucket
+                    - AppInstance
+                    - Vm
                     type: string
                   name:
+                    minLength: 1
                     type: string
                   namespace:
-                    description: Namespace of the source; defaults to the job's namespace.
                     type: string
                 required:
                 - kind

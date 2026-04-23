@@ -16,10 +16,23 @@ spec:
     singular: user
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.username
+      name: Username
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.keycloakID
+      name: KeycloakID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: User — Local user projection of Keycloak
+        description: User — Local projection of a Keycloak user.
         properties:
           apiVersion:
             description: |-
@@ -39,12 +52,75 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserSpec defines the desired state of User.
+            description: |-
+              UserSpec mirrors packages/schemas/src/identity/user.ts. It describes
+              the desired state of a NovaNas User, which is projected into Keycloak
+              (users, realm membership, group membership, password rotation) by the
+              User controller. The spec also carries POSIX identity attributes that
+              the node agent consults when rendering /etc/passwd entries.
+            properties:
+              admin:
+                description: Admin grants cluster-administrator rights via RBAC.
+                type: boolean
+              displayName:
+                description: DisplayName is the human-readable name shown in the UI.
+                type: string
+              email:
+                description: |-
+                  Email is the user's primary email. Used by Keycloak for password
+                  recovery and notifications.
+                pattern: ^[^@\s]+@[^@\s]+\.[^@\s]+$
+                type: string
+              enabled:
+                default: true
+                description: Enabled toggles login without deleting the user. Defaults
+                  to true.
+                type: boolean
+              federated:
+                description: |-
+                  Federated is true when the user is sourced from an external IdP
+                  (LDAP/AD/OIDC) and should not receive a local password.
+                type: boolean
+              groups:
+                description: Groups is the list of Group CR names this user belongs
+                  to.
+                items:
+                  type: string
+                type: array
+              homeDataset:
+                description: HomeDataset names a Dataset CR mounted as the user's
+                  home directory.
+                type: string
+              primaryGid:
+                description: PrimaryGID is the primary POSIX group-id.
+                format: int64
+                minimum: 0
+                type: integer
+              realm:
+                description: Realm overrides the operator's default Keycloak realm
+                  for this user.
+                type: string
+              shell:
+                description: Shell overrides the default login shell (/bin/bash).
+                type: string
+              uid:
+                description: UID is the POSIX user-id projected into /etc/passwd.
+                format: int64
+                minimum: 0
+                type: integer
+              username:
+                description: Username is the realm-unique login name.
+                maxLength: 255
+                minLength: 1
+                type: string
+            required:
+            - username
             type: object
           status:
-            description: UserStatus defines observed state of User.
+            description: UserStatus is the observed state of the User projection.
             properties:
               conditions:
+                description: Conditions carries Ready/Progressing/Degraded conditions.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -100,7 +176,27 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              keycloakID:
+                description: |-
+                  KeycloakID is the internal Keycloak UUID returned by the admin API
+                  after EnsureUser. Empty while the projection has never succeeded.
+                type: string
+              lastLogin:
+                description: |-
+                  LastLogin is the timestamp of the most recent successful login
+                  reported by Keycloak. Populated by the sync loop.
+                format: date-time
+                type: string
               phase:
+                description: Phase is a high-level lifecycle state for dashboards.
+                enum:
+                - Pending
+                - Active
+                - Disabled
+                - Failed
                 type: string
             type: object
         type: object

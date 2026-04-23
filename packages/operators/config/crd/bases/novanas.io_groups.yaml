@@ -16,10 +16,20 @@ spec:
     singular: group
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.memberCount
+      name: Members
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Group — Group projection of Keycloak
+        description: Group — Keycloak group projection with optional K8s RBAC binding.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +49,50 @@ spec:
           metadata:
             type: object
           spec:
-            description: GroupSpec defines the desired state of Group.
+            description: |-
+              GroupSpec mirrors packages/schemas/src/identity/group.ts. A Group is
+              projected into Keycloak and also drives K8s RBAC RoleBinding generation
+              so cluster tools can authorise on group membership.
+            properties:
+              clusterRole:
+                description: |-
+                  ClusterRole optionally names a Kubernetes ClusterRole that the
+                  controller should bind to this group via a generated
+                  ClusterRoleBinding.
+                type: string
+              displayName:
+                description: DisplayName is a human-readable label for the UI.
+                type: string
+              federated:
+                description: Federated is true for groups mirrored from an external
+                  IdP.
+                type: boolean
+              gid:
+                description: GID is the POSIX group-id projected into /etc/group.
+                format: int64
+                minimum: 0
+                type: integer
+              members:
+                description: |-
+                  Members is the list of User CR names that should belong to this
+                  group. The controller reconciles membership to Keycloak in both
+                  directions (adds and removes).
+                items:
+                  type: string
+                type: array
+              name:
+                description: Name is the realm-unique group name.
+                maxLength: 255
+                minLength: 1
+                type: string
+              realm:
+                description: Realm overrides the operator's default Keycloak realm.
+                type: string
+            required:
+            - name
             type: object
           status:
-            description: GroupStatus defines observed state of Group.
+            description: GroupStatus is the observed state of the Group projection.
             properties:
               conditions:
                 items:
@@ -100,7 +150,24 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              keycloakID:
+                description: KeycloakID is the internal UUID returned by the Keycloak
+                  admin API.
+                type: string
+              memberCount:
+                description: MemberCount is the number of resolved members on the
+                  last sync.
+                format: int32
+                minimum: 0
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
                 type: string
             type: object
         type: object

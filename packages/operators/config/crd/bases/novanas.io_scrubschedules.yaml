@@ -16,10 +16,20 @@ spec:
     singular: scrubschedule
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.pool
+      name: Pool
+      type: string
+    - jsonPath: .spec.cron
+      name: Cron
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ScrubSchedule — Per-pool integrity scrub cadence
+        description: ScrubSchedule drives per-pool integrity scrubs.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,39 @@ spec:
             type: object
           spec:
             description: ScrubScheduleSpec defines the desired state of ScrubSchedule.
+            properties:
+              cron:
+                description: Cron is a 5 or 6-field cron expression.
+                minLength: 1
+                type: string
+              pool:
+                description: Pool is the StoragePool name to scrub.
+                minLength: 1
+                type: string
+              priority:
+                description: Priority influences engine scheduling of the scrub task.
+                enum:
+                - low
+                - normal
+                - high
+                type: string
+              repair:
+                description: |-
+                  Repair, when true, asks the scrubber to repair recoverable chunks
+                  in-place instead of just reporting.
+                type: boolean
+              suspended:
+                type: boolean
+            required:
+            - cron
+            - pool
             type: object
           status:
             description: ScrubScheduleStatus defines observed state of ScrubSchedule.
             properties:
+              chunksScrubbed:
+                format: int64
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +139,25 @@ spec:
                   - type
                   type: object
                 type: array
+              errorsRepaired:
+                format: int64
+                type: integer
+              lastRun:
+                format: date-time
+                type: string
+              nextRun:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Active
+                - Running
+                - Suspended
+                - Failed
+                - Scheduled
                 type: string
             type: object
         type: object

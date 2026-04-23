@@ -71,6 +71,10 @@ spec:
             description: DiskStatus defines observed state of Disk.
             properties:
               class:
+                enum:
+                - nvme
+                - ssd
+                - hdd
                 type: string
               conditions:
                 items:
@@ -128,8 +132,67 @@ spec:
                   - type
                   type: object
                 type: array
+              deviceClass:
+                enum:
+                - nvme
+                - ssd
+                - hdd
+                type: string
               model:
                 type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              recentEvents:
+                items:
+                  description: DiskLifecycleEvent records a notable disk state transition.
+                  properties:
+                    actor:
+                      type: string
+                    fromState:
+                      description: DiskState is the lifecycle state of a physical
+                        disk.
+                      enum:
+                      - UNKNOWN
+                      - IDENTIFIED
+                      - ASSIGNED
+                      - ACTIVE
+                      - DEGRADED
+                      - FAILED
+                      - DRAINING
+                      - REMOVABLE
+                      - QUARANTINED
+                      - WIPED
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    timestamp:
+                      format: date-time
+                      type: string
+                    toState:
+                      description: DiskState is the lifecycle state of a physical
+                        disk.
+                      enum:
+                      - UNKNOWN
+                      - IDENTIFIED
+                      - ASSIGNED
+                      - ACTIVE
+                      - DEGRADED
+                      - FAILED
+                      - DRAINING
+                      - REMOVABLE
+                      - QUARANTINED
+                      - WIPED
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - timestamp
+                  - type
+                  type: object
+                type: array
               serial:
                 type: string
               sizeBytes:
@@ -140,9 +203,27 @@ spec:
               smart:
                 description: SmartInfo captures SMART health readings.
                 properties:
-                  overallHealth:
+                  lastLongTest:
+                    format: date-time
                     type: string
+                  lastShortTest:
+                    format: date-time
+                    type: string
+                  overallHealth:
+                    enum:
+                    - OK
+                    - WARN
+                    - WARNING
+                    - FAIL
+                    - FAILED
+                    type: string
+                  pendingSectors:
+                    format: int64
+                    type: integer
                   powerOnHours:
+                    format: int64
+                    type: integer
+                  reallocatedSectors:
                     format: int64
                     type: integer
                   temperature:

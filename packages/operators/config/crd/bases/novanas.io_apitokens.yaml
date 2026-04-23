@@ -16,10 +16,20 @@ spec:
     singular: apitoken
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.owner
+      name: Owner
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.lastRotatedAt
+      name: LastRotated
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ApiToken — Scoped API token
+        description: ApiToken — Scoped API token projection with hashed secret storage.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +49,49 @@ spec:
           metadata:
             type: object
           spec:
-            description: ApiTokenSpec defines the desired state of ApiToken.
+            description: |-
+              ApiTokenSpec mirrors packages/schemas/src/identity/api-token.ts. A
+              scoped bearer token created on behalf of a User, rotated on a schedule
+              set by the controller. The plaintext token is returned exactly once in
+              Status.RawTokenSecret and scrubbed on the next reconcile.
+            properties:
+              description:
+                description: Description is a free-form human-readable note shown
+                  in the UI.
+                type: string
+              expiresAt:
+                description: ExpiresAt is an optional absolute expiry. Nil means no
+                  expiry.
+                format: date-time
+                type: string
+              owner:
+                description: Owner is the User CR name that the token authenticates
+                  as.
+                minLength: 1
+                type: string
+              rotationPeriod:
+                description: |-
+                  RotationPeriod triggers automatic rotation at the given interval.
+                  Must be a valid Go duration string (e.g. "720h"). Empty disables
+                  automatic rotation.
+                type: string
+              scopes:
+                description: |-
+                  Scopes is the list of capability strings the token is permitted to
+                  use. Scope semantics are enforced by the API layer, not the operator.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+            required:
+            - owner
+            - scopes
             type: object
           status:
-            description: ApiTokenStatus defines observed state of ApiToken.
+            description: |-
+              ApiTokenStatus reports the token lifecycle. The plaintext token lives
+              in RawTokenSecret for exactly one reconcile after creation or rotation
+              and is scrubbed on the next pass.
             properties:
               conditions:
                 items:
@@ -100,7 +149,40 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              createdAt:
+                description: CreatedAt is when the current token was minted.
+                format: date-time
+                type: string
+              lastRotatedAt:
+                description: LastRotatedAt is when the token was last rotated.
+                format: date-time
+                type: string
+              lastUsedAt:
+                description: LastUsedAt is when the token was most recently presented.
+                format: date-time
+                type: string
               phase:
+                enum:
+                - Pending
+                - Active
+                - Expired
+                - Revoked
+                type: string
+              rawTokenSecret:
+                description: |-
+                  RawTokenSecret is the plaintext token delivered exactly once on
+                  create or rotation. The controller clears this field on the next
+                  reconcile, so clients must capture it immediately.
+                type: string
+              secretRef:
+                description: SecretRef names the Secret holding the token hash.
+                type: string
+              tokenID:
+                description: TokenID is a stable public identifier (SHA-256 of the
+                  token).
                 type: string
             type: object
         type: object

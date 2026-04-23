@@ -16,10 +16,18 @@ spec:
     singular: replicationtarget
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.endpoint
+      name: Endpoint
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ReplicationTarget — Remote NovaNas endpoint
+        description: ReplicationTarget is a remote NovaNas cluster/endpoint used by
+          ReplicationJob.
         properties:
           apiVersion:
             description: |-
@@ -40,6 +48,61 @@ spec:
             type: object
           spec:
             description: ReplicationTargetSpec defines the desired state of ReplicationTarget.
+            properties:
+              auth:
+                description: ReplicationAuth is embedded in ReplicationTargetSpec.
+                properties:
+                  secret:
+                    description: |-
+                      ReplicationSecretRef identifies an auth secret for a replication target.
+                      Either SecretName (Kubernetes Secret) or SecretRef (openbao://... URI) is used.
+                    properties:
+                      key:
+                        type: string
+                      namespace:
+                        type: string
+                      secretName:
+                        type: string
+                      secretRef:
+                        pattern: ^(openbao|vault)://.+
+                        type: string
+                    type: object
+                  secretRef:
+                    description: SecretRef is a plain string reference kept for back-compat.
+                    type: string
+                type: object
+              endpoint:
+                description: Endpoint is the remote NovaNas gRPC/HTTPS URL.
+                minLength: 1
+                pattern: ^https?://.+
+                type: string
+              tlsVerify:
+                type: boolean
+              transport:
+                description: ReplicationTransport tunes the replication stream.
+                properties:
+                  bandwidth:
+                    description: ReplicationBandwidth limits/schedules replication
+                      throughput.
+                    properties:
+                      limit:
+                        description: Limit is a rate string (e.g. "100Mbps").
+                        type: string
+                      schedule:
+                        type: string
+                    type: object
+                  compression:
+                    enum:
+                    - none
+                    - zstd
+                    - lz4
+                    type: string
+                  encryption:
+                    type: boolean
+                type: object
+            required:
+            - auth
+            - endpoint
             type: object
           status:
             description: ReplicationTargetStatus defines observed state of ReplicationTarget.
@@ -100,7 +163,20 @@ spec:
                   - type
                   type: object
                 type: array
+              lastHandshake:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Connected
+                - Failed
+                - Ready
+                type: string
+              remoteVersion:
                 type: string
             type: object
         type: object

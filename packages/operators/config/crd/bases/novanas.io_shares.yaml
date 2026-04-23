@@ -16,7 +16,17 @@ spec:
     singular: share
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.dataset
+      name: Dataset
+      type: string
+    - jsonPath: .spec.path
+      name: Path
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Share is a multi-protocol export (SMB + NFS) of a Dataset path.
@@ -46,6 +56,10 @@ spec:
                   description: ShareAccessRule is a single access-control entry.
                   properties:
                     mode:
+                      enum:
+                      - ro
+                      - rw
+                      - none
                       type: string
                     principal:
                       description: SharePrincipal identifies a user or group.
@@ -58,8 +72,10 @@ spec:
                   type: object
                 type: array
               dataset:
+                minLength: 1
                 type: string
               path:
+                minLength: 1
                 type: string
               protocols:
                 description: ShareProtocols configures per-protocol export options.
@@ -71,22 +87,45 @@ spec:
                         items:
                           type: string
                         type: array
+                      readOnly:
+                        type: boolean
                       server:
+                        minLength: 1
                         type: string
                       squash:
+                        enum:
+                        - noRootSquash
+                        - rootSquash
+                        - allSquash
                         type: string
+                      sync:
+                        type: boolean
+                    required:
+                    - server
                     type: object
                   smb:
                     description: SmbShareConfig holds SMB export options.
                     properties:
+                      browseable:
+                        type: boolean
                       caseSensitive:
                         type: boolean
+                      guestOk:
+                        type: boolean
+                      readOnly:
+                        type: boolean
                       server:
+                        minLength: 1
                         type: string
                       shadowCopies:
                         type: boolean
+                    required:
+                    - server
                     type: object
                 type: object
+            required:
+            - dataset
+            - path
             type: object
           status:
             description: ShareStatus defines observed state.
@@ -147,7 +186,18 @@ spec:
                   - type
                   type: object
                 type: array
+              exportedAt:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Ready
                 type: string
             type: object
         type: object

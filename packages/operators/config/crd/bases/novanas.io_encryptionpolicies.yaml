@@ -16,10 +16,17 @@ spec:
     singular: encryptionpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.cipher
+      name: Cipher
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: EncryptionPolicy — Cluster defaults for volume encryption
+        description: EncryptionPolicy — Cluster defaults for volume encryption.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +46,96 @@ spec:
           metadata:
             type: object
           spec:
-            description: EncryptionPolicySpec defines the desired state of EncryptionPolicy.
+            description: |-
+              EncryptionPolicySpec mirrors packages/schemas/src/crypto/encryption-policy.ts.
+              The policy is consulted by volume-provisioning controllers
+              (BlockVolume, Dataset, Bucket) via a shared helper
+              (reconciler.ResolveEncryptionPolicy). It can be cluster-scoped
+              (default) or narrowed by namespace selector.
+            properties:
+              cipher:
+                description: Cipher selects the symmetric cipher used on the data
+                  path.
+                enum:
+                - AES256-GCM
+                - AES128-GCM
+                - XChaCha20-Poly1305
+                type: string
+              defaultEnabled:
+                description: |-
+                  DefaultEnabled sets whether new volumes are encrypted by default
+                  when they don't specify an explicit choice.
+                type: boolean
+              masterKey:
+                description: MasterKey configures sealing of the cluster master key.
+                properties:
+                  sealedBy:
+                    enum:
+                    - tpm
+                    - passphrase
+                    - both
+                    type: string
+                type: object
+              namespaceSelector:
+                description: |-
+                  NamespaceSelector narrows a policy to a subset of namespaces.
+                  Nil selector means cluster-wide.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+              requireForTiers:
+                description: |-
+                  RequireForTiers lists storage tier names where encryption is
+                  mandatory (e.g. "hot", "cold").
+                items:
+                  type: string
+                type: array
             type: object
           status:
-            description: EncryptionPolicyStatus defines observed state of EncryptionPolicy.
+            description: |-
+              EncryptionPolicyStatus reports whether the master key is currently
+              sealed and available to the data-plane.
             properties:
               conditions:
                 items:
@@ -100,7 +193,18 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              masterKeySealed:
+                description: |-
+                  MasterKeySealed is true when the configured sealing mechanism
+                  currently holds the master key.
+                type: boolean
               phase:
+                enum:
+                - Active
+                - Failed
                 type: string
             type: object
         type: object

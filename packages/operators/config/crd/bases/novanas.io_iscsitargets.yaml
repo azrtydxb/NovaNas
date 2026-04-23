@@ -16,7 +16,14 @@ spec:
     singular: iscsitarget
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.blockVolume
+      name: Volume
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: IscsiTarget is an iSCSI portal binding a BlockVolume.
@@ -41,21 +48,77 @@ spec:
           spec:
             description: IscsiTargetSpec defines the desired state of IscsiTarget.
             properties:
-              blockVolume:
+              aclMode:
+                enum:
+                - any
+                - whitelist
                 type: string
-              initiators:
+              blockVolume:
+                description: BlockVolume names the backing BlockVolume CR.
+                minLength: 1
+                type: string
+              chap:
+                description: IscsiChapAuth toggles CHAP authentication on the target.
+                properties:
+                  enabled:
+                    type: boolean
+                  mutual:
+                    type: boolean
+                  mutualSecret:
+                    description: IscsiChapSecretRef points at a Kubernetes Secret
+                      holding CHAP creds.
+                    properties:
+                      key:
+                        type: string
+                      namespace:
+                        type: string
+                      secretName:
+                        type: string
+                      secretRef:
+                        pattern: ^(openbao|vault)://.+
+                        type: string
+                    type: object
+                  userSecret:
+                    description: IscsiChapSecretRef points at a Kubernetes Secret
+                      holding CHAP creds.
+                    properties:
+                      key:
+                        type: string
+                      namespace:
+                        type: string
+                      secretName:
+                        type: string
+                      secretRef:
+                        pattern: ^(openbao|vault)://.+
+                        type: string
+                    type: object
+                required:
+                - enabled
+                type: object
+              initiatorAllowList:
                 items:
                   type: string
                 type: array
               iqn:
                 type: string
-              port:
-                format: int32
-                type: integer
-              portalIps:
-                items:
-                  type: string
-                type: array
+              portal:
+                description: IscsiPortal is the network-facing listener of an iSCSI
+                  target.
+                properties:
+                  hostInterface:
+                    minLength: 1
+                    type: string
+                  port:
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - hostInterface
+                type: object
+            required:
+            - blockVolume
+            - portal
             type: object
           status:
             description: IscsiTargetStatus defines observed state.
@@ -116,7 +179,17 @@ spec:
                   - type
                   type: object
                 type: array
+              iqn:
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Ready
                 type: string
             type: object
         type: object

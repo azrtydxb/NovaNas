@@ -16,10 +16,23 @@ spec:
     singular: replicationjob
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.source.name
+      name: Source
+      type: string
+    - jsonPath: .spec.target
+      name: Target
+      type: string
+    - jsonPath: .spec.direction
+      name: Direction
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ReplicationJob — Snapshot-diff replication job
+        description: ReplicationJob drives snapshot-diff replication between pools/clusters.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +53,78 @@ spec:
             type: object
           spec:
             description: ReplicationJobSpec defines the desired state of ReplicationJob.
+            properties:
+              cron:
+                description: Cron schedules incremental jobs. Omit for one-shot.
+                type: string
+              direction:
+                description: Direction selects push (send local snapshots) or pull.
+                enum:
+                - push
+                - pull
+                type: string
+              remoteName:
+                description: RemoteName is the volume/dataset name on the remote side.
+                type: string
+              retention:
+                description: RetentionPolicy expresses GFS-style snapshot retention.
+                properties:
+                  daily:
+                    format: int32
+                    type: integer
+                  hourly:
+                    format: int32
+                    type: integer
+                  keepLast:
+                    format: int32
+                    type: integer
+                  monthly:
+                    format: int32
+                    type: integer
+                  weekly:
+                    format: int32
+                    type: integer
+                  yearly:
+                    format: int32
+                    type: integer
+                type: object
+              source:
+                description: Source volume-like object.
+                properties:
+                  kind:
+                    enum:
+                    - BlockVolume
+                    - Dataset
+                    - Bucket
+                    - AppInstance
+                    - Vm
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              suspended:
+                type: boolean
+              target:
+                description: Target is the name of a ReplicationTarget CR.
+                minLength: 1
+                type: string
+            required:
+            - direction
+            - source
+            - target
             type: object
           status:
             description: ReplicationJobStatus defines observed state of ReplicationJob.
             properties:
+              bytesTransferred:
+                format: int64
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +181,25 @@ spec:
                   - type
                   type: object
                 type: array
+              lastRun:
+                format: date-time
+                type: string
+              lastSnapshot:
+                type: string
+              nextRun:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Running
+                - Succeeded
+                - Failed
+                - Suspended
+                - Cancelled
                 type: string
             type: object
         type: object

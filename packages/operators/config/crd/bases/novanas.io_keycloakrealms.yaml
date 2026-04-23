@@ -16,10 +16,21 @@ spec:
     singular: keycloakrealm
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.userCount
+      name: Users
+      type: integer
+    - jsonPath: .status.groupCount
+      name: Groups
+      type: integer
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: KeycloakRealm — Realm federation config
+        description: KeycloakRealm — Keycloak realm configuration with federations
+          and MFA.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +50,96 @@ spec:
           metadata:
             type: object
           spec:
-            description: KeycloakRealmSpec defines the desired state of KeycloakRealm.
+            description: KeycloakRealmSpec mirrors packages/schemas/src/identity/keycloak-realm.ts.
+            properties:
+              defaultLocale:
+                type: string
+              displayName:
+                type: string
+              federations:
+                items:
+                  description: RealmFederation is one identity provider attached to
+                    the realm.
+                  properties:
+                    connection:
+                      description: RealmFederationConnection describes LDAP/AD/OIDC
+                        connection settings.
+                      properties:
+                        baseDn:
+                          type: string
+                        bindDn:
+                          type: string
+                        bindSecret:
+                          description: |-
+                            SecretKeyReference names a Secret (optionally in a specific namespace)
+                            plus an optional key. It mirrors packages/schemas common
+                            SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                            AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                            auth material, and ACME/upload bundles.
+                          properties:
+                            key:
+                              description: |-
+                                Key selects a specific key inside the Secret. When empty, the
+                                consumer picks a type-appropriate default (e.g. "tls.crt").
+                              type: string
+                            name:
+                              description: Name is the Secret name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace defaults to the referencing CR's
+                                namespace when empty.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        groupsDn:
+                          type: string
+                        startTls:
+                          type: boolean
+                        url:
+                          minLength: 1
+                          type: string
+                        usersDn:
+                          type: string
+                      required:
+                      - url
+                      type: object
+                    displayName:
+                      type: string
+                    syncPeriod:
+                      description: SyncPeriod is a Go duration string for the federation
+                        sync cadence.
+                      type: string
+                    type:
+                      enum:
+                      - activeDirectory
+                      - ldap
+                      - oidc
+                      type: string
+                  required:
+                  - connection
+                  - type
+                  type: object
+                type: array
+              mfa:
+                description: RealmMFA configures the realm's MFA requirements.
+                properties:
+                  required:
+                    type: boolean
+                  totp:
+                    type: boolean
+                  webauthn:
+                    type: boolean
+                type: object
+              passwordPolicy:
+                description: |-
+                  PasswordPolicy is the Keycloak password policy expression, e.g.
+                  "length(12) and upperCase(1) and digits(1)".
+                type: string
             type: object
           status:
-            description: KeycloakRealmStatus defines observed state of KeycloakRealm.
+            description: KeycloakRealmStatus reports sync state for the realm.
             properties:
               conditions:
                 items:
@@ -100,8 +197,26 @@ spec:
                   - type
                   type: object
                 type: array
-              phase:
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              groupCount:
+                format: int32
+                minimum: 0
+                type: integer
+              lastSync:
+                format: date-time
                 type: string
+              phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                type: string
+              userCount:
+                format: int32
+                minimum: 0
+                type: integer
             type: object
         type: object
     served: true

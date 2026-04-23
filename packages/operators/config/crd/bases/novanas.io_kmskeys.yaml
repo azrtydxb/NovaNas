@@ -16,10 +16,20 @@ spec:
     singular: kmskey
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.keyVersion
+      name: Version
+      type: integer
+    - jsonPath: .status.lastRotatedAt
+      name: LastRotated
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: KmsKey — Named data key for SSE-KMS usage
+        description: KmsKey — Named data key backed by OpenBao Transit.
         properties:
           apiVersion:
             description: |-
@@ -40,17 +50,37 @@ spec:
             type: object
           spec:
             description: |-
-              KmsKeySpec defines the desired state of KmsKey.
-
-              NOTE: these fields are intentionally minimal/additive. Full field
-              mirroring from the packages/schemas Zod schema is tracked under
+              KmsKeySpec mirrors packages/schemas/src/crypto/kms-key.ts plus two
+              operator-internal fields (KeyID, TransitPath) carried forward since
+              the original S3 gateway integration.
             properties:
+              deletionProtection:
+                description: DeletionProtection blocks deletion while true.
+                type: boolean
+              description:
+                description: Description is a human-readable note for the UI.
+                type: string
               keyId:
                 description: |-
-                  KeyID is the stable external identifier that S3 clients reference
+                  KeyID is the stable external identifier referenced by S3 clients
                   in x-amz-server-side-encryption-aws-kms-key-id headers, e.g.
                   "arn:novanas:kms:::key/finance-sse-kms".
                 type: string
+              rotation:
+                description: Rotation configures automatic key rotation through OpenBao
+                  Transit.
+                properties:
+                  enabled:
+                    description: Enabled toggles automatic rotation.
+                    type: boolean
+                  period:
+                    description: |-
+                      Period is a Go duration string (e.g. "720h"). When empty the
+                      controller uses a 30-day default.
+                    type: string
+                required:
+                - enabled
+                type: object
               transitPath:
                 description: |-
                   TransitPath is the OpenBao Transit mount + key path used to unwrap
@@ -58,7 +88,7 @@ spec:
                 type: string
             type: object
           status:
-            description: KmsKeyStatus defines observed state of KmsKey.
+            description: KmsKeyStatus is the observed state of the key.
             properties:
               conditions:
                 items:
@@ -116,14 +146,39 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              createdAt:
+                description: CreatedAt is when the backing key was first provisioned.
+                format: date-time
+                type: string
+              keyId:
+                description: KeyID is the concrete backend key identifier (Transit
+                  key name).
+                type: string
+              keyVersion:
+                description: KeyVersion is the active Transit key version.
+                format: int32
+                minimum: 0
+                type: integer
+              lastRotatedAt:
+                description: LastRotatedAt is when the key was last rotated.
+                format: date-time
+                type: string
               phase:
+                enum:
+                - Pending
+                - Active
+                - Rotating
+                - Disabled
+                - Destroyed
                 type: string
               wrappedDK:
                 description: |-
                   WrappedDK is the OpenBao-wrapped (Transit-encrypted) Dataset Key
-                  for this KmsKey, base64-encoded in its vault "vault:v1:..." form.
-                  The controller populates it; the S3 gateway's kms_resolver unwraps
-                  via Transit at request time.
+                  in its vault "vault:v1:..." form. The S3 gateway's kms_resolver
+                  unwraps it via Transit at request time.
                 type: string
             type: object
         type: object

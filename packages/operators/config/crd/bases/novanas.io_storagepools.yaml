@@ -56,6 +56,10 @@ spec:
           spec:
             description: StoragePoolSpec defines the desired state of StoragePool.
             properties:
+              allowDataLoss:
+                description: AllowDataLoss permits deletion while BlockVolumes still
+                  reference the pool.
+                type: boolean
               deviceFilter:
                 description: DeviceFilter constrains disk selection.
                 properties:
@@ -64,23 +68,57 @@ spec:
                   minSize:
                     type: string
                   preferredClass:
+                    enum:
+                    - nvme
+                    - ssd
+                    - hdd
                     type: string
                 type: object
+              disks:
+                description: Disks pins the member Disk CR names. Empty means filter-only.
+                items:
+                  type: string
+                type: array
               rebalanceOnAdd:
                 description: RebalanceOnAdd controls behaviour when new disks are
                   added.
+                enum:
+                - auto
+                - manual
+                - never
                 type: string
               recoveryRate:
-                description: RecoveryRate controls rebuild bandwidth (e.g., slow,
-                  balanced, fast).
+                description: RecoveryRate controls rebuild bandwidth.
+                enum:
+                - slow
+                - balanced
+                - fast
                 type: string
               tier:
-                description: Tier classifies the pool (e.g., fast, warm, cold).
+                description: Tier classifies the pool (fast/warm/cold/archive).
+                enum:
+                - fast
+                - warm
+                - cold
+                - archive
                 type: string
             type: object
           status:
             description: StoragePoolStatus defines the observed state of StoragePool.
             properties:
+              capacity:
+                description: PoolCapacity reports observed pool-level capacity.
+                properties:
+                  availableBytes:
+                    format: int64
+                    type: integer
+                  totalBytes:
+                    format: int64
+                    type: integer
+                  usedBytes:
+                    format: int64
+                    type: integer
+                type: object
               capacityBytes:
                 format: int64
                 type: integer
@@ -143,7 +181,16 @@ spec:
               diskCount:
                 format: int32
                 type: integer
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Degraded
+                - Failed
+                - Ready
                 type: string
               usedBytes:
                 format: int64

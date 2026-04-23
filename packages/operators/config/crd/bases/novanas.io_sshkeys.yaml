@@ -16,10 +16,20 @@ spec:
     singular: sshkey
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.owner
+      name: Owner
+      type: string
+    - jsonPath: .status.keyType
+      name: Type
+      type: string
+    - jsonPath: .status.fingerprint
+      name: Fingerprint
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SshKey — SSH authorized keys
+        description: SshKey — SSH authorized_keys projection with fingerprint tracking.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +49,39 @@ spec:
           metadata:
             type: object
           spec:
-            description: SshKeySpec defines the desired state of SshKey.
+            description: |-
+              SshKeySpec mirrors packages/schemas/src/identity/ssh-key.ts. The
+              controller pushes the public key to the host's authorized_keys via
+              the node agent and records the SHA-256 fingerprint in status.
+            properties:
+              comment:
+                description: Comment overrides the comment field in the authorized_keys
+                  entry.
+                type: string
+              expiresAt:
+                description: |-
+                  ExpiresAt disables the key after the given instant by removing it
+                  from authorized_keys. Nil means no expiry.
+                format: date-time
+                type: string
+              owner:
+                description: |-
+                  Owner is the User CR that owns the key. The node agent installs
+                  the key into ~owner/.ssh/authorized_keys on targeted hosts.
+                minLength: 1
+                type: string
+              publicKey:
+                description: |-
+                  PublicKey is the OpenSSH-format public key line
+                  (e.g. "ssh-ed25519 AAAA... comment").
+                minLength: 1
+                type: string
+            required:
+            - owner
+            - publicKey
             type: object
           status:
-            description: SshKeyStatus defines observed state of SshKey.
+            description: SshKeyStatus records projection state for the key.
             properties:
               conditions:
                 items:
@@ -100,7 +139,23 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              fingerprint:
+                description: |-
+                  Fingerprint is the SHA-256 fingerprint of the public key, base64
+                  encoded (matches `ssh-keygen -lf`).
+                type: string
+              keyType:
+                description: KeyType is the SSH key algorithm ("ssh-ed25519", "ssh-rsa",
+                  etc.).
+                type: string
               phase:
+                enum:
+                - Active
+                - Expired
+                - Revoked
                 type: string
             type: object
         type: object

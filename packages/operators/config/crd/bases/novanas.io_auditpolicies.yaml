@@ -16,10 +16,14 @@ spec:
     singular: auditpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AuditPolicy — What to audit, where to send it
+        description: AuditPolicy — What to audit and where to send it.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +43,196 @@ spec:
           metadata:
             type: object
           spec:
-            description: AuditPolicySpec defines the desired state of AuditPolicy.
+            description: |-
+              AuditPolicySpec mirrors packages/schemas/src/ops/audit-policy.ts. The
+              controller serialises the spec into a ConfigMap that the audit agent
+              reads; touching the ConfigMap triggers an agent restart via rollout
+              annotation.
+            properties:
+              events:
+                description: |-
+                  Events is a list of audit event types to emit (e.g. "user.login",
+                  "dataset.mount"). Empty means "all".
+                items:
+                  type: string
+                type: array
+              retention:
+                description: |-
+                  Retention is a Go duration string (e.g. "720h") applied to
+                  retention-capable sinks.
+                type: string
+              severity:
+                description: Severity is the minimum severity level recorded.
+                enum:
+                - info
+                - warning
+                - critical
+                type: string
+              sinks:
+                description: Sinks is the list of backends receiving records.
+                items:
+                  description: |-
+                    AuditSink is one configured destination for audit records. Exactly
+                    one of the backend-specific sub-structs must be set, matching Type.
+                  properties:
+                    file:
+                      description: AuditSinkFile configures an on-disk sink.
+                      properties:
+                        path:
+                          minLength: 1
+                          type: string
+                      required:
+                      - path
+                      type: object
+                    loki:
+                      description: AuditSinkLoki configures a Loki sink.
+                      properties:
+                        authSecret:
+                          description: |-
+                            SecretKeyReference names a Secret (optionally in a specific namespace)
+                            plus an optional key. It mirrors packages/schemas common
+                            SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                            AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                            auth material, and ACME/upload bundles.
+                          properties:
+                            key:
+                              description: |-
+                                Key selects a specific key inside the Secret. When empty, the
+                                consumer picks a type-appropriate default (e.g. "tls.crt").
+                              type: string
+                            name:
+                              description: Name is the Secret name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace defaults to the referencing CR's
+                                namespace when empty.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        url:
+                          minLength: 1
+                          type: string
+                      required:
+                      - url
+                      type: object
+                    name:
+                      minLength: 1
+                      type: string
+                    s3:
+                      description: AuditSinkS3 configures an S3 object-store sink.
+                      properties:
+                        bucket:
+                          minLength: 1
+                          type: string
+                        credentialsSecret:
+                          description: |-
+                            SecretKeyReference names a Secret (optionally in a specific namespace)
+                            plus an optional key. It mirrors packages/schemas common
+                            SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                            AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                            auth material, and ACME/upload bundles.
+                          properties:
+                            key:
+                              description: |-
+                                Key selects a specific key inside the Secret. When empty, the
+                                consumer picks a type-appropriate default (e.g. "tls.crt").
+                              type: string
+                            name:
+                              description: Name is the Secret name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace defaults to the referencing CR's
+                                namespace when empty.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        endpoint:
+                          type: string
+                        prefix:
+                          type: string
+                      required:
+                      - bucket
+                      - credentialsSecret
+                      type: object
+                    syslog:
+                      description: AuditSinkSyslog configures a syslog sink.
+                      properties:
+                        host:
+                          minLength: 1
+                          type: string
+                        port:
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        protocol:
+                          enum:
+                          - udp
+                          - tcp
+                          - tls
+                          type: string
+                      required:
+                      - host
+                      - port
+                      - protocol
+                      type: object
+                    type:
+                      enum:
+                      - loki
+                      - s3
+                      - syslog
+                      - file
+                      - webhook
+                      type: string
+                    webhook:
+                      description: AuditSinkWebhook configures a generic HTTPS webhook
+                        sink.
+                      properties:
+                        authSecret:
+                          description: |-
+                            SecretKeyReference names a Secret (optionally in a specific namespace)
+                            plus an optional key. It mirrors packages/schemas common
+                            SecretReferenceSchema and is used by IAM-domain specs (Certificate,
+                            AuditPolicy, KeycloakRealm) to reference bind credentials, webhook
+                            auth material, and ACME/upload bundles.
+                          properties:
+                            key:
+                              description: |-
+                                Key selects a specific key inside the Secret. When empty, the
+                                consumer picks a type-appropriate default (e.g. "tls.crt").
+                              type: string
+                            name:
+                              description: Name is the Secret name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace defaults to the referencing CR's
+                                namespace when empty.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        url:
+                          minLength: 1
+                          type: string
+                      required:
+                      - url
+                      type: object
+                  required:
+                  - name
+                  - type
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - sinks
             type: object
           status:
-            description: AuditPolicyStatus defines observed state of AuditPolicy.
+            description: AuditPolicyStatus is the observed state of the audit pipeline.
             properties:
               conditions:
                 items:
@@ -100,7 +290,23 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              configMapRef:
+                description: ConfigMapRef names the ConfigMap the controller wrote.
+                type: string
+              eventsEmitted:
+                description: EventsEmitted is a best-effort counter of forwarded events.
+                format: int64
+                minimum: 0
+                type: integer
               phase:
+                enum:
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

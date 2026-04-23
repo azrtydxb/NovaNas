@@ -57,8 +57,23 @@ spec:
             description: DatasetSpec defines the desired state of Dataset.
             properties:
               aclMode:
+                enum:
+                - posix
+                - nfsv4
+                - smb
+                - mixed
                 type: string
+              allowDataLoss:
+                description: |-
+                  AllowDataLoss permits deletion even when Snapshots/Shares reference
+                  this Dataset. Without it the controller cascades Snapshots first.
+                type: boolean
               compression:
+                enum:
+                - none
+                - lz4
+                - zstd
+                - gzip
                 type: string
               defaults:
                 description: DatasetDefaults sets default ownership and permissions.
@@ -66,6 +81,7 @@ spec:
                   group:
                     type: string
                   mode:
+                    pattern: ^0?[0-7]{3,4}$
                     type: string
                   owner:
                     type: string
@@ -79,28 +95,57 @@ spec:
                     type: string
                 type: object
               filesystem:
+                enum:
+                - xfs
+                - ext4
+                - btrfs
+                - zfs
                 type: string
               pool:
+                minLength: 1
                 type: string
               protection:
-                description: ProtectionPolicy encodes replication / erasure coding
-                  choice.
+                description: |-
+                  ProtectionPolicy encodes replication / erasure coding choice.
+                  Mirror of the discriminated-union Zod schema.
                 properties:
                   erasureCoding:
                     description: ErasureCodingSpec configures EC parameters.
                     properties:
                       dataShards:
                         format: int32
+                        minimum: 2
                         type: integer
                       parityShards:
                         format: int32
+                        minimum: 1
                         type: integer
+                    required:
+                    - dataShards
+                    - parityShards
                     type: object
                   mode:
+                    enum:
+                    - replication
+                    - erasureCoding
                     type: string
                   replicas:
+                    description: Replicas is retained for back-compat with mode=replication.
                     format: int32
                     type: integer
+                  replication:
+                    description: ReplicationProtection holds N-copy params.
+                    properties:
+                      copies:
+                        format: int32
+                        maximum: 8
+                        minimum: 1
+                        type: integer
+                    required:
+                    - copies
+                    type: object
+                required:
+                - mode
                 type: object
               quota:
                 description: DatasetQuota sets quota thresholds.
@@ -111,6 +156,7 @@ spec:
                     type: string
                 type: object
               size:
+                minLength: 1
                 type: string
               tiering:
                 description: TieringPolicy describes cross-pool data movement.
@@ -120,10 +166,18 @@ spec:
                   demoteTo:
                     type: string
                   primary:
+                    minLength: 1
                     type: string
+                  promoteAfterAccesses:
+                    format: int32
+                    type: integer
                   promoteOn:
                     type: string
                 type: object
+            required:
+            - filesystem
+            - pool
+            - size
             type: object
           status:
             description: DatasetStatus defines observed state.
@@ -189,28 +243,31 @@ spec:
                   time.
                 properties:
                   keyVersion:
-                    description: KeyVersion is the Transit master-key version used
-                      to wrap the DK.
                     format: int64
                     type: integer
                   provisioned:
-                    description: Provisioned is true once the DK has been generated
-                      and wrapped.
                     type: boolean
                   provisionedAt:
-                    description: ProvisionedAt records when the DK was created.
                     format: date-time
                     type: string
                   wrappedDK:
-                    description: |-
-                      WrappedDK is the OpenBao Transit-wrapped Dataset Key, base64-encoded
-                      by the JSON marshaller.
                     format: byte
                     type: string
                 type: object
               mountPath:
                 type: string
+              mountPoint:
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Mounted
+                - Degraded
+                - Failed
+                - Ready
                 type: string
               usedBytes:
                 format: int64

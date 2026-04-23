@@ -78,24 +78,47 @@ spec:
                     type: string
                 type: object
               protection:
-                description: ProtectionPolicy encodes replication / erasure coding
-                  choice.
+                description: |-
+                  ProtectionPolicy encodes replication / erasure coding choice.
+                  Mirror of the discriminated-union Zod schema.
                 properties:
                   erasureCoding:
                     description: ErasureCodingSpec configures EC parameters.
                     properties:
                       dataShards:
                         format: int32
+                        minimum: 2
                         type: integer
                       parityShards:
                         format: int32
+                        minimum: 1
                         type: integer
+                    required:
+                    - dataShards
+                    - parityShards
                     type: object
                   mode:
+                    enum:
+                    - replication
+                    - erasureCoding
                     type: string
                   replicas:
+                    description: Replicas is retained for back-compat with mode=replication.
                     format: int32
                     type: integer
+                  replication:
+                    description: ReplicationProtection holds N-copy params.
+                    properties:
+                      copies:
+                        format: int32
+                        maximum: 8
+                        minimum: 1
+                        type: integer
+                    required:
+                    - copies
+                    type: object
+                required:
+                - mode
                 type: object
               quota:
                 description: BucketQuota sets bucket-level quotas.
@@ -117,7 +140,11 @@ spec:
                   demoteTo:
                     type: string
                   primary:
+                    minLength: 1
                     type: string
+                  promoteAfterAccesses:
+                    format: int32
+                    type: integer
                   promoteOn:
                     type: string
                 type: object
@@ -188,22 +215,14 @@ spec:
                   time.
                 properties:
                   keyVersion:
-                    description: KeyVersion is the Transit master-key version used
-                      to wrap the DK.
                     format: int64
                     type: integer
                   provisioned:
-                    description: Provisioned is true once the DK has been generated
-                      and wrapped.
                     type: boolean
                   provisionedAt:
-                    description: ProvisionedAt records when the DK was created.
                     format: date-time
                     type: string
                   wrappedDK:
-                    description: |-
-                      WrappedDK is the OpenBao Transit-wrapped Dataset Key, base64-encoded
-                      by the JSON marshaller.
                     format: byte
                     type: string
                 type: object

@@ -16,10 +16,20 @@ spec:
     singular: nvmeoftarget
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.blockVolume
+      name: Volume
+      type: string
+    - jsonPath: .spec.transport
+      name: Transport
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NvmeofTarget — NVMe-oF subsystem binding a BlockVolume
+        description: NvmeofTarget is an NVMe-oF subsystem exporting a BlockVolume.
         properties:
           apiVersion:
             description: |-
@@ -40,6 +50,41 @@ spec:
             type: object
           spec:
             description: NvmeofTargetSpec defines the desired state of NvmeofTarget.
+            properties:
+              allowedHostNqns:
+                items:
+                  type: string
+                type: array
+              blockVolume:
+                description: BlockVolume names the backing BlockVolume CR.
+                minLength: 1
+                type: string
+              listen:
+                description: NvmeofListen is the portal configuration for an NVMe-oF
+                  target.
+                properties:
+                  hostInterface:
+                    minLength: 1
+                    type: string
+                  port:
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - hostInterface
+                type: object
+              subsystemNqn:
+                description: SubsystemNqn overrides the auto-generated NQN.
+                type: string
+              transport:
+                enum:
+                - tcp
+                - rdma
+                type: string
+            required:
+            - blockVolume
+            - listen
             type: object
           status:
             description: NvmeofTargetStatus defines observed state of NvmeofTarget.
@@ -100,7 +145,17 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Ready
+                type: string
+              subsystemNqn:
                 type: string
             type: object
         type: object
