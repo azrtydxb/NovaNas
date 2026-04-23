@@ -46,4 +46,20 @@ else
     echo "WARNING: vfio-pci driver not available"
 fi
 
+# Pre-load the NBD kernel module so `spdk_nbd_start` can bind chunk-backed
+# volumes to /dev/nbdN (used by the Go meta service to mount the metadata
+# volume and open BadgerDB on top of it). nbds_max=16 matches
+# `NbdManager::MAX_NBD_SLOTS`; raise in lockstep if more are needed.
+echo "Loading nbd kernel module (nbds_max=16)..."
+if [ -x /sbin/modprobe ]; then
+    modprobe nbd nbds_max=16 2>/dev/null || true
+else
+    nsenter -t 1 -m -- modprobe nbd nbds_max=16 2>/dev/null || true
+fi
+if [ -e /dev/nbd0 ]; then
+    echo "nbd module loaded (/dev/nbd0 present)"
+else
+    echo "WARNING: nbd device nodes not available — ExportMetadataVolumeNBD will fail"
+fi
+
 exec /usr/local/bin/novanas-dataplane "$@"

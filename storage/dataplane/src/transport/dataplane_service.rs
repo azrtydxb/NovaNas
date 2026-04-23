@@ -22,6 +22,7 @@ use crate::bdev::chunk_io::{ChunkStore, CHUNK_SIZE};
 use crate::config::{BlobstoreConfig, LocalBdevConfig, LvolConfig, NvmfInitiatorConfig};
 use crate::policy::engine::PolicyEngine;
 use crate::spdk::bdev_manager::BdevManager;
+use crate::spdk::nbd_manager::NbdManager;
 use crate::spdk::nvmf_manager::NvmfManager;
 
 /// Fragment size for streaming chunk data (1MB).
@@ -142,6 +143,11 @@ fn volume_id_to_nqn(volume_id: &str) -> String {
 pub struct DataplaneServiceImpl {
     bdev_manager: Arc<BdevManager>,
     nvmf_manager: Arc<NvmfManager>,
+    /// NBD-export bookkeeping used by `(export|release)_metadata_volume_nbd`.
+    /// Unused when built without `spdk-sys` (the RPC returns `Unimplemented`
+    /// on that path), hence the allow.
+    #[allow(dead_code)]
+    nbd_manager: Arc<NbdManager>,
 }
 
 impl DataplaneServiceImpl {
@@ -149,6 +155,7 @@ impl DataplaneServiceImpl {
         Self {
             bdev_manager,
             nvmf_manager,
+            nbd_manager: Arc::new(NbdManager::new()),
         }
     }
 }
@@ -1912,34 +1919,136 @@ impl DataplaneService for DataplaneServiceImpl {
     }
 
     /// Assemble a chunk-backed metadata volume and export it as an NBD
-    /// device. The real implementation must (a) open the blobstore for
-    /// `root_chunk_id`@`volume_version`, (b) create an SPDK NBD bdev
-    /// export with `spdk_nbd_start`, (c) return the resulting /dev/nbdN
-    /// path.
+    /// device.
     ///
-    /// Returning Unimplemented here is deliberate: the Go meta service
-    /// probes this RPC at startup and falls back to LocalDataDir if it
-    /// is not available, so a stub-return is the correct signalling for
-    /// clusters that have not yet enabled chunk-backed metadata. Full
-    /// impl is tracked on #13 (NBD mount end-to-end).
+    /// Flow:
+    /// 1. Resolve `(volume_name, root_chunk_id, volume_version)` into a
+    ///    registered SPDK bdev. The volume definition (including
+    ///    `size_bytes`) is read from the persistent metadata store. The
+    ///    chunk map is loaded at dataplane startup via
+    ///    `load_chunk_maps_from_store`, so reconstructing the bdev is a
+    ///    stateless operation: we just need to ensure an SPDK bdev named
+    ///    `novanas_<volume_name>` is registered.
+    /// 2. Start an NBD export via `spdk_nbd_start`, picking the first
+    ///    free `/dev/nbdN` slot in `[0, MAX_NBD_SLOTS)`.
+    /// 3. Return the chosen `/dev/nbdN` path. The Go meta service then
+    ///    mounts that device and opens BadgerDB on top of it.
+    ///
+    /// `root_chunk_id` and `volume_version` are logged for diagnostics.
+    /// They are not used to re-seed the chunk map here — the metadata
+    /// store already knows the chunk map, and validating the root+version
+    /// against the store is an end-to-end correctness check handled by
+    /// the meta service itself (it verifies the BadgerDB header after
+    /// mount).
+    #[cfg(feature = "spdk-sys")]
+    async fn export_metadata_volume_nbd(
+        &self,
+        request: Request<ExportMetadataVolumeNbdRequest>,
+    ) -> Result<Response<ExportMetadataVolumeNbdResponse>, Status> {
+        let req = request.into_inner();
+        if req.volume_name.is_empty() {
+            return Err(Status::invalid_argument(
+                "export_metadata_volume_nbd: volume_name must not be empty",
+            ));
+        }
+
+        // Resolve size_bytes from the persisted volume definition.
+        let size_bytes = {
+            let store = crate::bdev::novanas_bdev::get_metadata_store().ok_or_else(|| {
+                Status::failed_precondition(
+                    "export_metadata_volume_nbd: metadata store not initialised — \
+                     call InitChunkStore first",
+                )
+            })?;
+            let vol = store
+                .get_volume(&req.volume_name)
+                .map_err(|e| Status::internal(format!("get_volume('{}'): {e}", req.volume_name)))?
+                .ok_or_else(|| {
+                    Status::not_found(format!(
+                        "export_metadata_volume_nbd: volume '{}' not found in metadata store",
+                        req.volume_name
+                    ))
+                })?;
+            vol.size_bytes
+        };
+
+        log::info!(
+            "export_metadata_volume_nbd: volume='{}' root_chunk_id='{}' version={} size={}B",
+            req.volume_name,
+            req.root_chunk_id,
+            req.volume_version,
+            size_bytes,
+        );
+
+        // Run the blocking SPDK dispatch on a blocking thread so we don't
+        // hold up the tokio runtime reactor.
+        let mgr = self.nbd_manager.clone();
+        let vol_name = req.volume_name.clone();
+        let device_path =
+            tokio::task::spawn_blocking(move || mgr.export_volume(&vol_name, size_bytes))
+                .await
+                .map_err(|e| Status::internal(format!("spawn_blocking join: {e}")))?
+                .map_err(|e| {
+                    Status::internal(format!(
+                        "export_metadata_volume_nbd('{}'): {e}",
+                        req.volume_name
+                    ))
+                })?;
+
+        Ok(Response::new(ExportMetadataVolumeNbdResponse {
+            device_path,
+        }))
+    }
+
+    /// Non-SPDK stub: when the `spdk-sys` feature is disabled the SPDK
+    /// reactor does not exist, so an NBD export cannot be created. Return
+    /// `Unimplemented` — the Go meta service probes this RPC at startup
+    /// and falls back to `LocalDataDir` when it is not available.
+    #[cfg(not(feature = "spdk-sys"))]
     async fn export_metadata_volume_nbd(
         &self,
         _request: Request<ExportMetadataVolumeNbdRequest>,
     ) -> Result<Response<ExportMetadataVolumeNbdResponse>, Status> {
         Err(Status::unimplemented(
-            "export_metadata_volume_nbd: NBD-backed metadata volume export \
-             requires SPDK NBD bdev integration (see issue #13)",
+            "export_metadata_volume_nbd: built without the spdk-sys feature",
         ))
     }
 
+    #[cfg(feature = "spdk-sys")]
+    async fn release_metadata_volume_nbd(
+        &self,
+        request: Request<ReleaseMetadataVolumeNbdRequest>,
+    ) -> Result<Response<ReleaseMetadataVolumeNbdResponse>, Status> {
+        let req = request.into_inner();
+        if req.volume_name.is_empty() {
+            return Err(Status::invalid_argument(
+                "release_metadata_volume_nbd: volume_name must not be empty",
+            ));
+        }
+
+        let mgr = self.nbd_manager.clone();
+        let vol_name = req.volume_name.clone();
+        tokio::task::spawn_blocking(move || mgr.release_volume(&vol_name))
+            .await
+            .map_err(|e| Status::internal(format!("spawn_blocking join: {e}")))?
+            .map_err(|e| {
+                Status::internal(format!(
+                    "release_metadata_volume_nbd('{}'): {e}",
+                    req.volume_name
+                ))
+            })?;
+
+        Ok(Response::new(ReleaseMetadataVolumeNbdResponse {}))
+    }
+
+    /// Non-SPDK stub: idempotent no-op so the Go meta service's cleanup
+    /// path is clean regardless of which side of the spdk-sys feature
+    /// gate we are on.
+    #[cfg(not(feature = "spdk-sys"))]
     async fn release_metadata_volume_nbd(
         &self,
         _request: Request<ReleaseMetadataVolumeNbdRequest>,
     ) -> Result<Response<ReleaseMetadataVolumeNbdResponse>, Status> {
-        // Idempotent release: if the NBD export was never created (because
-        // export_metadata_volume_nbd returned Unimplemented), there is
-        // nothing to tear down. Return Ok so the caller's cleanup is
-        // clean regardless of which path was taken.
         Ok(Response::new(ReleaseMetadataVolumeNbdResponse {}))
     }
 }
