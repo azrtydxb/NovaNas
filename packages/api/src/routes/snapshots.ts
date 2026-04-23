@@ -6,7 +6,7 @@ import { register as registerSnapshots } from '../resources/snapshots.js';
 import { accepted, triggerJob } from '../services/actions.js';
 import type { JobsService } from '../services/jobs.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export interface SnapshotRoutesDeps {
   api?: CustomObjectsApi;
@@ -78,7 +78,7 @@ export async function snapshotRoutes(
     registerSnapshotActions(app, deps.jobs ?? null);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/snapshots', summary: 'List snapshots', tag: 'snapshots' },
     { method: 'POST', url: '/api/v1/snapshots', summary: 'Take a snapshot', tag: 'snapshots' },
     {

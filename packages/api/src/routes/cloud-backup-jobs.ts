@@ -5,7 +5,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { register as registerImpl } from '../resources/cloud-backup-jobs.js';
 import { accepted, kubeErrorReply, nowIso, setAnnotation } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'cloudbackupjobs' };
 
@@ -64,7 +64,7 @@ export async function cloudBackupJobsRoutes(
     registerCloudBackupActions(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/cloud-backup-jobs',

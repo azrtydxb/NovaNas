@@ -1,14 +1,14 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerDisks } from '../resources/disks.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function diskRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
   if (api) {
     registerDisks(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/disks', summary: 'List physical disks', tag: 'disks' },
     { method: 'POST', url: '/api/v1/disks', summary: 'Register a disk', tag: 'disks' },
     { method: 'GET', url: '/api/v1/disks/:name', summary: 'Get a disk', tag: 'disks' },

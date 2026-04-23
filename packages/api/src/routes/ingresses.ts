@@ -1,14 +1,14 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/ingresses.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function ingressesRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
   if (api) {
     registerImpl(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/ingresses', summary: 'List ingresses', tag: 'ingresses' },
     { method: 'POST', url: '/api/v1/ingresses', summary: 'Create an ingress', tag: 'ingresses' },
     { method: 'GET', url: '/api/v1/ingresses/:name', summary: 'Get an ingress', tag: 'ingresses' },

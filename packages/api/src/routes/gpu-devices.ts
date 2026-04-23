@@ -5,7 +5,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { register as registerImpl } from '../resources/gpu-devices.js';
 import { accepted, kubeErrorReply, patchSpec } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'gpudevices' };
 
@@ -89,7 +89,7 @@ export async function gpuDevicesRoutes(
     registerGpuActions(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/gpu-devices', summary: 'List GPU devices', tag: 'gpu-devices' },
     {
       method: 'GET',

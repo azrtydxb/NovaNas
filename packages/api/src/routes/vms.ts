@@ -12,7 +12,7 @@ import {
   setAnnotation,
 } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'vms' };
 
@@ -126,7 +126,7 @@ export async function vmRoutes(app: FastifyInstance, api?: CustomObjectsApi): Pr
     registerVmActions(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/vms', summary: 'List VMs', tag: 'vms' },
     { method: 'POST', url: '/api/v1/vms', summary: 'Create a VM', tag: 'vms' },
     { method: 'GET', url: '/api/v1/vms/:name', summary: 'Get a VM', tag: 'vms' },

@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/physical-interfaces.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function physicalInterfacesRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function physicalInterfacesRoutes(
     registerImpl(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/physical-interfaces',

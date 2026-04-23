@@ -1,14 +1,14 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerSmbServers } from '../resources/smb-servers.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function smbServerRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
   if (api) {
     registerSmbServers(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/smb-servers', summary: 'List SMB servers', tag: 'smb-servers' },
     {
       method: 'POST',

@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerIsoLibraries } from '../resources/iso-libraries.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function isoLibraryRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function isoLibraryRoutes(
     registerIsoLibraries(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/iso-libraries',
