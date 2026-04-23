@@ -16,10 +16,17 @@ spec:
     singular: app
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.version
+      name: Version
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: App — Synthesized catalog entry (read-only)
+        description: App — Synthesized catalog entry (read-only projection from AppCatalog).
         properties:
           apiVersion:
             description: |-
@@ -39,7 +46,78 @@ spec:
           metadata:
             type: object
           spec:
-            description: AppSpec defines the desired state of App.
+            description: AppSpec defines the desired state of App (a catalog entry
+              projection).
+            properties:
+              category:
+                type: string
+              chart:
+                description: Chart is the chart reference (required).
+                properties:
+                  digest:
+                    description: Digest pins a specific content digest (OCI manifest
+                      or index entry).
+                    type: string
+                  helmRepo:
+                    description: HelmRepo is the https URL of a traditional chart
+                      repo (used when OCIRef is empty).
+                    type: string
+                  name:
+                    description: Name of the chart inside the repo (ignored for OCIRef).
+                    type: string
+                  ociRef:
+                    description: OCIRef is a pullable OCI reference such as oci://registry/org/chart.
+                    type: string
+                  version:
+                    description: Version is the chart semver. Required for reproducibility.
+                    type: string
+                type: object
+              description:
+                type: string
+              displayName:
+                description: DisplayName is the human-friendly name (required).
+                minLength: 1
+                type: string
+              homepage:
+                type: string
+              icon:
+                description: Icon URL or inline data URI.
+                type: string
+              maintainers:
+                items:
+                  type: string
+                type: array
+              requirements:
+                description: |-
+                  AppRequirements advertises minimum host capabilities the catalog entry
+                  expects. Operators use this to gate scheduling.
+                properties:
+                  minCpu:
+                    type: string
+                  minRamMB:
+                    format: int32
+                    type: integer
+                  ports:
+                    description: Ports advertises ports the app expects (1-65535).
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                  privileged:
+                    description: Privileged marks apps that need a privileged pod
+                      security context.
+                    type: boolean
+                  requiresGpu:
+                    type: boolean
+                type: object
+              version:
+                description: Version is the catalog version string (required).
+                minLength: 1
+                type: string
+            required:
+            - chart
+            - displayName
+            - version
             type: object
           status:
             description: AppStatus defines observed state of App.
@@ -100,7 +178,16 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Ready
+                - Failed
                 type: string
             type: object
         type: object

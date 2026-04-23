@@ -13,13 +13,25 @@ spec:
     kind: ConfigBackupPolicy
     listKind: ConfigBackupPolicyList
     plural: configbackuppolicies
+    shortNames:
+    - cbp
     singular: configbackuppolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.cron
+      name: Cron
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.lastRun
+      name: LastRun
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ConfigBackupPolicy — Config snapshot cron and destinations
+        description: ConfigBackupPolicy — scheduled CR/config snapshot policy.
         properties:
           apiVersion:
             description: |-
@@ -40,6 +52,123 @@ spec:
             type: object
           spec:
             description: ConfigBackupPolicySpec defines the desired state of ConfigBackupPolicy.
+            properties:
+              cron:
+                description: Cron is a standard 5-field cron expression.
+                minLength: 1
+                type: string
+              destinations:
+                items:
+                  description: ConfigBackupDestination is a single backup target.
+                  properties:
+                    bucket:
+                      type: string
+                    cloudBackupTarget:
+                      type: string
+                    name:
+                      minLength: 1
+                      type: string
+                    path:
+                      type: string
+                    s3:
+                      description: ConfigBackupS3 captures an external S3 destination.
+                      properties:
+                        bucket:
+                          type: string
+                        credentialsSecret:
+                          description: |-
+                            SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                            operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                            encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                          properties:
+                            key:
+                              description: Key inside the Secret. Defaults are controller-specific.
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the Secret. Defaults to the CR's namespace for
+                                namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                              type: string
+                            secretName:
+                              minLength: 1
+                              type: string
+                          required:
+                          - secretName
+                          type: object
+                        endpoint:
+                          type: string
+                        prefix:
+                          type: string
+                        region:
+                          type: string
+                      required:
+                      - bucket
+                      type: object
+                    type:
+                      enum:
+                      - bucket
+                      - s3
+                      - cloudBackupTarget
+                      - localPath
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                type: array
+              encryption:
+                description: ConfigBackupEncryption toggles backup-level encryption.
+                properties:
+                  enabled:
+                    type: boolean
+                  passphraseSecret:
+                    description: |-
+                      SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                      operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                      encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                    properties:
+                      key:
+                        description: Key inside the Secret. Defaults are controller-specific.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the CR's namespace for
+                          namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                        type: string
+                      secretName:
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                required:
+                - enabled
+                type: object
+              include:
+                description: ConfigBackupIncludes selects which subsystems are exported.
+                properties:
+                  crds:
+                    type: boolean
+                  keycloak:
+                    type: boolean
+                  openbao:
+                    type: boolean
+                  postgres:
+                    type: boolean
+                type: object
+              retention:
+                description: ConfigBackupRetention bounds how many archives are kept.
+                properties:
+                  keepLast:
+                    format: int32
+                    minimum: 0
+                    type: integer
+                required:
+                - keepLast
+                type: object
+            required:
+            - cron
+            - destinations
             type: object
           status:
             description: ConfigBackupPolicyStatus defines observed state of ConfigBackupPolicy.
@@ -100,7 +229,24 @@ spec:
                   - type
                   type: object
                 type: array
+              lastArchive:
+                type: string
+              lastRun:
+                format: date-time
+                type: string
+              nextRun:
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Active
+                - Running
+                - Failed
                 type: string
             type: object
         type: object

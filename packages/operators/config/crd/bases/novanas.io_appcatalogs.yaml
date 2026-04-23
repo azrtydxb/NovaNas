@@ -16,10 +16,20 @@ spec:
     singular: appcatalog
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.source.type
+      name: Type
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.appCount
+      name: Apps
+      type: integer
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AppCatalog — Catalog source (git/helm/oci)
+        description: AppCatalog — remote catalog source (git/helm/oci).
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,53 @@ spec:
             type: object
           spec:
             description: AppCatalogSpec defines the desired state of AppCatalog.
+            properties:
+              source:
+                description: AppCatalogSource describes where to fetch chart metadata
+                  from.
+                properties:
+                  branch:
+                    type: string
+                  path:
+                    type: string
+                  refreshInterval:
+                    description: RefreshInterval is a duration (Go or systemd-calendar
+                      style).
+                    type: string
+                  type:
+                    enum:
+                    - git
+                    - helm
+                    - oci
+                    - custom
+                    type: string
+                  url:
+                    description: URL is the remote location (git repo URL, helm repo
+                      URL, or oci ref).
+                    minLength: 1
+                    type: string
+                required:
+                - type
+                - url
+                type: object
+              trust:
+                description: AppCatalogTrust describes signature requirements for
+                  catalog entries.
+                properties:
+                  required:
+                    type: boolean
+                  signedBy:
+                    type: string
+                type: object
+            required:
+            - source
             type: object
           status:
             description: AppCatalogStatus defines observed state of AppCatalog.
             properties:
+              appCount:
+                format: int32
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +153,19 @@ spec:
                   - type
                   type: object
                 type: array
+              lastSync:
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Synced
+                - Failed
                 type: string
             type: object
         type: object

@@ -208,10 +208,29 @@ spec:
                     type: string
                 type: object
               objects:
+                description: |-
+                  Objects is kept as a synonym for TotalObjects for source compatibility
+                  with earlier schema revisions; controllers should populate both.
+                  Deprecated: use TotalObjects.
+                format: int64
+                type: integer
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
                 format: int64
                 type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
                 type: string
+              totalObjects:
+                description: |-
+                  TotalObjects is the aggregate object count reported by the S3
+                  gateway's metadata service.
+                format: int64
+                type: integer
               usedBytes:
                 format: int64
                 type: integer

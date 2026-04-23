@@ -20,7 +20,7 @@ type AppChartRef struct {
 // expects. Operators use this to gate scheduling.
 type AppRequirements struct {
 	MinRAMMB    int32   `json:"minRamMB,omitempty"`
-	MinCPU      float64 `json:"minCpu,omitempty"`
+	MinCPU      string  `json:"minCpu,omitempty"`
 	RequiresGPU bool    `json:"requiresGpu,omitempty"`
 	// Ports advertises ports the app expects (1-65535).
 	Ports []int32 `json:"ports,omitempty"`
@@ -49,7 +49,6 @@ type AppSpec struct {
 
 // AppStatus defines observed state of App.
 type AppStatus struct {
-	// Phase is a coarse lifecycle summary.
 	// +kubebuilder:validation:Enum=Pending;Ready;Failed
 	Phase      string             `json:"phase,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`

@@ -16,10 +16,24 @@ spec:
     singular: updatepolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.channel
+      name: Channel
+      type: string
+    - jsonPath: .status.currentVersion
+      name: Current
+      type: string
+    - jsonPath: .status.availableVersion
+      name: Available
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: UpdatePolicy — Channel, auto-update, maintenance window
+        description: UpdatePolicy — RAUC A/B update channel, cadence, and maintenance
+          windows.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +54,48 @@ spec:
             type: object
           spec:
             description: UpdatePolicySpec defines the desired state of UpdatePolicy.
+            properties:
+              autoReboot:
+                type: boolean
+              autoUpdate:
+                type: boolean
+              channel:
+                enum:
+                - stable
+                - beta
+                - edge
+                - manual
+                type: string
+              maintenanceWindow:
+                description: UpdateMaintenanceWindow defines when updates are allowed
+                  to apply.
+                properties:
+                  cron:
+                    description: Cron is a 5-field cron expression that matches the
+                      start of the window.
+                    minLength: 1
+                    type: string
+                  durationMinutes:
+                    description: DurationMinutes is how long the window stays open.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                required:
+                - cron
+                - durationMinutes
+                type: object
+              skipVersions:
+                items:
+                  type: string
+                type: array
+            required:
+            - channel
             type: object
           status:
             description: UpdatePolicyStatus defines observed state of UpdatePolicy.
             properties:
+              availableVersion:
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +152,24 @@ spec:
                   - type
                   type: object
                 type: array
+              currentVersion:
+                type: string
+              lastCheck:
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Idle
+                - Checking
+                - Downloading
+                - Installing
+                - PendingReboot
+                - Failed
                 type: string
             type: object
         type: object
