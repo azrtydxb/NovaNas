@@ -1,8 +1,8 @@
 import Fastify from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
 import type { Redis } from 'ioredis';
-import type { DbClient } from '../services/db.js';
+import { afterEach, describe, expect, it } from 'vitest';
 import { fakeRedis } from '../resources/_test-helpers.js';
+import type { DbClient } from '../services/db.js';
 import { healthRoutes } from './health.js';
 
 function makeApp(deps: { redis: Redis; db?: DbClient | null; timeoutMs?: number }) {

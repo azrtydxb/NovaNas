@@ -281,7 +281,7 @@ impl StorageBackend for LvmBackend {
                     comp.complete(-1);
                     return;
                 }
-                ffi::vbdev_lvol_resize(lvol, new_size_bytes, Some(lvol_op_cb), comp.as_ptr());
+                ffi::vbdev_lvol_resize(lvol, new_size_bytes, Some(lvol_resize_cb), comp.as_ptr());
                 // Descriptor is only needed to recover the lvol handle; the
                 // resize itself holds its own reference on the lvol. Close
                 // now to avoid leaking the desc past this dispatch.
@@ -674,6 +674,14 @@ unsafe extern "C" fn lvol_op_with_handle_cb(
     _lvol: *mut ffi::spdk_lvol,
     rc: i32,
 ) {
+    let completion = Completion::<i32>::from_ptr(ctx);
+    completion.complete(rc);
+}
+
+// Callback matching SPDK's `spdk_lvol_op_complete` type — used by
+// operations that signal completion without returning the lvol handle
+// (vbdev_lvol_resize, vbdev_lvol_destroy, …).
+unsafe extern "C" fn lvol_resize_cb(ctx: *mut std::os::raw::c_void, rc: i32) {
     let completion = Completion::<i32>::from_ptr(ctx);
     completion.complete(rc);
 }
