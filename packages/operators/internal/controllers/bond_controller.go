@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/client-go/tools/record"
@@ -18,10 +17,11 @@ const finalizerBond = reconciler.FinalizerPrefix + "bond"
 
 // BondReconciler reconciles a Bond object.
 //
-// Wave-4 scope: project the desired bond into a nmstate YAML blob stored in
-// a ConfigMap under novanas-system, then hand off to NetworkClient (no-op
-// default) for host-side application. Status reflects the observed
-// revision.
+// Reconcile projects the Bond spec into a rendered nmstate YAML document,
+// stores a copy in a ConfigMap for auditability, and hands the bytes off to
+// the configured NetworkClient (ConfigMap-backed in production, noop in
+// tests). On deletion the finalizer teardown asks the host to shut down
+// the bond member by publishing a state=absent document.
 type BondReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -39,7 +39,17 @@ func (r *BondReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	net := r.Network
+	if net == nil {
+		net = reconciler.NoopNetworkClient{}
+	}
+
 	if !obj.DeletionTimestamp.IsZero() {
+		// Tear the bond down before letting Kubernetes delete the CR.
+		teardown := "interfaces:\n  - name: " + obj.Name + "\n    type: bond\n    state: absent\n"
+		if _, err := net.ApplyState(ctx, obj.Name, []byte(teardown)); err != nil {
+			logger.Error(err, "bond teardown failed; proceeding with finalizer removal to avoid stuck delete")
+		}
 		if err := reconciler.RemoveFinalizer(ctx, r.Client, &obj, finalizerBond); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -53,17 +63,14 @@ func (r *BondReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "projecting bond state")
 	obj.Status.Phase = "Reconciling"
 
-	net := r.Network
-	if net == nil {
-		net = reconciler.NoopNetworkClient{}
-	}
-
-	state := fmt.Sprintf("interfaces:\n  - name: %s\n    type: bond\n    state: up\n", obj.Name)
+	state := renderBondNmstate(&obj)
+	stateBytes := []byte(state)
 	cmName := childName(obj.Name, "nmstate")
-	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", cmName, &obj, map[string]string{"state.yaml": state}, map[string]string{"novanas.io/kind": "Bond"}); err != nil {
+	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", cmName, &obj, map[string]string{"state.yaml": state, "hash": hashBytes(stateBytes)}, map[string]string{"novanas.io/kind": "Bond"}); err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ConfigMapFailed", err.Error())
 		obj.Status.Phase = "Failed"
 		_ = statusUpdate(ctx, r.Client, &obj)
@@ -71,7 +78,7 @@ func (r *BondReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	rev, err := net.ApplyState(ctx, obj.Name, []byte(state))
+	rev, err := net.ApplyState(ctx, obj.Name, stateBytes)
 	if err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "NmstateFailed", err.Error())
 		obj.Status.Phase = "Failed"
@@ -80,8 +87,13 @@ func (r *BondReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 	logger.V(1).Info("nmstate applied", "revision", rev)
 
+	obj.Status.AppliedConfigHash = hashBytes(stateBytes)
+	// Active members default to the full member list until observedState
+	// reporting is wired. A real host reflector will override this via a
+	// watch.
+	obj.Status.ActiveMembers = append([]string(nil), obj.Spec.Interfaces...)
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "bond projected (rev "+rev+")")
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

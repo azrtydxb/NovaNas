@@ -16,10 +16,22 @@ spec:
     singular: remoteaccesstunnel
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.endpoint.hostname
+      name: Endpoint
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: RemoteAccessTunnel — SD-WAN / Tailscale-style tunnel
+        description: |-
+          RemoteAccessTunnel is a persistent outbound tunnel (WireGuard, IPsec,
+          Tailscale, or SD-WAN) managed by a systemd unit on the host.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +52,88 @@ spec:
             type: object
           spec:
             description: RemoteAccessTunnelSpec defines the desired state of RemoteAccessTunnel.
+            properties:
+              auth:
+                description: RemoteAccessTunnelAuth references the tunnel credentials.
+                properties:
+                  secret:
+                    description: Secret is a structured reference to a Secret key.
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  secretRef:
+                    description: SecretRef names an in-namespace Secret (legacy, simple
+                      form).
+                    type: string
+                type: object
+              endpoint:
+                description: RemoteAccessTunnelEndpoint is the remote peer address.
+                properties:
+                  hostname:
+                    minLength: 1
+                    type: string
+                  port:
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - hostname
+                type: object
+              exposes:
+                items:
+                  description: RemoteAccessTunnelExpose selects which workloads traverse
+                    the tunnel.
+                  properties:
+                    app:
+                      type: string
+                    via:
+                      enum:
+                      - tunnel
+                      - direct
+                      type: string
+                    vm:
+                      type: string
+                  type: object
+                type: array
+              type:
+                description: RemoteAccessTunnelType selects the tunnel technology.
+                enum:
+                - sdwan
+                - wireguard
+                - tailscale
+                type: string
+            required:
+            - auth
+            - endpoint
+            - type
             type: object
           status:
             description: RemoteAccessTunnelStatus defines observed state of RemoteAccessTunnel.
             properties:
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the projected Tunnel
+                  spec.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +190,28 @@ spec:
                   - type
                   type: object
                 type: array
+              connectedAt:
+                description: ConnectedAt is the timestamp of the most recent successful
+                  handshake.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Connected
+                - Disconnected
+                - Failed
+                - Reconciling
+                - Ready
+                type: string
+              publicKey:
+                description: PublicKey is the locally-advertised WireGuard/Tailscale
+                  public key.
                 type: string
             type: object
         type: object

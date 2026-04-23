@@ -14,12 +14,22 @@ spec:
     listKind: IngressList
     plural: ingresses
     singular: ingress
-  scope: Cluster
+  scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.hostname
+      name: Hostname
+      type: string
+    - jsonPath: .status.vip
+      name: VIP
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Ingress — novaedge reverse-proxy ingress rules
+        description: Ingress exposes a backend via novaedge.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,53 @@ spec:
             type: object
           spec:
             description: IngressSpec defines the desired state of Ingress.
+            properties:
+              hostname:
+                minLength: 1
+                type: string
+              rules:
+                items:
+                  description: IngressRule is one host/path -> backend mapping.
+                  properties:
+                    backend:
+                      description: Backend is the name of the target resource (App,
+                        Service, etc.).
+                      minLength: 1
+                      type: string
+                    host:
+                      minLength: 1
+                      type: string
+                    path:
+                      type: string
+                  required:
+                  - backend
+                  - host
+                  type: object
+                minItems: 1
+                type: array
+              tls:
+                description: IngressTls selects the certificate used to terminate
+                  TLS.
+                properties:
+                  certificate:
+                    description: Certificate is the name of a Certificate CR in the
+                      same namespace.
+                    minLength: 1
+                    type: string
+                required:
+                - certificate
+                type: object
+            required:
+            - hostname
+            - rules
             type: object
           status:
             description: IngressStatus defines observed state of Ingress.
             properties:
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the generated novaedge
+                  Route spec.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +153,21 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
+                type: string
+              vip:
+                description: Vip is the allocated external IP (IPv4 or IPv6).
                 type: string
             type: object
         type: object

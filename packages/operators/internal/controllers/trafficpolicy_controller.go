@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,7 +18,8 @@ import (
 const finalizerTrafficPolicy = reconciler.FinalizerPrefix + "trafficpolicy"
 
 // TrafficPolicyReconciler projects the policy into a novanet
-// TrafficPolicy CR. Falls back to status-only when the CRD is absent.
+// TrafficPolicy CR. Falls back to a ConfigMap snapshot when the CRD is
+// absent so the host agent can still pick up the limiter config.
 type TrafficPolicyReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -45,20 +47,33 @@ func (r *TrafficPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "projecting traffic policy")
 	obj.Status.Phase = "Reconciling"
 
+	rendered := renderTrafficLimits(&obj)
+	h := hashBytes([]byte(rendered))
+	_, _ = ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "tp"), &obj, map[string]string{
+		"config": rendered,
+		"hash":   h,
+	}, map[string]string{"novanas.io/kind": "TrafficPolicy"})
+
 	gvk := schema.GroupVersionKind{Group: "novanet.io", Version: "v1alpha1", Kind: "TrafficPolicy"}
 	err := ensureUnstructured(ctx, r.Client, gvk, "novanas-system", childName(obj.Name, "tp"), func(u *unstructuredType) {
-		setSpec(u, map[string]interface{}{"owner": obj.Name})
+		setSpec(u, map[string]interface{}{
+			"owner":     obj.Name,
+			"scopeKind": string(obj.Spec.Scope.Kind),
+			"scopeName": obj.Spec.Scope.Name,
+			"hash":      h,
+		})
 	})
 	switch err {
 	case nil:
 		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "traffic policy projected")
-		obj.Status.Phase = "Ready"
+		obj.Status.Phase = "Active"
 	case errKindMissing:
-		logger.V(1).Info("novanet TrafficPolicy CRD absent -- status only")
-		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novanet CRD absent; status-only")
+		logger.V(1).Info("novanet TrafficPolicy CRD absent -- ConfigMap-only reconcile")
+		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novanet CRD absent; policy staged in ConfigMap")
 		obj.Status.Phase = "Pending"
 	default:
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ProjectionFailed", err.Error())
@@ -66,6 +81,9 @@ func (r *TrafficPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
+	now := metav1.Now()
+	obj.Status.AppliedAt = &now
+	obj.Status.AppliedConfigHash = h
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

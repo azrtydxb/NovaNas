@@ -16,10 +16,20 @@ spec:
     singular: trafficpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.scope.kind
+      name: Scope
+      type: string
+    - jsonPath: .spec.scope.name
+      name: Target
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TrafficPolicy — QoS limits by scope
+        description: TrafficPolicy caps or shapes traffic for a named target.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,132 @@ spec:
             type: object
           spec:
             description: TrafficPolicySpec defines the desired state of TrafficPolicy.
+            properties:
+              limits:
+                description: TrafficLimits groups egress/ingress caps.
+                properties:
+                  egress:
+                    description: TrafficDirectionLimit is the per-direction limit
+                      block.
+                    properties:
+                      burst:
+                        description: |-
+                          TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                          as a free-form string; validated at admission time.
+                        type: string
+                      max:
+                        description: |-
+                          TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                          as a free-form string; validated at admission time.
+                        type: string
+                    type: object
+                  ingress:
+                    description: TrafficDirectionLimit is the per-direction limit
+                      block.
+                    properties:
+                      burst:
+                        description: |-
+                          TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                          as a free-form string; validated at admission time.
+                        type: string
+                      max:
+                        description: |-
+                          TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                          as a free-form string; validated at admission time.
+                        type: string
+                    type: object
+                type: object
+              priority:
+                description: Priority orders overlapping policies; lower runs first.
+                format: int32
+                type: integer
+              scheduling:
+                additionalProperties:
+                  description: TrafficSchedulingWindow overrides limits on a cron
+                    window.
+                  properties:
+                    cron:
+                      description: Cron is the crontab-style spec for when this window
+                        is active.
+                      minLength: 1
+                      type: string
+                    durationMinutes:
+                      format: int32
+                      minimum: 1
+                      type: integer
+                    overrideEgress:
+                      description: TrafficDirectionLimit is the per-direction limit
+                        block.
+                      properties:
+                        burst:
+                          description: |-
+                            TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                            as a free-form string; validated at admission time.
+                          type: string
+                        max:
+                          description: |-
+                            TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                            as a free-form string; validated at admission time.
+                          type: string
+                      type: object
+                    overrideIngress:
+                      description: TrafficDirectionLimit is the per-direction limit
+                        block.
+                      properties:
+                        burst:
+                          description: |-
+                            TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                            as a free-form string; validated at admission time.
+                          type: string
+                        max:
+                          description: |-
+                            TrafficBandwidth is a bandwidth limit (e.g. "100Mbps", "1.5Gbps"). Stored
+                            as a free-form string; validated at admission time.
+                          type: string
+                      type: object
+                  required:
+                  - cron
+                  - durationMinutes
+                  type: object
+                description: Scheduling is a map of named windows -> window spec.
+                type: object
+              scope:
+                description: TrafficPolicyScope names the target that will be rate-limited.
+                properties:
+                  kind:
+                    description: TrafficPolicyScopeKind is the kind of the target
+                      the policy applies to.
+                    enum:
+                    - HostInterface
+                    - Namespace
+                    - App
+                    - Vm
+                    - ReplicationJob
+                    - ObjectStore
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+            required:
+            - scope
             type: object
           status:
             description: TrafficPolicyStatus defines observed state of TrafficPolicy.
             properties:
+              appliedAt:
+                description: AppliedAt is the timestamp of successful tc/eBPF installation.
+                format: date-time
+                type: string
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the rendered limiter
+                  config.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +232,18 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

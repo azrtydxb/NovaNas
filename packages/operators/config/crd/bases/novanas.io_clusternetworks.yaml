@@ -16,10 +16,21 @@ spec:
     singular: clusternetwork
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.podCidr
+      name: Pods
+      type: string
+    - jsonPath: .spec.serviceCidr
+      name: Services
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterNetwork — Pod/service CIDRs, overlay config
+        description: ClusterNetwork is the cluster-singleton owning cluster-wide CNI
+          config.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +51,59 @@ spec:
             type: object
           spec:
             description: ClusterNetworkSpec defines the desired state of ClusterNetwork.
+            properties:
+              mtu:
+                anyOf:
+                - type: integer
+                - type: string
+                description: Mtu is the cluster-wide MTU. Either an integer or the
+                  string "auto".
+                x-kubernetes-int-or-string: true
+              overlay:
+                description: Overlay selects the data-plane encapsulation.
+                properties:
+                  egressInterface:
+                    description: EgressInterface is the NIC used for overlay egress
+                      traffic.
+                    type: string
+                  type:
+                    description: OverlayType selects the data-plane encapsulation
+                      mode.
+                    enum:
+                    - geneve
+                    - vxlan
+                    - none
+                    type: string
+                required:
+                - type
+                type: object
+              podCidr:
+                description: PodCidr is the pod IP allocation CIDR (IPv4 or IPv6).
+                minLength: 1
+                type: string
+              policy:
+                description: Policy tunes default pod policy behavior.
+                properties:
+                  defaultDeny:
+                    description: DefaultDeny installs a default-deny policy for pod
+                      traffic.
+                    type: boolean
+                type: object
+              serviceCidr:
+                description: ServiceCidr is the cluster service IP CIDR.
+                minLength: 1
+                type: string
+            required:
+            - podCidr
+            - serviceCidr
             type: object
           status:
             description: ClusterNetworkStatus defines observed state of ClusterNetwork.
             properties:
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the generated CNI/cluster-net
+                  config.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +160,22 @@ spec:
                   - type
                   type: object
                 type: array
+              effectiveMtu:
+                description: EffectiveMtu is the resolved MTU applied to the overlay.
+                format: int32
+                type: integer
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

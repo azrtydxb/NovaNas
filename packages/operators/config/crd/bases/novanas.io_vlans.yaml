@@ -16,10 +16,20 @@ spec:
     singular: vlan
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.parent
+      name: Parent
+      type: string
+    - jsonPath: .spec.vlanId
+      name: VlanID
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Vlan — 802.1Q virtual interface
+        description: Vlan is an 802.1Q VLAN child interface.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,33 @@ spec:
             type: object
           spec:
             description: VlanSpec defines the desired state of Vlan.
+            properties:
+              mtu:
+                description: Mtu overrides the child interface MTU.
+                format: int32
+                minimum: 1
+                type: integer
+              parent:
+                description: Parent is the underlying interface (ethernet, bond, etc.).
+                minLength: 1
+                type: string
+              vlanId:
+                description: VlanId is the 802.1Q VLAN tag (1-4094).
+                format: int32
+                maximum: 4094
+                minimum: 1
+                type: integer
+            required:
+            - parent
+            - vlanId
             type: object
           status:
             description: VlanStatus defines observed state of Vlan.
             properties:
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the last-applied nmstate
+                  YAML.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +133,18 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

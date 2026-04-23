@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,7 +19,7 @@ import (
 const finalizerIngress = reconciler.FinalizerPrefix + "ingress"
 
 // IngressReconciler projects a NovaNas Ingress into a novaedge Route.
-// Falls back to status-only when the novaedge CRD is absent.
+// Falls back to a ConfigMap snapshot when the novaedge CRD is absent.
 type IngressReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -45,20 +47,47 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "projecting ingress")
 	obj.Status.Phase = "Reconciling"
 
+	// Render a stable ruleset string for hashing/audit.
+	var rules []string
+	for _, rule := range obj.Spec.Rules {
+		rules = append(rules, fmt.Sprintf("%s%s -> %s", rule.Host, rule.Path, rule.Backend))
+	}
+	rendered := fmt.Sprintf("hostname: %s\nrules:\n  - %s\n", obj.Spec.Hostname, strings.Join(rules, "\n  - "))
+	if obj.Spec.Tls != nil {
+		rendered += "tls: " + obj.Spec.Tls.Certificate + "\n"
+	}
+	h := hashBytes([]byte(rendered))
+
+	ns := childNamespace(&obj)
+	_, _ = ensureConfigMap(ctx, r.Client, ns, childName(obj.Name, "ingress-snapshot"), &obj, map[string]string{
+		"route.yaml": rendered,
+		"hash":       h,
+	}, map[string]string{"novanas.io/kind": "Ingress"})
+
 	gvk := schema.GroupVersionKind{Group: "novaedge.io", Version: "v1alpha1", Kind: "Route"}
-	err := ensureUnstructured(ctx, r.Client, gvk, childNamespace(&obj), childName(obj.Name, "ingress"), func(u *unstructuredType) {
-		setSpec(u, map[string]interface{}{"owner": obj.Name})
+	err := ensureUnstructured(ctx, r.Client, gvk, ns, childName(obj.Name, "ingress"), func(u *unstructuredType) {
+		setSpec(u, map[string]interface{}{
+			"owner":    obj.Name,
+			"hostname": obj.Spec.Hostname,
+			"hash":     h,
+		})
 	})
 	switch err {
 	case nil:
 		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "route projected")
-		obj.Status.Phase = "Ready"
+		obj.Status.Phase = "Active"
+		// The novaedge controller is responsible for assigning the VIP;
+		// populate a placeholder until the observed Route reports it.
+		if obj.Status.Vip == "" {
+			obj.Status.Vip = "pending-allocation"
+		}
 	case errKindMissing:
-		logger.V(1).Info("novaedge Route CRD absent -- status only")
-		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novaedge CRD absent; status-only")
+		logger.V(1).Info("novaedge Route CRD absent -- ConfigMap-only reconcile")
+		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novaedge CRD absent; route staged in ConfigMap")
 		obj.Status.Phase = "Pending"
 	default:
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ProjectionFailed", err.Error())
@@ -66,6 +95,7 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
+	obj.Status.AppliedConfigHash = h
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,7 +18,8 @@ import (
 const finalizerFirewallRule = reconciler.FinalizerPrefix + "firewallrule"
 
 // FirewallRuleReconciler projects the rule into a novanet FirewallRule CR.
-// Falls back to status-only when the novanet CRD is absent.
+// Falls back to a ConfigMap snapshot when the novanet CRD is absent so the
+// host agent can still pick up the rendered ruleset.
 type FirewallRuleReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
@@ -45,20 +47,36 @@ func (r *FirewallRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "projecting firewall rule")
 	obj.Status.Phase = "Reconciling"
 
+	rendered := renderFirewallRule(&obj)
+	h := hashBytes([]byte(rendered))
+
+	// Always mirror to a ConfigMap so the host agent has a canonical copy.
+	_, _ = ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "fw"), &obj, map[string]string{
+		"rule.nft": rendered,
+		"hash":     h,
+	}, map[string]string{"novanas.io/kind": "FirewallRule"})
+
 	gvk := schema.GroupVersionKind{Group: "novanet.io", Version: "v1alpha1", Kind: "FirewallRule"}
 	err := ensureUnstructured(ctx, r.Client, gvk, "novanas-system", childName(obj.Name, "fw"), func(u *unstructuredType) {
-		setSpec(u, map[string]interface{}{"owner": obj.Name})
+		setSpec(u, map[string]interface{}{
+			"owner":     obj.Name,
+			"scope":     string(obj.Spec.Scope),
+			"direction": string(obj.Spec.Direction),
+			"action":    string(obj.Spec.Action),
+			"hash":      h,
+		})
 	})
 	switch err {
 	case nil:
 		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "firewall rule projected")
-		obj.Status.Phase = "Ready"
+		obj.Status.Phase = "Active"
 	case errKindMissing:
-		logger.V(1).Info("novanet FirewallRule CRD absent -- status only")
-		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novanet CRD absent; status-only")
+		logger.V(1).Info("novanet FirewallRule CRD absent -- ConfigMap-only reconcile")
+		obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "novanet CRD absent; rule staged in ConfigMap")
 		obj.Status.Phase = "Pending"
 	default:
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ProjectionFailed", err.Error())
@@ -66,6 +84,9 @@ func (r *FirewallRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
+	now := metav1.Now()
+	obj.Status.InstalledAt = &now
+	obj.Status.AppliedConfigHash = h
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

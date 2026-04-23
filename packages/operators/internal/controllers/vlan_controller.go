@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/client-go/tools/record"
@@ -35,7 +34,16 @@ func (r *VlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	net := r.Network
+	if net == nil {
+		net = reconciler.NoopNetworkClient{}
+	}
+
 	if !obj.DeletionTimestamp.IsZero() {
+		teardown := "interfaces:\n  - name: " + obj.Name + "\n    type: vlan\n    state: absent\n"
+		if _, err := net.ApplyState(ctx, obj.Name, []byte(teardown)); err != nil {
+			logger.Error(err, "vlan teardown failed; proceeding with finalizer removal")
+		}
 		if err := reconciler.RemoveFinalizer(ctx, r.Client, &obj, finalizerVlan); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -48,21 +56,19 @@ func (r *VlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	obj.Status.ObservedGeneration = obj.Generation
 	obj.Status.Conditions = reconciler.MarkProgressing(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciling, "projecting vlan state")
 	obj.Status.Phase = "Reconciling"
 
-	net := r.Network
-	if net == nil {
-		net = reconciler.NoopNetworkClient{}
-	}
-	state := fmt.Sprintf("interfaces:\n  - name: %s\n    type: vlan\n    state: up\n", obj.Name)
-	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "vlan-nmstate"), &obj, map[string]string{"state.yaml": state}, map[string]string{"novanas.io/kind": "Vlan"}); err != nil {
+	state := renderVlanNmstate(&obj)
+	stateBytes := []byte(state)
+	if _, err := ensureConfigMap(ctx, r.Client, "novanas-system", childName(obj.Name, "vlan-nmstate"), &obj, map[string]string{"state.yaml": state, "hash": hashBytes(stateBytes)}, map[string]string{"novanas.io/kind": "Vlan"}); err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ConfigMapFailed", err.Error())
 		obj.Status.Phase = "Failed"
 		_ = statusUpdate(ctx, r.Client, &obj)
 		return ctrl.Result{}, err
 	}
-	rev, err := net.ApplyState(ctx, obj.Name, []byte(state))
+	rev, err := net.ApplyState(ctx, obj.Name, stateBytes)
 	if err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "NmstateFailed", err.Error())
 		obj.Status.Phase = "Failed"
@@ -70,8 +76,9 @@ func (r *VlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 	logger.V(1).Info("vlan nmstate applied", "revision", rev)
+	obj.Status.AppliedConfigHash = hashBytes(stateBytes)
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "vlan projected (rev "+rev+")")
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
 	if err := statusUpdate(ctx, r.Client, &obj); err != nil {
 		return ctrl.Result{}, err
 	}

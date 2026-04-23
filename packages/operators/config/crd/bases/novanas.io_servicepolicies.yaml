@@ -16,10 +16,14 @@ spec:
     singular: servicepolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ServicePolicy — Master enable/disable for SSH, SMB, NFS
+        description: ServicePolicy toggles cluster-level services on/off.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +44,62 @@ spec:
             type: object
           spec:
             description: ServicePolicySpec defines the desired state of ServicePolicy.
+            properties:
+              services:
+                items:
+                  description: ServiceToggle enables/disables one service with optional
+                    bindings.
+                  properties:
+                    bindInterface:
+                      description: |-
+                        BindInterface restricts the service to a specific NIC (when
+                        supported by the underlying daemon).
+                      type: string
+                    enabled:
+                      type: boolean
+                    name:
+                      description: ServiceName enumerates manageable cluster services.
+                      enum:
+                      - ssh
+                      - smb
+                      - nfs
+                      - iscsi
+                      - nvmeof
+                      - s3
+                      - api
+                      - ui
+                      - grafana
+                      - prometheus
+                      - loki
+                      - keycloak
+                      - openbao
+                      type: string
+                    port:
+                      description: Port overrides the default listening port.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
+                  required:
+                  - enabled
+                  - name
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - services
             type: object
           status:
             description: ServicePolicyStatus defines observed state of ServicePolicy.
             properties:
+              appliedAt:
+                description: AppliedAt is the timestamp of the last successful apply.
+                format: date-time
+                type: string
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the rendered ConfigMap
+                  payload.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +156,18 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Applied
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object

@@ -16,10 +16,24 @@ spec:
     singular: firewallrule
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.scope
+      name: Scope
+      type: string
+    - jsonPath: .spec.direction
+      name: Direction
+      type: string
+    - jsonPath: .spec.action
+      name: Action
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: FirewallRule — Host-level nftables or pod-level policy
+        description: FirewallRule is a single allow/deny rule programmed into nftables
+          or eBPF.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +54,107 @@ spec:
             type: object
           spec:
             description: FirewallRuleSpec defines the desired state of FirewallRule.
+            properties:
+              action:
+                description: FirewallAction is the terminal disposition for a matching
+                  packet.
+                enum:
+                - allow
+                - deny
+                - reject
+                - log
+                type: string
+              destination:
+                description: FirewallEndpoint is the match block for a source/destination.
+                properties:
+                  cidrs:
+                    description: Cidrs is a list of IPv4/IPv6 CIDRs to match.
+                    items:
+                      type: string
+                    type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels matches pods by label (only meaningful when
+                      scope=pod).
+                    type: object
+                  ports:
+                    description: Ports is the list of L4 ports to match.
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                  protocol:
+                    description: Protocol narrows the match to a single L4 protocol.
+                    enum:
+                    - tcp
+                    - udp
+                    - icmp
+                    - any
+                    type: string
+                type: object
+              direction:
+                description: FirewallDirection selects the traffic direction.
+                enum:
+                - inbound
+                - outbound
+                type: string
+              interface:
+                description: Interface restricts the rule to traffic on this NIC (scope=host
+                  only).
+                type: string
+              priority:
+                description: Priority orders rules; lower runs first. Defaults to
+                  1000.
+                format: int32
+                type: integer
+              scope:
+                description: FirewallScope selects the enforcement plane for a rule.
+                enum:
+                - host
+                - pod
+                type: string
+              source:
+                description: FirewallEndpoint is the match block for a source/destination.
+                properties:
+                  cidrs:
+                    description: Cidrs is a list of IPv4/IPv6 CIDRs to match.
+                    items:
+                      type: string
+                    type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels matches pods by label (only meaningful when
+                      scope=pod).
+                    type: object
+                  ports:
+                    description: Ports is the list of L4 ports to match.
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                  protocol:
+                    description: Protocol narrows the match to a single L4 protocol.
+                    enum:
+                    - tcp
+                    - udp
+                    - icmp
+                    - any
+                    type: string
+                type: object
+            required:
+            - action
+            - direction
+            - scope
             type: object
           status:
             description: FirewallRuleStatus defines observed state of FirewallRule.
             properties:
+              appliedConfigHash:
+                description: AppliedConfigHash is the sha256 of the rendered nftables/eBPF
+                  blob.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +211,22 @@ spec:
                   - type
                   type: object
                 type: array
+              installedAt:
+                description: InstalledAt is the timestamp of successful rule installation.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration tracks the generation of the last
+                  reconcile.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Reconciling
+                - Ready
                 type: string
             type: object
         type: object
