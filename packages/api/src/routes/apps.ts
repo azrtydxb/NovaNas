@@ -12,7 +12,7 @@ import {
   setAnnotation,
 } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'appinstances' };
 
@@ -148,7 +148,7 @@ export async function appRoutes(app: FastifyInstance, api?: CustomObjectsApi): P
     registerAppActions(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/apps', summary: 'List installed apps', tag: 'apps' },
     { method: 'POST', url: '/api/v1/apps', summary: 'Install an app', tag: 'apps' },
     { method: 'GET', url: '/api/v1/apps/:name', summary: 'Get an app', tag: 'apps' },

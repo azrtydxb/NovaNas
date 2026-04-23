@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/service-policy.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function servicePolicyRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function servicePolicyRoutes(
     registerImpl(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/service-policy',

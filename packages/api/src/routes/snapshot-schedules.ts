@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/snapshot-schedules.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function snapshotSchedulesRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function snapshotSchedulesRoutes(
     registerImpl(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/snapshot-schedules',

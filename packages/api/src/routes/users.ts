@@ -6,7 +6,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { register as registerUsers } from '../resources/users.js';
 import { accepted } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
@@ -97,7 +97,7 @@ export async function userRoutes(app: FastifyInstance, api?: CustomObjectsApi): 
     registerUserActions(app);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/users', summary: 'List users', tag: 'users' },
     { method: 'POST', url: '/api/v1/users', summary: 'Create a user', tag: 'users' },
     { method: 'GET', url: '/api/v1/users/:name', summary: 'Get a user', tag: 'users' },

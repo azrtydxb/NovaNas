@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerAppsAvailable } from '../resources/apps-available.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function appsAvailableRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function appsAvailableRoutes(
     registerAppsAvailable(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/apps-available',

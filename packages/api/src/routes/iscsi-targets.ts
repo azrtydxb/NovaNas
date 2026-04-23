@@ -1,7 +1,7 @@
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerIscsiTargets } from '../resources/iscsi-targets.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 export async function iscsiTargetRoutes(
   app: FastifyInstance,
@@ -11,7 +11,7 @@ export async function iscsiTargetRoutes(
     registerIscsiTargets(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/iscsi-targets',

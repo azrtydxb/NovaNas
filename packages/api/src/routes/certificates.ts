@@ -5,7 +5,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { register as registerImpl } from '../resources/certificates.js';
 import { accepted, kubeErrorReply, nowIso, setAnnotation } from '../services/actions.js';
 import type { AuthenticatedUser } from '../types.js';
-import { registerStubs } from './_stubs.js';
+import { registerUnavailable } from './_unavailable.js';
 
 const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'certificates' };
 
@@ -48,7 +48,7 @@ export async function certificatesRoutes(
     registerCertificateActions(app, api);
     return;
   }
-  registerStubs(app, [
+  registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/certificates',
