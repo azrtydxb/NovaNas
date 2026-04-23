@@ -3,6 +3,7 @@
 pub mod bdev_manager;
 pub mod context;
 pub mod env;
+pub mod nbd_manager;
 pub mod nvmf_manager;
 pub mod reactor_dispatch;
 

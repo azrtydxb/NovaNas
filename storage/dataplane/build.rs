@@ -131,6 +131,8 @@ fn main() {
             .allowlist_function("spdk_get_io_channel")
             .allowlist_function("spdk_put_io_channel")
             .allowlist_function("spdk_nvme_.*")
+            .allowlist_function("spdk_nbd_.*")
+            .allowlist_type("spdk_nbd_disk")
             .allowlist_function("create_aio_bdev")
             .allowlist_function("novanas_create_uring_bdev")
             .allowlist_function("novanas_attach_nvme_bdev")
