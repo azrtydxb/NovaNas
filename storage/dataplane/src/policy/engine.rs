@@ -442,7 +442,8 @@ mod tests {
         let store_dir = tempfile::tempdir().unwrap();
         let db_dir = tempfile::tempdir().unwrap();
 
-        let file_store = FileChunkStore::new(store_dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
+        let file_store =
+            FileChunkStore::new(store_dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
         let location_store =
             Arc::new(ChunkLocationStore::open(db_dir.path().join("locations.redb")).unwrap());
         let topology = test_topology();
@@ -535,7 +536,8 @@ mod tests {
         let store_dir = tempfile::tempdir().unwrap();
         let db_dir = tempfile::tempdir().unwrap();
 
-        let file_store = FileChunkStore::new(store_dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
+        let file_store =
+            FileChunkStore::new(store_dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
         let location_store =
             Arc::new(ChunkLocationStore::open(db_dir.path().join("locations.redb")).unwrap());
 
