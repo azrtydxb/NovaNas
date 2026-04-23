@@ -16,10 +16,21 @@ spec:
     singular: systemsettings
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.hostname
+      name: Hostname
+      type: string
+    - jsonPath: .spec.timezone
+      name: Timezone
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SystemSettings — Hostname, timezone, NTP, locale, SMTP
+        description: SystemSettings — Hostname, timezone, NTP, locale, SMTP cluster
+          knobs.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +51,80 @@ spec:
             type: object
           spec:
             description: SystemSettingsSpec defines the desired state of SystemSettings.
+            properties:
+              hostname:
+                type: string
+              locale:
+                type: string
+              motd:
+                type: string
+              ntp:
+                description: SystemNtpSettings configures the host clock source.
+                properties:
+                  enabled:
+                    type: boolean
+                  servers:
+                    items:
+                      type: string
+                    type: array
+                required:
+                - servers
+                type: object
+              smtp:
+                description: SystemSmtpSettings configures outbound notification email.
+                properties:
+                  authSecret:
+                    description: |-
+                      SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                      operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                      encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                    properties:
+                      key:
+                        description: Key inside the Secret. Defaults are controller-specific.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the CR's namespace for
+                          namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                        type: string
+                      secretName:
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  encryption:
+                    enum:
+                    - none
+                    - starttls
+                    - tls
+                    type: string
+                  from:
+                    type: string
+                  host:
+                    minLength: 1
+                    type: string
+                  port:
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - from
+                - host
+                - port
+                type: object
+              supportContact:
+                type: string
+              timezone:
+                type: string
             type: object
           status:
             description: SystemSettingsStatus defines observed state of SystemSettings.
             properties:
+              appliedAt:
+                format: date-time
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +181,15 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Applied
+                - Failed
                 type: string
             type: object
         type: object

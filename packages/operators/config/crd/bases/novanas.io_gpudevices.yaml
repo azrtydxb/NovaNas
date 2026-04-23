@@ -16,10 +16,23 @@ spec:
     singular: gpudevice
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.vendor
+      name: Vendor
+      type: string
+    - jsonPath: .status.model
+      name: Model
+      type: string
+    - jsonPath: .spec.passthrough
+      name: Passthrough
+      type: boolean
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GpuDevice — Observed GPU, passthrough assignment
+        description: GpuDevice — Observed GPU with passthrough assignment.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +53,26 @@ spec:
             type: object
           spec:
             description: GpuDeviceSpec defines the desired state of GpuDevice.
+            properties:
+              passthrough:
+                description: Passthrough requests the device be rebound to vfio-pci
+                  for VM use.
+                type: boolean
             type: object
           status:
             description: GpuDeviceStatus defines observed state of GpuDevice.
             properties:
+              assignedTo:
+                description: ResourceRef is a simple name/namespace/kind pointer used
+                  by Status fields.
+                properties:
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,8 +129,34 @@ spec:
                   - type
                   type: object
                 type: array
-              phase:
+              deviceId:
                 type: string
+              driver:
+                type: string
+              iommuGroup:
+                format: int32
+                type: integer
+              model:
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
+              pciAddress:
+                type: string
+              phase:
+                enum:
+                - Detecting
+                - Available
+                - Assigned
+                - Unavailable
+                - Failed
+                type: string
+              vendor:
+                type: string
+              vfioBound:
+                type: boolean
             type: object
         type: object
     served: true

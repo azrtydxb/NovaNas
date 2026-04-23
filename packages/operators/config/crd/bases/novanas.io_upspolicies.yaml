@@ -16,10 +16,20 @@ spec:
     singular: upspolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.integration
+      name: Integration
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.onBattery
+      name: OnBattery
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: UpsPolicy — NUT/apcupsd integration
+        description: UpsPolicy — NUT/apcupsd integration and shutdown orchestration.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,74 @@ spec:
             type: object
           spec:
             description: UpsPolicySpec defines the desired state of UpsPolicy.
+            properties:
+              authSecret:
+                description: |-
+                  SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                  operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                  encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                properties:
+                  key:
+                    description: Key inside the Secret. Defaults are controller-specific.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the Secret. Defaults to the CR's namespace for
+                      namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                    type: string
+                  secretName:
+                    minLength: 1
+                    type: string
+                required:
+                - secretName
+                type: object
+              deviceName:
+                type: string
+              host:
+                type: string
+              integration:
+                enum:
+                - nut
+                - apcupsd
+                type: string
+              onBattery:
+                description: OnBattery is the ordered list of actions when utility
+                  power fails.
+                items:
+                  type: string
+                type: array
+              onLowBattery:
+                description: OnLowBattery triggers when BatteryPercent/RuntimeSeconds
+                  crosses the threshold.
+                items:
+                  type: string
+                type: array
+              port:
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
+              thresholds:
+                description: UpsThresholds encodes battery / runtime trigger points.
+                properties:
+                  batteryPercent:
+                    format: int32
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                  runtimeSeconds:
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
+            required:
+            - integration
             type: object
           status:
             description: UpsPolicyStatus defines observed state of UpsPolicy.
             properties:
+              batteryPercent:
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,8 +174,22 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
+              onBattery:
+                type: boolean
               phase:
+                enum:
+                - Active
+                - Disconnected
+                - Failed
                 type: string
+              runtimeSeconds:
+                format: int32
+                type: integer
             type: object
         type: object
     served: true

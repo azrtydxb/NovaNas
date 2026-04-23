@@ -16,10 +16,20 @@ spec:
     singular: vm
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.powerState
+      name: Power
+      type: string
+    - jsonPath: .status.ip
+      name: IP
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Vm — KubeVirt VM with NAS-friendly UX
+        description: Vm — KubeVirt VirtualMachine with NAS-friendly UX.
         properties:
           apiVersion:
             description: |-
@@ -40,6 +50,197 @@ spec:
             type: object
           spec:
             description: VmSpec defines the desired state of Vm.
+            properties:
+              autostart:
+                enum:
+                - never
+                - onBoot
+                - always
+                type: string
+              cdrom:
+                items:
+                  description: VmCdrom is a CD-ROM attachment backed by an entry in
+                    an IsoLibrary.
+                  properties:
+                    name:
+                      minLength: 1
+                      type: string
+                    source:
+                      description: VmCdromSource identifies the ISO-backed source
+                        for a CD-ROM.
+                      properties:
+                        isoLibrary:
+                          type: string
+                        type:
+                          enum:
+                          - iso
+                          type: string
+                      required:
+                      - type
+                      type: object
+                  required:
+                  - name
+                  - source
+                  type: object
+                type: array
+              disks:
+                items:
+                  description: VmDisk is a virtual disk attachment.
+                  properties:
+                    boot:
+                      format: int32
+                      type: integer
+                    bus:
+                      enum:
+                      - virtio
+                      - scsi
+                      - sata
+                      - ide
+                      type: string
+                    name:
+                      minLength: 1
+                      type: string
+                    readOnly:
+                      type: boolean
+                    source:
+                      description: |-
+                        VmDiskSource is a discriminated union; exactly one of Dataset / BlockVolume
+                        / ISO / Clone should be populated. Type selects which.
+                      properties:
+                        blockVolume:
+                          type: string
+                        dataset:
+                          type: string
+                        isoLibrary:
+                          type: string
+                        size:
+                          type: string
+                        sourceDisk:
+                          type: string
+                        sourceVm:
+                          type: string
+                        type:
+                          enum:
+                          - dataset
+                          - blockVolume
+                          - iso
+                          - clone
+                          type: string
+                      required:
+                      - type
+                      type: object
+                  required:
+                  - name
+                  - source
+                  type: object
+                type: array
+              gpu:
+                description: VmGpu configures passthrough GPU assignment.
+                properties:
+                  passthrough:
+                    items:
+                      description: VmGpuPassthroughEntry pins a specific PCI device
+                        to the VM.
+                      properties:
+                        device:
+                          type: string
+                        deviceName:
+                          type: string
+                        vendor:
+                          type: string
+                      required:
+                      - device
+                      type: object
+                    type: array
+                type: object
+              graphics:
+                description: VmGraphics toggles the console (SPICE/VNC).
+                properties:
+                  enabled:
+                    type: boolean
+                  type:
+                    enum:
+                    - spice
+                    - vnc
+                    type: string
+                required:
+                - enabled
+                type: object
+              network:
+                items:
+                  description: VmNetwork attaches the VM to a host bridge / pod network
+                    / masquerade.
+                  properties:
+                    bridge:
+                      type: string
+                    mac:
+                      type: string
+                    model:
+                      enum:
+                      - virtio
+                      - e1000
+                      - rtl8139
+                      type: string
+                    type:
+                      enum:
+                      - bridge
+                      - pod
+                      - masquerade
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+              os:
+                description: VmOS describes the guest OS family.
+                properties:
+                  type:
+                    enum:
+                    - linux
+                    - windows
+                    - other
+                    type: string
+                  variant:
+                    type: string
+                required:
+                - type
+                type: object
+              owner:
+                type: string
+              powerState:
+                description: PowerState is the desired runtime state.
+                enum:
+                - Running
+                - Stopped
+                - Paused
+                type: string
+              resources:
+                description: VmResources captures CPU and memory allocation.
+                properties:
+                  cores:
+                    format: int32
+                    type: integer
+                  cpu:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  memoryMiB:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  sockets:
+                    format: int32
+                    type: integer
+                  threads:
+                    format: int32
+                    type: integer
+                required:
+                - cpu
+                - memoryMiB
+                type: object
+            required:
+            - os
+            - resources
             type: object
           status:
             description: VmStatus defines observed state of Vm.
@@ -100,7 +301,22 @@ spec:
                   - type
                   type: object
                 type: array
+              consoleUrl:
+                type: string
+              ip:
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Running
+                - Stopped
+                - Paused
+                - Failed
                 type: string
             type: object
         type: object

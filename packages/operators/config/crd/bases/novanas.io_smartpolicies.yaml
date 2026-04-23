@@ -13,13 +13,23 @@ spec:
     kind: SmartPolicy
     listKind: SmartPolicyList
     plural: smartpolicies
+    shortNames:
+    - smartp
     singular: smartpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.diskCount
+      name: Disks
+      type: integer
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SmartPolicy — Disk SMART test cadence and thresholds
+        description: SmartPolicy — SMART self-test cadence and threshold-driven disk
+          actions.
         properties:
           apiVersion:
             description: |-
@@ -40,6 +50,122 @@ spec:
             type: object
           spec:
             description: SmartPolicySpec defines the desired state of SmartPolicy.
+            properties:
+              actions:
+                description: SmartActions ties threshold breaches to operator actions.
+                properties:
+                  onCritical:
+                    enum:
+                    - alert
+                    - alertAndMarkDegraded
+                    - markDegraded
+                    - none
+                    type: string
+                  onWarning:
+                    enum:
+                    - alert
+                    - alertAndMarkDegraded
+                    - markDegraded
+                    - none
+                    type: string
+                type: object
+              appliesTo:
+                description: SmartAppliesTo narrows which disks the policy monitors.
+                properties:
+                  all:
+                    type: boolean
+                  classes:
+                    items:
+                      enum:
+                      - nvme
+                      - ssd
+                      - hdd
+                      type: string
+                    type: array
+                  disks:
+                    items:
+                      type: string
+                    type: array
+                  pools:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              longTest:
+                description: SmartTest configures a scheduled self-test (short/long)
+                  by cron expression.
+                properties:
+                  cron:
+                    minLength: 1
+                    type: string
+                required:
+                - cron
+                type: object
+              shortTest:
+                description: SmartTest configures a scheduled self-test (short/long)
+                  by cron expression.
+                properties:
+                  cron:
+                    minLength: 1
+                    type: string
+                required:
+                - cron
+                type: object
+              thresholds:
+                description: SmartThresholds bundles per-attribute warning/critical
+                  values.
+                properties:
+                  pendingSectors:
+                    description: SmartThreshold pairs warning/critical levels for
+                      a single attribute.
+                    properties:
+                      critical:
+                        type: string
+                      warning:
+                        type: string
+                    required:
+                    - critical
+                    - warning
+                    type: object
+                  powerOnHours:
+                    description: SmartThreshold pairs warning/critical levels for
+                      a single attribute.
+                    properties:
+                      critical:
+                        type: string
+                      warning:
+                        type: string
+                    required:
+                    - critical
+                    - warning
+                    type: object
+                  reallocatedSectors:
+                    description: SmartThreshold pairs warning/critical levels for
+                      a single attribute.
+                    properties:
+                      critical:
+                        type: string
+                      warning:
+                        type: string
+                    required:
+                    - critical
+                    - warning
+                    type: object
+                  temperature:
+                    description: SmartThreshold pairs warning/critical levels for
+                      a single attribute.
+                    properties:
+                      critical:
+                        type: string
+                      warning:
+                        type: string
+                    required:
+                    - critical
+                    - warning
+                    type: object
+                type: object
+            required:
+            - appliesTo
             type: object
           status:
             description: SmartPolicyStatus defines observed state of SmartPolicy.
@@ -100,7 +226,18 @@ spec:
                   - type
                   type: object
                 type: array
+              diskCount:
+                format: int32
+                type: integer
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Active
+                - Failed
                 type: string
             type: object
         type: object

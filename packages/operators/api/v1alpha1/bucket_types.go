@@ -41,13 +41,23 @@ type BucketLifecycleRule struct {
 
 // BucketStatus defines observed state.
 type BucketStatus struct {
+	// +kubebuilder:validation:Enum=Pending;Active;Failed
 	Phase      string             `json:"phase,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	UsedBytes  int64              `json:"usedBytes,omitempty"`
-	Objects    int64              `json:"objects,omitempty"`
+	// TotalObjects is the aggregate object count reported by the S3
+	// gateway's metadata service.
+	TotalObjects int64 `json:"totalObjects,omitempty"`
+	// Objects is kept as a synonym for TotalObjects for source compatibility
+	// with earlier schema revisions; controllers should populate both.
+	// Deprecated: use TotalObjects.
+	Objects int64 `json:"objects,omitempty"`
 
 	// Encryption carries the wrapped DK produced at provision time.
 	Encryption *EncryptionStatus `json:"encryption,omitempty"`
+
+	// ObservedGeneration is the generation last processed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true

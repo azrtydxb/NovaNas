@@ -13,13 +13,23 @@ spec:
     kind: BucketUser
     listKind: BucketUserList
     plural: bucketusers
+    shortNames:
+    - bku
     singular: bucketuser
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.accessKeyId
+      name: AccessKey
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: BucketUser — S3 credentials and policies
+        description: BucketUser — S3 credentials and policies scoped to one or more
+          buckets.
         properties:
           apiVersion:
             description: |-
@@ -40,10 +50,94 @@ spec:
             type: object
           spec:
             description: BucketUserSpec defines the desired state of BucketUser.
+            properties:
+              credentials:
+                description: BucketUserCredentials points at Secrets holding generated
+                  AK/SK pairs.
+                properties:
+                  accessKeySecret:
+                    description: |-
+                      SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                      operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                      encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                    properties:
+                      key:
+                        description: Key inside the Secret. Defaults are controller-specific.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the CR's namespace for
+                          namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                        type: string
+                      secretName:
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  secretKeySecret:
+                    description: |-
+                      SecretRef is the NovaNas shared reference type for K8s Secrets used by
+                      operator-managed CRs (UPS credentials, SMTP auth, AD join, backup
+                      encryption, etc.). It mirrors packages/schemas SecretReferenceSchema.
+                    properties:
+                      key:
+                        description: Key inside the Secret. Defaults are controller-specific.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the CR's namespace for
+                          namespaced CRs, or the operator namespace for cluster-scoped CRs.
+                        type: string
+                      secretName:
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                type: object
+              displayName:
+                type: string
+              policies:
+                items:
+                  description: BucketUserPolicy is an IAM-like per-bucket permission
+                    block.
+                  properties:
+                    actions:
+                      items:
+                        enum:
+                        - read
+                        - write
+                        - delete
+                        - list
+                        - manage
+                        - bypassGovernance
+                        type: string
+                      minItems: 1
+                      type: array
+                    bucket:
+                      minLength: 1
+                      type: string
+                    effect:
+                      enum:
+                      - allow
+                      - deny
+                      type: string
+                    prefix:
+                      type: string
+                  required:
+                  - actions
+                  - bucket
+                  type: object
+                type: array
+            required:
+            - credentials
             type: object
           status:
             description: BucketUserStatus defines observed state of BucketUser.
             properties:
+              accessKeyId:
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +194,16 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation last processed by
+                  the controller.
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
                 type: string
             type: object
         type: object
