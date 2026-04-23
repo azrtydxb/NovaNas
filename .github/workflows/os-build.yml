@@ -59,11 +59,14 @@ jobs:
       - name: Build RAUC bundle (unsigned dev cert)
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os bundle
 
-      - name: Upload RAUC bundle
+      - name: Upload RAUC bundle + kernel
         uses: actions/upload-artifact@v4
         with:
           name: rauc-bundle-${{ github.sha }}
-          path: os/build/out/*.raucb
+          path: |
+            os/build/out/*.raucb
+            os/build/out/kernel.vmlinuz
+            os/build/out/kernel.initrd
           retention-days: 14
 
   iso-build:

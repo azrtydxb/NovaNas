@@ -221,12 +221,28 @@ EOF
   mount -o loop "$BOOT_OUT" "$boot_mnt"
   if [[ -d "$mnt/boot" ]]; then
     cp -a "$mnt/boot/." "$boot_mnt/"
+    # Export the kernel + initrd to well-known paths so the ISO stage
+    # can pick them up. /boot/vmlinuz and /boot/initrd.img are the
+    # canonical symlinks maintained by linux-image postinst.
+    local out_dir
+    out_dir=$(dirname "$OUT")
+    if [[ -e "$mnt/boot/vmlinuz" ]]; then
+      cp -L "$mnt/boot/vmlinuz" "$out_dir/kernel.vmlinuz"
+    fi
+    if [[ -e "$mnt/boot/initrd.img" ]]; then
+      cp -L "$mnt/boot/initrd.img" "$out_dir/kernel.initrd"
+    fi
     rm -rf "$mnt/boot"/*
   fi
   umount "$boot_mnt"
   umount "$mnt"
   rmdir "$mnt" "$boot_mnt"
   log "layered image at $OUT, boot at $BOOT_OUT"
+  if [[ -f "$(dirname "$OUT")/kernel.vmlinuz" ]]; then
+    log "exported kernel/initrd to $(dirname "$OUT")/kernel.{vmlinuz,initrd}"
+  else
+    log "WARN: kernel symlinks not found in layered rootfs — ISO boot will fail"
+  fi
 }
 
 case "$STAGE" in
