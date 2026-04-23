@@ -31,9 +31,11 @@ type SLOBurnRateAlert struct {
 type ServiceLevelObjectiveSpec struct {
 	Description string `json:"description,omitempty"`
 
-	// Target is the SLO target percentage (0..100, e.g. 99.9).
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=100
+	// Target is the SLO target percentage as a decimal string (0..100,
+	// e.g. "99.9"). Stored as string to preserve precision across
+	// JSON round-trips; the controller parses it to a float64.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(100(\.0+)?|[0-9]{1,2}(\.[0-9]+)?)$`
 	Target string `json:"target"`
 
 	// Window is the rolling evaluation window, e.g. "30d".

@@ -16,10 +16,29 @@ spec:
     singular: servicelevelobjective
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.target
+      name: Target
+      type: string
+    - jsonPath: .spec.window
+      name: Window
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.currentSLI
+      name: SLI
+      type: string
+    - jsonPath: .status.errorBudgetRemainingPercent
+      name: BudgetLeft
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ServiceLevelObjective — SLO config
+        description: ServiceLevelObjective describes an SLI/SLO with burn-rate alerting.
         properties:
           apiVersion:
             description: |-
@@ -39,11 +58,91 @@ spec:
           metadata:
             type: object
           spec:
-            description: ServiceLevelObjectiveSpec defines the desired state of ServiceLevelObjective.
+            description: ServiceLevelObjectiveSpec defines desired state.
+            properties:
+              alertChannels:
+                description: AlertChannels is the channel set notified on burn-rate
+                  alerts.
+                items:
+                  type: string
+                type: array
+              burnRateAlerts:
+                description: |-
+                  BurnRateAlerts configures per-window burn-rate alerts projected
+                  into PrometheusRule.
+                items:
+                  description: SLOBurnRateAlert configures a multi-window burn-rate
+                    alert.
+                  properties:
+                    longWindow:
+                      description: LongWindow is the slow-burn window, e.g. "1h".
+                      type: string
+                    severity:
+                      description: Severity maps to an AlertSeverity.
+                      enum:
+                      - info
+                      - warning
+                      - critical
+                      type: string
+                    shortWindow:
+                      description: ShortWindow is the fast-burn window, e.g. "5m".
+                      type: string
+                    threshold:
+                      description: |-
+                        Threshold is the multiple of the error budget consumption rate
+                        that triggers the alert (default 14.4 for 2% budget/hour).
+                      type: string
+                  type: object
+                type: array
+              description:
+                type: string
+              evalIntervalSeconds:
+                description: |-
+                  EvalIntervalSeconds controls how often the controller polls
+                  Prometheus for the current SLI. Default 60 when unset.
+                format: int32
+                type: integer
+              indicator:
+                description: SLOIndicator expresses a SLI as two PromQL queries.
+                properties:
+                  goodQuery:
+                    description: GoodQuery counts events meeting the SLO.
+                    type: string
+                  totalQuery:
+                    description: TotalQuery counts all SLI-eligible events.
+                    type: string
+                required:
+                - goodQuery
+                - totalQuery
+                type: object
+              prometheusURL:
+                description: |-
+                  PrometheusURL is the base URL of the Prometheus HTTP API used to
+                  query the current SLI. Defaults to
+                  http://prometheus.novanas-system:9090 when empty.
+                type: string
+              target:
+                description: |-
+                  Target is the SLO target percentage as a decimal string (0..100,
+                  e.g. "99.9"). Stored as string to preserve precision across
+                  JSON round-trips; the controller parses it to a float64.
+                pattern: ^(100(\.0+)?|[0-9]{1,2}(\.[0-9]+)?)$
+                type: string
+              window:
+                description: Window is the rolling evaluation window, e.g. "30d".
+                type: string
+            required:
+            - indicator
+            - target
+            - window
             type: object
           status:
-            description: ServiceLevelObjectiveStatus defines observed state of ServiceLevelObjective.
+            description: ServiceLevelObjectiveStatus reports observed state.
             properties:
+              burnRate:
+                description: BurnRate is the current normalised error-budget burn
+                  rate.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +199,40 @@ spec:
                   - type
                   type: object
                 type: array
+              currentSLI:
+                description: CurrentSLI is the most recent computed SLI as a percentage
+                  string.
+                type: string
+              errorBudgetRemainingPercent:
+                description: ErrorBudgetRemainingPercent is the remaining budget as
+                  a percentage.
+                type: string
+              errorBudgetRemainingSeconds:
+                description: |-
+                  ErrorBudgetRemainingSeconds is the remaining budget expressed as
+                  "unavailability time" within Window (lower is worse).
+                format: int64
+                type: integer
+              lastError:
+                description: LastError is the most recent evaluation error, if any.
+                type: string
+              lastEvaluation:
+                description: LastEvaluation is the time of the last Prometheus query.
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - AtRisk
+                - Breached
+                - Failed
+                type: string
+              renderedRuleName:
+                description: RenderedRuleName is the child PrometheusRule name.
                 type: string
             type: object
         type: object

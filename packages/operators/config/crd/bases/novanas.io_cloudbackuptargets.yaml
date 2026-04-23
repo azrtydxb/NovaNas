@@ -16,10 +16,27 @@ spec:
     singular: cloudbackuptarget
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.provider
+      name: Provider
+      type: string
+    - jsonPath: .spec.bucket
+      name: Bucket
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.reachable
+      name: Reachable
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: CloudBackupTarget — S3/B2/Azure endpoint
+        description: CloudBackupTarget is an S3/B2/Azure/GCS/Swift object-storage
+          endpoint.
         properties:
           apiVersion:
             description: |-
@@ -39,11 +56,108 @@ spec:
           metadata:
             type: object
           spec:
-            description: CloudBackupTargetSpec defines the desired state of CloudBackupTarget.
+            description: CloudBackupTargetSpec defines desired state.
+            properties:
+              bucket:
+                type: string
+              credentialsSecret:
+                description: |-
+                  CredentialsSecret is a Secret containing provider credentials.
+                  For S3/B2: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+                  For Azure: AZURE_ACCOUNT_NAME / AZURE_ACCOUNT_KEY.
+                properties:
+                  key:
+                    description: Key inside the Secret's data map.
+                    type: string
+                  name:
+                    description: Name of the Secret.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the Secret. Defaults to the channel namespace or
+                      "novanas-system" when empty.
+                    type: string
+                required:
+                - key
+                - name
+                type: object
+              endpoint:
+                description: Endpoint overrides the provider's default endpoint (S3-compat
+                  only).
+                type: string
+              engine:
+                description: CloudBackupEngine enumerates supported backup engines.
+                enum:
+                - restic
+                - borg
+                - kopia
+                type: string
+              prefix:
+                type: string
+              provider:
+                description: CloudBackupProvider enumerates supported object-storage
+                  providers.
+                enum:
+                - s3
+                - b2
+                - azure
+                - gcs
+                - swift
+                type: string
+              reachabilityProbeIntervalSeconds:
+                description: |-
+                  ReachabilityProbeIntervalSeconds controls how often the controller
+                  probes the target. Default 300 when unset.
+                format: int32
+                type: integer
+              region:
+                type: string
+              repositoryPasswordSecret:
+                description: |-
+                  RepositoryPasswordSecret is the encryption password secret for
+                  restic/borg/kopia.
+                properties:
+                  key:
+                    description: Key inside the Secret's data map.
+                    type: string
+                  name:
+                    description: Name of the Secret.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the Secret. Defaults to the channel namespace or
+                      "novanas-system" when empty.
+                    type: string
+                required:
+                - key
+                - name
+                type: object
+              storageClass:
+                description: StorageClass is the provider storage class, e.g. "STANDARD_IA".
+                type: string
+            required:
+            - bucket
+            - credentialsSecret
+            - provider
             type: object
           status:
-            description: CloudBackupTargetStatus defines observed state of CloudBackupTarget.
+            description: CloudBackupTargetStatus reports observed state.
             properties:
+              capabilities:
+                description: Capabilities is the detected capability set cached at
+                  probe time.
+                properties:
+                  lifecyclePolicy:
+                    type: boolean
+                  multipartUpload:
+                    type: boolean
+                  objectLock:
+                    type: boolean
+                  serverSideEncryption:
+                    type: boolean
+                  versioning:
+                    type: boolean
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,8 +214,41 @@ spec:
                   - type
                   type: object
                 type: array
-              phase:
+              lastProbeAt:
+                description: LastProbeAt is the last probe timestamp.
+                format: date-time
                 type: string
+              lastProbeError:
+                description: LastProbeError is the most recent probe error, if any.
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                enum:
+                - Pending
+                - Probing
+                - Ready
+                - Unreachable
+                - Failed
+                type: string
+              reachable:
+                description: Reachable reflects the last probe outcome.
+                type: boolean
+              repositoryInitialized:
+                description: |-
+                  RepositoryInitialized is true once the engine has initialised the
+                  remote repository (e.g. `restic init`).
+                type: boolean
+              resolvedEndpoint:
+                description: ResolvedEndpoint is the fully resolved endpoint used
+                  at probe time.
+                type: string
+              usedBytes:
+                description: UsedBytes is an informational size of all objects under
+                  Prefix.
+                format: int64
+                type: integer
             type: object
         type: object
     served: true

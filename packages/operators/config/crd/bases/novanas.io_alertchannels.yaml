@@ -16,10 +16,24 @@ spec:
     singular: alertchannel
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.consecutiveFailures
+      name: Failures
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AlertChannel — Email / webhook / ntfy / pushover
+        description: AlertChannel is an email/webhook/slack/pagerduty/ntfy/pushover
+          destination.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +53,272 @@ spec:
           metadata:
             type: object
           spec:
-            description: AlertChannelSpec defines the desired state of AlertChannel.
+            description: AlertChannelSpec defines desired state.
+            properties:
+              email:
+                description: EmailChannelConfig configures SMTP delivery.
+                properties:
+                  from:
+                    type: string
+                  passwordSecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  smtpPort:
+                    format: int32
+                    type: integer
+                  smtpServer:
+                    type: string
+                  startTls:
+                    type: boolean
+                  to:
+                    items:
+                      type: string
+                    type: array
+                  usernameSecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                required:
+                - to
+                type: object
+              minSeverity:
+                description: MinSeverity gates which alerts are dispatched on this
+                  channel.
+                enum:
+                - info
+                - warning
+                - critical
+                type: string
+              ntfy:
+                description: NtfyChannelConfig configures the ntfy.sh family of push
+                  destinations.
+                properties:
+                  authSecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  priority:
+                    type: string
+                  server:
+                    type: string
+                  topic:
+                    type: string
+                required:
+                - topic
+                type: object
+              pagerduty:
+                description: PagerDutyChannelConfig wraps the PD Events v2 routing
+                  key.
+                properties:
+                  component:
+                    type: string
+                  integrationKeySecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  severity:
+                    type: string
+                required:
+                - integrationKeySecret
+                type: object
+              pushover:
+                description: PushoverChannelConfig configures the Pushover API.
+                properties:
+                  device:
+                    type: string
+                  priority:
+                    format: int32
+                    type: integer
+                  tokenSecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  userKeySecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                required:
+                - tokenSecret
+                - userKeySecret
+                type: object
+              rateLimitPerMinute:
+                description: RateLimitPerMinute bounds delivery attempts; 0 means
+                  unlimited.
+                format: int32
+                type: integer
+              slack:
+                description: SlackChannelConfig wraps a Slack webhook URL secret.
+                properties:
+                  channel:
+                    type: string
+                  iconEmoji:
+                    type: string
+                  username:
+                    type: string
+                  webhookUrlSecret:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                required:
+                - webhookUrlSecret
+                type: object
+              suspended:
+                description: Suspended silences the channel without deleting it.
+                type: boolean
+              type:
+                description: AlertChannelType enumerates the supported delivery backends.
+                enum:
+                - email
+                - webhook
+                - slack
+                - pagerduty
+                - ntfy
+                - pushover
+                - discord
+                - telegram
+                type: string
+              webhook:
+                description: WebhookChannelConfig configures a generic JSON webhook
+                  target.
+                properties:
+                  headers:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  insecureSkipTlsVerify:
+                    type: boolean
+                  method:
+                    type: string
+                  secretRef:
+                    description: SecretKeyRef is a reference to a key within a Secret.
+                    properties:
+                      key:
+                        description: Key inside the Secret's data map.
+                        type: string
+                      name:
+                        description: Name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace of the Secret. Defaults to the channel namespace or
+                          "novanas-system" when empty.
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  timeoutSecs:
+                    format: int32
+                    type: integer
+                  url:
+                    type: string
+                required:
+                - url
+                type: object
+            required:
+            - type
             type: object
           status:
-            description: AlertChannelStatus defines observed state of AlertChannel.
+            description: AlertChannelStatus reports observed state.
             properties:
               conditions:
                 items:
@@ -100,8 +376,57 @@ spec:
                   - type
                   type: object
                 type: array
-              phase:
+              consecutiveFailures:
+                description: |-
+                  ConsecutiveFailures counts back-to-back delivery failures;
+                  resets on first success.
+                format: int32
+                type: integer
+              deliveryCount:
+                description: DeliveryCount is the total lifetime count of successful
+                  deliveries.
+                format: int64
+                type: integer
+              lastDeliveryAt:
+                description: LastDeliveryAt is the time of the most recent delivery
+                  attempt.
+                format: date-time
                 type: string
+              lastError:
+                description: LastError is the most recent dispatch error message.
+                type: string
+              lastSuccessfulDeliveryAt:
+                description: LastSuccessfulDeliveryAt is the last delivery that succeeded.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the .metadata.generation reconciled
+                  last.
+                format: int64
+                type: integer
+              phase:
+                enum:
+                - Pending
+                - Active
+                - Failed
+                - Suspended
+                type: string
+              resolvedSecretRef:
+                description: |-
+                  ResolvedSecretRef echoes the generated/normalised Secret reference
+                  used by the downstream dispatcher.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
             type: object
         type: object
     served: true

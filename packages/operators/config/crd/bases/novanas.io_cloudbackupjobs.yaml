@@ -16,10 +16,26 @@ spec:
     singular: cloudbackupjob
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.target
+      name: Target
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.progressPercent
+      name: Progress
+      type: integer
+    - jsonPath: .status.lastRun
+      name: LastRun
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: CloudBackupJob — Volume-to-cloud backup job
+        description: CloudBackupJob is a volume-to-cloud backup job (one-shot or cron).
         properties:
           apiVersion:
             description: |-
@@ -39,11 +55,88 @@ spec:
           metadata:
             type: object
           spec:
-            description: CloudBackupJobSpec defines the desired state of CloudBackupJob.
+            description: CloudBackupJobSpec defines desired state.
+            properties:
+              cron:
+                description: Cron is an optional schedule; when empty the job is one-shot.
+                type: string
+              excludes:
+                items:
+                  type: string
+                type: array
+              parallelism:
+                description: Parallelism bounds concurrent upload streams (engine-specific).
+                format: int32
+                type: integer
+              retention:
+                description: CloudBackupRetention is a minimal restic-style retention
+                  policy.
+                properties:
+                  keepDaily:
+                    format: int32
+                    type: integer
+                  keepHourly:
+                    format: int32
+                    type: integer
+                  keepLast:
+                    format: int32
+                    type: integer
+                  keepMonthly:
+                    format: int32
+                    type: integer
+                  keepWeekly:
+                    format: int32
+                    type: integer
+                  keepYearly:
+                    format: int32
+                    type: integer
+                type: object
+              source:
+                description: VolumeSourceRef refers to a source volume for a backup
+                  job.
+                properties:
+                  kind:
+                    description: Kind is one of "BlockVolume", "Dataset", "Snapshot".
+                    enum:
+                    - BlockVolume
+                    - Dataset
+                    - Snapshot
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    description: Namespace of the source; defaults to the job's namespace.
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              suspended:
+                type: boolean
+              target:
+                description: Target is the name of a CloudBackupTarget in the same
+                  namespace.
+                type: string
+              timeout:
+                description: Timeout bounds an individual run, e.g. "4h".
+                type: string
+            required:
+            - source
+            - target
             type: object
           status:
-            description: CloudBackupJobStatus defines observed state of CloudBackupJob.
+            description: CloudBackupJobStatus reports observed state.
             properties:
+              bytesTotal:
+                description: BytesTotal is the expected total bytes for the current
+                  run.
+                format: int64
+                type: integer
+              bytesTransferred:
+                description: BytesTransferred is the cumulative bytes uploaded in
+                  the last run.
+                format: int64
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -100,7 +193,50 @@ spec:
                   - type
                   type: object
                 type: array
+              failureCount:
+                description: FailureCount is the cumulative failure count.
+                format: int64
+                type: integer
+              filesProcessed:
+                description: FilesProcessed is the count of files in the last run.
+                format: int64
+                type: integer
+              lastError:
+                description: LastError is the most recent run error.
+                type: string
+              lastRun:
+                description: LastRun is the start time of the most recent run.
+                format: date-time
+                type: string
+              lastSuccessfulRun:
+                description: LastSuccessfulRun is the start time of the most recent
+                  successful run.
+                format: date-time
+                type: string
+              nextRun:
+                description: NextRun is the next scheduled invocation (cron jobs only).
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Scheduled
+                - Running
+                - Succeeded
+                - Failed
+                - Suspended
+                - Cancelled
+                type: string
+              progressPercent:
+                description: ProgressPercent is 0..100 for the current run.
+                format: int32
+                type: integer
+              snapshotId:
+                description: SnapshotID is the engine snapshot identifier produced
+                  by the last run.
                 type: string
             type: object
         type: object

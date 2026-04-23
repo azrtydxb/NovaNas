@@ -16,10 +16,23 @@ spec:
     singular: alertpolicy
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.severity
+      name: Severity
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.fireCount
+      name: FireCount
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AlertPolicy — Metric threshold to channel mapping
+        description: AlertPolicy maps a PromQL-driven threshold to one or more channels.
         properties:
           apiVersion:
             description: |-
@@ -39,10 +52,74 @@ spec:
           metadata:
             type: object
           spec:
-            description: AlertPolicySpec defines the desired state of AlertPolicy.
+            description: AlertPolicySpec defines desired state.
+            properties:
+              annotations:
+                additionalProperties:
+                  type: string
+                type: object
+              channels:
+                description: Channels lists AlertChannel names to dispatch to.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              condition:
+                description: AlertCondition is a PromQL threshold evaluation.
+                properties:
+                  for:
+                    description: For is the firing duration (e.g. "5m").
+                    type: string
+                  operator:
+                    description: Operator compares Query result vs Threshold.
+                    enum:
+                    - '>'
+                    - <
+                    - '>='
+                    - <=
+                    - ==
+                    - '!='
+                    type: string
+                  query:
+                    description: Query is the PromQL expression evaluated by Prometheus.
+                    type: string
+                  threshold:
+                    description: Threshold is the numeric value Query is compared
+                      to.
+                    type: string
+                required:
+                - operator
+                - query
+                - threshold
+                type: object
+              description:
+                type: string
+              labels:
+                additionalProperties:
+                  type: string
+                type: object
+              runtimeNamespace:
+                description: |-
+                  RuntimeNamespace overrides where the projected PrometheusRule is
+                  written. Defaults to "novanas-system".
+                type: string
+              severity:
+                description: AlertSeverity is the severity tier of an AlertPolicy.
+                enum:
+                - info
+                - warning
+                - critical
+                type: string
+              suspended:
+                description: Suspended disables rule rendering / firing without deletion.
+                type: boolean
+            required:
+            - channels
+            - condition
+            - severity
             type: object
           status:
-            description: AlertPolicyStatus defines observed state of AlertPolicy.
+            description: AlertPolicyStatus reports observed state.
             properties:
               conditions:
                 items:
@@ -100,7 +177,39 @@ spec:
                   - type
                   type: object
                 type: array
+              fireCount:
+                description: FireCount is the total number of transitions into a firing
+                  state.
+                format: int64
+                type: integer
+              firingSince:
+                description: |-
+                  FiringSince is the first observed firing time for the current
+                  incident. Cleared on resolve.
+                format: date-time
+                type: string
+              lastFiredAt:
+                description: LastFiredAt is the most recent firing timestamp observed.
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
+                enum:
+                - Pending
+                - Active
+                - Firing
+                - Suspended
+                - Failed
+                type: string
+              renderedRuleName:
+                description: RenderedRuleName is the child PrometheusRule name.
+                type: string
+              ruleHash:
+                description: |-
+                  RuleHash is a SHA-256 of the rendered PrometheusRule spec; used to
+                  short-circuit reconciliation when the spec is unchanged.
                 type: string
             type: object
         type: object

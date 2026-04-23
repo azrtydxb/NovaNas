@@ -253,26 +253,44 @@ func TestSmartPolicyReconciler_HappyPath(t *testing.T) {
 
 func TestAlertChannelReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.AlertChannel{ObjectMeta: newClusterMeta("email")}
+	cr := &novanasv1alpha1.AlertChannel{
+		ObjectMeta: newClusterMeta("email"),
+		Spec: novanasv1alpha1.AlertChannelSpec{
+			Type: "email",
+			Email: &novanasv1alpha1.EmailChannelConfig{
+				To:   []string{"ops@example.com"},
+				From: "novanas@example.com",
+			},
+		},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &AlertChannelReconciler{BaseReconciler: newPart2Base(c, s, "AlertChannel"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("email"))
 	var got novanasv1alpha1.AlertChannel
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "email"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
 	}
 }
 
 func TestAlertPolicyReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.AlertPolicy{ObjectMeta: newClusterMeta("disk-full")}
+	cr := &novanasv1alpha1.AlertPolicy{
+		ObjectMeta: newClusterMeta("disk-full"),
+		Spec: novanasv1alpha1.AlertPolicySpec{
+			Severity: "warning",
+			Condition: novanasv1alpha1.AlertCondition{
+				Query: "disk_usage_ratio", Operator: ">", Threshold: "0.9", For: "5m",
+			},
+			Channels: []string{"ops-email"},
+		},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &AlertPolicyReconciler{BaseReconciler: newPart2Base(c, s, "AlertPolicy"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("disk-full"))
 	var got novanasv1alpha1.AlertPolicy
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "disk-full"}, &got)
-	if got.Status.Phase != "Ready" && got.Status.Phase != "Pending" {
+	if got.Status.Phase != "Active" && got.Status.Phase != "Pending" {
 		t.Fatalf("phase = %q", got.Status.Phase)
 	}
 }
@@ -305,13 +323,27 @@ func TestUpsPolicyReconciler_HappyPath(t *testing.T) {
 
 func TestServiceLevelObjectiveReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.ServiceLevelObjective{ObjectMeta: newClusterMeta("api-slo")}
+	cr := &novanasv1alpha1.ServiceLevelObjective{
+		ObjectMeta: newClusterMeta("api-slo"),
+		Spec: novanasv1alpha1.ServiceLevelObjectiveSpec{
+			Target: "99.9",
+			Window: "30d",
+			Indicator: novanasv1alpha1.SLOIndicator{
+				GoodQuery:  "sum(rate(http_requests_total{status!~\"5..\"}[5m]))",
+				TotalQuery: "sum(rate(http_requests_total[5m]))",
+			},
+		},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &ServiceLevelObjectiveReconciler{BaseReconciler: newPart2Base(c, s, "ServiceLevelObjective"), Recorder: newPart2Recorder()}
+	r := &ServiceLevelObjectiveReconciler{
+		BaseReconciler: newPart2Base(c, s, "ServiceLevelObjective"),
+		Recorder:       newPart2Recorder(),
+		Prom:           stubPromClient{good: 995, total: 1000},
+	}
 	mustReconcileOK(t, context.Background(), r, part2Request("api-slo"))
 	var got novanasv1alpha1.ServiceLevelObjective
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "api-slo"}, &got)
-	if got.Status.Phase != "Ready" && got.Status.Phase != "Pending" {
+	if got.Status.Phase != "Active" && got.Status.Phase != "Pending" && got.Status.Phase != "AtRisk" && got.Status.Phase != "Breached" {
 		t.Fatalf("phase = %q", got.Status.Phase)
 	}
 }
