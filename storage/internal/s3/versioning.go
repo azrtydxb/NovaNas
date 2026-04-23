@@ -150,6 +150,19 @@ func (g *Gateway) handleGetBucketVersioning(w http.ResponseWriter, r *http.Reque
 func (g *Gateway) handlePutObjectVersioned(w http.ResponseWriter, r *http.Request, bucket, key string, vs *versionStore) {
 	ctx := r.Context()
 
+	// SSE headers route the chunks into either the default dedup
+	// namespace or the segregated "ssec" namespace (per-caller keys).
+	sseReq, sseErr := ParseSSEHeaders(r.Header)
+	if sseErr != nil {
+		writeS3Error(w, "InvalidRequest", sseErr.Error(), http.StatusBadRequest)
+		return
+	}
+	namespace, rerr := RouteSSE(sseReq, g.kmsKeyLookup)
+	if rerr != nil {
+		writeS3Error(w, "NotImplemented", rerr.Error(), http.StatusNotImplemented)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeS3Error(w, "InternalError", "failed to read request body", http.StatusInternalServerError)
@@ -164,7 +177,7 @@ func (g *Gateway) handlePutObjectVersioned(w http.ResponseWriter, r *http.Reques
 		if end > len(body) {
 			end = len(body)
 		}
-		chunkID, err := g.chunks.PutChunkData(ctx, body[offset:end])
+		chunkID, err := putChunkInNamespace(ctx, g.chunks, namespace, body[offset:end])
 		if err != nil {
 			writeS3Error(w, "InternalError", "failed to store chunk data", http.StatusInternalServerError)
 			return
@@ -223,7 +236,7 @@ func (g *Gateway) handleGetObjectVersioned(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusOK)
 
 	for _, cid := range obj.ChunkIDs {
-		data, err := g.chunks.GetChunkData(ctx, cid)
+		data, err := getChunkFromNamespace(ctx, g.chunks, cid)
 		if err != nil {
 			return
 		}

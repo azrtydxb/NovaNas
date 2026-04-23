@@ -39,7 +39,8 @@ func (g *Gateway) handlePutObject(w http.ResponseWriter, r *http.Request, bucket
 		writeS3Error(w, "InvalidRequest", sseErr.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, rerr := RouteSSE(sseReq, g.kmsKeyLookup); rerr != nil {
+	namespace, rerr := RouteSSE(sseReq, g.kmsKeyLookup)
+	if rerr != nil {
 		// SSE-KMS requested but not resolvable: AWS returns 501
 		// NotImplemented when the service cannot honor a specified KMS key.
 		writeS3Error(w, "NotImplemented", rerr.Error(), http.StatusNotImplemented)
@@ -85,7 +86,7 @@ func (g *Gateway) handlePutObject(w http.ResponseWriter, r *http.Request, bucket
 		if end > len(body) {
 			end = len(body)
 		}
-		chunkID, err := g.chunks.PutChunkData(ctx, body[offset:end])
+		chunkID, err := putChunkInNamespace(ctx, g.chunks, namespace, body[offset:end])
 		if err != nil {
 			writeS3Error(w, "InternalError", "failed to store chunk data", http.StatusInternalServerError)
 			return
@@ -161,7 +162,7 @@ func (g *Gateway) handleGetObject(w http.ResponseWriter, r *http.Request, bucket
 
 	bytesWritten := int64(0)
 	for _, cid := range obj.ChunkIDs {
-		data, err := g.chunks.GetChunkData(ctx, cid)
+		data, err := getChunkFromNamespace(ctx, g.chunks, cid)
 		if err != nil {
 			// Headers already sent; nothing we can do but stop writing.
 			return
