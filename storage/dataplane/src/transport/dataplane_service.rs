@@ -1937,8 +1937,8 @@ impl DataplaneService for DataplaneServiceImpl {
     /// impl is tracked on #13 (NBD mount end-to-end).
     async fn export_metadata_volume_nbd(
         &self,
-        _request: Request<ExportMetadataVolumeNBDRequest>,
-    ) -> Result<Response<ExportMetadataVolumeNBDResponse>, Status> {
+        _request: Request<ExportMetadataVolumeNbdRequest>,
+    ) -> Result<Response<ExportMetadataVolumeNbdResponse>, Status> {
         Err(Status::unimplemented(
             "export_metadata_volume_nbd: NBD-backed metadata volume export \
              requires SPDK NBD bdev integration (see issue #13)",
@@ -1947,12 +1947,12 @@ impl DataplaneService for DataplaneServiceImpl {
 
     async fn release_metadata_volume_nbd(
         &self,
-        _request: Request<ReleaseMetadataVolumeNBDRequest>,
-    ) -> Result<Response<ReleaseMetadataVolumeNBDResponse>, Status> {
+        _request: Request<ReleaseMetadataVolumeNbdRequest>,
+    ) -> Result<Response<ReleaseMetadataVolumeNbdResponse>, Status> {
         // Idempotent release: if the NBD export was never created (because
         // export_metadata_volume_nbd returned Unimplemented), there is
         // nothing to tear down. Return Ok so the caller's cleanup is
         // clean regardless of which path was taken.
-        Ok(Response::new(ReleaseMetadataVolumeNBDResponse {}))
+        Ok(Response::new(ReleaseMetadataVolumeNbdResponse {}))
     }
 }

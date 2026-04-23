@@ -1,6 +1,6 @@
+import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
-import { sql } from 'drizzle-orm';
 import type { DbClient } from '../services/db.js';
 
 export interface HealthDeps {
