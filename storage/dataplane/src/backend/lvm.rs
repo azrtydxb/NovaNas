@@ -221,39 +221,102 @@ impl StorageBackend for LvmBackend {
             .get_mut(name)
             .ok_or_else(|| DataPlaneError::LvolError(format!("volume '{}' not found", name)))?;
 
+        let old_size = vol.size_bytes;
+        let block_size = vol.block_size;
         let lvol_name = vol.lvol_name.clone();
         drop(volumes);
 
-        // Verify the bdev exists on the reactor thread.
-        let exists: bool = reactor_dispatch::dispatch_sync({
-            let lvol_name = lvol_name.clone();
-            move || {
-                let name_c = std::ffi::CString::new(lvol_name.as_str()).unwrap();
-                unsafe { !ffi::spdk_bdev_get_by_name(name_c.as_ptr() as *const c_char).is_null() }
-            }
-        });
-
-        if !exists {
+        if new_size_bytes == 0 {
+            return Err(DataPlaneError::LvolError(
+                "resize target must be > 0".into(),
+            ));
+        }
+        if new_size_bytes % block_size as u64 != 0 {
             return Err(DataPlaneError::LvolError(format!(
-                "lvol bdev '{}' not found",
-                lvol_name
+                "resize target {} is not a multiple of block_size {}",
+                new_size_bytes, block_size
+            )));
+        }
+        // SPDK blobstore cannot shrink a live volume — reject to match
+        // the NVMe-oF namespace contract (host sees monotonic capacity).
+        if new_size_bytes < old_size {
+            return Err(DataPlaneError::LvolError(format!(
+                "lvol shrink is not supported: {} -> {}",
+                old_size, new_size_bytes
             )));
         }
 
-        // TODO(gap-18): vbdev_lvol_resize requires a *mut spdk_lvol pointer.
-        // SPDK's spdk_bdev_get_module_ctx takes a bdev_desc (opened bdev),
-        // not a raw bdev pointer. To implement this properly:
-        // 1. Change lvol_op_cb to a new lvol_op_with_handle_cb that stores the
-        //    spdk_lvol pointer in a global registry keyed by bdev name
-        // 2. Look up the lvol pointer at resize time from the registry
-        // 3. Call vbdev_lvol_resize with the lvol pointer
-        //
-        // For now, return an error. This only affects LVM backend volume
-        // expansion — raw/file backends and chunk-level operations work fine.
-        Err(DataPlaneError::LvolError(
-            "lvol resize requires spdk_lvol pointer caching (gap-18: needs lvol_op_with_handle_cb)"
-                .into(),
-        ))
+        // Resize on the reactor thread: open the bdev to recover the lvol
+        // handle from its ctxt, then call vbdev_lvol_resize which is itself
+        // async and completes via lvol_op_cb.
+        let completion = Arc::new(Completion::<i32>::new());
+        let comp = completion.clone();
+
+        reactor_dispatch::send_to_reactor(move || {
+            let lvol_bdev_c = std::ffi::CString::new(lvol_name.as_str()).unwrap();
+            unsafe {
+                let mut desc: *mut ffi::spdk_bdev_desc = std::ptr::null_mut();
+                let rc = ffi::spdk_bdev_open_ext(
+                    lvol_bdev_c.as_ptr() as *const c_char,
+                    true, // write access
+                    Some(bdev_event_cb),
+                    std::ptr::null_mut(),
+                    &mut desc,
+                );
+                if rc != 0 {
+                    log::warn!("resize: open_ext('{}') failed: rc={}", lvol_name, rc);
+                    comp.complete(rc);
+                    return;
+                }
+                let bdev = ffi::spdk_bdev_desc_get_bdev(desc);
+                if bdev.is_null() {
+                    ffi::spdk_bdev_close(desc);
+                    comp.complete(-1);
+                    return;
+                }
+                let lvol = (*bdev).ctxt as *mut ffi::spdk_lvol;
+                if lvol.is_null() {
+                    log::warn!("resize: bdev.ctxt is null for '{}'", lvol_name);
+                    ffi::spdk_bdev_close(desc);
+                    comp.complete(-1);
+                    return;
+                }
+                ffi::vbdev_lvol_resize(lvol, new_size_bytes, Some(lvol_op_cb), comp.as_ptr());
+                // Descriptor is only needed to recover the lvol handle; the
+                // resize itself holds its own reference on the lvol. Close
+                // now to avoid leaking the desc past this dispatch.
+                ffi::spdk_bdev_close(desc);
+            }
+        });
+
+        let rc = completion.wait();
+        if rc != 0 {
+            return Err(DataPlaneError::LvolError(format!(
+                "vbdev_lvol_resize failed: rc={rc}"
+            )));
+        }
+
+        // Commit the new size to our bookkeeping and return fresh VolumeInfo.
+        let mut volumes = self.volumes.lock().unwrap();
+        let vol = volumes
+            .get_mut(name)
+            .ok_or_else(|| DataPlaneError::LvolError(format!("volume '{}' not found", name)))?;
+        vol.size_bytes = new_size_bytes;
+        info!(
+            "lvm: resized volume '{}' {} -> {}B",
+            name, old_size, new_size_bytes
+        );
+        Ok(VolumeInfo {
+            name: vol.name.clone(),
+            backend: BackendType::Lvm,
+            size_bytes: vol.size_bytes,
+            used_bytes: if vol.thin { 0 } else { vol.size_bytes },
+            block_size: vol.block_size,
+            healthy: true,
+            is_snapshot: vol.is_snapshot,
+            parent_snapshot: vol.parent_snapshot.clone(),
+            thin_provisioned: vol.thin,
+        })
     }
 
     fn stat_volume(&self, name: &str) -> Result<VolumeInfo> {
