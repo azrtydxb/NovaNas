@@ -1,10 +1,9 @@
 name: E2E
 
 on:
-  push:
-    branches: [main]
+  # Nightly only + manual dispatch — the kind-in-CI bring-up is too flaky
+  # for per-push gating and the full matrix takes 30+ minutes.
   schedule:
-    # Nightly at 02:17 UTC — offset to avoid colliding with other scheduled jobs.
     - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:

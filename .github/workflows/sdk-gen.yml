@@ -5,11 +5,11 @@ name: SDK Generation
 # dry-run mode to exercise the generation pipeline without side effects.
 
 on:
+  # Only on release tags — generating on every main push is expensive and
+  # the OpenAPI spec isn't exported as an artifact of the main build yet.
   push:
     tags:
       - "v*.*.*"
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       dry_run:
