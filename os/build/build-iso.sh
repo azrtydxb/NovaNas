@@ -95,15 +95,23 @@ fi
 log "building hybrid UEFI+BIOS ISO -> $OUT"
 mkdir -p "$(dirname "$OUT")"
 
+# xorriso's ISO 9660 volid limit is 32 chars, alnum + underscore only.
+# Replace non-alnum with _ and trim.
+VOLID="NOVANAS_$(echo "$VERSION" | tr -c '[:alnum:]' '_')"
+VOLID="${VOLID:0:32}"
+
+# grub-mkrescue forwards extra args to xorriso's mkisofs emulation,
+# where volume id is '-V' (single dash, space-separated), not --volid.
 grub-mkrescue \
   --output="$OUT" \
-  --volid="NOVANAS_${VERSION//./_}" \
   "$STAGE" \
   -- \
+  -volid "$VOLID" \
   -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin 2>/dev/null || \
 grub-mkrescue \
   --output="$OUT" \
-  --volid="NOVANAS_${VERSION//./_}" \
-  "$STAGE"
+  "$STAGE" \
+  -- \
+  -volid "$VOLID"
 
 log "ISO ready at $OUT ($(stat -c%s "$OUT") bytes)"
