@@ -17,6 +17,8 @@ linters:
         - -QF1002  # could use tagged switch — cosmetic
         - -QF1008  # could remove embedded field selector — cosmetic
         - -ST1000  # missing package comment — non-blocking
+        - -ST1020  # exported func comment formatting
+        - -ST1021  # exported type comment formatting
         - -ST1003  # naming preference (ApiToken vs APIToken)
         - -SA1019  # deprecation warnings — handled per-occurrence
   exclusions:
