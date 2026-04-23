@@ -120,7 +120,7 @@ jobs:
       - name: Install KVM + Packer
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-kvm qemu-utils qemu-system-x86
+          sudo apt-get install -y qemu-kvm qemu-utils qemu-system-x86 ovmf
           # Packer from HashiCorp apt repo — not in default 24.04 image.
           wget -O - https://apt.releases.hashicorp.com/gpg | \
             sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
