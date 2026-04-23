@@ -4,9 +4,6 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,21 +70,14 @@ func (r *AppInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		logger.Error(err, "update handler failed")
 	}
 
-	// --- desired-state + version spec patches -----------------------
-	desiredState, specVersion := readAppInstanceSpec(ctx, r.Client, obj.Namespace, obj.Name)
-	if desiredState != "" {
-		logger.V(1).Info("desiredState observed", "state", desiredState)
-	}
+	// --- version reconciliation -------------------------------------
+	specVersion := obj.Spec.Version
 	if specVersion != "" {
 		// Detect a version change against last-recorded annotation.
 		prev := obj.Annotations[reconciler.ActionAnnotationPrefix+"version-applied"]
 		if prev != specVersion {
 			logger.Info("app version change detected", "from", prev, "to", specVersion)
 			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonExternalSync, "app version change: "+prev+" -> "+specVersion)
-			// Record the applied version on the CR so the next
-			// reconcile doesn't retrigger. TODO(operators): replace
-			// with a typed status.observedVersion once the Spec
-			// struct is populated.
 			patched := obj.DeepCopy()
 			if patched.Annotations == nil {
 				patched.Annotations = map[string]string{}
@@ -111,11 +101,11 @@ func (r *AppInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	data := map[string]string{
 		"rendered.yaml": "# placeholder rendered manifests for " + obj.Name + "\n",
 	}
-	if desiredState != "" {
-		data["desiredState"] = desiredState
-	}
 	if specVersion != "" {
 		data["version"] = specVersion
+	}
+	if obj.Spec.App != "" {
+		data["app"] = obj.Spec.App
 	}
 	if _, err := ensureConfigMap(ctx, r.Client, ns, childName(obj.Name, "rendered"), &obj, data, map[string]string{"novanas.io/kind": "AppInstance"}); err != nil {
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "ConfigMapFailed", err.Error())
@@ -125,13 +115,9 @@ func (r *AppInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	logger.V(1).Info("app instance rendered", "namespace", ns)
 
+	// Phase stays Pending until the downstream Helm installer observes
+	// deployment readiness and flips it to Running via status patches.
 	phase := "Pending"
-	switch desiredState {
-	case "Stopped":
-		phase = "Stopped"
-	case "Running":
-		phase = "Pending" // until downstream Helm installer flips it
-	}
 
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonAwaitingExternal, "rendered; awaiting Helm installer")
 	obj.Status.Phase = phase
@@ -140,21 +126,6 @@ func (r *AppInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonProvisioning, "AppInstance rendered")
 	return ctrl.Result{RequeueAfter: defaultRequeuePart2}, nil
-}
-
-// readAppInstanceSpec fetches spec.desiredState and spec.version off
-// the AppInstance CR via unstructured. The typed AppInstanceSpec is
-// still a TODO(wave-4) empty struct.
-func readAppInstanceSpec(ctx context.Context, c client.Client, namespace, name string) (state, version string) {
-	gvk := schema.GroupVersionKind{Group: "novanas.io", Version: "v1alpha1", Kind: "AppInstance"}
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(gvk)
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, u); err != nil {
-		return "", ""
-	}
-	state, _, _ = unstructured.NestedString(u.Object, "spec", "desiredState")
-	version, _, _ = unstructured.NestedString(u.Object, "spec", "version")
-	return state, version
 }
 
 // SetupWithManager registers the controller with the manager.

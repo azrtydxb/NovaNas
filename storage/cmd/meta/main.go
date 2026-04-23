@@ -31,6 +31,9 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 
+	"go.uber.org/zap"
+
+	"github.com/azrtydxb/novanas/storage/internal/dataplane"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
 	"github.com/azrtydxb/novanas/storage/internal/metadata"
 	"github.com/azrtydxb/novanas/storage/internal/metrics"
@@ -47,10 +50,12 @@ var (
 func main() {
 	nodeID := flag.String("node-id", "", "Metadata node ID (defaults to hostname when empty)")
 	dataDir := flag.String("data-dir", "/var/lib/novanas/meta", "DEPRECATED: legacy local BadgerDB directory. Used only when --chunk-backed=false. In chunk-backed mode BadgerDB lives on a chunk-backed BlockVolume mounted at --meta-mount-path.")
-	chunkBacked := flag.Bool("chunk-backed", false, "Enable chunk-backed metadata (A4-Metadata-As-Chunks). When true, bootstrap via superblocks and mount the metadata BlockVolume before opening BadgerDB. Currently scaffolded: falls back to --data-dir until NBD export is wired in the data-plane (TODO(integration)).")
+	chunkBacked := flag.Bool("chunk-backed", false, "Enable chunk-backed metadata (A4-Metadata-As-Chunks). When true, bootstrap via superblocks and mount the metadata BlockVolume via the data-plane's ExportMetadataVolumeNBD RPC before opening BadgerDB. If that RPC returns Unimplemented the meta service falls back to --data-dir unless --require-chunk-backed is set.")
 	metaMountPath := flag.String("meta-mount-path", "/var/lib/novanas/meta-mount", "Mount path for the chunk-backed metadata BlockVolume when --chunk-backed=true.")
 	bootstrapTimeout := flag.Duration("bootstrap-timeout", 30*time.Second, "How long to wait for agents to report metadata-role superblocks before failing startup (chunk-backed mode only).")
 	minMetaDisks := flag.Int("min-metadata-disks", 1, "Minimum number of metadata-role disks that must report a superblock before bootstrap proceeds.")
+	dataplaneAddr := flag.String("dataplane-addr", "127.0.0.1:9500", "gRPC address of the local data-plane used for ExportMetadataVolumeNBD in chunk-backed mode.")
+	requireChunkBacked := flag.Bool("require-chunk-backed", false, "In chunk-backed mode, fail startup if the data-plane cannot mount the metadata BlockVolume. When false (default), fall back to --data-dir.")
 	grpcAddr := flag.String("grpc-addr", ":7001", "gRPC client API listen address")
 	metricsAddr := flag.String("metrics-addr", ":7002", "Prometheus metrics listen address")
 	tlsCA := flag.String("tls-ca", "", "Path to CA certificate for mTLS")
@@ -94,12 +99,14 @@ func main() {
 
 	// Create the metadata store.
 	//
-	// Chunk-backed path (A4-Metadata-As-Chunks, docs/14 S14): bootstrap by
-	// gathering metadata-role superblocks from agents, verifying CRUSH
-	// agreement, and (TODO(integration)) mounting the chunk-backed
-	// BlockVolume before opening BadgerDB. For now, the bootstrap step
-	// runs in "report-only" mode: it proves the locator flow and then
-	// opens BadgerDB at --data-dir as a safe fallback.
+	// Chunk-backed path (A4-Metadata-As-Chunks, docs/14 S14): bootstrap
+	// by gathering metadata-role superblocks from agents, verifying
+	// CRUSH agreement, calling DataplaneService.ExportMetadataVolumeNBD
+	// to assemble the metadata BlockVolume as /dev/nbdN, mounting it at
+	// --meta-mount-path, and opening BadgerDB there. If the dataplane
+	// has not yet implemented the export RPC (returns Unimplemented),
+	// NewRaftStoreChunkBackedMounted surfaces ErrMountNotSupported and
+	// we fall back to --data-dir.
 	//
 	// Local-disk path (legacy): open BadgerDB at --data-dir directly.
 	var (
@@ -117,11 +124,27 @@ func main() {
 		log.Printf("chunk-backed metadata enabled (bootstrap-timeout=%s, min-metadata-disks=%d, mount-path=%s)",
 			*bootstrapTimeout, *minMetaDisks, *metaMountPath)
 		bootCtx, bootCancel := context.WithTimeout(context.Background(), *bootstrapTimeout)
-		// Mounter is NoopMetadataVolumeMounter until an ExporterFunc is
-		// wired into this process (dev-loopback or production gRPC-backed).
-		// NewRaftStoreChunkBackedMounted detects ErrMountNotSupported and
-		// falls back to --data-dir automatically.
+		// Production mounter: delegate to the data-plane's
+		// ExportMetadataVolumeNBD / ReleaseMetadataVolumeNBD RPCs via
+		// the gRPC client at --dataplane-addr. If the data-plane does
+		// not yet implement the RPC (returns Unimplemented),
+		// NewRaftStoreChunkBackedMounted detects ErrMountNotSupported
+		// and falls back to --data-dir unless --require-chunk-backed
+		// is set.
 		var mounter metadata.MetadataVolumeMounter = metadata.NoopMetadataVolumeMounter{}
+		if dpClient, dpErr := dataplane.Dial(*dataplaneAddr, zap.NewNop()); dpErr == nil {
+			defer func() { _ = dpClient.Close() }()
+			mounter = &metadata.DataplaneNBDMounter{
+				Export: func(ctx context.Context, loc metadata.VolumeLocator) (string, error) {
+					return dpClient.ExportMetadataVolumeNBD(ctx, loc.Name, loc.RootChunk, loc.Version)
+				},
+				Release: func(ctx context.Context, loc metadata.VolumeLocator) (string, error) {
+					return "", dpClient.ReleaseMetadataVolumeNBD(ctx, loc.Name, "")
+				},
+			}
+		} else {
+			log.Printf("dataplane dial at %s failed (%v); chunk-backed mount path disabled", *dataplaneAddr, dpErr)
+		}
 		var report *metadata.BootstrapReport
 		store, report, err = metadata.NewRaftStoreChunkBackedMounted(bootCtx, *nodeID, metadata.BootstrapConfig{
 			LocalDataDir:       *dataDir,
@@ -136,6 +159,9 @@ func main() {
 				report.MetadataDisks, report.MetadataVolumeName, report.MetadataVolumeRoot, report.MetadataVolumeVer)
 		}
 		if err != nil {
+			if *requireChunkBacked {
+				log.Fatalf("chunk-backed bootstrap failed and --require-chunk-backed=true: %v", err)
+			}
 			log.Printf("chunk-backed bootstrap did not succeed (%v); using --data-dir fallback", err)
 			store, err = metadata.NewRaftStore(metadata.RaftConfig{NodeID: *nodeID, DataDir: *dataDir})
 		}

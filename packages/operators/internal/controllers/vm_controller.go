@@ -4,9 +4,7 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,10 +83,7 @@ func (r *VmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 
 	// --- Power-state reconciliation ---------------------------------
-	// The typed VmSpec is still a TODO(wave-4) empty struct, so we
-	// read spec.powerState off the unstructured view of the same
-	// resource. This keeps us unblocked until the typed spec lands.
-	if desired := readSpecPowerState(ctx, r.Client, obj.Namespace, obj.Name); desired != "" {
+	if desired := obj.Spec.PowerState; desired != "" {
 		if perr := eng.SetPowerState(ctx, obj.Namespace, obj.Name, desired); perr != nil {
 			logger.V(1).Info("set power state failed", "state", desired, "error", perr.Error())
 		} else {
@@ -118,20 +113,6 @@ func (r *VmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 	reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonReady, "Vm "+phase)
 	return ctrl.Result{RequeueAfter: defaultRequeuePart2}, nil
-}
-
-// readSpecPowerState reads the (untyped) spec.powerState field off
-// the Vm CR by fetching its unstructured form. Returns "" when the
-// field is absent or the read fails.
-func readSpecPowerState(ctx context.Context, c client.Client, namespace, name string) string {
-	gvk := schema.GroupVersionKind{Group: "novanas.io", Version: "v1alpha1", Kind: "Vm"}
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(gvk)
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, u); err != nil {
-		return ""
-	}
-	v, _, _ := unstructured.NestedString(u.Object, "spec", "powerState")
-	return v
 }
 
 // SetupWithManager registers the controller with the manager.
