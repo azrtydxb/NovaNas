@@ -112,7 +112,7 @@ build_layered() {
 
   local work
   work=$(mktemp -d)
-  trap 'umount -R "$work"/dev "$work"/proc "$work"/sys 2>/dev/null || true; rm -rf "$work"' EXIT
+  trap 'umount -R "${work:-}"/dev/pts "${work:-}"/dev "${work:-}"/proc "${work:-}"/sys 2>/dev/null || true; rm -rf "${work:-}"' EXIT
 
   log "extract base -> $work"
   tar -xpf "$IN" -C "$work"
@@ -120,8 +120,14 @@ build_layered() {
   log "overlay NovaNas rootfs skeleton"
   cp -a "$OS_DIR/rootfs/." "$work/"
 
+  # grub-pc-bin postinst invokes grub-mkconfig, which needs /boot/grub.
+  # Without this directory the install fails before our sources.list
+  # even has a chance to be queried.
+  mkdir -p "$work/boot/grub"
+
   log "prep chroot bind mounts"
   mount --bind /dev  "$work/dev"
+  mount --bind /dev/pts "$work/dev/pts"
   mount --bind /proc "$work/proc"
   mount --bind /sys  "$work/sys"
 
@@ -139,12 +145,27 @@ EOF
   # list above is authoritative.
   rm -f "$work/etc/apt/sources.list.d/debian.sources"
 
+  # Pre-seed locales so glibc's update-locale step doesn't fail with
+  # "invalid locale settings" during apt postinst scripts.
+  sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' "$work/etc/locale.gen" 2>/dev/null || \
+    echo "en_US.UTF-8 UTF-8" >> "$work/etc/locale.gen"
+
+  # Pre-seed grub-pc-bin so its postinst does not prompt for install
+  # devices or try to write to a disk that doesn't exist in the chroot.
+  cat > "$work/tmp/grub-pc.seed" <<'EOF'
+grub-pc grub-pc/install_devices multiselect
+grub-pc grub-pc/install_devices_empty boolean true
+EOF
+
   chroot "$work" /bin/bash -eu -o pipefail -c "
     export DEBIAN_FRONTEND=noninteractive
+    debconf-set-selections /tmp/grub-pc.seed
+    locale-gen en_US.UTF-8
+    update-locale LANG=en_US.UTF-8
     apt-get update
     apt-get install -y --no-install-recommends $LAYERED_PACKAGES
     apt-get clean
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /tmp/grub-pc.seed
   "
 
   log "install k3s $K3S_VERSION"
