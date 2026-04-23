@@ -155,7 +155,7 @@ mod tests {
     async fn setup() -> (ChunkServiceImpl, PathBuf) {
         let dir = TempDir::new().unwrap();
         let dir_path = dir.keep();
-        let store = FileChunkStore::new(dir_path.clone()).await.unwrap();
+        let store = FileChunkStore::new(dir_path.clone(), 64 * 1024 * 1024).unwrap();
         let svc = ChunkServiceImpl::new(Arc::new(store));
         (svc, dir_path)
     }

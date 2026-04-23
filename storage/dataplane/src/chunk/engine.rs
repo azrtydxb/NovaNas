@@ -1545,7 +1545,7 @@ mod tests {
     #[tokio::test]
     async fn write_and_read_local_volume() {
         let dir = tempfile::tempdir().unwrap();
-        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf()).await.unwrap());
+        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap());
         let topology = local_topology("node-1");
 
         let engine = ChunkEngine::new("node-1".to_string(), store, topology);
@@ -1568,9 +1568,7 @@ mod tests {
         let policy_dir = tempfile::tempdir().unwrap();
 
         let store = Arc::new(
-            FileChunkStore::new(chunk_dir.path().to_path_buf())
-                .await
-                .unwrap(),
+            FileChunkStore::new(chunk_dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap(),
         );
         let loc_store =
             Arc::new(ChunkLocationStore::open(policy_dir.path().join("policy.redb")).unwrap());
@@ -1608,7 +1606,7 @@ mod tests {
     #[tokio::test]
     async fn dedup_identical_chunks() {
         let dir = tempfile::tempdir().unwrap();
-        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf()).await.unwrap());
+        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap());
         let topology = local_topology("node-1");
 
         let engine = ChunkEngine::new("node-1".to_string(), store, topology);
@@ -1624,7 +1622,7 @@ mod tests {
         // Replication factor 3 on a single-node topology writes one replica
         // (capped by available nodes) — write should still succeed.
         let dir = tempfile::tempdir().unwrap();
-        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf()).await.unwrap());
+        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap());
         let topology = local_topology("node-1");
 
         let engine = ChunkEngine::with_protection(
@@ -1646,7 +1644,7 @@ mod tests {
     #[tokio::test]
     async fn protection_scheme_accessors() {
         let dir = tempfile::tempdir().unwrap();
-        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf()).await.unwrap());
+        let store = Arc::new(FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap());
         let topology = local_topology("node-1");
 
         let engine = ChunkEngine::new("node-1".to_string(), store, topology);

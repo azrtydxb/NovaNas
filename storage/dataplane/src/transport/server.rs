@@ -229,9 +229,7 @@ mod tests {
     #[tokio::test]
     async fn server_starts_and_accepts_client() {
         let dir = tempfile::tempdir().unwrap().keep();
-        let store = crate::backend::file_store::FileChunkStore::new(dir)
-            .await
-            .unwrap();
+        let store = crate::backend::file_store::FileChunkStore::new(dir, 64 * 1024 * 1024).unwrap();
 
         let config = GrpcServerConfig {
             listen_address: "127.0.0.1".to_string(),

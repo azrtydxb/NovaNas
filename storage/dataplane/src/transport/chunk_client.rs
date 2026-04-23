@@ -367,12 +367,18 @@ mod tests {
         ) -> Result<Response<PutSubBlockResponse>, Status> {
             Err(Status::unimplemented("test stub"))
         }
+        async fn sync_chunk_maps(
+            &self,
+            _: Request<SyncChunkMapsRequest>,
+        ) -> Result<Response<SyncChunkMapsResponse>, Status> {
+            Err(Status::unimplemented("test stub"))
+        }
     }
 
     async fn start_server() -> (SocketAddr, tokio::task::JoinHandle<()>) {
         let dir = TempDir::new().unwrap();
         let dir_path = dir.keep();
-        let store = FileChunkStore::new(dir_path).await.unwrap();
+        let store = FileChunkStore::new(dir_path, 64 * 1024 * 1024).unwrap();
         let store = Arc::new(store);
 
         let svc = TestDataplaneService {

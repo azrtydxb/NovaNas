@@ -497,11 +497,13 @@ mod tests {
                 address: "10.0.0.1".into(),
                 port: 4420,
                 nqn: "nqn-1".into(),
+                bdev_name: None,
             },
             ReplicaTarget {
                 address: "10.0.0.2".into(),
                 port: 4420,
                 nqn: "nqn-2".into(),
+                bdev_name: None,
             },
         ]
     }
@@ -537,6 +539,7 @@ mod tests {
             address: "10.0.0.3".into(),
             port: 4420,
             nqn: "nqn-3".into(),
+            bdev_name: None,
         };
         bdev.add_replica(new_target).unwrap();
         assert_eq!(bdev.replicas.read().unwrap().len(), 3);
@@ -549,6 +552,7 @@ mod tests {
             address: "10.0.0.1".into(),
             port: 4420,
             nqn: "nqn-dup".into(),
+            bdev_name: None,
         };
         let result = bdev.add_replica(dup_target);
         assert!(result.is_err());
@@ -569,6 +573,7 @@ mod tests {
             address: "10.0.0.1".into(),
             port: 4420,
             nqn: "nqn-1".into(),
+            bdev_name: None,
         }];
         let bdev = make_bdev(single_target);
         let result = bdev.remove_replica("10.0.0.1");
@@ -608,6 +613,7 @@ mod tests {
             address: "10.0.0.1".into(),
             port: 4420,
             nqn: "nqn-1".into(),
+            bdev_name: None,
         };
         let replica = Replica::new(target, "test-bdev".into());
         replica.stats.reads_completed.store(5, Ordering::Relaxed);
@@ -627,6 +633,7 @@ mod tests {
             address: "10.0.0.1".into(),
             port: 4420,
             nqn: "nqn-1".into(),
+            bdev_name: None,
         };
         let replica = Replica::new(target, "test-bdev".into());
 

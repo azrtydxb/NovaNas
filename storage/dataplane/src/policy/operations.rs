@@ -265,7 +265,7 @@ mod tests {
 
     async fn make_ops() -> (tempfile::TempDir, ChunkOperations) {
         let dir = tempfile::tempdir().unwrap();
-        let store = FileChunkStore::new(dir.path().to_path_buf()).await.unwrap();
+        let store = FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
         let ops = ChunkOperations::new(LOCAL_NODE.to_string(), Arc::new(store));
         (dir, ops)
     }
