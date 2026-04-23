@@ -13,8 +13,8 @@ use crate::error::Result;
 /// Executes chunk-level operations for the policy engine.
 ///
 /// Every target on a single-node cluster is the local node; the
-/// `local_node_id` field is retained only for bookkeeping and for symmetry
-/// with the older API signatures that still pass `(node_id, addr)` pairs.
+/// `local_node_id` field is retained for bookkeeping and to reject any
+/// action whose target drifts away from the local node.
 pub struct ChunkOperations {
     local_node_id: String,
     local_store: Arc<dyn ChunkStore>,
@@ -47,9 +47,7 @@ impl ChunkOperations {
         &self,
         chunk_id: &str,
         source_node_id: &str,
-        _source_addr: &str,
         target_node_id: &str,
-        _target_addr: &str,
     ) -> Result<()> {
         self.ensure_local(source_node_id)?;
         self.ensure_local(target_node_id)?;
@@ -61,18 +59,17 @@ impl ChunkOperations {
     /// Reconstruct a missing EC shard from surviving shards using
     /// Reed-Solomon decoding, then write the result to the target.
     ///
-    /// On single-node every shard lives on some local backend; the
-    /// `node_id`/`addr` fields in `shard_addrs` are still accepted for API
-    /// compatibility but every read goes through the local store.
+    /// On single-node every shard lives on some local backend; `surviving`
+    /// carries `(shard_index, node_id)` pairs and every read goes through
+    /// the local store.
     pub async fn reconstruct_shard(
         &self,
         chunk_id: &str,
         shard_index: usize,
         data_shards: u32,
         parity_shards: u32,
-        shard_addrs: &[(usize, String, String)], // (shard_idx, node_id, addr)
+        surviving: &[(usize, String)],
         target_node_id: &str,
-        _target_addr: &str,
     ) -> Result<()> {
         use crate::backend::chunk_store::ChunkHeader;
 
@@ -80,7 +77,7 @@ impl ChunkOperations {
 
         // Read all surviving shards from the local store.
         let mut available: Vec<(usize, Vec<u8>)> = Vec::new();
-        for (idx, node_id, _addr) in shard_addrs {
+        for (idx, node_id) in surviving {
             self.ensure_local(node_id)?;
             let shard_id = format!("{chunk_id}:shard:{idx}");
             let shard_with_header = self.local_store.get(&shard_id).await?;
@@ -186,12 +183,7 @@ impl ChunkOperations {
 
     /// Remove a chunk replica from a node. Single-node: deletes from the
     /// local store.
-    pub async fn remove_replica(
-        &self,
-        chunk_id: &str,
-        node_id: &str,
-        _node_addr: &str,
-    ) -> Result<()> {
+    pub async fn remove_replica(&self, chunk_id: &str, node_id: &str) -> Result<()> {
         self.ensure_local(node_id)?;
         self.local_store.delete(chunk_id).await?;
         Ok(())
@@ -239,7 +231,7 @@ mod tests {
         let data = make_chunk_data(b"hello replication");
 
         ops.local_store.put(&chunk_id, &data).await.unwrap();
-        ops.replicate_chunk(&chunk_id, LOCAL_NODE, "", LOCAL_NODE, "")
+        ops.replicate_chunk(&chunk_id, LOCAL_NODE, LOCAL_NODE)
             .await
             .unwrap();
 
@@ -255,7 +247,7 @@ mod tests {
         let data = make_chunk_data(payload);
 
         ops.local_store.put(&chunk_id, &data).await.unwrap();
-        ops.replicate_chunk(&chunk_id, LOCAL_NODE, "", LOCAL_NODE, "")
+        ops.replicate_chunk(&chunk_id, LOCAL_NODE, LOCAL_NODE)
             .await
             .unwrap();
 
@@ -272,7 +264,7 @@ mod tests {
         ops.local_store.put(&chunk_id, &data).await.unwrap();
         assert!(ops.local_store.exists(&chunk_id).await.unwrap());
 
-        ops.remove_replica(&chunk_id, LOCAL_NODE, "").await.unwrap();
+        ops.remove_replica(&chunk_id, LOCAL_NODE).await.unwrap();
         assert!(!ops.local_store.exists(&chunk_id).await.unwrap());
     }
 
@@ -280,7 +272,7 @@ mod tests {
     async fn remove_nonexistent_chunk_returns_error() {
         let (_dir, ops) = make_ops().await;
         let chunk_id = fake_chunk_id();
-        let result = ops.remove_replica(&chunk_id, LOCAL_NODE, "").await;
+        let result = ops.remove_replica(&chunk_id, LOCAL_NODE).await;
         assert!(result.is_err());
     }
 
@@ -288,9 +280,7 @@ mod tests {
     async fn replicate_nonexistent_source_returns_error() {
         let (_dir, ops) = make_ops().await;
         let chunk_id = fake_chunk_id();
-        let result = ops
-            .replicate_chunk(&chunk_id, LOCAL_NODE, "", LOCAL_NODE, "")
-            .await;
+        let result = ops.replicate_chunk(&chunk_id, LOCAL_NODE, LOCAL_NODE).await;
         assert!(result.is_err());
     }
 
@@ -302,7 +292,7 @@ mod tests {
         ops.local_store.put(&chunk_id, &data).await.unwrap();
 
         let err = ops
-            .replicate_chunk(&chunk_id, LOCAL_NODE, "", "other-host", "")
+            .replicate_chunk(&chunk_id, LOCAL_NODE, "other-host")
             .await
             .unwrap_err();
         assert!(format!("{err}").contains("non-local"));

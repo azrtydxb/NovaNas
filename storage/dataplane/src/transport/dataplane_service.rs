@@ -1772,38 +1772,25 @@ impl DataplaneService for DataplaneServiceImpl {
 
         let shard_index = req.shard_index as usize;
         let total_shards = total as usize;
-        let mut shard_addrs: Vec<(usize, String, String)> = Vec::new();
+        let mut surviving: Vec<(usize, String)> = Vec::new();
 
         for idx in 0..total_shards {
             if idx == shard_index {
                 continue;
             }
             let shard_id = format!("{}:shard:{}", req.chunk_id, idx);
-            // Use the policy engine's location store (accessed via public methods).
-            // We check if the async chunk store has this shard by querying
-            // the store. For remote shards we'd need the location store.
-            // For now, rely on the location store exposed through the engine.
-            //
-            // Since PolicyEngine doesn't expose location_store directly, we
-            // check via the chunk store for local availability, and rely on
-            // the caller (Go agent) providing target_node info.
+            // Single-node: every shard lives on a local backend. Check the
+            // async chunk store for local availability.
             let store = get_any_async_chunk_store()?;
-            match store.exists(&shard_id).await {
-                Ok(true) => {
-                    let node_id = policy_engine.node_id().to_string();
-                    shard_addrs.push((idx, node_id, String::new()));
-                }
-                _ => {
-                    // Shard not local — skip. The background reconcile loop
-                    // handles multi-node reconstruction via the location store.
-                }
+            if let Ok(true) = store.exists(&shard_id).await {
+                surviving.push((idx, policy_engine.node_id().to_string()));
             }
         }
 
-        if shard_addrs.len() < req.data_shards as usize {
+        if surviving.len() < req.data_shards as usize {
             return Err(Status::failed_precondition(format!(
                 "insufficient local surviving shards: have {}, need {} data shards",
-                shard_addrs.len(),
+                surviving.len(),
                 req.data_shards
             )));
         }
@@ -1813,7 +1800,7 @@ impl DataplaneService for DataplaneServiceImpl {
 
         let mut available: Vec<(usize, Vec<u8>)> = Vec::new();
         let store = get_any_async_chunk_store()?;
-        for (idx, _node_id, _addr) in &shard_addrs {
+        for (idx, _node_id) in &surviving {
             let shard_id = format!("{}:shard:{}", req.chunk_id, idx);
             match store.get(&shard_id).await {
                 Ok(shard_with_header) => {
