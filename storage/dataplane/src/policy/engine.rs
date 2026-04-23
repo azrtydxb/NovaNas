@@ -201,6 +201,13 @@ impl PolicyEngine {
         &self.node_id
     }
 
+    /// Returns a handle to the persistent location store. The shard
+    /// replicator and observability RPCs need direct access to enumerate
+    /// locations without going through the reconcile loop.
+    pub fn location_store(&self) -> &Arc<ChunkLocationStore> {
+        &self.location_store
+    }
+
     /// Set the ChunkEngine reference for migration I/O.
     /// Called after both PolicyEngine and ChunkEngine are created.
     pub async fn set_chunk_engine(&self, engine: Arc<ChunkEngine>) {
@@ -485,6 +492,113 @@ impl PolicyEngine {
         topology
             .get_node(node_id)
             .map(|n| format!("http://{}:{}", n.address, n.port))
+    }
+
+    /// Reconstruct a reported degraded shard.
+    ///
+    /// Looks up surviving shards in the location store, picks a healthy
+    /// target via CRUSH (avoiding nodes that already hold surviving shards),
+    /// runs Reed-Solomon decode / re-encode (via
+    /// [`ChunkOperations::reconstruct_shard`]), writes the reconstructed shard,
+    /// and records the new placement.
+    ///
+    /// Returns the target node ID where the shard was placed on success.
+    ///
+    /// Fails fast with an error when fewer than `data_shards` surviving
+    /// shards are resolvable (quorum lost) — the caller (e.g. the
+    /// [`ShardReplicator`](crate::policy::shard_replicator::ShardReplicator)
+    /// worker) will retry on the next tick.
+    pub async fn reconstruct_reported_shard(
+        &self,
+        report: &DegradedShardReport,
+        chunk_id: &str,
+        data_shards: u32,
+        parity_shards: u32,
+    ) -> Result<String> {
+        let topology = self.topology.read().await;
+        let total = (data_shards + parity_shards) as usize;
+
+        // Collect (idx, node_id, addr) for each surviving shard from the
+        // location store. A shard is considered surviving if ANY node in its
+        // ChunkLocation list is resolvable in the current topology.
+        let mut shard_addrs: Vec<(usize, String, String)> = Vec::new();
+        let mut excluded_nodes: HashSet<String> = HashSet::new();
+        for idx in 0..total {
+            if idx == report.shard_index {
+                continue;
+            }
+            let shard_id = format!("{chunk_id}:shard:{idx}");
+            if let Ok(Some(loc)) = self.location_store.get_location(&shard_id) {
+                for nid in &loc.node_ids {
+                    if let Some(addr) = self.node_addr(&topology, nid) {
+                        shard_addrs.push((idx, nid.clone(), addr));
+                        excluded_nodes.insert(nid.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        if shard_addrs.len() < data_shards as usize {
+            return Err(crate::error::DataPlaneError::ChunkEngineError(format!(
+                "quorum lost for {}:shard:{}: only {} of {} data shards reachable",
+                chunk_id,
+                report.shard_index,
+                shard_addrs.len(),
+                data_shards
+            )));
+        }
+
+        // Pick a healthy target via CRUSH. We prefer a node that does not
+        // already hold a shard of this chunk (to preserve failure-domain
+        // diversity), but fall back to the top CRUSH pick if the cluster is
+        // too small to satisfy that — better to repair onto a node that
+        // already hosts a different shard than to leave the chunk broken.
+        let crush_key = format!("{chunk_id}:shard:{}", report.shard_index);
+        let candidates = crate::metadata::crush::select(&crush_key, total * 2, &topology);
+        if candidates.is_empty() {
+            return Err(crate::error::DataPlaneError::ChunkEngineError(format!(
+                "no CRUSH candidates available for {}:shard:{}",
+                chunk_id, report.shard_index
+            )));
+        }
+        let target_node_id = candidates
+            .iter()
+            .map(|(nid, _)| nid.clone())
+            .find(|nid| !excluded_nodes.contains(nid))
+            .unwrap_or_else(|| candidates[0].0.clone());
+
+        let target_addr = self.node_addr(&topology, &target_node_id).ok_or_else(|| {
+            crate::error::DataPlaneError::ChunkEngineError(format!(
+                "chosen target {} has no address in topology",
+                target_node_id
+            ))
+        })?;
+
+        // Drop the topology read lock before the (potentially slow) I/O.
+        drop(topology);
+
+        self.operations
+            .reconstruct_shard(
+                chunk_id,
+                report.shard_index,
+                data_shards,
+                parity_shards,
+                &shard_addrs,
+                &target_node_id,
+                &target_addr,
+            )
+            .await?;
+
+        let shard_id = format!("{chunk_id}:shard:{}", report.shard_index);
+        self.location_store
+            .add_node_to_chunk(&shard_id, &target_node_id)?;
+
+        info!(
+            "shard replicator: reconstructed {} on {} (data={}, parity={})",
+            shard_id, target_node_id, data_shards, parity_shards
+        );
+        Ok(target_node_id)
     }
 }
 
