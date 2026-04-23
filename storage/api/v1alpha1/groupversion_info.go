@@ -22,8 +22,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&StoragePoolList{},
 		&BlockVolume{},
 		&BlockVolumeList{},
-		&SharedFilesystem{},
-		&SharedFilesystemList{},
 		&ObjectStore{},
 		&ObjectStoreList{},
 		&BackendAssignment{},

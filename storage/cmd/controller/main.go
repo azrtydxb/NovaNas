@@ -281,17 +281,6 @@ func main() {
 		}
 	}
 
-	if err := (&controller.SharedFilesystemReconciler{ //nolint:staticcheck // SA1019: deprecated but kept wired to emit migration events
-		Client:           mgr.GetClient(),
-		ImageRegistry:    imageRegistry,
-		ImageTag:         imageTag,
-		ImagePullPolicy:  imagePullPolicy,
-		ImagePullSecrets: pullSecretNames,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SharedFilesystem")
-		os.Exit(1)
-	}
-
 	if err := (&controller.ObjectStoreReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {

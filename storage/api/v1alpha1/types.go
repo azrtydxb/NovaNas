@@ -20,8 +20,6 @@
 //   - ObjectStoreSpec: operators is an empty TODO stub; storage has the
 //     concrete Endpoint/BucketPolicy/Image/Encryption fields consumers
 //     rely on.
-//   - SharedFilesystem: no operators twin; operators split this into
-//     Dataset+Share with a different shape.
 //
 // Per the plan's "don't force a consolidation that breaks semantics"
 // risk note, these types stay storage-local for now. The replace
@@ -207,57 +205,6 @@ type BlockVolumeList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []BlockVolume `json:"items"`
-}
-
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Pool",type=string,JSONPath=`.spec.pool`
-// +kubebuilder:printcolumn:name="Capacity",type=string,JSONPath=`.spec.capacity`
-// +kubebuilder:printcolumn:name="Protection",type=string,JSONPath=`.spec.dataProtection.mode`
-// +kubebuilder:printcolumn:name="Protocol",type=string,JSONPath=`.spec.export.protocol`
-// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-
-// SharedFilesystem represents a shared filesystem.
-type SharedFilesystem struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              SharedFilesystemSpec   `json:"spec,omitempty"`
-	Status            SharedFilesystemStatus `json:"status,omitempty"`
-}
-
-type SharedFilesystemSpec struct {
-	Pool     string `json:"pool"`
-	Capacity string `json:"capacity"`
-	// +kubebuilder:validation:Enum=ReadWriteMany;ReadOnlyMany
-	AccessMode string `json:"accessMode"`
-	// DataProtection configures how this filesystem's data is protected.
-	DataProtection DataProtectionSpec `json:"dataProtection"`
-	Export         *ExportSpec        `json:"export,omitempty"`
-	// Image overrides the NFS filer container image. Defaults to ghcr.io/azrtydxb/novanas/novanas-storage-filer:v0.1.0.
-	// +optional
-	Image string `json:"image,omitempty"`
-
-	// Encryption opts this filesystem into at-rest convergent encryption.
-	// +optional
-	Encryption *EncryptionSpec `json:"encryption,omitempty"`
-}
-
-type ExportSpec struct {
-	// +kubebuilder:validation:Enum=nfs
-	Protocol string `json:"protocol"`
-}
-
-type SharedFilesystemStatus struct {
-	Phase      string             `json:"phase,omitempty"`
-	Endpoint   string             `json:"endpoint,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-type SharedFilesystemList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SharedFilesystem `json:"items"`
 }
 
 // +kubebuilder:object:root=true
