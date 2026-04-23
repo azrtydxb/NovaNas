@@ -105,6 +105,12 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # Workspace Cargo.lock lives at repo root; Dockerfile.build expects
+      # it alongside storage/dataplane/Cargo.toml. Stage it there for the
+      # build context.
+      - name: Stage workspace Cargo.lock into dataplane context
+        run: cp Cargo.lock storage/dataplane/Cargo.lock
+
       - name: Build SPDK + dataplane (stage 1 + 2)
         uses: docker/build-push-action@v6
         with:
