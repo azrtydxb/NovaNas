@@ -23,6 +23,12 @@ service DataplaneService {
   rpc ListSubsystems(ListSubsystemsRequest) returns (ListSubsystemsResponse);
   rpc ExportBdev(ExportBdevRequest) returns (ExportBdevResponse);
 
+  // Assemble the metadata BlockVolume from its chunk locators and expose
+  // it as a local NBD device. Called by the meta service at startup to
+  // bootstrap BadgerDB on chunk-backed storage (docs/14 S11-S14).
+  rpc ExportMetadataVolumeNBD(ExportMetadataVolumeNBDRequest) returns (ExportMetadataVolumeNBDResponse);
+  rpc ReleaseMetadataVolumeNBD(ReleaseMetadataVolumeNBDRequest) returns (ReleaseMetadataVolumeNBDResponse);
+
   // --- NVMe-oF Initiator ---
   rpc ConnectInitiator(ConnectInitiatorRequest) returns (ConnectInitiatorResponse);
   rpc DisconnectInitiator(DisconnectInitiatorRequest) returns (DisconnectInitiatorResponse);
@@ -179,6 +185,20 @@ message ExportBdevRequest {
   uint32 nsid = 3;
 }
 message ExportBdevResponse { uint32 nsid = 1; }
+
+message ExportMetadataVolumeNBDRequest {
+  string volume_name = 1;
+  string root_chunk_id = 2;
+  uint64 volume_version = 3;
+}
+message ExportMetadataVolumeNBDResponse {
+  string device_path = 1;
+}
+message ReleaseMetadataVolumeNBDRequest {
+  string volume_name = 1;
+  string device_path = 2;
+}
+message ReleaseMetadataVolumeNBDResponse {}
 
 // NVMe-oF Initiator messages
 message ConnectInitiatorRequest {

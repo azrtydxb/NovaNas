@@ -577,3 +577,35 @@ func (c *Client) Heartbeat(nodeID string) (bool, error) {
 	}
 	return resp.GetFenced(), nil
 }
+
+// --------------------------------------------------------------------------
+// Metadata BlockVolume NBD export
+// --------------------------------------------------------------------------
+
+// ExportMetadataVolumeNBD asks the dataplane to assemble the metadata
+// BlockVolume from its chunk locators and expose it as an NBD device on
+// the local node. Returns the /dev/nbdN path.
+func (c *Client) ExportMetadataVolumeNBD(ctx context.Context, volumeName, rootChunkID string, version uint64) (string, error) {
+	callCtx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	resp, err := c.svc.ExportMetadataVolumeNBD(callCtx, &pb.ExportMetadataVolumeNBDRequest{
+		VolumeName:    volumeName,
+		RootChunkId:   rootChunkID,
+		VolumeVersion: version,
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.GetDevicePath(), nil
+}
+
+// ReleaseMetadataVolumeNBD tears down the NBD export for the named volume.
+func (c *Client) ReleaseMetadataVolumeNBD(ctx context.Context, volumeName, devicePath string) error {
+	callCtx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	_, err := c.svc.ReleaseMetadataVolumeNBD(callCtx, &pb.ReleaseMetadataVolumeNBDRequest{
+		VolumeName: volumeName,
+		DevicePath: devicePath,
+	})
+	return err
+}

@@ -57,6 +57,18 @@ service DataplaneService {
   // ExportBdev exports a named bdev as an NVMe-oF namespace on an existing subsystem.
   rpc ExportBdev(ExportBdevRequest) returns (ExportBdevResponse);
 
+  // ExportMetadataVolumeNBD assembles the metadata BlockVolume identified
+  // by (volume_name, root_chunk_id, volume_version) from its per-disk
+  // chunks and exports it as an NBD device on the local node. The
+  // returned device_path is something like "/dev/nbdN" and is suitable
+  // for mount(2) by the caller. Used by the meta service at startup to
+  // bootstrap BadgerDB on a chunk-backed volume (docs/14 S11-S14).
+  rpc ExportMetadataVolumeNBD(ExportMetadataVolumeNBDRequest) returns (ExportMetadataVolumeNBDResponse);
+
+  // ReleaseMetadataVolumeNBD tears down the NBD export created by
+  // ExportMetadataVolumeNBD and releases the underlying blob reference.
+  rpc ReleaseMetadataVolumeNBD(ReleaseMetadataVolumeNBDRequest) returns (ReleaseMetadataVolumeNBDResponse);
+
   // --- NVMe-oF Initiator ---
 
   // ConnectInitiator connects as an NVMe-oF initiator to a remote target.
@@ -279,6 +291,24 @@ message ExportBdevRequest {
 message ExportBdevResponse {
   uint32 nsid = 1;
 }
+
+message ExportMetadataVolumeNBDRequest {
+  string volume_name = 1;
+  string root_chunk_id = 2;
+  uint64 volume_version = 3;
+}
+
+message ExportMetadataVolumeNBDResponse {
+  // Path of the NBD device assigned by the dataplane, e.g. "/dev/nbd0".
+  string device_path = 1;
+}
+
+message ReleaseMetadataVolumeNBDRequest {
+  string volume_name = 1;
+  string device_path = 2;
+}
+
+message ReleaseMetadataVolumeNBDResponse {}
 
 // ==========================================================================
 // NVMe-oF Initiator messages

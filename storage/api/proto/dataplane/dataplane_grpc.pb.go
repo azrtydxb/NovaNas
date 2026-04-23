@@ -19,42 +19,44 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DataplaneService_CreateAioBdev_FullMethodName       = "/dataplane.DataplaneService/CreateAioBdev"
-	DataplaneService_CreateMallocBdev_FullMethodName    = "/dataplane.DataplaneService/CreateMallocBdev"
-	DataplaneService_CreateLvolStore_FullMethodName     = "/dataplane.DataplaneService/CreateLvolStore"
-	DataplaneService_CreateLvol_FullMethodName          = "/dataplane.DataplaneService/CreateLvol"
-	DataplaneService_DeleteBdev_FullMethodName          = "/dataplane.DataplaneService/DeleteBdev"
-	DataplaneService_ListBdevs_FullMethodName           = "/dataplane.DataplaneService/ListBdevs"
-	DataplaneService_GetBdevInfo_FullMethodName         = "/dataplane.DataplaneService/GetBdevInfo"
-	DataplaneService_ListLvolStores_FullMethodName      = "/dataplane.DataplaneService/ListLvolStores"
-	DataplaneService_InitTransport_FullMethodName       = "/dataplane.DataplaneService/InitTransport"
-	DataplaneService_CreateNvmfTarget_FullMethodName    = "/dataplane.DataplaneService/CreateNvmfTarget"
-	DataplaneService_DeleteNvmfTarget_FullMethodName    = "/dataplane.DataplaneService/DeleteNvmfTarget"
-	DataplaneService_SetAnaState_FullMethodName         = "/dataplane.DataplaneService/SetAnaState"
-	DataplaneService_GetAnaState_FullMethodName         = "/dataplane.DataplaneService/GetAnaState"
-	DataplaneService_ListSubsystems_FullMethodName      = "/dataplane.DataplaneService/ListSubsystems"
-	DataplaneService_ExportBdev_FullMethodName          = "/dataplane.DataplaneService/ExportBdev"
-	DataplaneService_ConnectInitiator_FullMethodName    = "/dataplane.DataplaneService/ConnectInitiator"
-	DataplaneService_DisconnectInitiator_FullMethodName = "/dataplane.DataplaneService/DisconnectInitiator"
-	DataplaneService_CreateReplicaBdev_FullMethodName   = "/dataplane.DataplaneService/CreateReplicaBdev"
-	DataplaneService_ReplicaStatus_FullMethodName       = "/dataplane.DataplaneService/ReplicaStatus"
-	DataplaneService_InitChunkStore_FullMethodName      = "/dataplane.DataplaneService/InitChunkStore"
-	DataplaneService_ChunkStoreStats_FullMethodName     = "/dataplane.DataplaneService/ChunkStoreStats"
-	DataplaneService_WriteChunk_FullMethodName          = "/dataplane.DataplaneService/WriteChunk"
-	DataplaneService_ReadChunk_FullMethodName           = "/dataplane.DataplaneService/ReadChunk"
-	DataplaneService_DeleteChunk_FullMethodName         = "/dataplane.DataplaneService/DeleteChunk"
-	DataplaneService_ChunkExists_FullMethodName         = "/dataplane.DataplaneService/ChunkExists"
-	DataplaneService_ListChunks_FullMethodName          = "/dataplane.DataplaneService/ListChunks"
-	DataplaneService_GarbageCollect_FullMethodName      = "/dataplane.DataplaneService/GarbageCollect"
-	DataplaneService_InitBackend_FullMethodName         = "/dataplane.DataplaneService/InitBackend"
-	DataplaneService_CreateVolume_FullMethodName        = "/dataplane.DataplaneService/CreateVolume"
-	DataplaneService_DeleteVolume_FullMethodName        = "/dataplane.DataplaneService/DeleteVolume"
-	DataplaneService_SetVolumePolicy_FullMethodName     = "/dataplane.DataplaneService/SetVolumePolicy"
-	DataplaneService_UpdateTopology_FullMethodName      = "/dataplane.DataplaneService/UpdateTopology"
-	DataplaneService_GetVersion_FullMethodName          = "/dataplane.DataplaneService/GetVersion"
-	DataplaneService_Heartbeat_FullMethodName           = "/dataplane.DataplaneService/Heartbeat"
-	DataplaneService_GetChunkMaps_FullMethodName        = "/dataplane.DataplaneService/GetChunkMaps"
-	DataplaneService_SyncChunkMaps_FullMethodName       = "/dataplane.DataplaneService/SyncChunkMaps"
+	DataplaneService_CreateAioBdev_FullMethodName            = "/dataplane.DataplaneService/CreateAioBdev"
+	DataplaneService_CreateMallocBdev_FullMethodName         = "/dataplane.DataplaneService/CreateMallocBdev"
+	DataplaneService_CreateLvolStore_FullMethodName          = "/dataplane.DataplaneService/CreateLvolStore"
+	DataplaneService_CreateLvol_FullMethodName               = "/dataplane.DataplaneService/CreateLvol"
+	DataplaneService_DeleteBdev_FullMethodName               = "/dataplane.DataplaneService/DeleteBdev"
+	DataplaneService_ListBdevs_FullMethodName                = "/dataplane.DataplaneService/ListBdevs"
+	DataplaneService_GetBdevInfo_FullMethodName              = "/dataplane.DataplaneService/GetBdevInfo"
+	DataplaneService_ListLvolStores_FullMethodName           = "/dataplane.DataplaneService/ListLvolStores"
+	DataplaneService_InitTransport_FullMethodName            = "/dataplane.DataplaneService/InitTransport"
+	DataplaneService_CreateNvmfTarget_FullMethodName         = "/dataplane.DataplaneService/CreateNvmfTarget"
+	DataplaneService_DeleteNvmfTarget_FullMethodName         = "/dataplane.DataplaneService/DeleteNvmfTarget"
+	DataplaneService_SetAnaState_FullMethodName              = "/dataplane.DataplaneService/SetAnaState"
+	DataplaneService_GetAnaState_FullMethodName              = "/dataplane.DataplaneService/GetAnaState"
+	DataplaneService_ListSubsystems_FullMethodName           = "/dataplane.DataplaneService/ListSubsystems"
+	DataplaneService_ExportBdev_FullMethodName               = "/dataplane.DataplaneService/ExportBdev"
+	DataplaneService_ExportMetadataVolumeNBD_FullMethodName  = "/dataplane.DataplaneService/ExportMetadataVolumeNBD"
+	DataplaneService_ReleaseMetadataVolumeNBD_FullMethodName = "/dataplane.DataplaneService/ReleaseMetadataVolumeNBD"
+	DataplaneService_ConnectInitiator_FullMethodName         = "/dataplane.DataplaneService/ConnectInitiator"
+	DataplaneService_DisconnectInitiator_FullMethodName      = "/dataplane.DataplaneService/DisconnectInitiator"
+	DataplaneService_CreateReplicaBdev_FullMethodName        = "/dataplane.DataplaneService/CreateReplicaBdev"
+	DataplaneService_ReplicaStatus_FullMethodName            = "/dataplane.DataplaneService/ReplicaStatus"
+	DataplaneService_InitChunkStore_FullMethodName           = "/dataplane.DataplaneService/InitChunkStore"
+	DataplaneService_ChunkStoreStats_FullMethodName          = "/dataplane.DataplaneService/ChunkStoreStats"
+	DataplaneService_WriteChunk_FullMethodName               = "/dataplane.DataplaneService/WriteChunk"
+	DataplaneService_ReadChunk_FullMethodName                = "/dataplane.DataplaneService/ReadChunk"
+	DataplaneService_DeleteChunk_FullMethodName              = "/dataplane.DataplaneService/DeleteChunk"
+	DataplaneService_ChunkExists_FullMethodName              = "/dataplane.DataplaneService/ChunkExists"
+	DataplaneService_ListChunks_FullMethodName               = "/dataplane.DataplaneService/ListChunks"
+	DataplaneService_GarbageCollect_FullMethodName           = "/dataplane.DataplaneService/GarbageCollect"
+	DataplaneService_InitBackend_FullMethodName              = "/dataplane.DataplaneService/InitBackend"
+	DataplaneService_CreateVolume_FullMethodName             = "/dataplane.DataplaneService/CreateVolume"
+	DataplaneService_DeleteVolume_FullMethodName             = "/dataplane.DataplaneService/DeleteVolume"
+	DataplaneService_SetVolumePolicy_FullMethodName          = "/dataplane.DataplaneService/SetVolumePolicy"
+	DataplaneService_UpdateTopology_FullMethodName           = "/dataplane.DataplaneService/UpdateTopology"
+	DataplaneService_GetVersion_FullMethodName               = "/dataplane.DataplaneService/GetVersion"
+	DataplaneService_Heartbeat_FullMethodName                = "/dataplane.DataplaneService/Heartbeat"
+	DataplaneService_GetChunkMaps_FullMethodName             = "/dataplane.DataplaneService/GetChunkMaps"
+	DataplaneService_SyncChunkMaps_FullMethodName            = "/dataplane.DataplaneService/SyncChunkMaps"
 )
 
 // DataplaneServiceClient is the client API for DataplaneService service.
@@ -95,6 +97,16 @@ type DataplaneServiceClient interface {
 	ListSubsystems(ctx context.Context, in *ListSubsystemsRequest, opts ...grpc.CallOption) (*ListSubsystemsResponse, error)
 	// ExportBdev exports a named bdev as an NVMe-oF namespace on an existing subsystem.
 	ExportBdev(ctx context.Context, in *ExportBdevRequest, opts ...grpc.CallOption) (*ExportBdevResponse, error)
+	// ExportMetadataVolumeNBD assembles the metadata BlockVolume identified
+	// by (volume_name, root_chunk_id, volume_version) from its per-disk
+	// chunks and exports it as an NBD device on the local node. The
+	// returned device_path is something like "/dev/nbdN" and is suitable
+	// for mount(2) by the caller. Used by the meta service at startup to
+	// bootstrap BadgerDB on a chunk-backed volume (docs/14 S11-S14).
+	ExportMetadataVolumeNBD(ctx context.Context, in *ExportMetadataVolumeNBDRequest, opts ...grpc.CallOption) (*ExportMetadataVolumeNBDResponse, error)
+	// ReleaseMetadataVolumeNBD tears down the NBD export created by
+	// ExportMetadataVolumeNBD and releases the underlying blob reference.
+	ReleaseMetadataVolumeNBD(ctx context.Context, in *ReleaseMetadataVolumeNBDRequest, opts ...grpc.CallOption) (*ReleaseMetadataVolumeNBDResponse, error)
 	// ConnectInitiator connects as an NVMe-oF initiator to a remote target.
 	ConnectInitiator(ctx context.Context, in *ConnectInitiatorRequest, opts ...grpc.CallOption) (*ConnectInitiatorResponse, error)
 	// DisconnectInitiator disconnects from a remote NVMe-oF target.
@@ -294,6 +306,26 @@ func (c *dataplaneServiceClient) ExportBdev(ctx context.Context, in *ExportBdevR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExportBdevResponse)
 	err := c.cc.Invoke(ctx, DataplaneService_ExportBdev_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataplaneServiceClient) ExportMetadataVolumeNBD(ctx context.Context, in *ExportMetadataVolumeNBDRequest, opts ...grpc.CallOption) (*ExportMetadataVolumeNBDResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExportMetadataVolumeNBDResponse)
+	err := c.cc.Invoke(ctx, DataplaneService_ExportMetadataVolumeNBD_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataplaneServiceClient) ReleaseMetadataVolumeNBD(ctx context.Context, in *ReleaseMetadataVolumeNBDRequest, opts ...grpc.CallOption) (*ReleaseMetadataVolumeNBDResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseMetadataVolumeNBDResponse)
+	err := c.cc.Invoke(ctx, DataplaneService_ReleaseMetadataVolumeNBD_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -560,6 +592,16 @@ type DataplaneServiceServer interface {
 	ListSubsystems(context.Context, *ListSubsystemsRequest) (*ListSubsystemsResponse, error)
 	// ExportBdev exports a named bdev as an NVMe-oF namespace on an existing subsystem.
 	ExportBdev(context.Context, *ExportBdevRequest) (*ExportBdevResponse, error)
+	// ExportMetadataVolumeNBD assembles the metadata BlockVolume identified
+	// by (volume_name, root_chunk_id, volume_version) from its per-disk
+	// chunks and exports it as an NBD device on the local node. The
+	// returned device_path is something like "/dev/nbdN" and is suitable
+	// for mount(2) by the caller. Used by the meta service at startup to
+	// bootstrap BadgerDB on a chunk-backed volume (docs/14 S11-S14).
+	ExportMetadataVolumeNBD(context.Context, *ExportMetadataVolumeNBDRequest) (*ExportMetadataVolumeNBDResponse, error)
+	// ReleaseMetadataVolumeNBD tears down the NBD export created by
+	// ExportMetadataVolumeNBD and releases the underlying blob reference.
+	ReleaseMetadataVolumeNBD(context.Context, *ReleaseMetadataVolumeNBDRequest) (*ReleaseMetadataVolumeNBDResponse, error)
 	// ConnectInitiator connects as an NVMe-oF initiator to a remote target.
 	ConnectInitiator(context.Context, *ConnectInitiatorRequest) (*ConnectInitiatorResponse, error)
 	// DisconnectInitiator disconnects from a remote NVMe-oF target.
@@ -659,6 +701,12 @@ func (UnimplementedDataplaneServiceServer) ListSubsystems(context.Context, *List
 }
 func (UnimplementedDataplaneServiceServer) ExportBdev(context.Context, *ExportBdevRequest) (*ExportBdevResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExportBdev not implemented")
+}
+func (UnimplementedDataplaneServiceServer) ExportMetadataVolumeNBD(context.Context, *ExportMetadataVolumeNBDRequest) (*ExportMetadataVolumeNBDResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExportMetadataVolumeNBD not implemented")
+}
+func (UnimplementedDataplaneServiceServer) ReleaseMetadataVolumeNBD(context.Context, *ReleaseMetadataVolumeNBDRequest) (*ReleaseMetadataVolumeNBDResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReleaseMetadataVolumeNBD not implemented")
 }
 func (UnimplementedDataplaneServiceServer) ConnectInitiator(context.Context, *ConnectInitiatorRequest) (*ConnectInitiatorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConnectInitiator not implemented")
@@ -1010,6 +1058,42 @@ func _DataplaneService_ExportBdev_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataplaneServiceServer).ExportBdev(ctx, req.(*ExportBdevRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataplaneService_ExportMetadataVolumeNBD_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportMetadataVolumeNBDRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataplaneServiceServer).ExportMetadataVolumeNBD(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataplaneService_ExportMetadataVolumeNBD_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataplaneServiceServer).ExportMetadataVolumeNBD(ctx, req.(*ExportMetadataVolumeNBDRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataplaneService_ReleaseMetadataVolumeNBD_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseMetadataVolumeNBDRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataplaneServiceServer).ReleaseMetadataVolumeNBD(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataplaneService_ReleaseMetadataVolumeNBD_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataplaneServiceServer).ReleaseMetadataVolumeNBD(ctx, req.(*ReleaseMetadataVolumeNBDRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1440,6 +1524,14 @@ var DataplaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExportBdev",
 			Handler:    _DataplaneService_ExportBdev_Handler,
+		},
+		{
+			MethodName: "ExportMetadataVolumeNBD",
+			Handler:    _DataplaneService_ExportMetadataVolumeNBD_Handler,
+		},
+		{
+			MethodName: "ReleaseMetadataVolumeNBD",
+			Handler:    _DataplaneService_ReleaseMetadataVolumeNBD_Handler,
 		},
 		{
 			MethodName: "ConnectInitiator",

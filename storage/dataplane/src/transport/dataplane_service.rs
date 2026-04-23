@@ -1923,4 +1923,36 @@ impl DataplaneService for DataplaneServiceImpl {
 
         Ok(Response::new(ReconstructShardResponse { success: true }))
     }
+
+    /// Assemble a chunk-backed metadata volume and export it as an NBD
+    /// device. The real implementation must (a) open the blobstore for
+    /// `root_chunk_id`@`volume_version`, (b) create an SPDK NBD bdev
+    /// export with `spdk_nbd_start`, (c) return the resulting /dev/nbdN
+    /// path.
+    ///
+    /// Returning Unimplemented here is deliberate: the Go meta service
+    /// probes this RPC at startup and falls back to LocalDataDir if it
+    /// is not available, so a stub-return is the correct signalling for
+    /// clusters that have not yet enabled chunk-backed metadata. Full
+    /// impl is tracked on #13 (NBD mount end-to-end).
+    async fn export_metadata_volume_nbd(
+        &self,
+        _request: Request<ExportMetadataVolumeNBDRequest>,
+    ) -> Result<Response<ExportMetadataVolumeNBDResponse>, Status> {
+        Err(Status::unimplemented(
+            "export_metadata_volume_nbd: NBD-backed metadata volume export \
+             requires SPDK NBD bdev integration (see issue #13)",
+        ))
+    }
+
+    async fn release_metadata_volume_nbd(
+        &self,
+        _request: Request<ReleaseMetadataVolumeNBDRequest>,
+    ) -> Result<Response<ReleaseMetadataVolumeNBDResponse>, Status> {
+        // Idempotent release: if the NBD export was never created (because
+        // export_metadata_volume_nbd returned Unimplemented), there is
+        // nothing to tear down. Return Ok so the caller's cleanup is
+        // clean regardless of which path was taken.
+        Ok(Response::new(ReleaseMetadataVolumeNBDResponse {}))
+    }
 }
