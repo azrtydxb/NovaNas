@@ -41,12 +41,30 @@ done
 
 command -v rauc >/dev/null 2>&1 || { echo "rauc not installed" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum missing" >&2; exit 1; }
+command -v openssl >/dev/null 2>&1 || { echo "openssl missing" >&2; exit 1; }
 
 log() { printf '[build-bundle] %s\n' "$*"; }
 
+# The repo ships a placeholder cert.pem with comments inside the BEGIN/END
+# markers so nobody ever accidentally commits a real signing key. When rauc
+# can't parse the placeholder, generate a throwaway development cert into a
+# tempdir and use that instead. Real releases re-sign offline via
+# hack/ci/rauc-sign-release.sh with the air-gapped NovaNas release key.
+DEV_CRT_DIR=""
+if ! openssl x509 -in "$CERT" -noout 2>/dev/null; then
+  log "placeholder cert detected — generating throwaway dev cert"
+  DEV_CRT_DIR=$(mktemp -d)
+  openssl req -x509 -newkey rsa:4096 -sha256 -days 1 -nodes \
+    -subj "/CN=novanas-ci-throwaway" \
+    -keyout "$DEV_CRT_DIR/key.pem" \
+    -out    "$DEV_CRT_DIR/cert.pem" 2>/dev/null
+  CERT="$DEV_CRT_DIR/cert.pem"
+  KEY="$DEV_CRT_DIR/key.pem"
+fi
+
 log "staging bundle tree"
 STAGE=$(mktemp -d)
-trap 'rm -rf "$STAGE"' EXIT
+trap 'rm -rf "$STAGE" "${DEV_CRT_DIR:-}"' EXIT
 
 cp "$ROOTFS_IMG" "$STAGE/rootfs.img"
 cp "$BOOT_IMG"   "$STAGE/boot.img"
