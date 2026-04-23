@@ -1,15 +1,21 @@
 //! Chunk engine — volume I/O → content-addressed chunks → CRUSH dispatch.
 //!
-//! Implements the core invariant: "Owner fans out to replicas via gRPC
-//! (Rust-to-Rust)." The chunk engine selects placement nodes via CRUSH,
-//! then replicates full chunks (or distributes EC shards) to those nodes.
+//! NovaNas is single-node by design (docs/14 S9, S12). "Replication factor N"
+//! means N copies across different **devices** (bdevs) on the single host, not
+//! copies on peer nodes. CRUSH picks N distinct `Backend` entries under the
+//! single local `Node`; every replica is written through the local
+//! `ChunkStore`.
+//!
+//! The sub-block read/write path (NDP) is preserved for now because it also
+//! handles local-bdev dispatch on this host and because the surrounding cache
+//! + chunk-map machinery still uses `NdpPool` for local ingestion. On a
+//! single-node topology the `target_node == self.node_id` branch is the only
+//! one ever taken — the remote NDP fan-out is dead.
 
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use log::warn;
 use ring::digest;
-use tokio::sync::Mutex;
 
 use crate::backend::chunk_store::{ChunkHeader, ChunkStore, CHUNK_SIZE};
 use crate::chunk::ndp_pool::{ChunkMapBatcher, NdpPool};
@@ -19,9 +25,11 @@ use crate::metadata::crush;
 use crate::metadata::topology::ClusterMap;
 use crate::metadata::types::{ChunkMapEntry, ErasureParams, Protection};
 use crate::policy::engine::PolicyEngine;
-use crate::transport::chunk_client::ChunkClient;
 
 /// Default NDP listen port (must match `NdpServerConfig::default().port`).
+/// On single-node deployments the NDP remote fan-out branches are never taken;
+/// this constant is retained so the dead-path address-formatting code still
+/// compiles unchanged.
 const NDP_PORT: u16 = 4500;
 
 pub struct ChunkEngine {
@@ -31,8 +39,6 @@ pub struct ChunkEngine {
     /// Data protection scheme for this engine instance.
     /// Behind RwLock so SetVolumePolicy can update it at runtime.
     protection: RwLock<Protection>,
-    /// Cached gRPC connections to remote nodes, keyed by address.
-    connections: Mutex<HashMap<String, ChunkClient>>,
     /// Optional policy engine for tracking chunk locations and references.
     policy: Option<Arc<PolicyEngine>>,
     /// NDP connection pool for sub-block I/O to remote backend nodes.
@@ -54,7 +60,6 @@ impl ChunkEngine {
             local_store,
             topology: RwLock::new(Arc::new(topology)),
             protection: RwLock::new(Protection::Replication { factor: 1 }),
-            connections: Mutex::new(HashMap::new()),
             policy: None,
             ndp_pool: Arc::new(NdpPool::new()),
             chunk_map_batcher: None,
@@ -75,7 +80,6 @@ impl ChunkEngine {
             local_store,
             topology: RwLock::new(Arc::new(topology)),
             protection: RwLock::new(Protection::Replication { factor: 1 }),
-            connections: Mutex::new(HashMap::new()),
             policy: Some(policy),
             ndp_pool: Arc::new(NdpPool::new()),
             chunk_map_batcher: None,
@@ -96,7 +100,6 @@ impl ChunkEngine {
             local_store,
             topology: RwLock::new(Arc::new(topology)),
             protection: RwLock::new(protection),
-            connections: Mutex::new(HashMap::new()),
             policy: None,
             ndp_pool: Arc::new(NdpPool::new()),
             chunk_map_batcher: None,
@@ -118,7 +121,6 @@ impl ChunkEngine {
             local_store,
             topology: RwLock::new(Arc::new(topology)),
             protection: RwLock::new(protection),
-            connections: Mutex::new(HashMap::new()),
             policy: Some(policy),
             ndp_pool: Arc::new(NdpPool::new()),
             chunk_map_batcher: None,
@@ -230,17 +232,6 @@ impl ChunkEngine {
     /// Safe to call from the SPDK reactor (takes a brief read lock).
     pub fn topology_snapshot(&self) -> Arc<ClusterMap> {
         self.topology.read().unwrap().clone()
-    }
-
-    /// Get or create a cached ChunkClient for the given address.
-    async fn get_client(&self, addr: &str) -> Result<ChunkClient> {
-        let mut cache = self.connections.lock().await;
-        if let Some(client) = cache.get(addr) {
-            return Ok(client.clone());
-        }
-        let client = ChunkClient::connect(addr).await?;
-        cache.insert(addr.to_string(), client.clone());
-        Ok(client)
     }
 
     /// Content-addressed chunk ID (SHA-256 hex of raw data).
@@ -427,53 +418,27 @@ impl ChunkEngine {
         let mut successes = 0usize;
         let mut last_err = None;
 
-        // Write to ALL replicas concurrently using tokio::task::JoinSet.
-        // Local writes go through put_chunk_to_node (which detects local and
-        // writes directly). Remote writes go through gRPC PutChunk.
-        // All run in parallel so a single write with factor=3 takes ~1 RTT,
-        // not 3 sequential RTTs. This prevents io_pool thread saturation.
+        // Single-node: every placement's `target_node` equals `self.node_id`.
+        // CRUSH has picked distinct backends (bdevs) for failure-domain
+        // diversity, but the actual write always goes to the local
+        // ChunkStore. Concurrent JoinSet writes keep the API symmetrical
+        // with the pre-single-node design and avoid serializing the (now
+        // cheap) local puts.
         let mut join_set = tokio::task::JoinSet::new();
         for (target_node, _backend) in &placements {
             let chunk_id_owned = chunk_id.to_string();
             let prepared_owned = prepared.to_vec();
             let target_owned = target_node.clone();
-            let node_id = self.node_id.clone();
             let local_store = self.local_store.clone();
-            let topo = self.topology.read().unwrap().clone();
 
             join_set.spawn(async move {
-                if target_owned == node_id {
-                    // Local write — fast, no network.
-                    local_store.put(&chunk_id_owned, &prepared_owned).await?;
-                    log::debug!(
-                        "put_chunk_to_node chunk={} len={} target={} local=true",
-                        &chunk_id_owned[..16],
-                        prepared_owned.len(),
-                        target_owned
-                    );
-                    log::debug!("put_chunk_to_node local done: true");
-                } else {
-                    // Remote write via gRPC PutChunk.
-                    let node = topo.nodes().iter().find(|n| n.id == target_owned);
-                    let addr = match node {
-                        Some(n) => format!("http://{}:{}", n.address, n.port),
-                        None => {
-                            return Err(DataPlaneError::ChunkEngineError(format!(
-                                "node {} not found in topology",
-                                target_owned
-                            )));
-                        }
-                    };
-                    log::debug!(
-                        "put_chunk_to_node chunk={} len={} target={} local=false",
-                        &chunk_id_owned[..16],
-                        prepared_owned.len(),
-                        target_owned
-                    );
-                    let mut client = ChunkClient::connect(&addr).await?;
-                    client.put(&chunk_id_owned, &prepared_owned).await?;
-                    log::debug!("put_chunk_to_node remote done: target={}", target_owned);
-                }
+                local_store.put(&chunk_id_owned, &prepared_owned).await?;
+                log::debug!(
+                    "put_chunk chunk={} len={} target={} (local)",
+                    &chunk_id_owned[..16],
+                    prepared_owned.len(),
+                    target_owned
+                );
                 Ok::<String, DataPlaneError>(target_owned)
             });
         }
@@ -565,8 +530,9 @@ impl ChunkEngine {
         let mut all_shards: Vec<Vec<u8>> = data_pieces.iter().map(|s| s.to_vec()).collect();
         all_shards.extend(parity);
 
-        // Distribute shards to nodes concurrently via JoinSet (same pattern
-        // as write_replicated to avoid blocking the SPDK reactor).
+        // Single-node: shards are distributed across distinct *backends*
+        // (bdevs) on the one local node. CRUSH handles backend selection;
+        // the write itself always hits the local ChunkStore.
         let mut successes = 0usize;
         let mut join_set = tokio::task::JoinSet::new();
         for (shard_idx, shard_data) in all_shards.iter().enumerate() {
@@ -577,29 +543,11 @@ impl ChunkEngine {
             let shard_id = format!("{chunk_id}:shard:{shard_idx}");
             let prepared = Self::prepare_chunk(shard_data);
             let target_owned = target_node.clone();
-            let node_id = self.node_id.clone();
             let local_store = self.local_store.clone();
-            let topo = self.topology.read().unwrap().clone();
 
             let shard_id_for_task = shard_id.clone();
             join_set.spawn(async move {
-                if target_owned == node_id {
-                    local_store.put(&shard_id_for_task, &prepared).await?;
-                } else {
-                    let addr = topo
-                        .nodes()
-                        .iter()
-                        .find(|n| n.id == target_owned)
-                        .map(|n| format!("http://{}:{}", n.address, n.port))
-                        .ok_or_else(|| {
-                            DataPlaneError::ChunkEngineError(format!(
-                                "node {} not found in topology",
-                                target_owned
-                            ))
-                        })?;
-                    let mut client = ChunkClient::connect(&addr).await?;
-                    client.put(&shard_id_for_task, &prepared).await?;
-                }
+                local_store.put(&shard_id_for_task, &prepared).await?;
                 Ok::<(String, String), DataPlaneError>((shard_id_for_task, target_owned))
             });
         }
@@ -638,64 +586,16 @@ impl ChunkEngine {
         Ok(())
     }
 
-    /// Put a prepared chunk to a specific node (local or remote via gRPC).
-    async fn put_chunk_to_node(
-        &self,
-        chunk_id: &str,
-        prepared: &[u8],
-        target_node: &str,
-    ) -> Result<()> {
-        log::debug!(
-            "put_chunk_to_node chunk={} len={} target={} local={}",
-            &chunk_id[..16],
-            prepared.len(),
-            target_node,
-            target_node == self.node_id
-        );
-        if target_node == self.node_id {
-            let r = self.local_store.put(chunk_id, prepared).await;
-            log::debug!("put_chunk_to_node local done: {:?}", r.is_ok());
-            r
-        } else {
-            let addr = {
-                let topo = self.topology.read().unwrap();
-                let node = topo
-                    .nodes()
-                    .iter()
-                    .find(|n| n.id == target_node)
-                    .ok_or_else(|| {
-                        DataPlaneError::ChunkEngineError(format!(
-                            "node not found in topology: {target_node}"
-                        ))
-                    })?;
-                format!("http://{}:{}", node.address, node.port)
-            }; // topo guard dropped
-            let client = self.get_client(&addr).await?;
-            client.put(chunk_id, prepared).await
-        }
-    }
-
-    /// Get a chunk from a specific node (local or remote via gRPC).
+    /// Get a chunk from the local store (single-node: every placement is
+    /// on this host, but possibly on a different backend).
     async fn get_chunk_from_node(&self, chunk_id: &str, target_node: &str) -> Result<Vec<u8>> {
-        if target_node == self.node_id {
-            self.local_store.get(chunk_id).await
-        } else {
-            let addr = {
-                let topo = self.topology.read().unwrap();
-                let node = topo
-                    .nodes()
-                    .iter()
-                    .find(|n| n.id == target_node)
-                    .ok_or_else(|| {
-                        DataPlaneError::ChunkEngineError(format!(
-                            "node not found in topology: {target_node}"
-                        ))
-                    })?;
-                format!("http://{}:{}", node.address, node.port)
-            }; // topo guard dropped
-            let client = self.get_client(&addr).await?;
-            client.get(chunk_id).await
+        if target_node != self.node_id {
+            return Err(DataPlaneError::ChunkEngineError(format!(
+                "unexpected non-local placement target {} on single-node deployment",
+                target_node
+            )));
         }
+        self.local_store.get(chunk_id).await
     }
 
     // -----------------------------------------------------------------------
