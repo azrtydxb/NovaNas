@@ -390,14 +390,14 @@ func main() {
 				poolLookup,
 				nodeChecker,
 				chunkReplicator,
-				// TODO(architecture): ShardReplicator is nil because EC shard replication
-				// must be implemented as a gRPC call to the Rust dataplane, not in Go.
-				// The Rust dataplane owns all data-path I/O including Reed-Solomon
-				// encode/decode/reconstruct. When the dataplane exposes an
-				// ECReconstructShard RPC, create a gRPC-backed ShardReplicator here
-				// that delegates to it. See internal/datamover/ec_reconstructor.go for
-				// the full architecture violation explanation.
-				nil,           // shardReplicator — requires Rust dataplane EC reconstruction gRPC
+				// shardReplicator intentionally nil: the Rust dataplane owns all
+				// data-path I/O (docs/14 S9, invariant #3). EC shard
+				// reconstruction runs inside the dataplane's `ShardReplicator`
+				// worker (storage/dataplane/src/policy/shard_replicator.rs),
+				// which drains degraded-shard reports from the Rust PolicyEngine
+				// and reconstructs locally via Reed-Solomon. The Go policy
+				// engine only observes compliance; it never moves data.
+				nil,
 				eventRecorder, // eventRecorder - now enabled
 				policyScanInterval,
 				policyRepairEnabled,
