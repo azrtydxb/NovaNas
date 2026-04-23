@@ -581,9 +581,10 @@ impl ChunkEngine {
             let local_store = self.local_store.clone();
             let topo = self.topology.read().unwrap().clone();
 
+            let shard_id_for_task = shard_id.clone();
             join_set.spawn(async move {
                 if target_owned == node_id {
-                    local_store.put(&shard_id, &prepared).await?;
+                    local_store.put(&shard_id_for_task, &prepared).await?;
                 } else {
                     let addr = topo
                         .nodes()
@@ -597,17 +598,24 @@ impl ChunkEngine {
                             ))
                         })?;
                     let mut client = ChunkClient::connect(&addr).await?;
-                    client.put(&shard_id, &prepared).await?;
+                    client.put(&shard_id_for_task, &prepared).await?;
                 }
-                Ok::<String, DataPlaneError>(target_owned)
+                Ok::<(String, String), DataPlaneError>((shard_id_for_task, target_owned))
             });
         }
 
         while let Some(result) = join_set.join_next().await {
             match result {
-                Ok(Ok(_target_node)) => {
+                Ok(Ok((shard_id, target_node))) => {
                     successes += 1;
-                    // TODO: record shard locations in policy engine
+                    if let Some(policy) = &self.policy {
+                        if let Err(e) = policy.record_chunk_location(&shard_id, &target_node) {
+                            warn!("failed to record shard location for {}: {}", shard_id, e);
+                        }
+                        if let Err(e) = policy.record_chunk_ref(&shard_id, volume_id) {
+                            warn!("failed to record shard ref for {}: {}", shard_id, e);
+                        }
+                    }
                 }
                 Ok(Err(e)) => {
                     warn!("EC shard write failed: {}", e);

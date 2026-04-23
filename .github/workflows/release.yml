@@ -84,13 +84,14 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
+          set -euo pipefail
           for img in \
             ghcr.io/azrtydxb/novanas/api \
             ghcr.io/azrtydxb/novanas/ui \
             ghcr.io/azrtydxb/novanas/operators \
             ghcr.io/azrtydxb/novanas/storage-meta \
             ghcr.io/azrtydxb/novanas/storage-agent; do
-            cosign sign --yes "${img}:${VERSION}" || echo "skip ${img}:${VERSION}"
+            cosign sign --yes "${img}:${VERSION}"
           done
 
       # ---------- charts ----------

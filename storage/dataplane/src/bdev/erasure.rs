@@ -11,7 +11,9 @@ use crate::config::{ErasureBdevConfig, ReplicaTarget};
 use crate::error::{DataPlaneError, Result};
 use crate::spdk::reactor_dispatch;
 use log::{debug, info, warn};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
+
+use crate::policy::engine::{DegradedShardState, PolicyEngine};
 
 /// An erasure-coded bdev that distributes shards across multiple targets.
 pub struct ErasureBdev {
@@ -22,6 +24,9 @@ pub struct ErasureBdev {
     pub bdev_name: String,
     /// When true, submit_write/submit_read perform real SPDK bdev I/O.
     use_spdk_io: bool,
+    /// Optional PolicyEngine reference. When set, shard state transitions
+    /// are reported to the engine for reconcile-driven repair.
+    policy: RwLock<Option<Arc<PolicyEngine>>>,
 }
 
 /// A target that holds one shard of the erasure-coded data.
@@ -96,7 +101,13 @@ impl ErasureBdev {
             shards: RwLock::new(shard_targets),
             bdev_name,
             use_spdk_io: false,
+            policy: RwLock::new(None),
         })
+    }
+
+    /// Attach a PolicyEngine so shard state transitions are reported for repair.
+    pub fn set_policy_engine(&self, policy: Arc<PolicyEngine>) {
+        *self.policy.write().unwrap() = Some(policy);
     }
 
     /// Encode data into data+parity shards using Reed-Solomon.
@@ -268,11 +279,14 @@ impl ErasureBdev {
             shard_index, shard.target.address
         );
         shard.state = ShardState::Degraded;
-        // TODO(gap-17): Notify the PolicyEngine that this shard is degraded so
-        // it can trigger a repair operation (re-encode from surviving shards and
-        // write to a new node). Currently mark_shard_degraded/missing only updates
-        // local state — no downstream effect. The PolicyEngine's reconcile loop
-        // should detect degraded EC shards and emit ReconstructShard actions.
+        drop(shards);
+        if let Some(policy) = self.policy.read().unwrap().as_ref() {
+            policy.report_degraded_shard(
+                &self.volume_id,
+                shard_index,
+                DegradedShardState::Degraded,
+            );
+        }
         Ok(())
     }
 
@@ -287,6 +301,10 @@ impl ErasureBdev {
             shard_index, shard.target.address
         );
         shard.state = ShardState::Missing;
+        drop(shards);
+        if let Some(policy) = self.policy.read().unwrap().as_ref() {
+            policy.report_degraded_shard(&self.volume_id, shard_index, DegradedShardState::Missing);
+        }
         Ok(())
     }
 

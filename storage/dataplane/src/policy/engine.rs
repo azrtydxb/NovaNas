@@ -3,8 +3,8 @@
 //! The `PolicyEngine` ties together the location store (where chunks live),
 //! the evaluator (what needs fixing), and chunk operations (how to fix it).
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::{Arc, Mutex};
 
 use log::{info, warn};
 use tokio::sync::RwLock;
@@ -34,6 +34,30 @@ pub struct PolicyEngine {
     chunk_engine: RwLock<Option<Arc<ChunkEngine>>>,
     /// Rate-limits concurrent migration tasks.
     migration_semaphore: Arc<tokio::sync::Semaphore>,
+    /// Pending degraded shard reports awaiting reconcile.
+    /// Keyed by (volume_id, shard_index); VecDeque preserves arrival order
+    /// so the reconcile loop can drain oldest first.
+    degraded_shards: Mutex<VecDeque<DegradedShardReport>>,
+    /// Set of shard keys currently queued to avoid duplicate enqueues.
+    degraded_shard_index: Mutex<HashSet<(String, usize)>>,
+}
+
+/// A report of a shard that has transitioned to a non-healthy state.
+///
+/// Emitted by bdev layer (e.g. `ErasureBdev::mark_shard_degraded`) and
+/// drained by the reconcile loop to schedule repair actions.
+#[derive(Debug, Clone)]
+pub struct DegradedShardReport {
+    pub volume_id: String,
+    pub shard_index: usize,
+    pub state: DegradedShardState,
+    pub reported_at: std::time::SystemTime,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DegradedShardState {
+    Degraded,
+    Missing,
 }
 
 impl PolicyEngine {
@@ -59,7 +83,80 @@ impl PolicyEngine {
             policies: RwLock::new(HashMap::new()),
             chunk_engine: RwLock::new(None),
             migration_semaphore: Arc::new(tokio::sync::Semaphore::new(16)),
+            degraded_shards: Mutex::new(VecDeque::new()),
+            degraded_shard_index: Mutex::new(HashSet::new()),
         }
+    }
+
+    /// Report that an erasure shard has become degraded or missing.
+    ///
+    /// Called by the bdev layer when I/O probes detect shard health changes.
+    /// Reports are deduped by (volume_id, shard_index) so repeated callers
+    /// do not flood the queue; the state of the latest report wins if the
+    /// shard is already queued.
+    ///
+    /// The reconcile loop drains this queue via
+    /// [`drain_degraded_shards`](Self::drain_degraded_shards) and emits
+    /// `ReconstructShard` actions for each entry.
+    pub fn report_degraded_shard(
+        &self,
+        volume_id: &str,
+        shard_index: usize,
+        state: DegradedShardState,
+    ) {
+        let key = (volume_id.to_string(), shard_index);
+        let mut seen = self.degraded_shard_index.lock().unwrap();
+        if !seen.insert(key.clone()) {
+            // Already queued — update the state of the existing entry if the
+            // new report is worse (Degraded -> Missing).
+            let mut q = self.degraded_shards.lock().unwrap();
+            if let Some(existing) = q
+                .iter_mut()
+                .find(|r| r.volume_id == key.0 && r.shard_index == shard_index)
+            {
+                if state == DegradedShardState::Missing
+                    && existing.state == DegradedShardState::Degraded
+                {
+                    existing.state = DegradedShardState::Missing;
+                    existing.reported_at = std::time::SystemTime::now();
+                }
+            }
+            return;
+        }
+        let mut q = self.degraded_shards.lock().unwrap();
+        q.push_back(DegradedShardReport {
+            volume_id: key.0,
+            shard_index,
+            state,
+            reported_at: std::time::SystemTime::now(),
+        });
+        info!(
+            "degraded shard reported: volume={} shard={} state={:?}",
+            volume_id, shard_index, state
+        );
+    }
+
+    /// Drain up to `max` pending degraded-shard reports.
+    ///
+    /// Returned reports are removed from the internal queue; the reconcile
+    /// loop owns the lifecycle after this call.
+    pub fn drain_degraded_shards(&self, max: usize) -> Vec<DegradedShardReport> {
+        let mut q = self.degraded_shards.lock().unwrap();
+        let take = q.len().min(max);
+        let drained: Vec<_> = q.drain(..take).collect();
+        drop(q);
+        if !drained.is_empty() {
+            let mut seen = self.degraded_shard_index.lock().unwrap();
+            for r in &drained {
+                seen.remove(&(r.volume_id.clone(), r.shard_index));
+            }
+        }
+        drained
+    }
+
+    /// Number of degraded-shard reports awaiting reconcile.
+    pub fn pending_degraded_shards(&self) -> usize {
+        self.degraded_shards.lock().unwrap().len()
     }
 
     /// Register or update a volume's replication policy.
@@ -456,6 +553,51 @@ mod tests {
         );
 
         (store_dir, db_dir, engine)
+    }
+
+    #[tokio::test]
+    async fn degraded_shards_are_queued_and_deduped() {
+        let (_s, _d, engine) = make_engine().await;
+
+        // Empty to start.
+        assert_eq!(engine.pending_degraded_shards(), 0);
+
+        engine.report_degraded_shard("vol-a", 0, DegradedShardState::Degraded);
+        engine.report_degraded_shard("vol-a", 1, DegradedShardState::Degraded);
+        assert_eq!(engine.pending_degraded_shards(), 2);
+
+        // Duplicate (same key) should not create a new entry but can upgrade
+        // state from Degraded -> Missing.
+        engine.report_degraded_shard("vol-a", 0, DegradedShardState::Missing);
+        assert_eq!(engine.pending_degraded_shards(), 2);
+
+        let drained = engine.drain_degraded_shards(10);
+        assert_eq!(drained.len(), 2);
+        // First drain honours FIFO — vol-a/0 was reported first.
+        assert_eq!(drained[0].volume_id, "vol-a");
+        assert_eq!(drained[0].shard_index, 0);
+        assert_eq!(drained[0].state, DegradedShardState::Missing);
+        assert_eq!(drained[1].shard_index, 1);
+        assert_eq!(drained[1].state, DegradedShardState::Degraded);
+
+        // Index also cleared, so a re-report now enqueues again.
+        assert_eq!(engine.pending_degraded_shards(), 0);
+        engine.report_degraded_shard("vol-a", 0, DegradedShardState::Degraded);
+        assert_eq!(engine.pending_degraded_shards(), 1);
+    }
+
+    #[tokio::test]
+    async fn drain_respects_max() {
+        let (_s, _d, engine) = make_engine().await;
+        for i in 0..5 {
+            engine.report_degraded_shard("vol-b", i, DegradedShardState::Degraded);
+        }
+        let first = engine.drain_degraded_shards(2);
+        assert_eq!(first.len(), 2);
+        assert_eq!(engine.pending_degraded_shards(), 3);
+        let rest = engine.drain_degraded_shards(100);
+        assert_eq!(rest.len(), 3);
+        assert_eq!(engine.pending_degraded_shards(), 0);
     }
 
     #[tokio::test]

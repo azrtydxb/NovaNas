@@ -92,7 +92,7 @@ export interface RouteDeps {
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   // unauthenticated
-  await app.register(healthRoutes);
+  await app.register(async (s) => healthRoutes(s, { redis: deps.redis, db: deps.db ?? null }));
   await app.register(async (s) => versionRoutes(s, deps.env));
 
   // auth flow (some public, some require session)

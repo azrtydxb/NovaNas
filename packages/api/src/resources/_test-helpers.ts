@@ -208,6 +208,9 @@ export function fakeRedis(): Redis {
     async expire() {
       return 1;
     },
+    async ping() {
+      return 'PONG';
+    },
     async publish() {
       return 0;
     },
