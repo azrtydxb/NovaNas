@@ -17,12 +17,12 @@ linters:
         - -QF1002  # could use tagged switch — cosmetic
         - -QF1008  # could remove embedded field selector — cosmetic
         - -ST1000  # missing package comment — non-blocking
-        - -ST1003  # naming preference (ApiToken vs APIToken) — CRD types mirror user-chosen names
-        - -SA1019  # deprecation warnings — handled case by case with //lint:ignore
+        - -ST1003  # naming preference (ApiToken vs APIToken)
+        - -SA1019  # deprecation warnings — handled per-occurrence
   exclusions:
     generated: lax
     rules:
       - path: _test\.go
-        linters: [unused]
+        linters: [unused, staticcheck]
       - path: zz_generated.*\.go
         linters: [unused, staticcheck]
