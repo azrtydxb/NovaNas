@@ -6,30 +6,48 @@ import (
 
 // StoragePoolSpec defines the desired state of StoragePool.
 type StoragePoolSpec struct {
-	// Tier classifies the pool (e.g., fast, warm, cold).
+	// Tier classifies the pool (fast/warm/cold/archive).
+	// +kubebuilder:validation:Enum=fast;warm;cold;archive
 	Tier string `json:"tier,omitempty"`
 	// DeviceFilter constrains disk selection.
 	DeviceFilter *DeviceFilter `json:"deviceFilter,omitempty"`
-	// RecoveryRate controls rebuild bandwidth (e.g., slow, balanced, fast).
+	// RecoveryRate controls rebuild bandwidth.
+	// +kubebuilder:validation:Enum=slow;balanced;fast
 	RecoveryRate string `json:"recoveryRate,omitempty"`
 	// RebalanceOnAdd controls behaviour when new disks are added.
+	// +kubebuilder:validation:Enum=auto;manual;never
 	RebalanceOnAdd string `json:"rebalanceOnAdd,omitempty"`
+	// Disks pins the member Disk CR names. Empty means filter-only.
+	Disks []string `json:"disks,omitempty"`
+	// AllowDataLoss permits deletion while BlockVolumes still reference the pool.
+	AllowDataLoss bool `json:"allowDataLoss,omitempty"`
 }
 
 // DeviceFilter narrows device eligibility for a StoragePool.
 type DeviceFilter struct {
+	// +kubebuilder:validation:Enum=nvme;ssd;hdd
 	PreferredClass string `json:"preferredClass,omitempty"`
 	MinSize        string `json:"minSize,omitempty"`
 	MaxSize        string `json:"maxSize,omitempty"`
 }
 
+// PoolCapacity reports observed pool-level capacity.
+type PoolCapacity struct {
+	TotalBytes     int64 `json:"totalBytes,omitempty"`
+	UsedBytes      int64 `json:"usedBytes,omitempty"`
+	AvailableBytes int64 `json:"availableBytes,omitempty"`
+}
+
 // StoragePoolStatus defines the observed state of StoragePool.
 type StoragePoolStatus struct {
-	Phase      string             `json:"phase,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	DiskCount  int32              `json:"diskCount,omitempty"`
-	CapacityBytes int64           `json:"capacityBytes,omitempty"`
-	UsedBytes  int64              `json:"usedBytes,omitempty"`
+	// +kubebuilder:validation:Enum=Pending;Active;Degraded;Failed;Ready
+	Phase              string             `json:"phase,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	DiskCount          int32              `json:"diskCount,omitempty"`
+	CapacityBytes      int64              `json:"capacityBytes,omitempty"`
+	UsedBytes          int64              `json:"usedBytes,omitempty"`
+	Capacity           *PoolCapacity      `json:"capacity,omitempty"`
 }
 
 // +kubebuilder:object:root=true

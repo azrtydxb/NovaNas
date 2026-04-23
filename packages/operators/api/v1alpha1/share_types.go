@@ -4,9 +4,11 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // ShareSpec defines the desired state of Share.
 type ShareSpec struct {
-	Dataset   string           `json:"dataset,omitempty"`
-	Path      string           `json:"path,omitempty"`
-	Protocols ShareProtocols   `json:"protocols,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Dataset string `json:"dataset"`
+	// +kubebuilder:validation:MinLength=1
+	Path      string            `json:"path"`
+	Protocols ShareProtocols    `json:"protocols,omitempty"`
 	Access    []ShareAccessRule `json:"access,omitempty"`
 }
 
@@ -18,22 +20,31 @@ type ShareProtocols struct {
 
 // SmbShareConfig holds SMB export options.
 type SmbShareConfig struct {
-	Server        string `json:"server,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Server        string `json:"server"`
 	ShadowCopies  bool   `json:"shadowCopies,omitempty"`
 	CaseSensitive bool   `json:"caseSensitive,omitempty"`
+	Browseable    bool   `json:"browseable,omitempty"`
+	GuestOk       bool   `json:"guestOk,omitempty"`
+	ReadOnly      bool   `json:"readOnly,omitempty"`
 }
 
 // NfsShareConfig holds NFS export options.
 type NfsShareConfig struct {
-	Server          string   `json:"server,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Server string `json:"server"`
+	// +kubebuilder:validation:Enum=noRootSquash;rootSquash;allSquash
 	Squash          string   `json:"squash,omitempty"`
 	AllowedNetworks []string `json:"allowedNetworks,omitempty"`
+	ReadOnly        bool     `json:"readOnly,omitempty"`
+	Sync            bool     `json:"sync,omitempty"`
 }
 
 // ShareAccessRule is a single access-control entry.
 type ShareAccessRule struct {
 	Principal SharePrincipal `json:"principal,omitempty"`
-	Mode      string         `json:"mode,omitempty"`
+	// +kubebuilder:validation:Enum=ro;rw;none
+	Mode string `json:"mode,omitempty"`
 }
 
 // SharePrincipal identifies a user or group.
@@ -44,13 +55,19 @@ type SharePrincipal struct {
 
 // ShareStatus defines observed state.
 type ShareStatus struct {
-	Phase      string             `json:"phase,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// +kubebuilder:validation:Enum=Pending;Active;Failed;Ready
+	Phase              string             `json:"phase,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	ExportedAt         *metav1.Time       `json:"exportedAt,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories=novanas
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Dataset",type=string,JSONPath=`.spec.dataset`
+// +kubebuilder:printcolumn:name="Path",type=string,JSONPath=`.spec.path`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
 // Share is a multi-protocol export (SMB + NFS) of a Dataset path.
 type Share struct {

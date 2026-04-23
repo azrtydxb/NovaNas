@@ -31,22 +31,43 @@ type DiskSpec struct {
 
 // SmartInfo captures SMART health readings.
 type SmartInfo struct {
-	OverallHealth string `json:"overallHealth,omitempty"`
-	Temperature   int32  `json:"temperature,omitempty"`
-	PowerOnHours  int64  `json:"powerOnHours,omitempty"`
+	// +kubebuilder:validation:Enum=OK;WARN;WARNING;FAIL;FAILED
+	OverallHealth      string `json:"overallHealth,omitempty"`
+	Temperature        int32  `json:"temperature,omitempty"`
+	PowerOnHours       int64  `json:"powerOnHours,omitempty"`
+	ReallocatedSectors int64  `json:"reallocatedSectors,omitempty"`
+	PendingSectors     int64  `json:"pendingSectors,omitempty"`
+	LastShortTest      *metav1.Time `json:"lastShortTest,omitempty"`
+	LastLongTest       *metav1.Time `json:"lastLongTest,omitempty"`
+}
+
+// DiskLifecycleEvent records a notable disk state transition.
+type DiskLifecycleEvent struct {
+	Timestamp metav1.Time `json:"timestamp"`
+	Type      string      `json:"type"`
+	Reason    string      `json:"reason,omitempty"`
+	Message   string      `json:"message,omitempty"`
+	FromState DiskState   `json:"fromState,omitempty"`
+	ToState   DiskState   `json:"toState,omitempty"`
+	Actor     string      `json:"actor,omitempty"`
 }
 
 // DiskStatus defines observed state of Disk.
 type DiskStatus struct {
-	State      DiskState          `json:"state,omitempty"`
-	Slot       string             `json:"slot,omitempty"`
-	Model      string             `json:"model,omitempty"`
-	Serial     string             `json:"serial,omitempty"`
-	Wwn        string             `json:"wwn,omitempty"`
-	SizeBytes  int64              `json:"sizeBytes,omitempty"`
-	Class      string             `json:"class,omitempty"`
-	Smart      *SmartInfo         `json:"smart,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	State              DiskState            `json:"state,omitempty"`
+	Slot               string               `json:"slot,omitempty"`
+	Model              string               `json:"model,omitempty"`
+	Serial             string               `json:"serial,omitempty"`
+	Wwn                string               `json:"wwn,omitempty"`
+	SizeBytes          int64                `json:"sizeBytes,omitempty"`
+	// +kubebuilder:validation:Enum=nvme;ssd;hdd
+	Class              string               `json:"class,omitempty"`
+	// +kubebuilder:validation:Enum=nvme;ssd;hdd
+	DeviceClass        string               `json:"deviceClass,omitempty"`
+	Smart              *SmartInfo           `json:"smart,omitempty"`
+	RecentEvents       []DiskLifecycleEvent `json:"recentEvents,omitempty"`
+	Conditions         []metav1.Condition   `json:"conditions,omitempty"`
+	ObservedGeneration int64                `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
