@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	novanasv1alpha1 "github.com/azrtydxb/novanas/packages/operators/api/v1alpha1"
@@ -101,26 +103,53 @@ func TestReplicationJobReconciler_HappyPath(t *testing.T) {
 
 func TestCloudBackupTargetReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.CloudBackupTarget{ObjectMeta: newClusterMeta("cbt1")}
-	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &CloudBackupTargetReconciler{BaseReconciler: newPart2Base(c, s, "CloudBackupTarget"), Recorder: newPart2Recorder()}
+	sec := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "s3-creds", Namespace: "novanas-system"},
+		Data:       map[string][]byte{"AWS_ACCESS_KEY_ID": []byte("x"), "AWS_SECRET_ACCESS_KEY": []byte("y")},
+	}
+	cr := &novanasv1alpha1.CloudBackupTarget{
+		ObjectMeta: newClusterMeta("cbt1"),
+		Spec: novanasv1alpha1.CloudBackupTargetSpec{
+			Provider: "s3",
+			Bucket:   "novanas-backups",
+			Region:   "us-east-1",
+			CredentialsSecret: novanasv1alpha1.SecretKeyRef{
+				Name: "s3-creds", Namespace: "novanas-system", Key: "AWS_ACCESS_KEY_ID",
+			},
+		},
+	}
+	c := newPart2Client(s, []client.Object{cr, sec}, []client.Object{cr})
+	r := &CloudBackupTargetReconciler{
+		BaseReconciler: newPart2Base(c, s, "CloudBackupTarget"),
+		Recorder:       newPart2Recorder(),
+		Prober:         stubProber{},
+	}
 	mustReconcileOK(t, context.Background(), r, part2Request("cbt1"))
 	var got novanasv1alpha1.CloudBackupTarget
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "cbt1"}, &got)
 	if got.Status.Phase != "Ready" {
 		t.Fatalf("phase = %q", got.Status.Phase)
 	}
+	if !got.Status.Reachable {
+		t.Fatalf("expected Reachable=true")
+	}
 }
 
 func TestCloudBackupJobReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.CloudBackupJob{ObjectMeta: newClusterMeta("cbj1")}
+	cr := &novanasv1alpha1.CloudBackupJob{
+		ObjectMeta: newClusterMeta("cbj1"),
+		Spec: novanasv1alpha1.CloudBackupJobSpec{
+			Target: "cbt1",
+			Source: novanasv1alpha1.VolumeSourceRef{Kind: "BlockVolume", Name: "vol1"},
+		},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &CloudBackupJobReconciler{BaseReconciler: newPart2Base(c, s, "CloudBackupJob"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("cbj1"))
 	var got novanasv1alpha1.CloudBackupJob
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "cbj1"}, &got)
-	if got.Status.Phase != "Completed" {
+	if got.Status.Phase != "Succeeded" {
 		t.Fatalf("phase = %q", got.Status.Phase)
 	}
 }

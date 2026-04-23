@@ -1,112 +1,140 @@
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
-// SecretKeyRef points at a key inside a Kubernetes Secret. It mirrors
-// the SecretReference union from packages/schemas/src/common/references.ts
-// (classic variant). The OpenBao variant is represented by SecretURI.
+// AlertChannelType enumerates the supported delivery backends.
+// +kubebuilder:validation:Enum=email;webhook;slack;pagerduty;ntfy;pushover;discord;telegram
+type AlertChannelType string
+
+// SecretKeyRef is a reference to a key within a Secret.
 type SecretKeyRef struct {
-	// Name is the secret's metadata.name.
-	// +kubebuilder:validation:MinLength=1
+	// Name of the Secret.
 	Name string `json:"name"`
-	// Key is the map key within the secret. Defaults to "token" when empty.
-	// +optional
-	Key string `json:"key,omitempty"`
-	// Namespace of the secret; defaults to the CR's namespace when empty.
-	// +optional
+	// Namespace of the Secret. Defaults to the channel namespace or
+	// "novanas-system" when empty.
 	Namespace string `json:"namespace,omitempty"`
-	// URI is an alternate addressing form (openbao://path or vault://path).
-	// Mutually exclusive with Name.
-	// +optional
-	URI string `json:"uri,omitempty"`
+	// Key inside the Secret's data map.
+	Key string `json:"key"`
 }
 
-// EmailChannel holds SMTP recipients for an email alert channel.
-type EmailChannel struct {
-	// +kubebuilder:validation:MinItems=1
-	To   []string `json:"to"`
-	From string   `json:"from,omitempty"`
+// EmailChannelConfig configures SMTP delivery.
+type EmailChannelConfig struct {
+	To             []string      `json:"to"`
+	From           string        `json:"from,omitempty"`
+	SmtpServer     string        `json:"smtpServer,omitempty"`
+	SmtpPort       int32         `json:"smtpPort,omitempty"`
+	UsernameSecret *SecretKeyRef `json:"usernameSecret,omitempty"`
+	PasswordSecret *SecretKeyRef `json:"passwordSecret,omitempty"`
+	StartTLS       bool          `json:"startTls,omitempty"`
 }
 
-// WebhookChannel is a generic outgoing webhook.
-type WebhookChannel struct {
-	// +kubebuilder:validation:Pattern=`^https?://.+`
-	URL     string            `json:"url"`
-	Secret  *SecretKeyRef     `json:"secret,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
+// WebhookChannelConfig configures a generic JSON webhook target.
+type WebhookChannelConfig struct {
+	URL          string            `json:"url"`
+	Method       string            `json:"method,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	SecretRef    *SecretKeyRef     `json:"secretRef,omitempty"`
+	TimeoutSecs  int32             `json:"timeoutSecs,omitempty"`
+	InsecureSkip bool              `json:"insecureSkipTlsVerify,omitempty"`
 }
 
-// SlackChannel is a Slack incoming-webhook destination.
-type SlackChannel struct {
-	// +kubebuilder:validation:Pattern=`^https://hooks\.slack\.com/.+`
-	WebhookURL string `json:"webhookURL"`
-	Channel    string `json:"channel,omitempty"`
-	Username   string `json:"username,omitempty"`
+// SlackChannelConfig wraps a Slack webhook URL secret.
+type SlackChannelConfig struct {
+	WebhookURLSecret SecretKeyRef `json:"webhookUrlSecret"`
+	Channel          string       `json:"channel,omitempty"`
+	Username         string       `json:"username,omitempty"`
+	IconEmoji        string       `json:"iconEmoji,omitempty"`
 }
 
-// PagerDutyChannel is a PagerDuty Events v2 integration.
-type PagerDutyChannel struct {
-	// RoutingKeySecret references the Events v2 integration key.
-	RoutingKeySecret SecretKeyRef `json:"routingKeySecret"`
-	// Severity maps NovaNas severity to PagerDuty severity when set;
-	// otherwise NovaNas severity passes through.
-	// +optional
-	Severity string `json:"severity,omitempty"`
+// PagerDutyChannelConfig wraps the PD Events v2 routing key.
+type PagerDutyChannelConfig struct {
+	IntegrationKeySecret SecretKeyRef `json:"integrationKeySecret"`
+	Severity             string       `json:"severity,omitempty"`
+	Component            string       `json:"component,omitempty"`
 }
 
-// NtfyChannel is an ntfy.sh (or self-hosted) topic subscription.
-type NtfyChannel struct {
+// NtfyChannelConfig configures the ntfy.sh family of push destinations.
+type NtfyChannelConfig struct {
 	Server     string        `json:"server,omitempty"`
 	Topic      string        `json:"topic"`
 	AuthSecret *SecretKeyRef `json:"authSecret,omitempty"`
+	Priority   string        `json:"priority,omitempty"`
 }
 
-// PushoverChannel pushes to the Pushover service.
-type PushoverChannel struct {
-	UserKey SecretKeyRef `json:"userKey"`
-	Token   SecretKeyRef `json:"token"`
+// PushoverChannelConfig configures the Pushover API.
+type PushoverChannelConfig struct {
+	UserKeySecret SecretKeyRef `json:"userKeySecret"`
+	TokenSecret   SecretKeyRef `json:"tokenSecret"`
+	Device        string       `json:"device,omitempty"`
+	Priority      int32        `json:"priority,omitempty"`
 }
 
-// AlertChannelSpec defines the desired state of AlertChannel.
+// AlertChannelSpec defines desired state.
 type AlertChannelSpec struct {
-	// +kubebuilder:validation:Enum=email;webhook;ntfy;pushover;slack;discord;telegram;browserPush;pagerduty
-	Type string `json:"type"`
+	// +kubebuilder:validation:Required
+	Type AlertChannelType `json:"type"`
 
-	Email     *EmailChannel     `json:"email,omitempty"`
-	Webhook   *WebhookChannel   `json:"webhook,omitempty"`
-	Slack     *SlackChannel     `json:"slack,omitempty"`
-	PagerDuty *PagerDutyChannel `json:"pagerduty,omitempty"`
-	Ntfy      *NtfyChannel      `json:"ntfy,omitempty"`
-	Pushover  *PushoverChannel  `json:"pushover,omitempty"`
-
+	// MinSeverity gates which alerts are dispatched on this channel.
 	// +kubebuilder:validation:Enum=info;warning;critical
-	// +optional
 	MinSeverity string `json:"minSeverity,omitempty"`
+
+	Email     *EmailChannelConfig     `json:"email,omitempty"`
+	Webhook   *WebhookChannelConfig   `json:"webhook,omitempty"`
+	Slack     *SlackChannelConfig     `json:"slack,omitempty"`
+	PagerDuty *PagerDutyChannelConfig `json:"pagerduty,omitempty"`
+	Ntfy      *NtfyChannelConfig      `json:"ntfy,omitempty"`
+	Pushover  *PushoverChannelConfig  `json:"pushover,omitempty"`
+
+	// Suspended silences the channel without deleting it.
+	Suspended bool `json:"suspended,omitempty"`
+
+	// RateLimitPerMinute bounds delivery attempts; 0 means unlimited.
+	RateLimitPerMinute int32 `json:"rateLimitPerMinute,omitempty"`
 }
 
-// AlertChannelStatus defines observed state of AlertChannel.
+// AlertChannelStatus reports observed state.
 type AlertChannelStatus struct {
-	// Phase is one of Pending, Active, Degraded, Failed.
+	// +kubebuilder:validation:Enum=Pending;Active;Failed;Suspended
 	Phase string `json:"phase,omitempty"`
-	// LastDeliveryAt is the RFC3339 timestamp of the most recent
-	// successful probe or alert delivery.
+
+	// ObservedGeneration is the .metadata.generation reconciled last.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// LastDeliveryAt is the time of the most recent delivery attempt.
 	LastDeliveryAt *metav1.Time `json:"lastDeliveryAt,omitempty"`
-	// LastProbeAt is when the controller last tried to probe the endpoint.
-	LastProbeAt *metav1.Time `json:"lastProbeAt,omitempty"`
-	// LastProbeError is the error from the last failed probe, if any.
-	LastProbeError string `json:"lastProbeError,omitempty"`
-	// ConsecutiveFailures is a rolling health counter; it resets on success.
+
+	// LastSuccessfulDeliveryAt is the last delivery that succeeded.
+	LastSuccessfulDeliveryAt *metav1.Time `json:"lastSuccessfulDeliveryAt,omitempty"`
+
+	// DeliveryCount is the total lifetime count of successful deliveries.
+	DeliveryCount int64 `json:"deliveryCount,omitempty"`
+
+	// ConsecutiveFailures counts back-to-back delivery failures;
+	// resets on first success.
 	ConsecutiveFailures int32 `json:"consecutiveFailures,omitempty"`
-	// ObservedGeneration reflects the latest generation the controller saw.
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+
+	// LastError is the most recent dispatch error message.
+	LastError string `json:"lastError,omitempty"`
+
+	// ResolvedSecretRef echoes the generated/normalised Secret reference
+	// used by the downstream dispatcher.
+	ResolvedSecretRef *corev1.LocalObjectReference `json:"resolvedSecretRef,omitempty"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories=novanas
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=".spec.type"
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Failures",type=integer,JSONPath=".status.consecutiveFailures"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
-// AlertChannel — notification destination (email / webhook / Slack / PagerDuty / ntfy / pushover).
+// AlertChannel is an email/webhook/slack/pagerduty/ntfy/pushover destination.
 type AlertChannel struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

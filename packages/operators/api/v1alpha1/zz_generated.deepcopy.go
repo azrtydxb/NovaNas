@@ -5,8 +5,8 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -75,32 +75,32 @@ func (in *AlertChannelSpec) DeepCopyInto(out *AlertChannelSpec) {
 	*out = *in
 	if in.Email != nil {
 		in, out := &in.Email, &out.Email
-		*out = new(EmailChannel)
+		*out = new(EmailChannelConfig)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Webhook != nil {
 		in, out := &in.Webhook, &out.Webhook
-		*out = new(WebhookChannel)
+		*out = new(WebhookChannelConfig)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Slack != nil {
 		in, out := &in.Slack, &out.Slack
-		*out = new(SlackChannel)
+		*out = new(SlackChannelConfig)
 		**out = **in
 	}
 	if in.PagerDuty != nil {
 		in, out := &in.PagerDuty, &out.PagerDuty
-		*out = new(PagerDutyChannel)
+		*out = new(PagerDutyChannelConfig)
 		**out = **in
 	}
 	if in.Ntfy != nil {
 		in, out := &in.Ntfy, &out.Ntfy
-		*out = new(NtfyChannel)
+		*out = new(NtfyChannelConfig)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Pushover != nil {
 		in, out := &in.Pushover, &out.Pushover
-		*out = new(PushoverChannel)
+		*out = new(PushoverChannelConfig)
 		**out = **in
 	}
 }
@@ -122,13 +122,18 @@ func (in *AlertChannelStatus) DeepCopyInto(out *AlertChannelStatus) {
 		in, out := &in.LastDeliveryAt, &out.LastDeliveryAt
 		*out = (*in).DeepCopy()
 	}
-	if in.LastProbeAt != nil {
-		in, out := &in.LastProbeAt, &out.LastProbeAt
+	if in.LastSuccessfulDeliveryAt != nil {
+		in, out := &in.LastSuccessfulDeliveryAt, &out.LastSuccessfulDeliveryAt
 		*out = (*in).DeepCopy()
+	}
+	if in.ResolvedSecretRef != nil {
+		in, out := &in.ResolvedSecretRef, &out.ResolvedSecretRef
+		*out = new(v1.LocalObjectReference)
+		**out = **in
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -261,13 +266,13 @@ func (in *AlertPolicyStatus) DeepCopyInto(out *AlertPolicyStatus) {
 		in, out := &in.FiringSince, &out.FiringSince
 		*out = (*in).DeepCopy()
 	}
-	if in.LastFired != nil {
-		in, out := &in.LastFired, &out.LastFired
+	if in.LastFiredAt != nil {
+		in, out := &in.LastFiredAt, &out.LastFiredAt
 		*out = (*in).DeepCopy()
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -384,7 +389,7 @@ func (in *ApiTokenStatus) DeepCopyInto(out *ApiTokenStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -532,7 +537,7 @@ func (in *AppCatalogStatus) DeepCopyInto(out *AppCatalogStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -735,7 +740,7 @@ func (in *AppInstanceStatus) DeepCopyInto(out *AppInstanceStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -885,7 +890,7 @@ func (in *AppStatus) DeepCopyInto(out *AppStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -993,7 +998,7 @@ func (in *AuditPolicyStatus) DeepCopyInto(out *AuditPolicyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1230,7 +1235,7 @@ func (in *BlockVolumeStatus) DeepCopyInto(out *BlockVolumeStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1371,7 +1376,7 @@ func (in *BondStatus) DeepCopyInto(out *BondStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1527,7 +1532,7 @@ func (in *BucketStatus) DeepCopyInto(out *BucketStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1681,7 +1686,7 @@ func (in *BucketUserStatus) DeepCopyInto(out *BucketUserStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1820,7 +1825,7 @@ func (in *CertificateStatus) DeepCopyInto(out *CertificateStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1850,6 +1855,21 @@ func (in *CertificateUploadSpec) DeepCopy() *CertificateUploadSpec {
 		return nil
 	}
 	out := new(CertificateUploadSpec)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *CloudBackupCapability) DeepCopyInto(out *CloudBackupCapability) {
+	*out = *in
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new CloudBackupCapability.
+func (in *CloudBackupCapability) DeepCopy() *CloudBackupCapability {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudBackupCapability)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -1919,7 +1939,7 @@ func (in *CloudBackupJobSpec) DeepCopyInto(out *CloudBackupJobSpec) {
 	out.Source = in.Source
 	if in.Retention != nil {
 		in, out := &in.Retention, &out.Retention
-		*out = new(RetentionPolicy)
+		*out = new(CloudBackupRetention)
 		**out = **in
 	}
 	if in.Excludes != nil {
@@ -1946,17 +1966,17 @@ func (in *CloudBackupJobStatus) DeepCopyInto(out *CloudBackupJobStatus) {
 		in, out := &in.LastRun, &out.LastRun
 		*out = (*in).DeepCopy()
 	}
-	if in.NextRun != nil {
-		in, out := &in.NextRun, &out.NextRun
-		*out = (*in).DeepCopy()
-	}
 	if in.LastSuccessfulRun != nil {
 		in, out := &in.LastSuccessfulRun, &out.LastSuccessfulRun
 		*out = (*in).DeepCopy()
 	}
+	if in.NextRun != nil {
+		in, out := &in.NextRun, &out.NextRun
+		*out = (*in).DeepCopy()
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1969,6 +1989,21 @@ func (in *CloudBackupJobStatus) DeepCopy() *CloudBackupJobStatus {
 		return nil
 	}
 	out := new(CloudBackupJobStatus)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *CloudBackupRetention) DeepCopyInto(out *CloudBackupRetention) {
+	*out = *in
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new CloudBackupRetention.
+func (in *CloudBackupRetention) DeepCopy() *CloudBackupRetention {
+	if in == nil {
+		return nil
+	}
+	out := new(CloudBackupRetention)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -1998,21 +2033,6 @@ func (in *CloudBackupTarget) DeepCopyObject() runtime.Object {
 		return c
 	}
 	return nil
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *CloudBackupTargetCapabilities) DeepCopyInto(out *CloudBackupTargetCapabilities) {
-	*out = *in
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new CloudBackupTargetCapabilities.
-func (in *CloudBackupTargetCapabilities) DeepCopy() *CloudBackupTargetCapabilities {
-	if in == nil {
-		return nil
-	}
-	out := new(CloudBackupTargetCapabilities)
-	in.DeepCopyInto(out)
-	return out
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
@@ -2077,12 +2097,12 @@ func (in *CloudBackupTargetStatus) DeepCopyInto(out *CloudBackupTargetStatus) {
 	}
 	if in.Capabilities != nil {
 		in, out := &in.Capabilities, &out.Capabilities
-		*out = new(CloudBackupTargetCapabilities)
+		*out = new(CloudBackupCapability)
 		**out = **in
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2223,7 +2243,7 @@ func (in *ClusterNetworkStatus) DeepCopyInto(out *ClusterNetworkStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2404,7 +2424,7 @@ func (in *ConfigBackupPolicyStatus) DeepCopyInto(out *ConfigBackupPolicyStatus) 
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2537,7 +2557,7 @@ func (in *CustomDomainStatus) DeepCopyInto(out *CustomDomainStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2703,7 +2723,7 @@ func (in *DatasetStatus) DeepCopyInto(out *DatasetStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2847,7 +2867,7 @@ func (in *DiskStatus) DeepCopyInto(out *DiskStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -2865,21 +2885,31 @@ func (in *DiskStatus) DeepCopy() *DiskStatus {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *EmailChannel) DeepCopyInto(out *EmailChannel) {
+func (in *EmailChannelConfig) DeepCopyInto(out *EmailChannelConfig) {
 	*out = *in
 	if in.To != nil {
 		in, out := &in.To, &out.To
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.UsernameSecret != nil {
+		in, out := &in.UsernameSecret, &out.UsernameSecret
+		*out = new(SecretKeyRef)
+		**out = **in
+	}
+	if in.PasswordSecret != nil {
+		in, out := &in.PasswordSecret, &out.PasswordSecret
+		*out = new(SecretKeyRef)
+		**out = **in
+	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new EmailChannel.
-func (in *EmailChannel) DeepCopy() *EmailChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new EmailChannelConfig.
+func (in *EmailChannelConfig) DeepCopy() *EmailChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(EmailChannel)
+	out := new(EmailChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -2978,7 +3008,7 @@ func (in *EncryptionPolicySpec) DeepCopyInto(out *EncryptionPolicySpec) {
 	}
 	if in.NamespaceSelector != nil {
 		in, out := &in.NamespaceSelector, &out.NamespaceSelector
-		*out = new(v1.LabelSelector)
+		*out = new(metav1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
 }
@@ -2998,7 +3028,7 @@ func (in *EncryptionPolicyStatus) DeepCopyInto(out *EncryptionPolicyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3194,7 +3224,7 @@ func (in *FirewallRuleStatus) DeepCopyInto(out *FirewallRuleStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3295,7 +3325,7 @@ func (in *GpuDeviceStatus) DeepCopyInto(out *GpuDeviceStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3401,7 +3431,7 @@ func (in *GroupStatus) DeepCopyInto(out *GroupStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3537,7 +3567,7 @@ func (in *HostInterfaceStatus) DeepCopyInto(out *HostInterfaceStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3658,7 +3688,7 @@ func (in *IngressStatus) DeepCopyInto(out *IngressStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3835,7 +3865,7 @@ func (in *IscsiTargetStatus) DeepCopyInto(out *IscsiTargetStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -3962,7 +3992,7 @@ func (in *IsoLibraryStatus) DeepCopyInto(out *IsoLibraryStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4089,7 +4119,7 @@ func (in *KeycloakRealmStatus) DeepCopyInto(out *KeycloakRealmStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4213,7 +4243,7 @@ func (in *KmsKeyStatus) DeepCopyInto(out *KmsKeyStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4314,7 +4344,7 @@ func (in *NfsServerStatus) DeepCopyInto(out *NfsServerStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4352,7 +4382,7 @@ func (in *NfsShareConfig) DeepCopy() *NfsShareConfig {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *NtfyChannel) DeepCopyInto(out *NtfyChannel) {
+func (in *NtfyChannelConfig) DeepCopyInto(out *NtfyChannelConfig) {
 	*out = *in
 	if in.AuthSecret != nil {
 		in, out := &in.AuthSecret, &out.AuthSecret
@@ -4361,12 +4391,12 @@ func (in *NtfyChannel) DeepCopyInto(out *NtfyChannel) {
 	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new NtfyChannel.
-func (in *NtfyChannel) DeepCopy() *NtfyChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new NtfyChannelConfig.
+func (in *NtfyChannelConfig) DeepCopy() *NtfyChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(NtfyChannel)
+	out := new(NtfyChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -4471,7 +4501,7 @@ func (in *NvmeofTargetStatus) DeepCopyInto(out *NvmeofTargetStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4612,7 +4642,7 @@ func (in *ObjectStoreStatus) DeepCopyInto(out *ObjectStoreStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4645,17 +4675,17 @@ func (in *ObjectStoreTLS) DeepCopy() *ObjectStoreTLS {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PagerDutyChannel) DeepCopyInto(out *PagerDutyChannel) {
+func (in *PagerDutyChannelConfig) DeepCopyInto(out *PagerDutyChannelConfig) {
 	*out = *in
-	out.RoutingKeySecret = in.RoutingKeySecret
+	out.IntegrationKeySecret = in.IntegrationKeySecret
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PagerDutyChannel.
-func (in *PagerDutyChannel) DeepCopy() *PagerDutyChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PagerDutyChannelConfig.
+func (in *PagerDutyChannelConfig) DeepCopy() *PagerDutyChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(PagerDutyChannel)
+	out := new(PagerDutyChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -4744,7 +4774,7 @@ func (in *PhysicalInterfaceStatus) DeepCopyInto(out *PhysicalInterfaceStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -4802,18 +4832,18 @@ func (in *ProtectionPolicy) DeepCopy() *ProtectionPolicy {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PushoverChannel) DeepCopyInto(out *PushoverChannel) {
+func (in *PushoverChannelConfig) DeepCopyInto(out *PushoverChannelConfig) {
 	*out = *in
-	out.UserKey = in.UserKey
-	out.Token = in.Token
+	out.UserKeySecret = in.UserKeySecret
+	out.TokenSecret = in.TokenSecret
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PushoverChannel.
-func (in *PushoverChannel) DeepCopy() *PushoverChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PushoverChannelConfig.
+func (in *PushoverChannelConfig) DeepCopy() *PushoverChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(PushoverChannel)
+	out := new(PushoverChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -4901,7 +4931,7 @@ func (in *RemoteAccessTunnelAuth) DeepCopyInto(out *RemoteAccessTunnelAuth) {
 	*out = *in
 	if in.Secret != nil {
 		in, out := &in.Secret, &out.Secret
-		*out = new(corev1.SecretKeySelector)
+		*out = new(v1.SecretKeySelector)
 		(*in).DeepCopyInto(*out)
 	}
 }
@@ -5009,7 +5039,7 @@ func (in *RemoteAccessTunnelStatus) DeepCopyInto(out *RemoteAccessTunnelStatus) 
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5146,7 +5176,7 @@ func (in *ReplicationJobStatus) DeepCopyInto(out *ReplicationJobStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5291,7 +5321,7 @@ func (in *ReplicationTargetStatus) DeepCopyInto(out *ReplicationTargetStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5378,6 +5408,36 @@ func (in *RetentionPolicy) DeepCopy() *RetentionPolicy {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *SLOBurnRateAlert) DeepCopyInto(out *SLOBurnRateAlert) {
+	*out = *in
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SLOBurnRateAlert.
+func (in *SLOBurnRateAlert) DeepCopy() *SLOBurnRateAlert {
+	if in == nil {
+		return nil
+	}
+	out := new(SLOBurnRateAlert)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *SLOIndicator) DeepCopyInto(out *SLOIndicator) {
+	*out = *in
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SLOIndicator.
+func (in *SLOIndicator) DeepCopy() *SLOIndicator {
+	if in == nil {
+		return nil
+	}
+	out := new(SLOIndicator)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *ScrubSchedule) DeepCopyInto(out *ScrubSchedule) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
@@ -5456,7 +5516,7 @@ func (in *ScrubScheduleStatus) DeepCopyInto(out *ScrubScheduleStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5589,6 +5649,11 @@ func (in *ServiceLevelObjectiveList) DeepCopyObject() runtime.Object {
 func (in *ServiceLevelObjectiveSpec) DeepCopyInto(out *ServiceLevelObjectiveSpec) {
 	*out = *in
 	out.Indicator = in.Indicator
+	if in.BurnRateAlerts != nil {
+		in, out := &in.BurnRateAlerts, &out.BurnRateAlerts
+		*out = make([]SLOBurnRateAlert, len(*in))
+		copy(*out, *in)
+	}
 	if in.AlertChannels != nil {
 		in, out := &in.AlertChannels, &out.AlertChannels
 		*out = make([]string, len(*in))
@@ -5609,38 +5674,13 @@ func (in *ServiceLevelObjectiveSpec) DeepCopy() *ServiceLevelObjectiveSpec {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *ServiceLevelObjectiveStatus) DeepCopyInto(out *ServiceLevelObjectiveStatus) {
 	*out = *in
-	if in.CurrentSLI != nil {
-		in, out := &in.CurrentSLI, &out.CurrentSLI
-		*out = new(float64)
-		**out = **in
-	}
-	if in.CurrentObjective != nil {
-		in, out := &in.CurrentObjective, &out.CurrentObjective
-		*out = new(float64)
-		**out = **in
-	}
-	if in.ErrorBudgetRemaining != nil {
-		in, out := &in.ErrorBudgetRemaining, &out.ErrorBudgetRemaining
-		*out = new(float64)
-		**out = **in
-	}
-	if in.ErrorBudgetRemainingSeconds != nil {
-		in, out := &in.ErrorBudgetRemainingSeconds, &out.ErrorBudgetRemainingSeconds
-		*out = new(int64)
-		**out = **in
-	}
-	if in.BurnRate != nil {
-		in, out := &in.BurnRate, &out.BurnRate
-		*out = new(float64)
-		**out = **in
-	}
-	if in.LastEvaluatedAt != nil {
-		in, out := &in.LastEvaluatedAt, &out.LastEvaluatedAt
+	if in.LastEvaluation != nil {
+		in, out := &in.LastEvaluation, &out.LastEvaluation
 		*out = (*in).DeepCopy()
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5745,7 +5785,7 @@ func (in *ServicePolicyStatus) DeepCopyInto(out *ServicePolicyStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5918,7 +5958,7 @@ func (in *ShareStatus) DeepCopyInto(out *ShareStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -5940,31 +5980,17 @@ func (in *ShareStatus) DeepCopy() *ShareStatus {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *SlackChannel) DeepCopyInto(out *SlackChannel) {
+func (in *SlackChannelConfig) DeepCopyInto(out *SlackChannelConfig) {
 	*out = *in
+	out.WebhookURLSecret = in.WebhookURLSecret
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SlackChannel.
-func (in *SlackChannel) DeepCopy() *SlackChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SlackChannelConfig.
+func (in *SlackChannelConfig) DeepCopy() *SlackChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(SlackChannel)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *SloIndicator) DeepCopyInto(out *SloIndicator) {
-	*out = *in
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SloIndicator.
-func (in *SloIndicator) DeepCopy() *SloIndicator {
-	if in == nil {
-		return nil
-	}
-	out := new(SloIndicator)
+	out := new(SlackChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -6137,7 +6163,7 @@ func (in *SmartPolicyStatus) DeepCopyInto(out *SmartPolicyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6298,7 +6324,7 @@ func (in *SmbServerStatus) DeepCopyInto(out *SmbServerStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6474,7 +6500,7 @@ func (in *SnapshotScheduleStatus) DeepCopyInto(out *SnapshotScheduleStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6531,7 +6557,7 @@ func (in *SnapshotStatus) DeepCopyInto(out *SnapshotStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6639,7 +6665,7 @@ func (in *SshKeyStatus) DeepCopyInto(out *SshKeyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6745,7 +6771,7 @@ func (in *StoragePoolStatus) DeepCopyInto(out *StoragePoolStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -6885,7 +6911,7 @@ func (in *SystemSettingsStatus) DeepCopyInto(out *SystemSettingsStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7088,7 +7114,7 @@ func (in *TrafficPolicyStatus) DeepCopyInto(out *TrafficPolicyStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7238,7 +7264,7 @@ func (in *UpdatePolicyStatus) DeepCopyInto(out *UpdatePolicyStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7354,7 +7380,7 @@ func (in *UpsPolicyStatus) DeepCopyInto(out *UpsPolicyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7499,7 +7525,7 @@ func (in *UserStatus) DeepCopyInto(out *UserStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7615,7 +7641,7 @@ func (in *VipPoolStatus) DeepCopyInto(out *VipPoolStatus) {
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7716,7 +7742,7 @@ func (in *VlanStatus) DeepCopyInto(out *VlanStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -7996,7 +8022,7 @@ func (in *VmStatus) DeepCopyInto(out *VmStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -8029,13 +8055,8 @@ func (in *VolumeSourceRef) DeepCopy() *VolumeSourceRef {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *WebhookChannel) DeepCopyInto(out *WebhookChannel) {
+func (in *WebhookChannelConfig) DeepCopyInto(out *WebhookChannelConfig) {
 	*out = *in
-	if in.Secret != nil {
-		in, out := &in.Secret, &out.Secret
-		*out = new(SecretKeyRef)
-		**out = **in
-	}
 	if in.Headers != nil {
 		in, out := &in.Headers, &out.Headers
 		*out = make(map[string]string, len(*in))
@@ -8043,14 +8064,19 @@ func (in *WebhookChannel) DeepCopyInto(out *WebhookChannel) {
 			(*out)[key] = val
 		}
 	}
+	if in.SecretRef != nil {
+		in, out := &in.SecretRef, &out.SecretRef
+		*out = new(SecretKeyRef)
+		**out = **in
+	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new WebhookChannel.
-func (in *WebhookChannel) DeepCopy() *WebhookChannel {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new WebhookChannelConfig.
+func (in *WebhookChannelConfig) DeepCopy() *WebhookChannelConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(WebhookChannel)
+	out := new(WebhookChannelConfig)
 	in.DeepCopyInto(out)
 	return out
 }

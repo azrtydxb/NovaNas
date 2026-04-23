@@ -2,63 +2,90 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// CloudBackupJobSpec defines the desired state of CloudBackupJob.
-type CloudBackupJobSpec struct {
-	Source VolumeSourceRef `json:"source"`
-	// Target is the name of a CloudBackupTarget CR.
-	// +kubebuilder:validation:MinLength=1
-	Target string `json:"target"`
-	// Cron is a five-field POSIX cron expression. Empty means on-demand.
-	// +optional
-	Cron string `json:"cron,omitempty"`
-	// +optional
-	Retention *RetentionPolicy `json:"retention,omitempty"`
-	// +optional
-	Excludes []string `json:"excludes,omitempty"`
-	// +optional
-	Suspended bool `json:"suspended,omitempty"`
-	// MaxRetries is the max number of consecutive failed runs before
-	// the controller marks the job Failed. Defaults to 3.
-	// +optional
-	MaxRetries int32 `json:"maxRetries,omitempty"`
+// CloudBackupRetention is a minimal restic-style retention policy.
+type CloudBackupRetention struct {
+	KeepLast    int32 `json:"keepLast,omitempty"`
+	KeepHourly  int32 `json:"keepHourly,omitempty"`
+	KeepDaily   int32 `json:"keepDaily,omitempty"`
+	KeepWeekly  int32 `json:"keepWeekly,omitempty"`
+	KeepMonthly int32 `json:"keepMonthly,omitempty"`
+	KeepYearly  int32 `json:"keepYearly,omitempty"`
 }
 
-// CloudBackupJobStatus defines observed state of CloudBackupJob.
+// CloudBackupJobSpec defines desired state.
+type CloudBackupJobSpec struct {
+	// +kubebuilder:validation:Required
+	Source VolumeSourceRef `json:"source"`
+
+	// Target is the name of a CloudBackupTarget in the same namespace.
+	// +kubebuilder:validation:Required
+	Target string `json:"target"`
+
+	// Cron is an optional schedule; when empty the job is one-shot.
+	Cron string `json:"cron,omitempty"`
+
+	Retention *CloudBackupRetention `json:"retention,omitempty"`
+	Excludes  []string              `json:"excludes,omitempty"`
+
+	Suspended bool `json:"suspended,omitempty"`
+
+	// Timeout bounds an individual run, e.g. "4h".
+	Timeout string `json:"timeout,omitempty"`
+
+	// Parallelism bounds concurrent upload streams (engine-specific).
+	Parallelism int32 `json:"parallelism,omitempty"`
+}
+
+// CloudBackupJobStatus reports observed state.
 type CloudBackupJobStatus struct {
-	// Phase is one of Pending, Running, Succeeded, Failed, Suspended.
+	// +kubebuilder:validation:Enum=Pending;Scheduled;Running;Succeeded;Failed;Suspended;Cancelled
 	Phase string `json:"phase,omitempty"`
+
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// LastRun is the start time of the most recent run.
 	LastRun *metav1.Time `json:"lastRun,omitempty"`
-	// NextRun is the next scheduled run (cron).
-	NextRun *metav1.Time `json:"nextRun,omitempty"`
-	// LastSuccessfulRun tracks the most recent Succeeded run for dedup.
+
+	// LastSuccessfulRun is the start time of the most recent successful run.
 	LastSuccessfulRun *metav1.Time `json:"lastSuccessfulRun,omitempty"`
-	// LastSnapshotID is the source snapshot the last successful run used.
-	LastSnapshotID string `json:"lastSnapshotID,omitempty"`
-	// SnapshotID is the source snapshot the current/last run is streaming.
-	SnapshotID string `json:"snapshotID,omitempty"`
-	// BytesTotal is the expected payload size of the current run.
-	BytesTotal int64 `json:"bytesTotal,omitempty"`
-	// BytesTransferred is progress for the current run (monotonic until reset).
+
+	// NextRun is the next scheduled invocation (cron jobs only).
+	NextRun *metav1.Time `json:"nextRun,omitempty"`
+
+	// BytesTransferred is the cumulative bytes uploaded in the last run.
 	BytesTransferred int64 `json:"bytesTransferred,omitempty"`
-	// BytesUploaded is the cumulative bytes uploaded across all runs.
-	BytesUploaded int64 `json:"bytesUploaded,omitempty"`
-	// Progress is 0..100 for the current run.
-	Progress int32 `json:"progress,omitempty"`
-	// ConsecutiveFailures is reset on each success.
-	ConsecutiveFailures int32 `json:"consecutiveFailures,omitempty"`
-	// Message is a human-readable status message.
-	Message string `json:"message,omitempty"`
-	// ObservedGeneration reflects the latest generation the controller saw.
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+
+	// BytesTotal is the expected total bytes for the current run.
+	BytesTotal int64 `json:"bytesTotal,omitempty"`
+
+	// ProgressPercent is 0..100 for the current run.
+	ProgressPercent int32 `json:"progressPercent,omitempty"`
+
+	// SnapshotID is the engine snapshot identifier produced by the last run.
+	SnapshotID string `json:"snapshotId,omitempty"`
+
+	// FilesProcessed is the count of files in the last run.
+	FilesProcessed int64 `json:"filesProcessed,omitempty"`
+
+	// FailureCount is the cumulative failure count.
+	FailureCount int64 `json:"failureCount,omitempty"`
+
+	// LastError is the most recent run error.
+	LastError string `json:"lastError,omitempty"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories=novanas
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=".spec.target"
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Progress",type=integer,JSONPath=".status.progressPercent"
+// +kubebuilder:printcolumn:name="LastRun",type=date,JSONPath=".status.lastRun"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
-// CloudBackupJob — scheduled volume-to-cloud backup job.
+// CloudBackupJob is a volume-to-cloud backup job (one-shot or cron).
 type CloudBackupJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
