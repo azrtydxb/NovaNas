@@ -30,7 +30,6 @@ source "qemu" "novanas" {
   # shutdown on success.
   shutdown_command   = "true"
   shutdown_timeout   = "30m"
-  ssh_skip_nat_mapping = true
 
   # No SSH in the installer phase; packer needs some signal. The installer
   # powers the VM off when done. boot_command is empty because GRUB autoselect
