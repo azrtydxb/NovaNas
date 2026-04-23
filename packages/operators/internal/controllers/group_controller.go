@@ -63,15 +63,30 @@ func (r *GroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if _, err := kc.EnsureGroup(ctx, reconciler.KeycloakGroup{Realm: realm, Name: obj.Name}); err != nil {
+	groupName := obj.Spec.Name
+	if groupName == "" {
+		groupName = obj.Name
+	}
+	effRealm := realm
+	if obj.Spec.Realm != "" {
+		effRealm = obj.Spec.Realm
+	}
+	gid, err := kc.EnsureGroup(ctx, reconciler.KeycloakGroup{
+		Realm:   effRealm,
+		Name:    groupName,
+		Members: obj.Spec.Members,
+	})
+	if err != nil {
 		obj.Status.Phase = "Failed"
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
 		_ = r.Client.Status().Update(ctx, &obj)
 		result = "error"
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
 	}
+	obj.Status.KeycloakID = gid
+	obj.Status.MemberCount = int32(len(obj.Spec.Members))
 
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "group synced to keycloak")
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {
