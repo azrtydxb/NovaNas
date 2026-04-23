@@ -28,7 +28,7 @@ VA_OVA       := $(BUILD_DIR)/novanas-$(VERSION).ova
 
 export VERSION CHANNEL ARCH BUILD_DIR ROOTFS_DIR RAUC_DIR INSTALLER_BINARY
 
-.PHONY: all base layered bundle iso va clean lint help
+.PHONY: all base layered bundle iso iso-only va va-only clean lint help
 
 help:
 	@echo "NovaNas OS build targets:"
@@ -73,7 +73,26 @@ iso: bundle
 		--bundle=$(BUNDLE) \
 		--out=$(ISO)
 
+# iso-only assumes $(BUNDLE) already exists (e.g. downloaded as a CI
+# artifact) and skips the base → layered → bundle rebuild chain.
+iso-only: | $(BUILD_DIR)
+	@test -f $(BUNDLE) || { echo "BUNDLE not found: $(BUNDLE)" >&2; exit 1; }
+	$(CURDIR)/build/build-iso.sh \
+		--version=$(VERSION) --channel=$(CHANNEL) \
+		--installer-binary=$(INSTALLER_BINARY) \
+		--bundle=$(BUNDLE) \
+		--out=$(ISO)
+
 va: iso
+	$(CURDIR)/build/build-va.sh \
+		--version=$(VERSION) --channel=$(CHANNEL) \
+		--iso=$(ISO) \
+		--packer-dir=$(PACKER_DIR) \
+		--out-dir=$(BUILD_DIR)
+
+# va-only assumes $(ISO) already exists. Mirrors iso-only for the VA job.
+va-only: | $(BUILD_DIR)
+	@test -f $(ISO) || { echo "ISO not found: $(ISO)" >&2; exit 1; }
 	$(CURDIR)/build/build-va.sh \
 		--version=$(VERSION) --channel=$(CHANNEL) \
 		--iso=$(ISO) \

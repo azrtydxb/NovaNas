@@ -100,7 +100,7 @@ jobs:
           fi
 
       - name: Build ISO
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os iso
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os iso-only
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4
@@ -135,7 +135,7 @@ jobs:
           path: os/build/out/
 
       - name: Build VA images
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os va
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os va-only
 
       - name: Upload VA images
         uses: actions/upload-artifact@v4
