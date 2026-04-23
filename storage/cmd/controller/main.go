@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -185,10 +184,6 @@ func main() {
 	var policyRepairEnabled bool
 	var policyRepairConcurrency int
 	var cacheSyncTimeout time.Duration
-	var imageRegistry string
-	var imageTag string
-	var imagePullPolicy string
-	var imagePullSecrets string
 
 	// Handle subcommands before flag parsing.
 	if len(os.Args) > 1 && os.Args[1] == "tls-bootstrap" {
@@ -216,10 +211,6 @@ func main() {
 	flag.BoolVar(&policyRepairEnabled, "policy-repair-enabled", true, "Enable automatic repair of non-compliant chunks.")
 	flag.IntVar(&policyRepairConcurrency, "policy-repair-concurrency", 4, "Maximum number of concurrent policy repair operations.")
 	flag.DurationVar(&cacheSyncTimeout, "cache-sync-timeout", 2*time.Minute, "Timeout for waiting for cache sync on startup.")
-	flag.StringVar(&imageRegistry, "image-registry", "", "Container image registry for dynamically created pods (e.g. ghcr.io/azrtydxb/novanas)")
-	flag.StringVar(&imageTag, "image-tag", "", "Image tag for dynamically created pods (e.g. latest)")
-	flag.StringVar(&imagePullPolicy, "image-pull-policy", "IfNotPresent", "Image pull policy for dynamically created pods")
-	flag.StringVar(&imagePullSecrets, "image-pull-secrets", "", "Comma-separated list of image pull secret names for dynamically created pods")
 
 	opts := crzap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -269,16 +260,6 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BlockVolume")
 		os.Exit(1)
-	}
-
-	var pullSecretNames []string
-	if imagePullSecrets != "" {
-		for _, s := range strings.Split(imagePullSecrets, ",") {
-			s = strings.TrimSpace(s)
-			if s != "" {
-				pullSecretNames = append(pullSecretNames, s)
-			}
-		}
 	}
 
 	if err := (&controller.ObjectStoreReconciler{

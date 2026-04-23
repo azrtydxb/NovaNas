@@ -15,7 +15,7 @@
 //!    volume is restored from the persistent metadata store on dataplane
 //!    startup, so re-creating the bdev is stateless from the caller's POV.
 //! 3. We pick the first free `/dev/nbdN` (N ∈ [0, 16)) by probing with
-//!    `spdk_nbd_get_disk_by_nbd_path` on the reactor thread.
+//!    `spdk_nbd_disk_find_by_nbd_path` on the reactor thread.
 //! 4. We dispatch `spdk_nbd_start(bdev_name, nbd_path, cb, ctx)` to the
 //!    reactor and block on a `Completion<i32>` until the callback fires.
 //! 5. We store `(volume_name → (nbd_path, spdk_nbd_disk*))` in the
@@ -125,7 +125,7 @@ impl NbdManager {
     ///
     /// `probe` receives the candidate path and returns true iff that
     /// path is free from SPDK's perspective. In production this is
-    /// `spdk_nbd_get_disk_by_nbd_path(path).is_null()`; tests inject a
+    /// `spdk_nbd_disk_find_by_nbd_path(path).is_null()`; tests inject a
     /// pure function.
     fn pick_free_slot<F>(&self, probe: F) -> Result<String>
     where
@@ -277,7 +277,7 @@ fn spdk_path_is_free(nbd_path: &str) -> bool {
             Ok(s) => s,
             Err(_) => return false,
         };
-        let disk = unsafe { ffi::spdk_nbd_get_disk_by_nbd_path(c_path.as_ptr()) };
+        let disk = unsafe { ffi::spdk_nbd_disk_find_by_nbd_path(c_path.as_ptr()) };
         disk.is_null()
     })
 }
