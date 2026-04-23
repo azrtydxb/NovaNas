@@ -76,6 +76,9 @@ fn main() {
     for lib in &[
         "c", "m", "dl", "rt", "pthread", "aio", "uuid", "numa", "ssl", "crypto", "uring", "fuse3",
         "json-c", "gcc_s",
+        // stdc++ needed for __gxx_personality_v0 — transitively pulled in by
+        // some SPDK/DPDK dependencies despite SPDK itself being pure C.
+        "stdc++",
     ] {
         println!("cargo:rustc-link-arg=-l{}", lib);
     }
