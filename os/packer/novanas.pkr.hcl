@@ -21,8 +21,11 @@ source "qemu" "novanas" {
   disk_interface     = "virtio"
   machine_type       = "q35"
   efi_boot           = true
-  efi_firmware_code  = "/usr/share/OVMF/OVMF_CODE.fd"
-  efi_firmware_vars  = "/usr/share/OVMF/OVMF_VARS.fd"
+  # Ubuntu 24.04 (noble) ovmf 2024.02 ships the 4M-variant firmware as
+  # the canonical path; OVMF_CODE.fd / OVMF_VARS.fd without suffix no
+  # longer exist. The 4M variant is what Q35 + modern qemu expect.
+  efi_firmware_code  = "/usr/share/OVMF/OVMF_CODE_4M.fd"
+  efi_firmware_vars  = "/usr/share/OVMF/OVMF_VARS_4M.fd"
   boot_wait          = "10s"
 
   # The NovaNas installer runs non-interactively when booted with
