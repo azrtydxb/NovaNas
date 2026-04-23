@@ -2,63 +2,103 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// UserSpec defines the desired state of a User.
-//
-// The User CR is the cluster-authoritative projection of a Keycloak user
-// plus a per-tenant OpenBao policy + kubernetes-auth role. Fields mirror
-// the Zod User schema in packages/schemas. When a field is empty the
-// Keycloak admin client leaves the attribute unchanged on update.
+// UserSpec mirrors packages/schemas/src/identity/user.ts. It describes
+// the desired state of a NovaNas User, which is projected into Keycloak
+// (users, realm membership, group membership, password rotation) by the
+// User controller. The spec also carries POSIX identity attributes that
+// the node agent consults when rendering /etc/passwd entries.
 type UserSpec struct {
-	// Email address of the user. Synced to Keycloak as `email`.
+	// Username is the realm-unique login name.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Username string `json:"username"`
+
+	// Email is the user's primary email. Used by Keycloak for password
+	// recovery and notifications.
+	// +kubebuilder:validation:Pattern=`^[^@\s]+@[^@\s]+\.[^@\s]+$`
 	// +optional
 	Email string `json:"email,omitempty"`
 
-	// FirstName is the user's given name. Synced to Keycloak as `firstName`.
+	// DisplayName is the human-readable name shown in the UI.
 	// +optional
-	FirstName string `json:"firstName,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 
-	// LastName is the user's family name. Synced to Keycloak as `lastName`.
-	// +optional
-	LastName string `json:"lastName,omitempty"`
-
-	// Enabled is the Keycloak `enabled` flag. When false the user exists
-	// but cannot authenticate. Defaults to true when unset.
-	// +optional
-	Enabled *bool `json:"enabled,omitempty"`
-
-	// Groups is the list of Keycloak group names the user should be a
-	// member of. Group membership is replaced on every reconcile
-	// (set-semantics, not merge).
+	// Groups is the list of Group CR names this user belongs to.
 	// +optional
 	Groups []string `json:"groups,omitempty"`
 
-	// Realm overrides the default realm name ("novanas"). Typically left
-	// unset; useful only for multi-realm deployments.
+	// Admin grants cluster-administrator rights via RBAC.
+	// +optional
+	Admin bool `json:"admin,omitempty"`
+
+	// Enabled toggles login without deleting the user. Defaults to true.
+	// +kubebuilder:default=true
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Realm overrides the operator's default Keycloak realm for this user.
 	// +optional
 	Realm string `json:"realm,omitempty"`
+
+	// Federated is true when the user is sourced from an external IdP
+	// (LDAP/AD/OIDC) and should not receive a local password.
+	// +optional
+	Federated bool `json:"federated,omitempty"`
+
+	// UID is the POSIX user-id projected into /etc/passwd.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	UID *int64 `json:"uid,omitempty"`
+
+	// PrimaryGID is the primary POSIX group-id.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	PrimaryGID *int64 `json:"primaryGid,omitempty"`
+
+	// HomeDataset names a Dataset CR mounted as the user's home directory.
+	// +optional
+	HomeDataset string `json:"homeDataset,omitempty"`
+
+	// Shell overrides the default login shell (/bin/bash).
+	// +optional
+	Shell string `json:"shell,omitempty"`
 }
 
-// UserStatus defines observed state of User.
+// UserStatus is the observed state of the User projection.
 type UserStatus struct {
-	// Phase is a coarse-grained lifecycle indicator: Pending, Ready,
-	// Failed. More fine-grained signals live on Conditions.
+	// Phase is a high-level lifecycle state for dashboards.
+	// +kubebuilder:validation:Enum=Pending;Active;Disabled;Failed
+	// +optional
 	Phase string `json:"phase,omitempty"`
 
-	// KeycloakUserID is the UUID returned by Keycloak on first EnsureUser.
-	// Stable across reconciles; used by GroupReconciler and downstream
-	// auditing.
-	KeycloakUserID string `json:"keycloakUserID,omitempty"`
+	// KeycloakID is the internal Keycloak UUID returned by the admin API
+	// after EnsureUser. Empty while the projection has never succeeded.
+	// +optional
+	KeycloakID string `json:"keycloakID,omitempty"`
 
-	// Conditions is the Kubernetes-standard condition slice for Ready /
-	// Reconciling / Failed signals.
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// LastLogin is the timestamp of the most recent successful login
+	// reported by Keycloak. Populated by the sync loop.
+	// +optional
+	LastLogin *metav1.Time `json:"lastLogin,omitempty"`
+
+	// Conditions carries Ready/Progressing/Degraded conditions.
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories=novanas
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Username",type=string,JSONPath=`.spec.username`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="KeycloakID",type=string,JSONPath=`.status.keycloakID`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// User — Local user projection of Keycloak.
+// User — Local projection of a Keycloak user.
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

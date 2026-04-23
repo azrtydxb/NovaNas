@@ -93,7 +93,16 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		err = apierrors.NewNotFound(corev1.Resource("secrets"), secretName)
 	}
 	if apierrors.IsNotFound(err) {
-		bundle, ierr := iss.Issue(ctx, reconciler.CertificateRequest{Name: obj.Name, CommonName: obj.Name})
+		cn := obj.Spec.CommonName
+		if cn == "" {
+			cn = obj.Name
+		}
+		bundle, ierr := iss.Issue(ctx, reconciler.CertificateRequest{
+			Name:       obj.Name,
+			CommonName: cn,
+			DNSNames:   obj.Spec.DNSNames,
+			IPSANs:     obj.Spec.IPAddresses,
+		})
 		if ierr != nil {
 			obj.Status.Phase = "Failed"
 			obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, ierr.Error())
@@ -101,6 +110,18 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			result = "error"
 			return ctrl.Result{RequeueAfter: defaultRequeue}, ierr
 		}
+		// Populate typed status fields from the issued material.
+		if !bundle.NotBefore.IsZero() {
+			nb := metav1.NewTime(bundle.NotBefore)
+			obj.Status.NotBefore = &nb
+		}
+		if !bundle.NotAfter.IsZero() {
+			na := metav1.NewTime(bundle.NotAfter)
+			obj.Status.NotAfter = &na
+		}
+		obj.Status.SerialNumber = bundle.Serial
+		obj.Status.SecretRef = secretName
+
 		sec = corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Namespace: obj.Namespace, Name: secretName},
 			Type:       corev1.SecretTypeTLS,
@@ -124,7 +145,7 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Issued"
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "certificate issued")
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {

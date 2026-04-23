@@ -5,6 +5,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,13 +64,28 @@ func (r *KmsKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Provision idempotent by name.
-	if _, _, err := kp.ProvisionVolume(ctx, obj.Name); err != nil {
+	// Provision (idempotent) — returns (wrappedDK, keyVersion, err).
+	wrappedDK, keyVersion, err := kp.ProvisionVolume(ctx, obj.Name)
+	if err != nil {
 		obj.Status.Phase = "Failed"
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
 		_ = r.Client.Status().Update(ctx, &obj)
 		result = "error"
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
+	}
+	now := metav1.NewTime(time.Now().UTC())
+	// Populate typed status on first provision; record the new version on
+	// subsequent calls so rotation bookkeeping stays current.
+	if obj.Status.KeyID == "" {
+		obj.Status.KeyID = obj.Name
+		obj.Status.CreatedAt = &now
+	}
+	if prev := obj.Status.KeyVersion; int32(keyVersion) != prev { //nolint:gosec // version fits in int32 in practice
+		obj.Status.KeyVersion = int32(keyVersion) //nolint:gosec
+		obj.Status.LastRotatedAt = &now
+	}
+	if len(wrappedDK) > 0 {
+		obj.Status.WrappedDK = string(wrappedDK)
 	}
 	obj.Status.Phase = "Active"
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "key provisioned")

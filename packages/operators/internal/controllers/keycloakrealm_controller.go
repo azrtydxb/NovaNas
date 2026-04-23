@@ -5,6 +5,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,15 +59,20 @@ func (r *KeycloakRealmReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if err := kc.EnsureRealm(ctx, reconciler.KeycloakRealmConfig{Name: obj.Name, Enabled: true}); err != nil {
+	if err := kc.EnsureRealm(ctx, reconciler.KeycloakRealmConfig{
+		Name:        obj.Name,
+		DisplayName: obj.Spec.DisplayName,
+		Enabled:     true,
+	}); err != nil {
 		obj.Status.Phase = "Failed"
 		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconcileFailed, err.Error())
 		_ = r.Client.Status().Update(ctx, &obj)
 		result = "error"
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
 	}
-
-	obj.Status.Phase = "Ready"
+	now := metav1.NewTime(time.Now().UTC())
+	obj.Status.LastSync = &now
+	obj.Status.Phase = "Active"
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "realm synced")
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {

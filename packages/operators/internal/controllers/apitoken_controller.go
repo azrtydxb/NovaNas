@@ -22,16 +22,19 @@ import (
 )
 
 // ApiTokenReconciler reconciles an ApiToken. On create it generates a
-// cryptographically random token, stores the cleartext in a child Secret
-// (so the operator can hand it out to the user once) and keeps the SHA-256
-// hash in the Secret annotations for subsequent verification. The token
-// itself never lands in status.
+// cryptographically random token, stores the hash in a child Secret
+// and returns the plaintext exactly once via Status.RawTokenSecret.
+// The next reconcile scrubs RawTokenSecret.
+//
+// The reconciler also enforces rotation: if Spec.RotationPeriod is set
+// and Status.LastRotatedAt is older than the period, a new token is
+// minted and re-delivered via Status.RawTokenSecret.
 type ApiTokenReconciler struct {
 	reconciler.BaseReconciler
 	Recorder record.EventRecorder
 }
 
-// Reconcile ensures the token Secret.
+// Reconcile ensures the token Secret and manages rotation.
 func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	start := time.Now()
 	logger := log.FromContext(ctx).WithValues("controller", "ApiToken", "key", req.NamespacedName)
@@ -44,6 +47,7 @@ func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	if !obj.DeletionTimestamp.IsZero() {
 		logger.Info("ApiToken deleting")
+		obj.Status.Phase = "Revoked"
 		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonDeleted, "api token revoked")
 		if err := reconciler.RemoveFinalizer(ctx, r.Client, &obj, reconciler.FinalizerApiToken); err != nil {
 			result = "error"
@@ -63,37 +67,99 @@ func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		ns = "novanas-system"
 	}
 	secretName := "apitoken-" + obj.Name
+	now := metav1.NewTime(time.Now().UTC())
+
+	// Scrub the one-shot RawTokenSecret on every reconcile that comes
+	// in *after* a delivery. We detect delivery by a non-empty value
+	// in status on a spec that has already been successfully reconciled.
+	if obj.Status.RawTokenSecret != "" && obj.Status.Phase == "Active" {
+		obj.Status.RawTokenSecret = ""
+		if err := r.Client.Status().Update(ctx, &obj); err != nil && !apierrors.IsConflict(err) {
+			result = "error"
+			return ctrl.Result{}, err
+		}
+		logger.V(1).Info("apitoken: scrubbed one-shot raw token from status")
+	}
+
+	// Decide whether we need to mint (first time) or rotate.
+	mustMint := obj.Status.TokenID == ""
+	if !mustMint && obj.Spec.RotationPeriod != "" {
+		if d, err := time.ParseDuration(obj.Spec.RotationPeriod); err == nil && d > 0 {
+			if obj.Status.LastRotatedAt == nil || time.Since(obj.Status.LastRotatedAt.Time) > d {
+				mustMint = true
+				logger.V(1).Info("apitoken: rotation due", "period", d.String())
+			}
+		}
+	}
+
+	// Check expiry.
+	if obj.Spec.ExpiresAt != nil && time.Now().After(obj.Spec.ExpiresAt.Time) {
+		obj.Status.Phase = "Expired"
+		obj.Status.Conditions = reconciler.MarkFailed(obj.Status.Conditions, obj.Generation, "Expired", "token past expiry")
+		if err := r.Client.Status().Update(ctx, &obj); err != nil && !apierrors.IsConflict(err) {
+			result = "error"
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: defaultRequeue}, nil
+	}
+
 	var sec corev1.Secret
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: ns, Name: secretName}, &sec)
-	if apierrors.IsNotFound(err) {
+	getErr := r.Client.Get(ctx, types.NamespacedName{Namespace: ns, Name: secretName}, &sec)
+	if mustMint || apierrors.IsNotFound(getErr) {
 		tokBytes := make([]byte, 32)
-		_, _ = rand.Read(tokBytes)
+		if _, err := rand.Read(tokBytes); err != nil {
+			result = "error"
+			return ctrl.Result{}, err
+		}
 		tok := hex.EncodeToString(tokBytes)
 		hash := sha256.Sum256([]byte(tok))
-		sec = corev1.Secret{
+		hashHex := hex.EncodeToString(hash[:])
+
+		desired := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   ns,
 				Name:        secretName,
-				Annotations: map[string]string{"novanas.io/token-sha256": hex.EncodeToString(hash[:])},
+				Annotations: map[string]string{"novanas.io/token-sha256": hashHex},
 			},
 			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{"token": []byte(tok)},
+			Data: map[string][]byte{
+				"tokenHash": []byte(hashHex),
+			},
 		}
-		if err := controllerutil.SetControllerReference(&obj, &sec, r.Scheme); err != nil {
+		if err := controllerutil.SetControllerReference(&obj, &desired, r.Scheme); err != nil {
 			result = "error"
 			return ctrl.Result{}, err
 		}
-		if err := r.Client.Create(ctx, &sec); err != nil && !apierrors.IsAlreadyExists(err) {
-			result = "error"
-			return ctrl.Result{}, err
+		if apierrors.IsNotFound(getErr) {
+			if err := r.Client.Create(ctx, &desired); err != nil && !apierrors.IsAlreadyExists(err) {
+				result = "error"
+				return ctrl.Result{}, err
+			}
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonCreated, "api token minted in secret "+secretName)
+		} else {
+			sec.Data = desired.Data
+			sec.Annotations = desired.Annotations
+			if err := r.Client.Update(ctx, &sec); err != nil {
+				result = "error"
+				return ctrl.Result{}, err
+			}
+			reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonCreated, "api token rotated")
 		}
-		reconciler.Emit(r.Recorder, &obj, reconciler.EventReasonCreated, "api token minted in secret "+secretName)
-	} else if err != nil {
+
+		// Populate status with typed fields and deliver the raw token.
+		obj.Status.TokenID = hashHex
+		obj.Status.SecretRef = secretName
+		obj.Status.RawTokenSecret = tok
+		obj.Status.LastRotatedAt = &now
+		if obj.Status.CreatedAt == nil {
+			obj.Status.CreatedAt = &now
+		}
+	} else if getErr != nil {
 		result = "error"
-		return ctrl.Result{}, err
+		return ctrl.Result{}, getErr
 	}
 
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "token available in secret "+secretName)
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {
@@ -102,7 +168,14 @@ func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		result = "error"
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: defaultRequeue}, nil
+
+	// If we just delivered a raw token, requeue promptly so the next
+	// reconcile can scrub it.
+	requeue := defaultRequeue
+	if obj.Status.RawTokenSecret != "" {
+		requeue = 5 * time.Second
+	}
+	return ctrl.Result{RequeueAfter: requeue}, nil
 }
 
 // SetupWithManager registers the controller with the manager.

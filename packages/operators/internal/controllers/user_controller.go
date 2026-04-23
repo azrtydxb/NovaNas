@@ -62,9 +62,6 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		ob = reconciler.NoopOpenBaoClient{}
 	}
 	realm := r.Realm
-	if obj.Spec.Realm != "" {
-		realm = obj.Spec.Realm
-	}
 	if realm == "" {
 		realm = "novanas"
 	}
@@ -74,7 +71,15 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	if !obj.DeletionTimestamp.IsZero() {
 		logger.Info("User deleting")
-		if err := kc.DeleteUser(ctx, realm, obj.Name); err != nil {
+		delUser := obj.Spec.Username
+		if delUser == "" {
+			delUser = obj.Name
+		}
+		delRealm := realm
+		if obj.Spec.Realm != "" {
+			delRealm = obj.Spec.Realm
+		}
+		if err := kc.DeleteUser(ctx, delRealm, delUser); err != nil {
 			logger.Error(err, "keycloak delete user failed")
 		}
 		if err := ob.DeleteAuthRole(ctx, roleName); err != nil {
@@ -97,18 +102,25 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Prefer the spec username when provided; fall back to the CR name.
+	username := obj.Spec.Username
+	if username == "" {
+		username = obj.Name
+	}
 	enabled := true
 	if obj.Spec.Enabled != nil {
 		enabled = *obj.Spec.Enabled
 	}
-	userID, err := kc.EnsureUser(ctx, reconciler.KeycloakUser{
-		Realm:     realm,
-		Username:  obj.Name,
-		Email:     obj.Spec.Email,
-		FirstName: obj.Spec.FirstName,
-		LastName:  obj.Spec.LastName,
-		Groups:    obj.Spec.Groups,
-		Enabled:   enabled,
+	effRealm := realm
+	if obj.Spec.Realm != "" {
+		effRealm = obj.Spec.Realm
+	}
+	keycloakID, err := kc.EnsureUser(ctx, reconciler.KeycloakUser{
+		Realm:    effRealm,
+		Username: username,
+		Email:    obj.Spec.Email,
+		Groups:   obj.Spec.Groups,
+		Enabled:  enabled,
 	})
 	if err != nil {
 		obj.Status.Phase = "Failed"
@@ -117,9 +129,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		result = "error"
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
 	}
-	if userID != "" {
-		obj.Status.KeycloakUserID = userID
-	}
+	obj.Status.KeycloakID = keycloakID
 
 	// Per-tenant OpenBao policy + auth role.
 	hcl, err := reconciler.RenderTenantPolicy(r.OpenBaoPolicyTemplate, obj.Name)
@@ -156,7 +166,10 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{RequeueAfter: defaultRequeue}, err
 	}
 
-	obj.Status.Phase = "Ready"
+	obj.Status.Phase = "Active"
+	if !enabled {
+		obj.Status.Phase = "Disabled"
+	}
 	obj.Status.Conditions = reconciler.MarkReady(obj.Status.Conditions, obj.Generation, reconciler.ReasonReconciled, "user synced to keycloak and openbao")
 	if err := r.Client.Status().Update(ctx, &obj); err != nil {
 		if apierrors.IsConflict(err) {

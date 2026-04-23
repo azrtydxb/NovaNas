@@ -172,8 +172,14 @@ func TestCertificateReconciler_HappyPath(t *testing.T) {
 	mustReconcileOK(t, context.Background(), r, part2NsRequest("ns", "c1"))
 	var got novanasv1alpha1.Certificate
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "c1"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Issued" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.NotAfter == nil {
+		t.Fatalf("expected NotAfter populated, got nil")
+	}
+	if got.Status.SerialNumber == "" {
+		t.Fatalf("expected SerialNumber populated, got empty")
 	}
 }
 
@@ -270,65 +276,109 @@ func TestBucketUserReconciler_HappyPath(t *testing.T) {
 
 func TestUserReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.User{ObjectMeta: newClusterMeta("alice")}
+	cr := &novanasv1alpha1.User{
+		ObjectMeta: newClusterMeta("alice"),
+		Spec:       novanasv1alpha1.UserSpec{Username: "alice", Email: "alice@example.com"},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &UserReconciler{BaseReconciler: newPart2Base(c, s, "User"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("alice"))
 	var got novanasv1alpha1.User
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "alice"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.KeycloakID == "" {
+		t.Fatalf("expected KeycloakID populated")
 	}
 }
 
 func TestGroupReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.Group{ObjectMeta: newClusterMeta("admins")}
+	cr := &novanasv1alpha1.Group{
+		ObjectMeta: newClusterMeta("admins"),
+		Spec:       novanasv1alpha1.GroupSpec{Name: "admins", Members: []string{"alice", "bob"}},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &GroupReconciler{BaseReconciler: newPart2Base(c, s, "Group"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("admins"))
 	var got novanasv1alpha1.Group
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "admins"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.MemberCount != 2 {
+		t.Fatalf("MemberCount = %d; want 2", got.Status.MemberCount)
+	}
+	if got.Status.KeycloakID == "" {
+		t.Fatalf("expected KeycloakID populated")
 	}
 }
 
 func TestApiTokenReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.ApiToken{ObjectMeta: newClusterMeta("tok1")}
+	cr := &novanasv1alpha1.ApiToken{
+		ObjectMeta: newClusterMeta("tok1"),
+		Spec:       novanasv1alpha1.ApiTokenSpec{Owner: "alice", Scopes: []string{"read"}},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &ApiTokenReconciler{BaseReconciler: newPart2Base(c, s, "ApiToken"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("tok1"))
 	var got novanasv1alpha1.ApiToken
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "tok1"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.TokenID == "" {
+		t.Fatalf("expected TokenID populated")
+	}
+	if got.Status.RawTokenSecret == "" {
+		t.Fatalf("expected RawTokenSecret delivered on first reconcile")
+	}
+	if got.Status.LastRotatedAt == nil {
+		t.Fatalf("expected LastRotatedAt populated")
 	}
 }
 
 func TestSshKeyReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.SshKey{ObjectMeta: newClusterMeta("ssh1")}
+	// A realistic ed25519 public key blob so fingerprint parsing succeeds.
+	const pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxTqhF9N1l9YkXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx alice@example.com"
+	cr := &novanasv1alpha1.SshKey{
+		ObjectMeta: newClusterMeta("ssh1"),
+		Spec:       novanasv1alpha1.SshKeySpec{Owner: "alice", PublicKey: pub},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &SshKeyReconciler{BaseReconciler: newPart2Base(c, s, "SshKey"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("ssh1"))
 	var got novanasv1alpha1.SshKey
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "ssh1"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.KeyType != "ssh-ed25519" {
+		t.Fatalf("KeyType = %q; want ssh-ed25519", got.Status.KeyType)
+	}
+	if got.Status.Fingerprint == "" {
+		t.Fatalf("expected Fingerprint populated")
 	}
 }
 
 func TestKeycloakRealmReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.KeycloakRealm{ObjectMeta: newClusterMeta("realm1")}
+	cr := &novanasv1alpha1.KeycloakRealm{
+		ObjectMeta: newClusterMeta("realm1"),
+		Spec:       novanasv1alpha1.KeycloakRealmSpec{DisplayName: "Realm 1"},
+	}
 	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
 	r := &KeycloakRealmReconciler{BaseReconciler: newPart2Base(c, s, "KeycloakRealm"), Recorder: newPart2Recorder()}
 	mustReconcileOK(t, context.Background(), r, part2Request("realm1"))
 	var got novanasv1alpha1.KeycloakRealm
 	_ = c.Get(context.Background(), client.ObjectKey{Name: "realm1"}, &got)
-	if got.Status.Phase != "Ready" {
+	if got.Status.Phase != "Active" {
 		t.Fatalf("phase = %q", got.Status.Phase)
+	}
+	if got.Status.LastSync == nil {
+		t.Fatalf("expected LastSync populated")
 	}
 }
