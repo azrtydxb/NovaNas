@@ -84,12 +84,13 @@ terminal_output --append console
 terminal_input  --append console
 
 menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
-  # systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on prevents systemd-getty-generator from creating
-  # serial-getty@ttyS0.service on NAS mobos that lack a serial port —
-  # otherwise boot hangs ~90s waiting for /dev/ttyS0.device to appear.
-  # Kernel console=ttyS0 is still passed so QEMU/IPMI SOL capture the
-  # kernel log; it silently no-ops on hardware without a UART.
-  linux /boot/vmlinuz boot=live components toram quiet splash novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on
+  # No 'quiet splash' — text-mode boot. Plymouth captures the console
+  # when splash is on and only lets a handful of messages through,
+  # which on i915-ENOENT-firmware boards looks like a stalled boot
+  # even when it's progressing. Keep the full systemd output visible.
+  # systemd.debug-shell=1 opens a root shell on tty9 (Ctrl+Alt+F9) so
+  # a stuck boot can still be inspected live.
+  linux /boot/vmlinuz boot=live components toram novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target systemd.debug_shell=1 random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
 

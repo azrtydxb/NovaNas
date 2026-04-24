@@ -209,6 +209,32 @@ EOF
       "$OS_DIR/build/image-manifest.txt" || log "prepull skipped (see script output)"
   fi
 
+  # Pin hostname to a known value and ensure /etc/hosts has a matching
+  # entry. Without this, any baked-in hostname (e.g. the CI runner's
+  # auto-generated name) has no local resolver entry → every
+  # gethostbyname(self) call in libc / PAM / sudo / journald times out
+  # on DNS, adding ~30s per service startup during boot. Symptom user
+  # was hitting: "every systemd unit loads one per minute".
+  log "pin hostname + /etc/hosts"
+  echo 'novanas-installer' > "$work/etc/hostname"
+  cat > "$work/etc/hosts" <<EOF
+127.0.0.1   localhost
+127.0.1.1   novanas-installer
+::1         localhost ip6-localhost ip6-loopback
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+EOF
+
+  # Nuke plymouth if apt pulled it in via a recommends chain. Plymouth
+  # captures /dev/tty0 and swallows all systemd status messages behind
+  # a splash screen; on hardware where i915 firmware is missing it
+  # sits there spinning forever. We drop it entirely — the installer's
+  # TUI is the only "splash" the operator ever sees.
+  chroot "$work" /bin/bash -eu -o pipefail -c "
+    export DEBIAN_FRONTEND=noninteractive
+    dpkg -l plymouth 2>/dev/null | grep -q '^ii' && apt-get purge -y plymouth plymouth-themes 2>/dev/null || true
+  "
+
   log "enable NovaNas units + users"
   chroot "$work" /bin/bash -eu -o pipefail -c "
     useradd -m -s /bin/bash -u $DEFAULT_UID $DEFAULT_USER || true
