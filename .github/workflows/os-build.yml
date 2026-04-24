@@ -45,7 +45,7 @@ env:
 jobs:
   rauc-bundle:
     name: RAUC bundle (dev cert)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
@@ -97,7 +97,7 @@ jobs:
   iso-build:
     name: Hybrid installer ISO
     needs: rauc-bundle
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -169,7 +169,7 @@ jobs:
   va-images:
     name: Virtual appliance images (qcow2 / vmdk / ova / raw)
     needs: iso-build
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
