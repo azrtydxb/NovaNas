@@ -1,15 +1,13 @@
 name: os-build
 
-# Builds the NovaNas OS pipeline:
-#   1. base rootfs via mmdebstrap
-#   2. layered NovaNas rootfs (ext4)
-#   3. RAUC update bundle (unsigned dev cert on PR/main; signed on tag
-#      by the release workflow)
-#   4. Hybrid installer ISO
-#   5. Virtual appliance images (raw/qcow2/vmdk/ova) via Packer + QEMU
+# mkosi-driven NovaNas OS build.
 #
-# Requires ubuntu-24.04 (KVM, root, hugepages, and modern Debian tooling
-# are all available on that image).
+# Jobs:
+#   1. os-build  - runs mkosi twice (live + update profiles), emits squashfs,
+#                  ext4 images, RAUC bundle, and hybrid installer ISO.
+#   2. va-images - Packer VM builds from the ISO.
+#
+# Release signing is a separate, human-approved workflow (release.yml).
 
 on:
   push:
@@ -30,91 +28,62 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  # contents: write so the iso-build job can publish the rolling-dev
-  # release asset (read is sufficient for everything else).
+  # contents: write so the os-build job can publish the rolling-dev
+  # release asset.
   contents: write
 
-# Opt the whole workflow into Node 24 for javascript actions — silences
-# the "Node.js 20 actions are deprecated" annotations GH emits for
-# actions/upload-artifact@v5, actions/download-artifact@v5, etc. (they
-# still bundle Node 20 runtimes as of v5; v6 wasn't out yet at the
-# time of writing).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  rauc-bundle:
-    name: RAUC bundle (dev cert)
+  os-build:
+    name: mkosi (live + update) + bundle + ISO
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
 
       - name: Install build deps
         run: |
           sudo apt-get update
+          # mkosi ships in trixie; on older runners fall back to pip.
           sudo apt-get install -y \
-            debootstrap mmdebstrap qemu-utils qemu-system-x86 \
-            rauc squashfs-tools xorriso ovmf \
-            systemd-container arch-install-scripts \
-            dosfstools e2fsprogs parted \
-            debian-archive-keyring
-
-      - name: Fetch current Debian archive keyring (trixie-compatible)
-        # The distro-packaged debian-archive-keyring on older
-        # self-hosted runners / GH-hosted ubuntu-24.04 predates the
-        # trixie release keys, so mmdebstrap fails with NO_PUBKEY
-        # against deb.debian.org/debian trixie. Fetch the current
-        # .deb directly from packages.debian.org and force-install it
-        # over whatever the host has. Idempotent.
-        run: |
-          set -eu
-          TMP=$(mktemp -d)
-          cd "$TMP"
-          # Follow redirects; the API returns a redirect to the
-          # fastest mirror. --fail-with-body so we see errors.
-          curl -sSLfo debian-archive-keyring.deb \
-            "https://packages.debian.org/trixie/all/debian-archive-keyring/download"
-          # That URL returns an HTML picker page — prefer a direct
-          # deb.debian.org path when available.
-          if ! dpkg-deb -I debian-archive-keyring.deb >/dev/null 2>&1; then
-            curl -sSLfo debian-archive-keyring.deb \
-              "http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb" \
-            || curl -sSLfo debian-archive-keyring.deb \
-              "http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2024.12.1_all.deb"
-          fi
-          sudo dpkg -i debian-archive-keyring.deb
-          # Verify the trixie key (6ED0E7B82643E131) is now present.
-          gpg --no-default-keyring \
-            --keyring /usr/share/keyrings/debian-archive-keyring.gpg \
-            --list-keys 2>&1 | grep -qi "debian.*stable\|trixie\|archive key" \
-          || { echo "keyring install didn't include trixie keys" >&2; exit 1; }
-          rm -rf "$TMP"
+            mkosi systemd-container \
+            rauc squashfs-tools xorriso \
+            grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
+            e2fsprogs parted \
+            debian-archive-keyring \
+            || { sudo apt-get install -y python3-pip && \
+                 sudo pip3 install --break-system-packages mkosi; }
+          mkosi --version
 
       - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
-          # The installer is the only Go module we need in this job;
-          # pointing cache-dependency-path at it silences the
-          # 'Dependencies file is not found' warning setup-go emits
-          # when probing the repo root (which has no go.mod — the
-          # modules live under installer/, storage/, packages/*).
           cache-dependency-path: installer/go.sum
 
-      - name: Build installer binary (baked into layered rootfs)
+      - name: Build installer binary (baked into live rootfs)
         run: |
           cd installer && GOWORK=off go build -o bin/novanas-installer .
 
-      - name: Build base rootfs (mmdebstrap)
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os base
+      - name: Build update (RAUC) rootfs via mkosi
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os mkosi-update
 
-      - name: Build layered rootfs
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os layered
+      - name: Build live (ISO) rootfs via mkosi
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os mkosi-live
+
+      - name: Extract artefacts (squashfs + ext4 + kernel/initrd)
+        run: |
+          sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os update-artifacts
+          sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os live-artifacts
 
       - name: Build RAUC bundle (unsigned dev cert)
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os bundle
 
-      - name: Upload RAUC bundle + kernel
+      - name: Build hybrid installer ISO
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os iso-only
+
+      - name: Upload RAUC bundle + kernel + squashfs
         uses: actions/upload-artifact@v5
         with:
           name: rauc-bundle-${{ github.sha }}
@@ -125,47 +94,6 @@ jobs:
             os/build/out/filesystem.squashfs
           retention-days: 14
 
-  iso-build:
-    name: Hybrid installer ISO
-    needs: rauc-bundle
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.23"
-          cache-dependency-path: installer/go.sum
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: rauc-bundle-${{ github.sha }}
-          path: os/build/out/
-
-      - name: Build installer binary
-        run: |
-          if [ -f installer/Cargo.toml ]; then
-            cd installer && cargo build --release
-          else
-            cd installer && GOWORK=off go build -o bin/novanas-installer .
-          fi
-
-      - name: Build ISO
-        # Single ISO for CI + operator. The live-booted installer
-        # launcher detects the runtime environment via DMI: QEMU/KVM
-        # → auto dry-run; real hardware → interactive TUI. No build-
-        # time switch needed.
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os iso-only
-
       - name: Upload ISO
         uses: actions/upload-artifact@v5
         with:
@@ -173,12 +101,7 @@ jobs:
           path: os/build/out/*.iso
           retention-days: 14
 
-      # ---------- Publish to "rolling-dev" release for IP-KVM virtual-media ----------
-      # Every main push overwrites the ISO on a fixed prerelease tag so
-      # JetKVM / Redfish / bootc virtual-media can point at a stable,
-      # public, non-zipped URL:
-      #   https://github.com/azrtydxb/NovaNas/releases/download/rolling-dev/novanas-dev.iso
-      # Skipped on PR and tag pushes (release.yml handles tagged releases).
+      # ---------- rolling-dev release for IP-KVM virtual media ----------
       - name: Publish rolling-dev ISO
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -187,8 +110,6 @@ jobs:
           set -eu
           ISO=$(ls os/build/out/*.iso | head -1)
           cp "$ISO" os/build/out/novanas-dev.iso
-          # Recreate the release each time so the asset URL is rewrittable
-          # without the "asset already exists" hurdle.
           gh release delete rolling-dev --yes --cleanup-tag 2>/dev/null || true
           gh release create rolling-dev \
             --title "Rolling dev build (main @ ${GITHUB_SHA::7})" \
@@ -199,7 +120,7 @@ jobs:
 
   va-images:
     name: Virtual appliance images (qcow2 / vmdk / ova / raw)
-    needs: iso-build
+    needs: os-build
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
     steps:
@@ -209,7 +130,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-kvm qemu-utils qemu-system-x86 ovmf
-          # Packer from HashiCorp apt repo — not in default 24.04 image.
           wget -O - https://apt.releases.hashicorp.com/gpg | \
             sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
