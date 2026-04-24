@@ -3,10 +3,15 @@ Description=NovaNas persistent partition
 DefaultDependencies=no
 Conflicts=umount.target
 Before=local-fs.target umount.target
-After=systemd-fsck@dev-disk-by\x2dpartlabel-Persistent.service
+# Deliberately NOT listing systemd-fsck@dev-disk-by\x2dpartlabel-Persistent
+# in After=: on a live boot that ordering would cause systemd to
+# materialise the device unit and wait 90s for it to appear before the
+# mount's Condition is even evaluated. fsck still runs at mount time
+# via the generator's default path.
 # Skip on live boot — the Persistent partition only exists on a
 # disk-installed system.
 ConditionKernelCommandLine=!boot=live
+ConditionPathExists=/dev/disk/by-partlabel/Persistent
 
 [Mount]
 What=/dev/disk/by-partlabel/Persistent
