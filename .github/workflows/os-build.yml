@@ -60,6 +60,37 @@ jobs:
             dosfstools e2fsprogs parted \
             debian-archive-keyring
 
+      - name: Fetch current Debian archive keyring (trixie-compatible)
+        # The distro-packaged debian-archive-keyring on older
+        # self-hosted runners / GH-hosted ubuntu-24.04 predates the
+        # trixie release keys, so mmdebstrap fails with NO_PUBKEY
+        # against deb.debian.org/debian trixie. Fetch the current
+        # .deb directly from packages.debian.org and force-install it
+        # over whatever the host has. Idempotent.
+        run: |
+          set -eu
+          TMP=$(mktemp -d)
+          cd "$TMP"
+          # Follow redirects; the API returns a redirect to the
+          # fastest mirror. --fail-with-body so we see errors.
+          curl -sSLfo debian-archive-keyring.deb \
+            "https://packages.debian.org/trixie/all/debian-archive-keyring/download"
+          # That URL returns an HTML picker page — prefer a direct
+          # deb.debian.org path when available.
+          if ! dpkg-deb -I debian-archive-keyring.deb >/dev/null 2>&1; then
+            curl -sSLfo debian-archive-keyring.deb \
+              "http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb" \
+            || curl -sSLfo debian-archive-keyring.deb \
+              "http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2024.12.1_all.deb"
+          fi
+          sudo dpkg -i debian-archive-keyring.deb
+          # Verify the trixie key (6ED0E7B82643E131) is now present.
+          gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/debian-archive-keyring.gpg \
+            --list-keys 2>&1 | grep -qi "debian.*stable\|trixie\|archive key" \
+          || { echo "keyring install didn't include trixie keys" >&2; exit 1; }
+          rm -rf "$TMP"
+
       - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
