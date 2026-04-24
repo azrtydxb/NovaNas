@@ -32,6 +32,14 @@ concurrency:
 permissions:
   contents: read
 
+# Opt the whole workflow into Node 24 for javascript actions — silences
+# the "Node.js 20 actions are deprecated" annotations GH emits for
+# actions/upload-artifact@v5, actions/download-artifact@v5, etc. (they
+# still bundle Node 20 runtimes as of v5; v6 wasn't out yet at the
+# time of writing).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   rauc-bundle:
     name: RAUC bundle (dev cert)
@@ -53,6 +61,12 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
+          # The installer is the only Go module we need in this job;
+          # pointing cache-dependency-path at it silences the
+          # 'Dependencies file is not found' warning setup-go emits
+          # when probing the repo root (which has no go.mod — the
+          # modules live under installer/, storage/, packages/*).
+          cache-dependency-path: installer/go.sum
 
       - name: Build installer binary (baked into layered rootfs)
         run: |
@@ -95,6 +109,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
+          cache-dependency-path: installer/go.sum
 
       - uses: dtolnay/rust-toolchain@stable
 
