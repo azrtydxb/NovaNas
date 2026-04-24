@@ -197,10 +197,17 @@ EOF
     mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
   "
 
-  log "pre-pull container images"
-  "$OS_DIR/build/prepull-images.sh" \
-    "$work/var/lib/rancher/k3s/agent/images" \
-    "$OS_DIR/build/image-manifest.txt" || log "prepull skipped (see script output)"
+  # Pre-pulling container images into the rootfs used to bake ~300 MB
+  # of airgap blobs into the squashfs AND the RAUC bundle. Dropped:
+  # first-boot now pulls from the upstream registries (fast on any
+  # reasonable network, zero cost on the ISO). Airgap install will be
+  # re-introduced via a separate side-load archive when/if needed.
+  log "skip container pre-pull (enabled by NOVANAS_PREPULL=1 for airgap builds)"
+  if [[ "${NOVANAS_PREPULL:-0}" == "1" ]]; then
+    "$OS_DIR/build/prepull-images.sh" \
+      "$work/var/lib/rancher/k3s/agent/images" \
+      "$OS_DIR/build/image-manifest.txt" || log "prepull skipped (see script output)"
+  fi
 
   log "enable NovaNas units + users"
   chroot "$work" /bin/bash -eu -o pipefail -c "

@@ -12,7 +12,6 @@
 set +e  # we handle exit status explicitly — do not abort early
 
 LOG=/var/log/novanas-installer.log
-BUNDLE=/run/live/medium/novanas/novanas.raucb
 INSTALLER=/usr/local/bin/novanas-installer
 
 # Always echo to the serial console so `virsh console` / packer VNC shows it.
@@ -64,7 +63,7 @@ elif [[ "$MODE" == "real" ]]; then
     # installer's own --log-file flag.
     exec > /dev/console 2>&1 < /dev/console
     echo "==== launching interactive installer; no poweroff after exit ===="
-    "$INSTALLER" --bundle="$BUNDLE" --log-file="$LOG"
+    "$INSTALLER" --log-file="$LOG"
     rc=$?
     echo "==== installer exited rc=$rc $(date -Is) ===="
     # After a successful real install the installer reboots itself;
@@ -75,18 +74,8 @@ elif [[ "$MODE" == "real" ]]; then
 else
     # Dry-run auto path (CI / packer).
     export NOVANAS_INSTALLER_DRY_RUN=1
-    if [[ ! -f "$BUNDLE" ]]; then
-        echo "WARN: bundle $BUNDLE not found; trying alternate locations" >&2
-        for alt in /cdrom/novanas/novanas.raucb /media/cdrom/novanas/novanas.raucb /run/live/medium/novanas/novanas.raucb; do
-            if [[ -f "$alt" ]]; then
-                BUNDLE="$alt"
-                echo "using bundle: $BUNDLE"
-                break
-            fi
-        done
-    fi
-    echo "invoking: $INSTALLER --auto --bundle=$BUNDLE"
-    "$INSTALLER" --auto --bundle="$BUNDLE" --log-file="$LOG"
+    echo "invoking: $INSTALLER --auto"
+    "$INSTALLER" --auto --log-file="$LOG"
     rc=$?
     echo "==== installer exited rc=$rc $(date -Is) ===="
 fi

@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	bundle := flag.String("bundle", "/cdrom/novanas.raucb", "path to the RAUC bundle to install")
+	bundle := flag.String("bundle", "", "DEPRECATED: ignored. The installer now clones the live squashfs directly onto the target partition.")
 	debug := flag.Bool("debug", false, "verbose logging")
 	skipNet := flag.Bool("skip-network", false, "skip the network step (first boot uses DHCP)")
 	autoDisk := flag.String("auto-disk", "", "unattended: select this disk without prompting")

@@ -53,7 +53,10 @@ log "assembling ISO root at $STAGE"
 mkdir -p "$STAGE/boot/grub" "$STAGE/novanas" "$STAGE/EFI/BOOT" "$STAGE/live"
 
 install -m 0755 "$INSTALLER_BINARY" "$STAGE/novanas/installer"
-install -m 0644 "$BUNDLE"           "$STAGE/novanas/novanas.raucb"
+# The installer no longer needs the .raucb inside the ISO: it clones
+# the live-booted squashfs onto the target partition via unsquashfs.
+# The .raucb remains an artifact of the RAUC bundle job for A/B
+# update use post-install.
 echo "$VERSION" > "$STAGE/novanas/version"
 echo "$CHANNEL" > "$STAGE/novanas/channel"
 

@@ -174,13 +174,14 @@ func (s *InstallStep) doInstall() error {
 		}
 	}
 
-	// 4. Extract RAUC bundle onto OS-A.
-	rauc := &install.RAUCExtractor{DryRun: s.dryRun, Log: s.logf}
-	if err := rauc.Verify(s.bundlePath); err != nil && !s.dryRun {
-		return err
-	}
-	if err := rauc.Extract(s.bundlePath, osRoot); err != nil {
-		return fmt.Errorf("rauc extract: %w", err)
+	// 4. Clone the live squashfs rootfs onto OS-A. The live ISO
+	//    authoritative rootfs is already mounted by live-boot; we
+	//    unsquashfs it to the target partition. No .raucb in the
+	//    ISO; the RAUC bundle flow is reserved for A/B update
+	//    post-install.
+	unsquash := &install.SquashfsExtractor{DryRun: s.dryRun, Log: s.logf}
+	if err := unsquash.Extract(osRoot); err != nil {
+		return fmt.Errorf("squashfs extract: %w", err)
 	}
 
 	// 5. GRUB.
