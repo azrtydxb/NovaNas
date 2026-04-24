@@ -260,15 +260,20 @@ EOF
   if [[ -d "$mnt/boot" ]]; then
     cp -a "$mnt/boot/." "$boot_mnt/"
     # Export the kernel + initrd to well-known paths so the ISO stage
-    # can pick them up. /boot/vmlinuz and /boot/initrd.img are the
-    # canonical symlinks maintained by linux-image postinst.
-    local out_dir
+    # can pick them up. linux-image-amd64 places the real files as
+    # /boot/vmlinuz-<ver> and /boot/initrd.img-<ver>. The /boot/vmlinuz
+    # convenience symlink is maintained by linux-update-symlinks but
+    # isn't always present (e.g. linux-base not installed pre-kernel).
+    # Glob for the versioned files and pick the newest.
+    local out_dir kern_src initrd_src
     out_dir=$(dirname "$OUT")
-    if [[ -e "$mnt/boot/vmlinuz" ]]; then
-      cp -L "$mnt/boot/vmlinuz" "$out_dir/kernel.vmlinuz"
+    kern_src=$(ls -1t "$mnt"/boot/vmlinuz-* 2>/dev/null | head -1)
+    initrd_src=$(ls -1t "$mnt"/boot/initrd.img-* 2>/dev/null | head -1)
+    if [[ -n "$kern_src" ]]; then
+      cp -L "$kern_src" "$out_dir/kernel.vmlinuz"
     fi
-    if [[ -e "$mnt/boot/initrd.img" ]]; then
-      cp -L "$mnt/boot/initrd.img" "$out_dir/kernel.initrd"
+    if [[ -n "$initrd_src" ]]; then
+      cp -L "$initrd_src" "$out_dir/kernel.initrd"
     fi
     rm -rf "$mnt/boot"/*
   fi
