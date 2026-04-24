@@ -89,9 +89,8 @@ actions:
     command: |
       set -eu
       systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-      systemctl enable novanas-persistent.mount || true
-      systemctl enable novanas-overlay-etc.mount || true
-      systemctl enable novanas-overlay-var.mount || true
+      systemctl enable mnt-persistent.mount || true
+      systemctl enable novanas-overlays.service || true
       systemctl enable novanas-firstboot.service || true
       systemctl enable novanas-healthcheck.service || true
 

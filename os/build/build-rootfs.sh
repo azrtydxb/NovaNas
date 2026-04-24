@@ -209,7 +209,7 @@ EOF
     usermod -aG sudo $DEFAULT_USER
     systemctl disable ssh 2>/dev/null || true
     systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-    systemctl enable novanas-persistent.mount novanas-overlay-etc.mount novanas-overlay-var.mount 2>/dev/null || true
+    systemctl enable mnt-persistent.mount novanas-overlays.service 2>/dev/null || true
     systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
     systemctl enable novanas-installer.service 2>/dev/null || true
     systemctl enable novanas-installer-watchdog.service 2>/dev/null || true
