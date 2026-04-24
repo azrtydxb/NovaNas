@@ -32,13 +32,23 @@ source "qemu" "novanas" {
   # novanas.installer=1 + preseed file shipped in the ISO. We simply wait for
   # shutdown on success.
   shutdown_command   = "true"
-  shutdown_timeout   = "30m"
+  # 8m gives the watchdog (5m) + a little slack for qemu teardown.
+  # Dry-run install powers off in <1m on the happy path.
+  shutdown_timeout   = "8m"
 
   # No SSH in the installer phase; packer needs some signal. The installer
   # powers the VM off when done. boot_command is empty because GRUB autoselect
   # handles it.
   boot_command       = []
   communicator       = "none"
+
+  # Pipe the VM's serial console (ttyS0) to a log file so the CI job can
+  # upload it on failure. Kernel cmdline in build-iso.sh already has
+  # console=ttyS0,115200n8 on the default menuentry so this captures the
+  # full boot sequence including live-boot progress and installer logs.
+  qemuargs = [
+    ["-serial", "file:${var.out_dir}/packer-serial.log"],
+  ]
 
   output_directory   = "${var.out_dir}/packer-novanas-${var.version}"
 }

@@ -155,6 +155,15 @@ jobs:
       - name: Build VA images
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os va-only
 
+      - name: Upload serial console log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-serial-${{ github.sha }}
+          path: os/build/out/packer-serial.log
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload VA images
         uses: actions/upload-artifact@v4
         with:
