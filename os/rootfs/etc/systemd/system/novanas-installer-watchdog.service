@@ -1,0 +1,17 @@
+[Unit]
+Description=NovaNas live-boot poweroff watchdog
+# Belt-and-suspenders: even if novanas-installer.service never runs or
+# hangs, this watchdog powers the VM off after 20 minutes so packer's
+# shutdown_timeout catches a clean shutdown rather than timing out.
+# Only active on live boots that carry our installer flag — never on
+# installed systems.
+ConditionKernelCommandLine=novanas.installer
+ConditionKernelCommandLine=boot=live
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'echo "novanas-installer-watchdog: sleeping 20m then poweroff" | tee /dev/console; sleep 1200; echo "novanas-installer-watchdog: timeout — forcing poweroff" | tee /dev/console; /sbin/poweroff -f || (echo o > /proc/sysrq-trigger)'
+
+[Install]
+WantedBy=multi-user.target

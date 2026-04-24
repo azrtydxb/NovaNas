@@ -3,47 +3,25 @@ Description=NovaNas unattended installer (live boot)
 Documentation=https://github.com/azrtydxb/novanas
 # Only run when booted from the installer ISO. live-boot sets boot=live
 # on the kernel cmdline; we also require our own signal so a rescue boot
-# or a misconfigured live session doesn't accidentally trigger an install.
+# doesn't accidentally trigger an install.
 ConditionKernelCommandLine=novanas.installer
 ConditionKernelCommandLine=boot=live
-# Wait for block devices + udev settle before partitioning.
-After=systemd-udev-settle.service local-fs.target network.target
+After=systemd-udev-settle.service local-fs.target
 Wants=systemd-udev-settle.service
-# This unit runs once and powers off; make sure it's the terminal state.
-DefaultDependencies=no
-Conflicts=shutdown.target
-Before=shutdown.target
+# Block any getty from stealing focus while we're running.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=no
-# Log everything to journal + a dedicated file so operators booting into
-# an enterprise recovery image can grab the last log without journald.
+# Route output to both journal and the serial console so packer VNC /
+# virsh console surface installer progress.
 StandardOutput=journal+console
 StandardError=journal+console
-# The installer binary was baked into the rootfs by build-rootfs.sh. The
-# RAUC bundle lives on the ISO at /run/live/medium/novanas/novanas.raucb
-# (live-boot mounts the ISO there). --auto runs non-interactively
-# against the first suitable disk.
-ExecStartPre=/bin/sh -c 'echo "=== NovaNas installer starting $(date -Is) ==="'
-# Kernel cmdline 'novanas.installer=dryrun' (or =1 in CI's fast path) is
-# translated to the env var the installer reads. Anything else — including
-# a bare 'novanas.installer' — falls through as a real install attempt.
-# grub.cfg on the ISO sets novanas.installer=1 for CI/VA builds.
-ExecStart=/bin/sh -c '\
-    if grep -qE "novanas\\.installer\\.mode=dryrun" /proc/cmdline; then \
-        export NOVANAS_INSTALLER_DRY_RUN=1; \
-        echo "novanas-installer: dry-run enabled via kernel cmdline"; \
-    fi; \
-    exec /usr/local/bin/novanas-installer \
-        --auto \
-        --bundle=/run/live/medium/novanas/novanas.raucb \
-        --log-file=/var/log/novanas-installer.log'
-# Power off whether install succeeded or failed so packer's shutdown_timeout
-# trips cleanly. Failure is still surfaced via the journal and the exit
-# status recorded in the log file.
-ExecStopPost=/bin/sh -c 'echo "=== NovaNas installer exited rc=$EXIT_STATUS $(date -Is) ==="; /sbin/poweroff -f'
-TimeoutStartSec=20min
+TTYPath=/dev/tty1
+ExecStart=/usr/local/bin/novanas-live-installer.sh
+TimeoutStartSec=25min
 
 [Install]
 WantedBy=multi-user.target
