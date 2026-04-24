@@ -209,7 +209,12 @@ EOF
     usermod -aG sudo $DEFAULT_USER
     systemctl disable ssh 2>/dev/null || true
     systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-    systemctl enable mnt-persistent.mount novanas-overlays.service 2>/dev/null || true
+    # mnt-persistent.mount + novanas-overlays.service are deliberately NOT
+    # shipped in the live rootfs. Shipping them made systemd materialise a
+    # .device unit for /dev/disk/by-partlabel/Persistent at boot, waiting
+    # ~30s for a partition that only exists post-install. The installer
+    # writes these units from installer/assets/systemd/ onto the target
+    # /etc/systemd/system/ at install time.
     systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
     systemctl enable novanas-installer.service 2>/dev/null || true
     systemctl enable novanas-installer-watchdog.service 2>/dev/null || true

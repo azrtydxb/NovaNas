@@ -17,7 +17,11 @@ ConditionPathExists=/dev/disk/by-partlabel/Persistent
 What=/dev/disk/by-partlabel/Persistent
 Where=/mnt/persistent
 Type=ext4
-Options=rw,noatime,errors=remount-ro
+# nofail: don't fail local-fs.target if the partition is missing (live boot).
+# x-systemd.device-timeout=1: give up on the device unit in 1s instead of
+# the default 90s — critical on live boot where the partition never
+# exists.
+Options=rw,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=1s
 
 [Install]
 WantedBy=local-fs.target

@@ -18,7 +18,8 @@ actions:
     packages:
       - nmstate
       - tpm2-tools
-      - tpm2-abrmd
+      # tpm2-abrmd pulls in a service that waits for /dev/tpm0 ~30s on
+      # boards without a TPM. Install post-install if actually needed.
       - cryptsetup
       - lvm2
       - mdadm
@@ -89,8 +90,10 @@ actions:
     command: |
       set -eu
       systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-      systemctl enable mnt-persistent.mount || true
-      systemctl enable novanas-overlays.service || true
+      # mnt-persistent + novanas-overlays units live in installer/assets/
+      # and are written to the target /etc/systemd/system/ by the installer
+      # at install time (they make boot on the live ISO wait ~30s for an
+      # absent partition otherwise).
       systemctl enable novanas-firstboot.service || true
       systemctl enable novanas-healthcheck.service || true
 
