@@ -49,13 +49,36 @@ log() { printf '[build-iso] %s\n' "$*"; }
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
+# Optional: when NOVANAS_ISO_PACKER_MODE=1 the ISO's default menuentry
+# carries an extra cmdline token that the live-booted installer service
+# translates to NOVANAS_INSTALLER_DRY_RUN=1. This is strictly a CI-speed
+# knob so packer VA builds don't actually write the target disk.
+PACKER_CMDLINE=""
+if [[ "${NOVANAS_ISO_PACKER_MODE:-0}" == "1" ]]; then
+  PACKER_CMDLINE=" novanas.installer.mode=dryrun"
+  echo "[build-iso] NOVANAS_ISO_PACKER_MODE=1 -> menuentry will request dry-run"
+fi
+
 log "assembling ISO root at $STAGE"
-mkdir -p "$STAGE/boot/grub" "$STAGE/novanas" "$STAGE/EFI/BOOT"
+mkdir -p "$STAGE/boot/grub" "$STAGE/novanas" "$STAGE/EFI/BOOT" "$STAGE/live"
 
 install -m 0755 "$INSTALLER_BINARY" "$STAGE/novanas/installer"
 install -m 0644 "$BUNDLE"           "$STAGE/novanas/novanas.raucb"
 echo "$VERSION" > "$STAGE/novanas/version"
 echo "$CHANNEL" > "$STAGE/novanas/channel"
+
+# live-boot expects the squashfs rootfs at /live/filesystem.squashfs by
+# default. build-rootfs.sh --stage=layered exports it to build/out/, and
+# CI downloads it as part of the rauc-bundle artifact. If it's absent we
+# still produce an ISO so earlier pipeline stages can see their failure.
+SQUASHFS="$OS_DIR/build/out/filesystem.squashfs"
+if [[ -f "$SQUASHFS" ]]; then
+  log "placing live rootfs squashfs ($(stat -c%s "$SQUASHFS") bytes)"
+  install -m 0644 "$SQUASHFS" "$STAGE/live/filesystem.squashfs"
+else
+  echo "ERROR: filesystem.squashfs missing at $SQUASHFS — live boot will fail" >&2
+  exit 1
+fi
 
 cat > "$STAGE/boot/grub/grub.cfg" <<EOF
 set timeout=5
@@ -68,17 +91,17 @@ terminal_output --append console
 terminal_input  --append console
 
 menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
-  linux /boot/vmlinuz boot=live console=tty0 console=ttyS0,115200n8 novanas.installer=1
+  linux /boot/vmlinuz boot=live components quiet splash novanas.installer=1${PACKER_CMDLINE} console=tty0 console=ttyS0,115200n8
   initrd /boot/initrd.img
 }
 
 menuentry "Install NovaNas ${VERSION} (serial console)" {
-  linux /boot/vmlinuz boot=live console=ttyS0,115200n8 novanas.installer=1
+  linux /boot/vmlinuz boot=live components novanas.installer=1${PACKER_CMDLINE} console=ttyS0,115200n8
   initrd /boot/initrd.img
 }
 
 menuentry "Rescue shell" {
-  linux /boot/vmlinuz boot=live single console=tty0 console=ttyS0,115200n8
+  linux /boot/vmlinuz boot=live components single console=tty0 console=ttyS0,115200n8
   initrd /boot/initrd.img
 }
 EOF

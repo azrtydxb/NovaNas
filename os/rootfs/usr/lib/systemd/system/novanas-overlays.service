@@ -1,0 +1,22 @@
+[Unit]
+Description=NovaNas overlay filesystems for /etc and /var
+DefaultDependencies=no
+Requires=mnt-persistent.mount
+After=mnt-persistent.mount
+Before=local-fs.target sysinit.target
+# Only an installed system has the Persistent partition to anchor the
+# overlays. The live ISO boot skips this unit.
+ConditionKernelCommandLine=!boot=live
+ConditionPathIsMountPoint=/mnt/persistent
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/mkdir -p /mnt/persistent/etc /mnt/persistent/etc.work /mnt/persistent/var /mnt/persistent/var.work
+ExecStart=/bin/mount -t overlay overlay -o lowerdir=/etc,upperdir=/mnt/persistent/etc,workdir=/mnt/persistent/etc.work /etc
+ExecStart=/bin/mount -t overlay overlay -o lowerdir=/var,upperdir=/mnt/persistent/var,workdir=/mnt/persistent/var.work /var
+ExecStop=/bin/umount /var
+ExecStop=/bin/umount /etc
+
+[Install]
+WantedBy=local-fs.target

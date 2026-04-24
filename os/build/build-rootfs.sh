@@ -168,6 +168,24 @@ EOF
     rm -rf /var/lib/apt/lists/* /tmp/grub-pc.seed
   "
 
+  # Install the compiled installer binary into the rootfs so the live-booted
+  # system has it on PATH without mounting the ISO. CI ensures this artifact
+  # exists before invoking 'make layered'; if it's missing we warn and
+  # continue so local dev builds still work.
+  local installer_bin="${INSTALLER_BINARY:-$OS_DIR/../installer/bin/novanas-installer}"
+  if [[ -f "$installer_bin" ]]; then
+    log "install novanas-installer -> /usr/local/bin"
+    install -m 0755 "$installer_bin" "$work/usr/local/bin/novanas-installer"
+  else
+    log "WARN: installer binary not found at $installer_bin (live ISO autoinstall will fail)"
+  fi
+
+  log "regenerate initramfs (pick up live-boot hooks)"
+  chroot "$work" /bin/bash -eu -o pipefail -c "
+    export DEBIAN_FRONTEND=noninteractive
+    update-initramfs -u -k all
+  "
+
   log "install k3s $K3S_VERSION"
   chroot "$work" /bin/bash -eu -o pipefail -c "
     curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
@@ -191,8 +209,10 @@ EOF
     usermod -aG sudo $DEFAULT_USER
     systemctl disable ssh 2>/dev/null || true
     systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-    systemctl enable novanas-persistent.mount novanas-overlay-etc.mount novanas-overlay-var.mount 2>/dev/null || true
+    systemctl enable mnt-persistent.mount novanas-overlays.service 2>/dev/null || true
     systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
+    systemctl enable novanas-installer.service 2>/dev/null || true
+    systemctl enable novanas-installer-watchdog.service 2>/dev/null || true
     locale-gen $LOCALE
     update-locale LANG=$LOCALE
     ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
@@ -202,6 +222,31 @@ EOF
 
   log "unmount chroot binds"
   umount -R "$work"/dev "$work"/proc "$work"/sys
+
+  # Build filesystem.squashfs for the installer ISO's live-boot layer from
+  # the same rootfs contents we pack into ext4 below. We do it here (rather
+  # than in build-iso.sh) because the chroot is already assembled and we
+  # don't want to re-mount the ext4 image. Excludes: /boot (kernel+initrd
+  # come via the ISO's /boot/ directly), /proc, /sys, /dev, /run.
+  local squash_out
+  squash_out="$(dirname "$OUT")/filesystem.squashfs"
+  if command -v mksquashfs >/dev/null 2>&1; then
+    log "pack rootfs squashfs -> $squash_out"
+    rm -f "$squash_out"
+    # Keep proc/ sys/ dev/ run/ tmp/ as empty directories so live-boot can
+    # bind-mount the host versions onto them post switch_root. Excluding
+    # them entirely (as `-e proc sys dev run tmp` did previously) made
+    # /init panic with "mount point does not exist" during live boot.
+    # Only exclude dirs that carry real content we don't want shipped:
+    # /boot (kernel/initrd live on the ISO, not in squashfs) and the
+    # apt cache.
+    mksquashfs "$work" "$squash_out" \
+      -noappend -comp zstd \
+      -e boot var/cache/apt/archives \
+      -wildcards -e 'var/lib/apt/lists/*'
+  else
+    log "WARN: mksquashfs not available on the host; skipping live squashfs"
+  fi
 
   log "pack rootfs ext4 -> $OUT"
   mkdir -p "$(dirname "$OUT")" "$(dirname "$BOOT_OUT")"
@@ -222,15 +267,20 @@ EOF
   if [[ -d "$mnt/boot" ]]; then
     cp -a "$mnt/boot/." "$boot_mnt/"
     # Export the kernel + initrd to well-known paths so the ISO stage
-    # can pick them up. /boot/vmlinuz and /boot/initrd.img are the
-    # canonical symlinks maintained by linux-image postinst.
-    local out_dir
+    # can pick them up. linux-image-amd64 places the real files as
+    # /boot/vmlinuz-<ver> and /boot/initrd.img-<ver>. The /boot/vmlinuz
+    # convenience symlink is maintained by linux-update-symlinks but
+    # isn't always present (e.g. linux-base not installed pre-kernel).
+    # Glob for the versioned files and pick the newest.
+    local out_dir kern_src initrd_src
     out_dir=$(dirname "$OUT")
-    if [[ -e "$mnt/boot/vmlinuz" ]]; then
-      cp -L "$mnt/boot/vmlinuz" "$out_dir/kernel.vmlinuz"
+    kern_src=$(ls -1t "$mnt"/boot/vmlinuz-* 2>/dev/null | head -1)
+    initrd_src=$(ls -1t "$mnt"/boot/initrd.img-* 2>/dev/null | head -1)
+    if [[ -n "$kern_src" ]]; then
+      cp -L "$kern_src" "$out_dir/kernel.vmlinuz"
     fi
-    if [[ -e "$mnt/boot/initrd.img" ]]; then
-      cp -L "$mnt/boot/initrd.img" "$out_dir/kernel.initrd"
+    if [[ -n "$initrd_src" ]]; then
+      cp -L "$initrd_src" "$out_dir/kernel.initrd"
     fi
     rm -rf "$mnt/boot"/*
   fi

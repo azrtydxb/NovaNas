@@ -4,6 +4,9 @@ DefaultDependencies=no
 Conflicts=umount.target
 Before=local-fs.target umount.target
 After=systemd-fsck@dev-disk-by\x2dpartlabel-Persistent.service
+# Skip on live boot — the Persistent partition only exists on a
+# disk-installed system.
+ConditionKernelCommandLine=!boot=live
 
 [Mount]
 What=/dev/disk/by-partlabel/Persistent
