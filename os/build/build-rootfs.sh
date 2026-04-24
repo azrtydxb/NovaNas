@@ -83,10 +83,18 @@ build_base() {
   log "mmdebstrap $SUITE -> $OUT"
   mkdir -p "$(dirname "$OUT")"
 
+  # Pass each component via a separate --components flag. Some
+  # mmdebstrap versions don't split comma-separated values and pass
+  # the whole string through to apt's sources.list, producing a
+  # "component misspelt in sources.list?" error on apt update.
+  comp_args=()
+  for c in $COMPONENTS; do
+    comp_args+=("--components=$c")
+  done
   mmdebstrap \
     --variant="$VARIANT" \
     --architectures="$ARCH" \
-    --components="$(echo "$COMPONENTS" | tr ' ' ',')" \
+    "${comp_args[@]}" \
     --include="$INCLUDE" \
     "$SUITE" \
     "$OUT" \
