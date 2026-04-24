@@ -46,15 +46,23 @@ jobs:
       - name: Install build deps
         run: |
           sudo apt-get update
-          # mkosi ships in trixie; on older runners fall back to pip.
+          # Install everything EXCEPT mkosi from apt — we always install
+          # mkosi from pip to guarantee a modern (v25+) release. The
+          # apt-packaged mkosi on older Debian/Ubuntu is pre-v15, which
+          # predates the `Profile=` + `build` subcommand + `--directory`
+          # arg surface we rely on in os/mkosi.conf.d/.
           sudo apt-get install -y \
-            mkosi systemd-container \
+            systemd-container \
             rauc squashfs-tools xorriso \
             grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             e2fsprogs parted \
             debian-archive-keyring \
-            || { sudo apt-get install -y python3-pip && \
-                 sudo pip3 install --break-system-packages mkosi; }
+            python3-pip python3-venv \
+            bubblewrap
+          # Force a modern mkosi. --break-system-packages is needed on
+          # PEP-668 distros; pinned to v25.* so we don't accidentally
+          # grab a breaking HEAD later.
+          sudo pip3 install --break-system-packages --upgrade 'mkosi>=25,<26'
           mkosi --version
 
       - uses: actions/setup-go@v6
