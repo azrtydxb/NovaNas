@@ -58,24 +58,25 @@ jobs:
             grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             e2fsprogs parted \
             debian-archive-keyring \
-            bubblewrap curl software-properties-common
+            bubblewrap curl ca-certificates
 
-          # mkosi v25 requires Python >= 3.9. The self-hosted runner is
-          # Ubuntu 20.04 focal with /usr/bin/python3 == 3.8. Pull a
-          # modern Python from the deadsnakes PPA. Skip if a suitable
-          # 3.11 already exists (persistent runner, subsequent runs).
-          if ! command -v python3.11 >/dev/null; then
-            sudo add-apt-repository -y ppa:deadsnakes/ppa
-            sudo apt-get update
-            sudo apt-get install -y python3.11 python3.11-venv python3.11-distutils
+          # mkosi v25 requires Python >= 3.9. The self-hosted runner
+          # is Ubuntu 20.04 focal (system Python 3.8), and deadsnakes
+          # PPA dropped focal after its 2025-04 EOL so python3.11
+          # from apt is no longer an option.
+          # Use uv — it installs a self-contained Python under
+          # /usr/local and then pip-installs mkosi. Host-distro
+          # independent.
+          if ! command -v uv >/dev/null; then
+            curl -LsSf https://astral.sh/uv/install.sh \
+              | sudo UV_INSTALL_DIR=/usr/local/bin sh
           fi
-
-          # Venv at a stable path so a persistent runner caches it
-          # across workflow runs.
+          # Re-install the venv if mkosi is missing (fresh runner / upgrade).
           if [ ! -x /opt/mkosi-venv/bin/mkosi ]; then
             sudo rm -rf /opt/mkosi-venv
-            sudo python3.11 -m venv /opt/mkosi-venv
+            sudo /usr/local/bin/uv venv /opt/mkosi-venv --python 3.12
           fi
+          sudo /opt/mkosi-venv/bin/python -m ensurepip --upgrade || true
           sudo /opt/mkosi-venv/bin/pip install --upgrade pip
           sudo /opt/mkosi-venv/bin/pip install --upgrade 'mkosi>=25,<26'
           echo "/opt/mkosi-venv/bin" >> "$GITHUB_PATH"
