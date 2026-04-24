@@ -25,6 +25,11 @@ permissions:
   packages: write   # push to ghcr
   id-token: write   # cosign keyless
 
+# Opt javascript actions into Node 24 — silences deprecation warnings
+# for actions/upload-artifact@v5 etc. that still bundle Node 20.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-sign-release:
     name: Build, sign, release
