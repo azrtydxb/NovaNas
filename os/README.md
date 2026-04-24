@@ -25,31 +25,51 @@ v1 ships **amd64 only**. arm64 plumbing stays wired but is not produced.
 Host tooling required to drive a build (run on Debian/Ubuntu or inside a
 privileged build container):
 
-- `mmdebstrap` >= 1.4
-- `debootstrap` (fallback)
+- `mkosi` >= 25 (ships in Debian trixie; `pip install mkosi` elsewhere)
+- `systemd-container` (`systemd-nspawn`, used by mkosi)
 - `rauc` >= 1.10 (bundle tool)
 - `squashfs-tools`, `e2fsprogs`, `dosfstools`
 - `xorriso` and `grub-mkrescue` (ISO builder)
 - `packer` >= 1.9 (virtual appliances)
 - `qemu-system-x86_64`, `qemu-utils` (`qemu-img`)
-- `ovftool` (optional, for `.ova` output) or fallback tar+OVF
-- `skopeo` or `crane` (container image pre-pull)
 - `openssl` (for placeholder key generation)
 
 Root/`fakeroot` + loop-mount privileges are required for most targets. Run
 inside a privileged container (`--privileged --device /dev/loop-control`) or a
 dedicated build VM.
 
-## Build targets
+## Build flow
+
+The rootfs is built by [mkosi](https://github.com/systemd/mkosi) from
+`os/mkosi.conf` + `os/mkosi.conf.d/*.conf`. Two profiles are declared:
+
+- **live** — rootfs baked into the installer ISO. Includes the journald
+  no-rate-limit drop-in for stuck-boot debug visibility.
+- **update** — rootfs packed into the A/B RAUC bundle. No debug drop-ins.
+
+```
+mkosi --profile=live   build  -> build/out/mkosi/live/image/    (tree)
+mkosi --profile=update build  -> build/out/mkosi/update/image/  (tree)
+                                     │
+build-images.sh --profile=live       │   -> filesystem.squashfs + kernel.*
+build-images.sh --profile=update     │   -> rootfs.img + boot.img + kernel.*
+                                     │
+build-rauc-bundle.sh                 │   -> novanas-<ver>.raucb
+build-iso.sh                         │   -> novanas-<ver>.iso
+```
+
+### Make targets
 
 ```sh
-make base       # Debian minimal rootfs via mmdebstrap -> build/base-rootfs.tar
-make layered    # Add NovaNas layer (k3s, Helm chart, pre-pulled images)
-make bundle     # RAUC .raucb (unsigned by CI; signed offline for release)
-make iso        # Hybrid bootable ISO including installer + RAUC bundle
-make va         # All virtual appliance images via Packer
-make all        # base -> layered -> bundle -> iso -> va
-make clean      # Nuke $(BUILD_DIR)
+make mkosi-live       # Bootstrap live rootfs tree
+make mkosi-update     # Bootstrap update rootfs tree
+make live-artifacts   # Squashfs + kernel + initrd
+make update-artifacts # ext4 rootfs.img + boot.img
+make bundle           # RAUC .raucb (update-artifacts then rauc bundle)
+make iso              # Hybrid installer ISO (live-artifacts then grub-mkrescue)
+make va               # Virtual appliance images via Packer
+make all              # bundle + iso + va
+make clean            # Nuke $(BUILD_DIR)
 ```
 
 Variables:
@@ -143,19 +163,34 @@ handled in `.github/workflows/`, not here.
 os/
 ├── README.md                (this file)
 ├── Makefile                 (orchestrates build targets)
-├── mmdebstrap.conf          (base Debian build configuration)
-├── recipes/
-│   ├── base.yaml            (debos-compatible base recipe)
-│   └── layered.yaml         (NovaNas layer on top of base)
-├── rootfs/                  (tree copied into the image)
+├── mkosi.conf               (top-level mkosi configuration)
+├── mkosi.conf.d/            (packages, skeleton, profile-gated drop-ins)
+├── mkosi.profiles/          (live + update profile declarations)
+├── mkosi.postinst           (chroot postinst: k3s, user, hostname, initramfs)
+├── mkosi.extra-live/        (files added to live profile only, e.g. journald)
+├── rootfs/                  (tree copied into both profiles via ExtraTrees=)
 │   ├── etc/...
 │   └── usr/local/bin/...
 ├── rauc/                    (bundle manifest + placeholder keys)
 ├── overlays/                (overlayfs / mount-unit configuration)
-├── build/                   (build scripts)
+├── build/
+│   ├── build-images.sh      (mkosi tree -> squashfs / ext4 / kernel export)
+│   ├── build-iso.sh         (thin grub-mkrescue wrapper)
+│   ├── build-rauc-bundle.sh (rauc bundle wrapper)
+│   └── build-va.sh          (Packer driver)
 ├── packer/                  (VA templates)
 └── tests/smoke-qemu.sh      (QEMU smoke test)
 ```
+
+### Why a thin ISO wrapper remains
+
+mkosi v25's `Format=disk` produces a UEFI GPT disk image with systemd-boot or
+grub installed directly, which is the right answer for cloud VM images but not
+for a Debian Live installer ISO — which boots via `boot=live components toram`
+and expects `/live/filesystem.squashfs` plus our three-entry grub.cfg (default,
+serial, rescue). `build-iso.sh` is ~70 lines around `grub-mkrescue` that takes
+the mkosi-built squashfs + kernel + initrd and wraps them into the hybrid
+BIOS/UEFI ISO the operator flashes.
 
 ## CI integration
 
