@@ -103,6 +103,17 @@ menuentry "Rescue shell" {
   linux /boot/vmlinuz boot=live components single console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
+
+# Diagnostic: full systemd verbose logging to the kernel console. Use
+# when boot stalls and we need to see which unit systemd is stuck on.
+# systemd.log_level=debug prints every transaction/unit decision.
+# systemd.log_target=kmsg routes to /dev/kmsg so the console shows it.
+# systemd.log_time=1 timestamps each line.
+# systemd.show_status=1 prevents plymouth from hiding unit messages.
+menuentry "Debug: verbose systemd boot" {
+  linux /boot/vmlinuz boot=live components novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on systemd.log_level=info systemd.log_target=kmsg systemd.log_time=1 systemd.show_status=1
+  initrd /boot/initrd.img
+}
 EOF
 
 log "placing kernel/initrd stubs (CI injects real ones from the layered image)"
