@@ -45,25 +45,35 @@ jobs:
 
       - name: Install build deps
         run: |
+          set -eu
           sudo apt-get update
-          # Install everything EXCEPT mkosi from apt — we always install
-          # mkosi from pip to guarantee a modern (v25+) release. The
-          # apt-packaged mkosi on older Debian/Ubuntu is pre-v15, which
-          # predates the `Profile=` + `build` subcommand + `--directory`
-          # arg surface we rely on in os/mkosi.conf.d/.
+          # Everything except mkosi from apt. mkosi is always installed
+          # from pip into a dedicated venv so we get a modern (>=25)
+          # release regardless of the runner's distro vintage — Ubuntu
+          # focal's apt has pre-v15, Debian trixie has v22. Our
+          # mkosi.conf.d layout is v25 syntax.
           sudo apt-get install -y \
             systemd-container \
             rauc squashfs-tools xorriso \
             grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             e2fsprogs parted \
             debian-archive-keyring \
-            python3-pip python3-venv \
-            bubblewrap
-          # Force a modern mkosi. --break-system-packages is needed on
-          # PEP-668 distros; pinned to v25.* so we don't accidentally
-          # grab a breaking HEAD later.
-          sudo pip3 install --break-system-packages --upgrade 'mkosi>=25,<26'
-          mkosi --version
+            python3 python3-venv python3-pip \
+            bubblewrap curl
+
+          # Dedicated venv so pip works on PEP-668 distros without
+          # --break-system-packages (old pip on focal doesn't support
+          # that flag anyway). Venv lives outside the workspace so it
+          # survives between runs on a persistent self-hosted runner.
+          sudo mkdir -p /opt/mkosi-venv
+          if [ ! -x /opt/mkosi-venv/bin/mkosi ]; then
+            sudo python3 -m venv /opt/mkosi-venv
+          fi
+          sudo /opt/mkosi-venv/bin/pip install --upgrade pip
+          sudo /opt/mkosi-venv/bin/pip install --upgrade 'mkosi>=25,<26'
+          # Make `mkosi` resolvable for the rest of the job steps.
+          echo "/opt/mkosi-venv/bin" >> "$GITHUB_PATH"
+          /opt/mkosi-venv/bin/mkosi --version
 
       - uses: actions/setup-go@v6
         with:
