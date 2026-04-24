@@ -21,8 +21,6 @@ env:
   S3_ENDPOINT: https://localhost:9000
   S3_ACCESS_KEY: novanas
   S3_SECRET_KEY: novanas-secret
-
-env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
