@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install build deps
         run: |
@@ -50,7 +50,7 @@ jobs:
             dosfstools e2fsprogs parted \
             debian-archive-keyring
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
 
@@ -68,7 +68,7 @@ jobs:
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os bundle
 
       - name: Upload RAUC bundle + kernel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rauc-bundle-${{ github.sha }}
           path: |
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install deps
         run: |
@@ -92,13 +92,13 @@ jobs:
           sudo apt-get install -y \
             xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: rauc-bundle-${{ github.sha }}
           path: os/build/out/
@@ -121,7 +121,7 @@ jobs:
           NOVANAS_ISO_PACKER_MODE: "1"
 
       - name: Upload ISO
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: iso-${{ github.sha }}
           path: os/build/out/*.iso
@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install KVM + Packer
         run: |
@@ -147,7 +147,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y packer
           sudo chmod 666 /dev/kvm || true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: iso-${{ github.sha }}
           path: os/build/out/
@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload serial console log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: packer-serial-${{ github.sha }}
           path: os/build/out/packer-serial.log
@@ -165,7 +165,7 @@ jobs:
           retention-days: 14
 
       - name: Upload VA images
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: va-images-${{ github.sha }}
           path: |

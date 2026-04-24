@@ -29,9 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -53,7 +53,7 @@ jobs:
         run: pnpm test
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-report
           path: |
@@ -71,8 +71,8 @@ jobs:
     timeout-minutes: 30
     needs: ui-e2e
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with: { go-version: "1.25" }
       - uses: helm/kind-action@v1
         with:
@@ -102,12 +102,12 @@ jobs:
     timeout-minutes: 60
     needs: ui-e2e
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22 }
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: "1.25" }
       - uses: helm/kind-action@v1
         with:
@@ -139,7 +139,7 @@ jobs:
           go run go-sdk-smoke.go
       - name: Upload S3 artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: s3-compat-artifacts
           path: e2e/artifacts
@@ -158,11 +158,11 @@ jobs:
     timeout-minutes: 40
     needs: ui-e2e
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
       - name: Download ISO artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: novanas-iso
           path: os/build/
@@ -174,7 +174,7 @@ jobs:
           TIMEOUT_SEC: "1500"
       - name: Upload serial log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: qemu-serial-log
           path: e2e/qemu/artifacts/serial.log
@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install QEMU + OpenSSH
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils openssh-client
       - name: Download prior release ISO
@@ -197,7 +197,7 @@ jobs:
         env:
           PRIOR_TAG: ${{ vars.NOVANAS_PRIOR_STABLE_TAG || 'v26.04.0' }}
       - name: Download current RAUC bundle artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: novanas-raucb
           path: os/build/
@@ -208,7 +208,7 @@ jobs:
           NEW_BUNDLE: ${{ github.workspace }}/os/build/novanas.raucb
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: upgrade-artifacts
           path: e2e/qemu/artifacts/upgrade
@@ -222,7 +222,7 @@ jobs:
     timeout-minutes: 60
     needs: ui-e2e
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sudo apt-get update && sudo apt-get install -y fio jq nfs-common cifs-utils
       - uses: helm/kind-action@v1
         with:
@@ -240,7 +240,7 @@ jobs:
       - name: SMB throughput
         run: bash e2e/qemu/performance/smb-throughput.sh
         continue-on-error: true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: perf-csv

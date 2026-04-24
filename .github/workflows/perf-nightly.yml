@@ -32,7 +32,7 @@ jobs:
       THRESHOLD_PCT: ${{ github.event.inputs.threshold_pct || '10' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install QEMU + fio + nfs-utils + smbclient
         run: |
@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: perf-results
           path: perf/results/**
@@ -78,7 +78,7 @@ jobs:
 
       - name: Open issue on regression
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
