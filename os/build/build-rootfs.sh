@@ -168,6 +168,24 @@ EOF
     rm -rf /var/lib/apt/lists/* /tmp/grub-pc.seed
   "
 
+  # Install the compiled installer binary into the rootfs so the live-booted
+  # system has it on PATH without mounting the ISO. CI ensures this artifact
+  # exists before invoking 'make layered'; if it's missing we warn and
+  # continue so local dev builds still work.
+  local installer_bin="${INSTALLER_BINARY:-$OS_DIR/../installer/bin/novanas-installer}"
+  if [[ -f "$installer_bin" ]]; then
+    log "install novanas-installer -> /usr/local/bin"
+    install -m 0755 "$installer_bin" "$work/usr/local/bin/novanas-installer"
+  else
+    log "WARN: installer binary not found at $installer_bin (live ISO autoinstall will fail)"
+  fi
+
+  log "regenerate initramfs (pick up live-boot hooks)"
+  chroot "$work" /bin/bash -eu -o pipefail -c "
+    export DEBIAN_FRONTEND=noninteractive
+    update-initramfs -u -k all
+  "
+
   log "install k3s $K3S_VERSION"
   chroot "$work" /bin/bash -eu -o pipefail -c "
     curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
@@ -202,6 +220,24 @@ EOF
 
   log "unmount chroot binds"
   umount -R "$work"/dev "$work"/proc "$work"/sys
+
+  # Build filesystem.squashfs for the installer ISO's live-boot layer from
+  # the same rootfs contents we pack into ext4 below. We do it here (rather
+  # than in build-iso.sh) because the chroot is already assembled and we
+  # don't want to re-mount the ext4 image. Excludes: /boot (kernel+initrd
+  # come via the ISO's /boot/ directly), /proc, /sys, /dev, /run.
+  local squash_out
+  squash_out="$(dirname "$OUT")/filesystem.squashfs"
+  if command -v mksquashfs >/dev/null 2>&1; then
+    log "pack rootfs squashfs -> $squash_out"
+    rm -f "$squash_out"
+    mksquashfs "$work" "$squash_out" \
+      -noappend -comp zstd \
+      -e boot proc sys dev run tmp var/cache/apt/archives \
+      -wildcards -e 'var/lib/apt/lists/*'
+  else
+    log "WARN: mksquashfs not available on the host; skipping live squashfs"
+  fi
 
   log "pack rootfs ext4 -> $OUT"
   mkdir -p "$(dirname "$OUT")" "$(dirname "$BOOT_OUT")"

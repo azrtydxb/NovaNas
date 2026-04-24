@@ -50,11 +50,19 @@ jobs:
             dosfstools e2fsprogs parted \
             debian-archive-keyring
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build installer binary (baked into layered rootfs)
+        run: |
+          cd installer && GOWORK=off go build -o bin/novanas-installer .
+
       - name: Build base rootfs (mmdebstrap)
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os base
 
       - name: Build layered rootfs
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os layered
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,INSTALLER_BINARY make -C os layered
 
       - name: Build RAUC bundle (unsigned dev cert)
         run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os bundle
@@ -67,6 +75,7 @@ jobs:
             os/build/out/*.raucb
             os/build/out/kernel.vmlinuz
             os/build/out/kernel.initrd
+            os/build/out/filesystem.squashfs
           retention-days: 14
 
   iso-build:
