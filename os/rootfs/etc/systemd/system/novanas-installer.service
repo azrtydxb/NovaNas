@@ -13,15 +13,20 @@ Conflicts=getty@tty1.service
 After=getty@tty1.service
 
 [Service]
-Type=oneshot
+Type=idle
 RemainAfterExit=no
-# Route output to both journal and the serial console so packer VNC /
-# virsh console surface installer progress.
-StandardOutput=journal+console
-StandardError=journal+console
+# Take the real console so the interactive TUI installer (bubbletea) can
+# draw a proper terminal on bare-metal boots. The launcher script picks
+# dry-run vs interactive based on DMI; in dry-run the tee→journal
+# redirect inside the script replaces these anyway.
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
 TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
 ExecStart=/usr/local/bin/novanas-live-installer.sh
-TimeoutStartSec=25min
+TimeoutStartSec=0
 
 [Install]
 WantedBy=multi-user.target

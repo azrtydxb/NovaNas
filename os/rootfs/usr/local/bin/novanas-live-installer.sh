@@ -21,16 +21,60 @@ exec > >(tee -a "$LOG" > /dev/console) 2>&1
 echo "==== novanas-live-installer: starting $(date -Is) ===="
 echo "kernel cmdline: $(cat /proc/cmdline)"
 
-# Honor packer dry-run opt-in via kernel cmdline. grub.cfg on ISOs built
-# with NOVANAS_ISO_PACKER_MODE=1 appends novanas.installer.mode=dryrun.
-if grep -qE 'novanas\.installer\.mode=dryrun' /proc/cmdline; then
-    export NOVANAS_INSTALLER_DRY_RUN=1
-    echo "novanas-live-installer: dry-run enabled via kernel cmdline"
+# Single-ISO policy: the same image serves bare-metal operators and the
+# packer VA CI build. Runtime environment detection picks the mode:
+#
+#   * Bare-metal / real VM (operator laptop, production NAS, real
+#     hypervisor) — drop into the interactive TUI installer. The
+#     operator selects disks, confirms the destructive step, and the
+#     installer writes the bundle to the chosen hardware.
+#
+#   * QEMU TCG or KVM-backed CI VM (packer build) — no TTY attached,
+#     SMBIOS product name is "Standard PC (…)" / sys_vendor is "QEMU"
+#     or "Red Hat". Run --auto with NOVANAS_INSTALLER_DRY_RUN=1 so the
+#     installer exercises the full pipeline without writing to the
+#     disk, then powers off.
+#
+# The kernel cmdline override (novanas.installer.mode=dryrun or
+# novanas.installer.mode=real) still wins if explicitly set — useful
+# for forcing dry-run on real hardware when smoke-testing the ISO.
+MODE=""
+case "$(cat /proc/cmdline)" in
+    *novanas.installer.mode=dryrun*) MODE=dryrun ;;
+    *novanas.installer.mode=real*)   MODE=real ;;
+esac
+
+if [[ -z "$MODE" ]]; then
+    sys_vendor=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo unknown)
+    product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)
+    echo "dmi sys_vendor='$sys_vendor' product='$product'"
+    case "$sys_vendor" in
+        QEMU|"Red Hat"|Bochs|innotek\ GmbH) MODE=dryrun ;;
+        *) MODE=real ;;
+    esac
 fi
+echo "novanas-live-installer: detected mode=$MODE"
 
 if [[ ! -x "$INSTALLER" ]]; then
     echo "FATAL: $INSTALLER missing; cannot continue" >&2
+elif [[ "$MODE" == "real" ]]; then
+    # Interactive TUI path. Hand the controlling TTY to the installer
+    # so its bubbletea renderer can draw. Do NOT tee stdout away from
+    # it — that breaks termios. We still capture to the log via the
+    # installer's own --log-file flag.
+    exec > /dev/console 2>&1 < /dev/console
+    echo "==== launching interactive installer; no poweroff after exit ===="
+    "$INSTALLER" --bundle="$BUNDLE" --log-file="$LOG"
+    rc=$?
+    echo "==== installer exited rc=$rc $(date -Is) ===="
+    # After a successful real install the installer reboots itself;
+    # if it returns without rebooting, drop the operator to a shell
+    # rather than pulling the rug.
+    echo "drop to rescue shell — Ctrl-D to poweroff"
+    exec /bin/bash -l
 else
+    # Dry-run auto path (CI / packer).
+    export NOVANAS_INSTALLER_DRY_RUN=1
     if [[ ! -f "$BUNDLE" ]]; then
         echo "WARN: bundle $BUNDLE not found; trying alternate locations" >&2
         for alt in /cdrom/novanas/novanas.raucb /media/cdrom/novanas/novanas.raucb /run/live/medium/novanas/novanas.raucb; do
@@ -41,7 +85,6 @@ else
             fi
         done
     fi
-
     echo "invoking: $INSTALLER --auto --bundle=$BUNDLE"
     "$INSTALLER" --auto --bundle="$BUNDLE" --log-file="$LOG"
     rc=$?

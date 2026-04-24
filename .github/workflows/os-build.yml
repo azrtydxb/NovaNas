@@ -112,13 +112,11 @@ jobs:
           fi
 
       - name: Build ISO
-        # NOVANAS_ISO_PACKER_MODE=1 flips the default menuentry into a
-        # dry-run install (no disk writes) so the downstream packer VA job
-        # finishes in minutes rather than waiting on a full RAUC extract.
-        # Remove once we publish a separate operator-facing ISO.
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,NOVANAS_ISO_PACKER_MODE make -C os iso-only
-        env:
-          NOVANAS_ISO_PACKER_MODE: "1"
+        # Single ISO for CI + operator. The live-booted installer
+        # launcher detects the runtime environment via DMI: QEMU/KVM
+        # → auto dry-run; real hardware → interactive TUI. No build-
+        # time switch needed.
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os iso-only
 
       - name: Upload ISO
         uses: actions/upload-artifact@v5
