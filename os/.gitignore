@@ -7,6 +7,10 @@
 !build/*.txt
 build/out/
 
+# mkosi transient build context: the Makefile drops the installer binary here
+# before invoking mkosi so mkosi.postinst can pick it up via /work/src/.
+mkosi.build-src/
+
 # Also un-ignore rootfs/usr/local/bin (was caught by `bin/` in root gitignore).
 !rootfs/usr/local/bin/
 !rootfs/usr/local/bin/*.sh
