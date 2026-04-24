@@ -15,7 +15,7 @@
 //!    volume is restored from the persistent metadata store on dataplane
 //!    startup, so re-creating the bdev is stateless from the caller's POV.
 //! 3. We pick the first free `/dev/nbdN` (N ∈ [0, 16)) by probing with
-//!    `spdk_nbd_disk_find_by_nbd_path` on the reactor thread.
+//!    `/sys/class/block/nbdN/pid` (kernel-side in-use indicator).
 //! 4. We dispatch `spdk_nbd_start(bdev_name, nbd_path, cb, ctx)` to the
 //!    reactor and block on a `Completion<i32>` until the callback fires.
 //! 5. We store `(volume_name → (nbd_path, spdk_nbd_disk*))` in the
@@ -125,7 +125,7 @@ impl NbdManager {
     ///
     /// `probe` receives the candidate path and returns true iff that
     /// path is free from SPDK's perspective. In production this is
-    /// `spdk_nbd_disk_find_by_nbd_path(path).is_null()`; tests inject a
+    /// `/sys/class/block/<basename>/pid` missing; tests inject a
     /// pure function.
     fn pick_free_slot<F>(&self, probe: F) -> Result<String>
     where
@@ -267,19 +267,18 @@ fn ensure_bdev_registered(volume_name: &str, size_bytes: u64) -> Result<()> {
     Ok(())
 }
 
-/// True iff SPDK reports that `nbd_path` is not currently exporting any
-/// disk. Runs on the reactor thread.
+/// True iff `nbd_path` is not currently in use. SPDK v24.09 does not
+/// expose a public "find disk by path" helper (only in nbd_internal.h),
+/// so we ask the Linux kernel instead: `/sys/class/block/nbdN/pid`
+/// exists iff a userspace process has claimed the nbd device. This is
+/// what `nbd-client -c` does under the hood.
 #[cfg(feature = "spdk-sys")]
 fn spdk_path_is_free(nbd_path: &str) -> bool {
-    let path = nbd_path.to_string();
-    reactor_dispatch::dispatch_sync(move || {
-        let c_path = match std::ffi::CString::new(path.as_str()) {
-            Ok(s) => s,
-            Err(_) => return false,
-        };
-        let disk = unsafe { ffi::spdk_nbd_disk_find_by_nbd_path(c_path.as_ptr()) };
-        disk.is_null()
-    })
+    let basename = std::path::Path::new(nbd_path)
+        .file_name()
+        .and_then(|s| s.to_str());
+    let Some(name) = basename else { return false };
+    !std::path::Path::new(&format!("/sys/class/block/{}/pid", name)).exists()
 }
 
 /// Call `spdk_nbd_start` on the reactor, block until the callback fires,
