@@ -211,6 +211,7 @@ EOF
     systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
     systemctl enable novanas-persistent.mount novanas-overlay-etc.mount novanas-overlay-var.mount 2>/dev/null || true
     systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
+    systemctl enable novanas-installer.service 2>/dev/null || true
     locale-gen $LOCALE
     update-locale LANG=$LOCALE
     ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
