@@ -233,9 +233,16 @@ EOF
   if command -v mksquashfs >/dev/null 2>&1; then
     log "pack rootfs squashfs -> $squash_out"
     rm -f "$squash_out"
+    # Keep proc/ sys/ dev/ run/ tmp/ as empty directories so live-boot can
+    # bind-mount the host versions onto them post switch_root. Excluding
+    # them entirely (as `-e proc sys dev run tmp` did previously) made
+    # /init panic with "mount point does not exist" during live boot.
+    # Only exclude dirs that carry real content we don't want shipped:
+    # /boot (kernel/initrd live on the ISO, not in squashfs) and the
+    # apt cache.
     mksquashfs "$work" "$squash_out" \
       -noappend -comp zstd \
-      -e boot proc sys dev run tmp var/cache/apt/archives \
+      -e boot var/cache/apt/archives \
       -wildcards -e 'var/lib/apt/lists/*'
   else
     log "WARN: mksquashfs not available on the host; skipping live squashfs"
