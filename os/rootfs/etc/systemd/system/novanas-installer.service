@@ -26,10 +26,19 @@ StandardError=journal+console
 # (live-boot mounts the ISO there). --auto runs non-interactively
 # against the first suitable disk.
 ExecStartPre=/bin/sh -c 'echo "=== NovaNas installer starting $(date -Is) ==="'
-ExecStart=/usr/local/bin/novanas-installer \
-    --auto \
-    --bundle=/run/live/medium/novanas/novanas.raucb \
-    --log-file=/var/log/novanas-installer.log
+# Kernel cmdline 'novanas.installer=dryrun' (or =1 in CI's fast path) is
+# translated to the env var the installer reads. Anything else — including
+# a bare 'novanas.installer' — falls through as a real install attempt.
+# grub.cfg on the ISO sets novanas.installer=1 for CI/VA builds.
+ExecStart=/bin/sh -c '\
+    if grep -qE "novanas\\.installer\\.mode=dryrun" /proc/cmdline; then \
+        export NOVANAS_INSTALLER_DRY_RUN=1; \
+        echo "novanas-installer: dry-run enabled via kernel cmdline"; \
+    fi; \
+    exec /usr/local/bin/novanas-installer \
+        --auto \
+        --bundle=/run/live/medium/novanas/novanas.raucb \
+        --log-file=/var/log/novanas-installer.log'
 # Power off whether install succeeded or failed so packer's shutdown_timeout
 # trips cleanly. Failure is still surfaced via the journal and the exit
 # status recorded in the log file.

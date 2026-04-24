@@ -112,7 +112,13 @@ jobs:
           fi
 
       - name: Build ISO
-        run: sudo --preserve-env=VERSION,CHANNEL,ARCH make -C os iso-only
+        # NOVANAS_ISO_PACKER_MODE=1 flips the default menuentry into a
+        # dry-run install (no disk writes) so the downstream packer VA job
+        # finishes in minutes rather than waiting on a full RAUC extract.
+        # Remove once we publish a separate operator-facing ISO.
+        run: sudo --preserve-env=VERSION,CHANNEL,ARCH,NOVANAS_ISO_PACKER_MODE make -C os iso-only
+        env:
+          NOVANAS_ISO_PACKER_MODE: "1"
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4

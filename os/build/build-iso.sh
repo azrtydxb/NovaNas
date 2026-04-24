@@ -49,6 +49,16 @@ log() { printf '[build-iso] %s\n' "$*"; }
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
+# Optional: when NOVANAS_ISO_PACKER_MODE=1 the ISO's default menuentry
+# carries an extra cmdline token that the live-booted installer service
+# translates to NOVANAS_INSTALLER_DRY_RUN=1. This is strictly a CI-speed
+# knob so packer VA builds don't actually write the target disk.
+PACKER_CMDLINE=""
+if [[ "${NOVANAS_ISO_PACKER_MODE:-0}" == "1" ]]; then
+  PACKER_CMDLINE=" novanas.installer.mode=dryrun"
+  echo "[build-iso] NOVANAS_ISO_PACKER_MODE=1 -> menuentry will request dry-run"
+fi
+
 log "assembling ISO root at $STAGE"
 mkdir -p "$STAGE/boot/grub" "$STAGE/novanas" "$STAGE/EFI/BOOT" "$STAGE/live"
 
@@ -81,12 +91,12 @@ terminal_output --append console
 terminal_input  --append console
 
 menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
-  linux /boot/vmlinuz boot=live components quiet splash novanas.installer=1 console=tty0 console=ttyS0,115200n8
+  linux /boot/vmlinuz boot=live components quiet splash novanas.installer=1${PACKER_CMDLINE} console=tty0 console=ttyS0,115200n8
   initrd /boot/initrd.img
 }
 
 menuentry "Install NovaNas ${VERSION} (serial console)" {
-  linux /boot/vmlinuz boot=live components novanas.installer=1 console=ttyS0,115200n8
+  linux /boot/vmlinuz boot=live components novanas.installer=1${PACKER_CMDLINE} console=ttyS0,115200n8
   initrd /boot/initrd.img
 }
 
