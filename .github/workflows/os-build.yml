@@ -30,7 +30,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # contents: write so the iso-build job can publish the rolling-dev
+  # release asset (read is sufficient for everything else).
+  contents: write
 
 # Opt the whole workflow into Node 24 for javascript actions — silences
 # the "Node.js 20 actions are deprecated" annotations GH emits for
@@ -139,6 +141,30 @@ jobs:
           name: iso-${{ github.sha }}
           path: os/build/out/*.iso
           retention-days: 14
+
+      # ---------- Publish to "rolling-dev" release for IP-KVM virtual-media ----------
+      # Every main push overwrites the ISO on a fixed prerelease tag so
+      # JetKVM / Redfish / bootc virtual-media can point at a stable,
+      # public, non-zipped URL:
+      #   https://github.com/azrtydxb/NovaNas/releases/download/rolling-dev/novanas-dev.iso
+      # Skipped on PR and tag pushes (release.yml handles tagged releases).
+      - name: Publish rolling-dev ISO
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          ISO=$(ls os/build/out/*.iso | head -1)
+          cp "$ISO" os/build/out/novanas-dev.iso
+          # Recreate the release each time so the asset URL is rewrittable
+          # without the "asset already exists" hurdle.
+          gh release delete rolling-dev --yes --cleanup-tag 2>/dev/null || true
+          gh release create rolling-dev \
+            --title "Rolling dev build (main @ ${GITHUB_SHA::7})" \
+            --notes "Auto-published ISO for virtual-media boot. Overwritten on every main push." \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            os/build/out/novanas-dev.iso
 
   va-images:
     name: Virtual appliance images (qcow2 / vmdk / ova / raw)
