@@ -18,6 +18,9 @@ CHANNEL      ?= dev
 ARCH         ?= amd64
 K3S_VERSION  ?= v1.31.3+k3s1
 BUILD_DIR    ?= $(CURDIR)/build/out
+# mkosi v25 refuses a workspace dir that lives under any source dir (i.e.
+# under $(CURDIR)). Put it at the repo root instead.
+WORKSPACE_DIR ?= $(abspath $(CURDIR)/..)/.mkosi-workspace
 ROOTFS_DIR   ?= $(CURDIR)/rootfs
 RAUC_DIR     ?= $(CURDIR)/rauc
 PACKER_DIR   ?= $(CURDIR)/packer
@@ -42,7 +45,7 @@ export VERSION CHANNEL ARCH BUILD_DIR ROOTFS_DIR RAUC_DIR INSTALLER_BINARY K3S_V
 MKOSI        ?= mkosi
 MKOSI_COMMON := \
     --directory=$(CURDIR) \
-    --workspace-dir=$(BUILD_DIR)/workspace \
+    --workspace-dir=$(WORKSPACE_DIR) \
     --environment=NOVANAS_VERSION=$(VERSION) \
     --environment=NOVANAS_CHANNEL=$(CHANNEL) \
     --environment=NOVANAS_K3S_VERSION=$(K3S_VERSION) \
@@ -160,7 +163,7 @@ va-only: | $(BUILD_DIR)
 	    --out-dir=$(BUILD_DIR)
 
 clean:
-	rm -rf $(BUILD_DIR) $(CURDIR)/mkosi.build-src
+	rm -rf $(BUILD_DIR) $(WORKSPACE_DIR) $(CURDIR)/mkosi.build-src
 
 lint:
 	@echo "==> bash -n on build scripts"
