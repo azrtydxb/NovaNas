@@ -81,17 +81,23 @@ terminal_output --append console
 terminal_input  --append console
 
 menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
-  linux /boot/vmlinuz boot=live components quiet splash novanas.installer=1 console=tty0 console=ttyS0,115200n8
+  # systemd.getty_auto=0 prevents systemd-getty-generator from creating
+  # serial-getty@ttyS0.service on NAS mobos that lack a serial port —
+  # otherwise boot hangs ~90s waiting for /dev/ttyS0.device to appear.
+  # Kernel console=ttyS0 is still passed so QEMU/IPMI SOL capture the
+  # kernel log; it silently no-ops on hardware without a UART.
+  linux /boot/vmlinuz boot=live components quiet splash novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0
   initrd /boot/initrd.img
 }
 
 menuentry "Install NovaNas ${VERSION} (serial console)" {
-  linux /boot/vmlinuz boot=live components novanas.installer=1 console=ttyS0,115200n8
+  # Remote install via IPMI SOL / headless boards with a real UART.
+  linux /boot/vmlinuz boot=live components novanas.installer=1 console=ttyS0,115200n8 systemd.getty_auto=0
   initrd /boot/initrd.img
 }
 
 menuentry "Rescue shell" {
-  linux /boot/vmlinuz boot=live components single console=tty0 console=ttyS0,115200n8
+  linux /boot/vmlinuz boot=live components single console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0
   initrd /boot/initrd.img
 }
 EOF
