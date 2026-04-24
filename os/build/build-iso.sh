@@ -90,7 +90,12 @@ menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
   # even when it's progressing. Keep the full systemd output visible.
   # systemd.debug-shell=1 opens a root shell on tty9 (Ctrl+Alt+F9) so
   # a stuck boot can still be inspected live.
-  linux /boot/vmlinuz boot=live components toram novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target systemd.debug_shell=1 random.trust_cpu=on random.trust_bootloader=on
+  # systemd.log_level=debug + log_target=kmsg routes every systemd
+  # decision to the kernel ring buffer — we can read it with
+  # `journalctl -k` (or dmesg) once booted. Combined with the no-
+  # rate-limit drop-in in /etc/systemd/journald.conf.d/ the console
+  # shows every unit's actual start/stop timing.
+  linux /boot/vmlinuz boot=live components toram novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target systemd.debug_shell=1 systemd.log_level=debug systemd.log_target=kmsg systemd.log_time=1 systemd.show_status=1 random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
 
