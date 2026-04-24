@@ -71,16 +71,14 @@ jobs:
             curl -LsSf https://astral.sh/uv/install.sh \
               | sudo UV_INSTALL_DIR=/usr/local/bin sh
           fi
-          # Re-install the venv if mkosi is missing (fresh runner / upgrade).
-          if [ ! -x /opt/mkosi-venv/bin/mkosi ]; then
-            sudo rm -rf /opt/mkosi-venv
-            sudo /usr/local/bin/uv venv /opt/mkosi-venv --python 3.12
-          fi
-          sudo /opt/mkosi-venv/bin/python -m ensurepip --upgrade || true
-          sudo /opt/mkosi-venv/bin/pip install --upgrade pip
-          sudo /opt/mkosi-venv/bin/pip install --upgrade 'mkosi>=25,<26'
-          echo "/opt/mkosi-venv/bin" >> "$GITHUB_PATH"
-          /opt/mkosi-venv/bin/mkosi --version
+          # uv tool install creates an isolated app-venv managed by uv;
+          # no host pip, no PEP-668 fight. Installs the `mkosi` launcher
+          # into /root/.local/bin which we then symlink into /usr/local
+          # for system-wide access.
+          sudo UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
+            /usr/local/bin/uv tool install --python 3.12 \
+              --force 'mkosi>=25,<26'
+          mkosi --version
 
       - uses: actions/setup-go@v6
         with:
