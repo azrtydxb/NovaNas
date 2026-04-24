@@ -1,0 +1,110 @@
+#!/bin/bash
+# Runs inside the NovaNas rootfs chroot after mkosi has installed all packages
+# and overlaid ExtraTrees. mkosi sets $BUILDROOT to the rootfs path when this
+# script is invoked from the host, or runs it as PID1 inside the image when
+# the argument is "final".
+#
+# Responsibilities:
+#   - locale + timezone
+#   - novanas user + sudo + disable sshd
+#   - purge plymouth (captures console on i915-ENOENT boards)
+#   - hostname + /etc/hosts
+#   - /etc/novanas/{version,channel} stamps
+#   - install k3s (skip-start/skip-enable, we start it from firstboot)
+#   - enable NovaNas systemd units
+#   - install the Go installer binary (live-profile only)
+#   - regenerate initramfs (picks up live-boot hooks)
+#
+# See os/build/build-rootfs.sh (removed) for the old equivalent.
+
+set -eu -o pipefail
+
+VERSION="${NOVANAS_VERSION:-0.0.0-dev}"
+CHANNEL="${NOVANAS_CHANNEL:-dev}"
+K3S_VERSION="${NOVANAS_K3S_VERSION:-v1.31.3+k3s1}"
+PROFILE="${NOVANAS_PROFILE:-live}"
+INSTALLER_BINARY="${NOVANAS_INSTALLER_BINARY:-}"
+
+log() { printf '[mkosi.postinst] %s\n' "$*"; }
+
+export DEBIAN_FRONTEND=noninteractive
+
+log "locale + timezone"
+sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen 2>/dev/null || \
+  echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+locale-gen en_US.UTF-8
+update-locale LANG=en_US.UTF-8
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+
+log "pin hostname + /etc/hosts"
+# Same rationale as before: without a matching /etc/hosts entry, every
+# gethostbyname(self) in PAM/sudo/journald waits ~30s for DNS during boot.
+echo 'novanas-installer' > /etc/hostname
+cat > /etc/hosts <<'EOF'
+127.0.0.1   localhost
+127.0.1.1   novanas-installer
+::1         localhost ip6-localhost ip6-loopback
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+EOF
+
+log "stamp version/channel (${VERSION} / ${CHANNEL})"
+mkdir -p /etc/novanas
+printf '%s\n' "$VERSION" > /etc/novanas/version
+printf '%s\n' "$CHANNEL" > /etc/novanas/channel
+
+log "create novanas user"
+useradd -m -s /bin/bash -u 1000 novanas 2>/dev/null || true
+passwd -l novanas 2>/dev/null || true
+usermod -aG sudo novanas 2>/dev/null || true
+
+log "purge plymouth (if pulled in as recommends)"
+if dpkg -l plymouth 2>/dev/null | grep -q '^ii'; then
+  apt-get purge -y plymouth plymouth-themes 2>/dev/null || true
+fi
+
+log "install k3s ${K3S_VERSION}"
+mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
+curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
+INSTALL_K3S_VERSION="$K3S_VERSION" \
+  INSTALL_K3S_SKIP_START=true \
+  INSTALL_K3S_SKIP_ENABLE=true \
+  sh /tmp/k3s-install.sh
+rm -f /tmp/k3s-install.sh
+
+log "enable NovaNas + networking systemd units"
+systemctl disable ssh 2>/dev/null || true
+systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
+# mnt-persistent.mount + novanas-overlays.service deliberately NOT enabled
+# here — they live in installer/assets/systemd/ and are written to the
+# installed target by the installer. Enabling them in the live rootfs made
+# boot wait ~30s for /dev/disk/by-partlabel/Persistent.
+systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
+if [[ "$PROFILE" == "live" ]]; then
+  systemctl enable novanas-installer.service 2>/dev/null || true
+  systemctl enable novanas-installer-watchdog.service 2>/dev/null || true
+fi
+
+# Installer binary: mkosi mounts the build context at /work/src; expect the
+# binary to be copied there by the Makefile before invocation. Fallback to
+# NOVANAS_INSTALLER_BINARY pointing at a host path mkosi has exposed.
+if [[ "$PROFILE" == "live" ]]; then
+  if [[ -f /work/src/novanas-installer ]]; then
+    log "install novanas-installer -> /usr/local/bin"
+    install -m 0755 /work/src/novanas-installer /usr/local/bin/novanas-installer
+  elif [[ -n "$INSTALLER_BINARY" && -f "$INSTALLER_BINARY" ]]; then
+    log "install novanas-installer from $INSTALLER_BINARY"
+    install -m 0755 "$INSTALLER_BINARY" /usr/local/bin/novanas-installer
+  else
+    log "WARN: no installer binary found (live ISO autoinstall will fail)"
+  fi
+fi
+
+log "regenerate initramfs (live-boot hooks)"
+update-initramfs -u -k all
+
+log "cleanup apt cache"
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+log "postinst done"
