@@ -112,6 +112,8 @@ jobs:
       # ---------- rolling-dev release for IP-KVM virtual media ----------
       - name: Publish rolling-dev ISO
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Container's default /bin/sh is dash; ${VAR::N} is a bash-ism.
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
