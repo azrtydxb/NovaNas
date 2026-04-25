@@ -4,9 +4,13 @@ export const API_VERSION = 'novanas.io/v1alpha1' as const;
 export const ApiVersionSchema = z.literal(API_VERSION);
 
 /**
- * Pool tier. A user-defined label used by tiering policies.
+ * Pool tier — numeric performance level: "1" is the fastest tier
+ * (NVMe / hot data) and "4" is the slowest (cold archive). Stored as
+ * a string in the CRD enum so we can extend with intermediate values
+ * later (e.g. "1.5") without a breaking type change. Tiering policies
+ * compare lexically: lower number = faster.
  */
-export const PoolTierSchema = z.enum(['hot', 'warm', 'cold', 'fast', 'capacity', 'archive']);
+export const PoolTierSchema = z.enum(['1', '2', '3', '4']);
 export type PoolTier = z.infer<typeof PoolTierSchema>;
 
 /**

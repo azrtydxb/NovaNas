@@ -28,7 +28,9 @@ export type StoragePoolSpec = z.infer<typeof StoragePoolSpecSchema>;
 
 export const StoragePoolStatusSchema = z
   .object({
-    phase: z.enum(['Pending', 'Active', 'Degraded', 'Failed']),
+    // Operator emits Pending/Ready/Active/Degraded/Failed — keep the
+    // schema in sync with packages/operators/api/v1alpha1/storagepool_types.go.
+    phase: z.enum(['Pending', 'Ready', 'Active', 'Degraded', 'Failed']),
     capacity: z.object({
       totalBytes: z.number().int().nonnegative(),
       usedBytes: z.number().int().nonnegative(),

@@ -95,12 +95,15 @@ spec:
                 - fast
                 type: string
               tier:
-                description: Tier classifies the pool (fast/warm/cold/archive).
+                description: |-
+                  Pool performance tier. "1" is the fastest (NVMe, hot
+                  data); "4" is the slowest (cold archive). Tiering
+                  policies compare lexically — lower number = faster.
                 enum:
-                - fast
-                - warm
-                - cold
-                - archive
+                - "1"
+                - "2"
+                - "3"
+                - "4"
                 type: string
             type: object
           status:

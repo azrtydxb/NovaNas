@@ -57,7 +57,10 @@ export const Route = createFileRoute('/_auth/storage/pools')({
 // -----------------------------------------------------------------------------
 // Schema for the create form. We use a UI-local shape that maps to PoolCreateBody.
 // -----------------------------------------------------------------------------
-const tierOptions = ['hot', 'warm', 'cold', 'fast', 'capacity', 'archive'] as const;
+// Numeric performance tiers — must match the StoragePool CRD enum
+// (packages/operators/config/crd/bases/novanas.io_storagepools.yaml).
+// 1 is the fastest (NVMe / hot), 4 is the slowest (cold archive).
+const tierOptions = ['1', '2', '3', '4'] as const;
 const deviceClassOptions = ['nvme', 'ssd', 'hdd'] as const;
 
 const CreatePoolFormSchema = z.object({
@@ -84,7 +87,7 @@ function PoolsPage() {
     <>
       <PageHeader
         title={i18n._('Pools')}
-        subtitle={i18n._('Hot / warm / cold storage tiers backed by the chunk engine.')}
+        subtitle={i18n._('Performance tiers (1 = fastest, 4 = slowest) backed by the chunk engine.')}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
@@ -168,7 +171,7 @@ function PoolsPage() {
                       <span className='text-foreground font-medium'>{p.metadata.name}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge>{p.spec.tier}</Badge>
+                      <Badge>Tier {p.spec.tier}</Badge>
                     </TableCell>
                     <TableCell>
                       <span className='mono text-xs text-foreground-muted'>{phase}</span>
@@ -228,7 +231,7 @@ function CreatePoolDialog({
   const form = useForm<CreatePoolForm>({
     resolver: zodResolver(CreatePoolFormSchema),
     mode: 'onChange',
-    defaultValues: { name: '', tier: 'hot' },
+    defaultValues: { name: '', tier: '1' },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -264,10 +267,15 @@ function CreatePoolDialog({
             required
             error={form.formState.errors.name?.message}
           >
-            <Input id='pool-name' placeholder='fast' {...form.register('name')} />
+            <Input id='pool-name' placeholder='nvme-hot' {...form.register('name')} />
           </FormField>
 
-          <FormField label='Tier' required error={form.formState.errors.tier?.message}>
+          <FormField
+            label='Tier'
+            required
+            hint='1 is the fastest (NVMe / hot data); 4 is the slowest (cold archive).'
+            error={form.formState.errors.tier?.message}
+          >
             <Controller
               control={form.control}
               name='tier'
@@ -279,7 +287,7 @@ function CreatePoolDialog({
                   <SelectContent>
                     {tierOptions.map((t) => (
                       <SelectItem key={t} value={t}>
-                        {t}
+                        Tier {t}
                       </SelectItem>
                     ))}
                   </SelectContent>

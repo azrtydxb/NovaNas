@@ -125,7 +125,17 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
       const user = req.user as AuthenticatedUser;
       const namespace = resolveNamespace?.(req, user);
       if (!canWrite(user, kind, namespace)) return forbid(reply);
-      const parsed = opts.schema.safeParse(req.body);
+      // The route already knows the resource kind/apiVersion; the
+      // client only has to send `{metadata, spec}` and we hydrate the
+      // K8s envelope before validation. Keeps the JSON the SPA posts
+      // human-shaped instead of forcing it to know CRD details.
+      const incoming = (req.body ?? {}) as Record<string, unknown>;
+      const hydrated = {
+        apiVersion: 'novanas.io/v1alpha1',
+        kind,
+        ...incoming,
+      };
+      const parsed = opts.schema.safeParse(hydrated);
       if (!parsed.success) {
         return reply.code(400).send({ error: 'invalid_body', message: parsed.error.message });
       }

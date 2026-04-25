@@ -6,8 +6,10 @@ import (
 
 // StoragePoolSpec defines the desired state of StoragePool.
 type StoragePoolSpec struct {
-	// Tier classifies the pool (fast/warm/cold/archive).
-	// +kubebuilder:validation:Enum=fast;warm;cold;archive
+	// Tier is the pool's performance level. "1" is the fastest (NVMe,
+	// hot data); "4" is the slowest (cold archive). Tiering policies
+	// compare lexically — lower number = faster.
+	// +kubebuilder:validation:Enum="1";"2";"3";"4"
 	Tier string `json:"tier,omitempty"`
 	// DeviceFilter constrains disk selection.
 	DeviceFilter *DeviceFilter `json:"deviceFilter,omitempty"`
