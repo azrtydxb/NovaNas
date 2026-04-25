@@ -32,6 +32,29 @@ download_netinst() {
   echo "$cache"
 }
 
+unpack_iso() {
+  local iso="$1"
+  local dest="$WORK_DIR/iso"
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  log "extracting $iso to $dest"
+  xorriso -osirrox on -indev "$iso" -extract / "$dest"
+  chmod -R u+w "$dest"
+}
+
+inject_preseed() {
+  local initrd="$WORK_DIR/iso/install.amd/initrd.gz"
+  local stage="$WORK_DIR/initrd-stage"
+  rm -rf "$stage"
+  mkdir -p "$stage"
+  log "unpacking initrd"
+  ( cd "$stage" && gunzip < "../../$initrd" | cpio -id --quiet )
+  log "copying preseed into initrd"
+  cp installer-di/preseed.cfg "$stage/preseed.cfg"
+  log "repacking initrd"
+  ( cd "$stage" && find . | cpio --create --format=newc --quiet | gzip > "../../$initrd" )
+}
+
 main() {
   command -v xorriso >/dev/null 2>&1 || { echo "xorriso not installed"; exit 1; }
   command -v gunzip  >/dev/null 2>&1 || { echo "gunzip not installed"; exit 1; }
@@ -41,7 +64,9 @@ main() {
   log "step 1: download netinst"
   ISO_PATH=$(download_netinst)
   log "step 2: unpack ISO contents"
+  unpack_iso "$ISO_PATH"
   log "step 3: inject preseed into initrd"
+  inject_preseed
   log "step 4: copy late_command + RAUC bundle into ISO"
   log "step 5: customize grub menu"
   log "step 6: rebuild ISO with xorriso"
