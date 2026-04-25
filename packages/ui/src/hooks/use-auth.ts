@@ -40,7 +40,16 @@ export function useAuth() {
   }, []);
 
   const hasPermission = useCallback((perm: string) => !!user?.permissions?.includes(perm), [user]);
-  const hasRole = useCallback((role: string) => !!user?.roles?.includes(role), [user]);
+  // Realm roles are mapped into the `groups` claim by the
+  // `novanas:roles` client-scope mapper in keycloak (see
+  // helm/templates/keycloak-setup/realm-configmap.yaml). So a user
+  // with the `admin` realm role shows up with admin in BOTH lists
+  // depending on whether the id_token or access_token surfaced it.
+  // Check both so neither shape gets misclassified.
+  const hasRole = useCallback(
+    (role: string) => !!(user?.roles?.includes(role) || user?.groups?.includes(role)),
+    [user]
+  );
   /**
    * True when the current user has a role that permits mutations.
    * Viewers (and unauthenticated users) cannot mutate. During scaffolding
@@ -49,12 +58,12 @@ export function useAuth() {
    */
   const canMutate = useCallback((): boolean => {
     if (!user) return true;
-    const roles = user.roles ?? [];
-    if (roles.length === 0) return true;
-    if (roles.includes('viewer') && !roles.includes('admin') && !roles.includes('user')) {
+    const grants = [...(user.roles ?? []), ...(user.groups ?? [])];
+    if (grants.length === 0) return true;
+    if (grants.includes('viewer') && !grants.includes('admin') && !grants.includes('user')) {
       return false;
     }
-    return roles.includes('admin') || roles.includes('user');
+    return grants.includes('admin') || grants.includes('user');
   }, [user]);
 
   return {
