@@ -82,18 +82,26 @@ terminal_output --append gfxterm
 terminal_output --append console
 terminal_input  --append console
 
+# NOTE: console=ttyS0 was removed from the default entry. On JetKVM (and
+# any board without a real exposed UART), every kernel/systemd printk to
+# ttyS0 stalled on a never-draining serial driver, blowing boot from 15s
+# to 8+ minutes. The serial-console entry below keeps it for actual real
+# serial-attached debugging.
+# live-config.username=novanas — without this, live-config installs an
+# autologin drop-in for user "user" (its default) which doesn't exist on our
+# rootfs, so getty@tty1 exits silently and no login prompt ever appears.
 menuentry "Install NovaNas ${VERSION} (${CHANNEL})" {
-  linux /boot/vmlinuz boot=live components toram novanas.installer=1 console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target systemd.debug_shell=1 systemd.log_level=debug systemd.log_target=kmsg systemd.log_time=1 systemd.show_status=1 random.trust_cpu=on random.trust_bootloader=on
+  linux /boot/vmlinuz boot=live components toram novanas.installer=1 live-config.username=novanas console=tty0 systemd.unit=multi-user.target systemd.debug_shell=1 random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
 
 menuentry "Install NovaNas ${VERSION} (serial console)" {
-  linux /boot/vmlinuz boot=live components toram novanas.installer=1 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on
+  linux /boot/vmlinuz boot=live components toram novanas.installer=1 live-config.username=novanas console=ttyS0,115200n8 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
 
 menuentry "Rescue shell" {
-  linux /boot/vmlinuz boot=live components toram single console=tty0 console=ttyS0,115200n8 systemd.getty_auto=0 systemd.unit=multi-user.target random.trust_cpu=on random.trust_bootloader=on
+  linux /boot/vmlinuz boot=live components toram single console=tty0 systemd.debug_shell=1 random.trust_cpu=on random.trust_bootloader=on
   initrd /boot/initrd.img
 }
 EOF

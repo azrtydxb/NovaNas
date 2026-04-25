@@ -55,26 +55,34 @@ if dpkg -l plymouth 2>/dev/null | grep -q '^ii'; then
   apt-get purge -y plymouth plymouth-themes 2>/dev/null || true
 fi
 
-log "install k3s ${K3S_VERSION}"
-mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
-curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
-INSTALL_K3S_VERSION="$K3S_VERSION" \
-  INSTALL_K3S_SKIP_START=true \
-  INSTALL_K3S_SKIP_ENABLE=true \
-  sh /tmp/k3s-install.sh
-rm -f /tmp/k3s-install.sh
+# k3s + first-boot health services are installed-system concerns; the live
+# installer ISO has no RAUC slots, no overlay, and shouldn't run k3s. Skip
+# them entirely in the live profile to keep the installer minimal and avoid
+# noisy restart loops on tty.
+if [[ "$PROFILE" != "live" ]]; then
+  log "install k3s ${K3S_VERSION}"
+  mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
+  curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
+  INSTALL_K3S_VERSION="$K3S_VERSION" \
+    INSTALL_K3S_SKIP_START=true \
+    INSTALL_K3S_SKIP_ENABLE=true \
+    sh /tmp/k3s-install.sh
+  rm -f /tmp/k3s-install.sh
+fi
 
-log "enable NovaNas + networking systemd units"
+log "enable networking systemd units"
 systemctl disable ssh 2>/dev/null || true
 systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
-# mnt-persistent.mount + novanas-overlays.service deliberately NOT enabled
-# here — they live in installer/assets/systemd/ and are written to the
-# installed target by the installer. Enabling them in the live rootfs made
-# boot wait ~30s for /dev/disk/by-partlabel/Persistent.
-systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
+
 if [[ "$PROFILE" == "live" ]]; then
+  log "enable installer-only units (live profile)"
   systemctl enable novanas-installer.service 2>/dev/null || true
   systemctl enable novanas-installer-watchdog.service 2>/dev/null || true
+else
+  log "enable post-install/runtime units (update profile)"
+  # firstboot + healthcheck are RAUC-slot concerns; only relevant on the
+  # installed system, never on the installer ISO.
+  systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
 fi
 
 # Installer binary: mkosi mounts the build context at /work/src; expect the
