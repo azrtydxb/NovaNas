@@ -18,7 +18,7 @@ Every step uses `|| true` / idempotent checks. Safe to re-run.
 NOTE: the separate k8s-auth-job is folded into this job; see
 k8s-auth-job.yaml for the stub retained for operator discoverability.
 */}}
-{{- if .Values.openbao.enabled }}
+{{- if and .Values.openbao.enabled .Values.openbao.policies.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -169,7 +169,7 @@ spec:
       serviceAccountName: novanas-operators
       containers:
         - name: bao
-          image: quay.io/openbao/openbao:latest
+          image: "{{ .Values.openbao.image.registry }}/{{ .Values.openbao.image.repository }}:{{ .Values.openbao.image.tag }}"
           command: ["/bin/sh", "/scripts/init.sh"]
           env:
             - name: BAO_ADDR

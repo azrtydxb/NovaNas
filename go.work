@@ -1,7 +1,6 @@
 go 1.24.0
 
 use (
-	./installer
 	./packages/cli
 	./packages/operators
 	./storage

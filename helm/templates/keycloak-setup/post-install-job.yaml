@@ -40,7 +40,7 @@ spec:
       serviceAccountName: novanas-operators
       containers:
         - name: kcadm
-          image: quay.io/keycloak/keycloak:24.0
+          image: "{{ .Values.keycloak.image.registry }}/{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
           command: ["/bin/bash", "-c"]
           env:
             - name: KC_SERVER
@@ -50,15 +50,13 @@ spec:
             - name: KEYCLOAK_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.keycloak.auth.existingSecret | default "novanas-bootstrap" }}
-                  key: admin-password
-                  optional: true
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: keycloak-admin-password
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: novanas-bootstrap
-                  key: keycloak-realm-admin-password
-                  optional: true
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: keycloak-admin-password
             - name: NOVANAS_API_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -76,10 +74,25 @@ spec:
               set -euo pipefail
 
               # --- Wait for Keycloak readiness -------------------------------
-              echo "[keycloak-setup] waiting for ${KC_SERVER}/realms/master ..."
-              until curl -fsS "${KC_SERVER}/realms/master/.well-known/openid-configuration" >/dev/null 2>&1; do
+              # The keycloak container image does NOT ship curl/wget. We use
+              # kcadm's `config credentials` against the master realm as the
+              # readiness probe — it's idempotent and guaranteed to be on
+              # the PATH inside this image.
+              echo "[keycloak-setup] waiting for keycloak master realm ..."
+              attempts=0
+              until /opt/keycloak/bin/kcadm.sh config credentials \
+                  --server "${KC_SERVER}" \
+                  --realm master \
+                  --user "${KEYCLOAK_ADMIN}" \
+                  --password "${KEYCLOAK_ADMIN_PASSWORD}" >/dev/null 2>&1; do
+                attempts=$((attempts + 1))
+                if [ $attempts -gt 60 ]; then
+                  echo "[keycloak-setup] keycloak did not become ready in 5min — giving up"
+                  exit 1
+                fi
                 sleep 5
               done
+              echo "[keycloak-setup] keycloak is ready"
 
               # --- Authenticate ---------------------------------------------
               /opt/keycloak/bin/kcadm.sh config credentials \
@@ -95,7 +108,15 @@ spec:
               : "${NOVANAS_API_CLIENT_SECRET:=$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)}"
               : "${GRAFANA_CLIENT_SECRET:=$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)}"
 
-              envsubst < /realm/novanas-realm.json > /tmp/realm.json
+              # The keycloak image doesn't ship envsubst. Substitute the
+              # placeholders we know about by hand. Each value is escaped
+              # for sed by doubling slashes/ampersands; in practice these
+              # are alphanumeric/randAlphaNum so it's safe.
+              sed \
+                -e "s|\${ADMIN_PASSWORD}|${ADMIN_PASSWORD}|g" \
+                -e "s|\${NOVANAS_API_CLIENT_SECRET}|${NOVANAS_API_CLIENT_SECRET}|g" \
+                -e "s|\${GRAFANA_CLIENT_SECRET}|${GRAFANA_CLIENT_SECRET}|g" \
+                /realm/novanas-realm.json > /tmp/realm.json
 
               # --- Create or update the realm ------------------------------
               if /opt/keycloak/bin/kcadm.sh get realms/novanas >/dev/null 2>&1; then

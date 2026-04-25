@@ -1,0 +1,80 @@
+{{- if .Values.keycloak.enabled -}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-keycloak
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+spec:
+  replicas: {{ .Values.keycloak.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "keycloak") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: keycloak
+          image: "{{ .Values.keycloak.image.registry }}/{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            {{- if .Values.keycloak.devMode }}
+            - "start-dev"
+            {{- else }}
+            - "start"
+            - "--optimized"
+            {{- end }}
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://novanas-postgresql.{{ $ns }}.svc:5432/{{ .Values.keycloak.database.name | default "keycloak" }}"
+            - name: KC_DB_USERNAME
+              value: {{ .Values.keycloak.database.username | default "keycloak" | quote }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: keycloak-db-password
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.auth.adminUser | default "admin" | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: keycloak-admin-password
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            {{- toYaml (.Values.keycloak.resources | default dict) | nindent 12 }}
+{{- end }}

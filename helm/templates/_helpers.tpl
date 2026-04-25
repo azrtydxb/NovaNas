@@ -54,7 +54,11 @@ app.kubernetes.io/component: {{ .component }}
 {{- $registry := .ctx.Values.global.imageRegistry -}}
 {{- $repo    := .image.repository -}}
 {{- $tag     := default .ctx.Chart.AppVersion .image.tag -}}
+{{- if $registry -}}
 {{- printf "%s/%s:%s" $registry $repo $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $repo $tag -}}
+{{- end -}}
 {{- end -}}
 
 {{/* Resolve imagePullPolicy with per-component override. */}}

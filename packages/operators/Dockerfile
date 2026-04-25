@@ -1,16 +1,21 @@
 # syntax=docker/dockerfile:1.7
+#
+# Build context MUST be the repo root (not packages/operators) so the
+# go.work workspace and the storage/ replace target are visible to the
+# Go toolchain.
 
 # ---- build stage -----------------------------------------------------------
-FROM golang:1.23 AS build
-WORKDIR /workspace
+FROM golang:1.25 AS build
+WORKDIR /src
 
-# Module download first so the layer caches across source edits.
-COPY go.mod go.sum* ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download || true
+# Pull in the workspace + every module operators directly or transitively
+# depends on via replace directives.
+COPY go.work go.work.sum* ./
+COPY packages/operators packages/operators
+COPY packages/cli packages/cli
+COPY storage storage
 
-COPY . .
+WORKDIR /src/packages/operators
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \

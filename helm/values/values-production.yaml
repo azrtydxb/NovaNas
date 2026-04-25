@@ -1,6 +1,8 @@
 # Production/stable channel. Default values.yaml is already production-
 # oriented; this file exists for channel-specific overrides (image pull
 # policy, retention, etc) without touching the shared defaults.
+# Observability retention will land here once the in-house observability
+# templates are ready (they replace kube-prometheus-stack).
 global:
   imagePullPolicy: IfNotPresent
 
@@ -9,10 +11,11 @@ api:
     NODE_ENV: production
     LOG_LEVEL: info
 
-observability:
-  prometheus:
-    prometheusSpec:
-      retention: 30d
+keycloak:
+  devMode: false
+
+openbao:
+  devMode: false
 
 alerts:
   enabled: true

@@ -36,6 +36,33 @@ spec:
             {{- end }}
             - name: PORT
               value: {{ .Values.api.service.port | quote }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: novanas-postgresql
+                  key: postgres-password
+            - name: DATABASE_URL
+              value: "postgresql://novanas:$(DATABASE_PASSWORD)@novanas-postgresql.{{ include "novanas.systemNamespace" . }}.svc:5432/novanas?sslmode=disable"
+            - name: REDIS_URL
+              {{- if .Values.redis.enabled }}
+              value: "redis://novanas-redis.{{ include "novanas.systemNamespace" . }}.svc:6379"
+              {{- else }}
+              value: "memory://"
+              {{- end }}
+            - name: KEYCLOAK_ISSUER_URL
+              value: "http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc/realms/{{ .Values.keycloak.realm.name | default "novanas" }}"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "novanas-api"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: keycloak-api-client-secret
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: api-session-secret
           envFrom:
             - configMapRef:
                 name: novanas-api-config

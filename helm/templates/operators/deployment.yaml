@@ -48,6 +48,31 @@ spec:
           envFrom:
             - configMapRef:
                 name: novanas-operators-config
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPENBAO_ADDR
+              value: {{ .Values.openbao.address | default (printf "http://novanas-openbao.%s.svc:8200" (include "novanas.systemNamespace" .)) | quote }}
+            {{- if .Values.openbao.devMode }}
+            - name: OPENBAO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: openbao-root-token
+            {{- end }}
+            - name: KEYCLOAK_URL
+              value: {{ .Values.keycloak.internalURL | default (printf "http://novanas-keycloak.%s.svc" (include "novanas.systemNamespace" .)) | quote }}
+            {{- if and .Values.storage.meta .Values.storage.meta.enabled }}
+            - name: STORAGE_META_ADDR
+              value: "novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:7001"
+            {{- else }}
+            # Storage meta service is disabled in this overlay; the
+            # operator falls back to a no-op storage client.
+            - name: NOVANAS_DEV
+              value: "1"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

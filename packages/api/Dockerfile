@@ -22,9 +22,26 @@ COPY packages/schemas packages/schemas
 COPY packages/db packages/db
 COPY packages/api packages/api
 
+RUN rm -f packages/schemas/tsconfig.tsbuildinfo \
+         packages/db/tsconfig.tsbuildinfo \
+         packages/api/tsconfig.tsbuildinfo
 RUN pnpm --filter @novanas/schemas build \
  && pnpm --filter @novanas/db build \
  && pnpm --filter @novanas/api run build:bundle
+
+# Materialize a self-contained app dir with production deps only.
+# `pnpm deploy` resolves workspace + symlinked deps into a real
+# node_modules tree that we can ship without copying the workspace.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm --filter @novanas/api deploy --prod /deploy
+
+# pnpm deploy does NOT include the workspace package's `dist/` output —
+# only the source per the `files` field. Re-copy the freshly-built dist
+# trees over the deploy tree so Node can resolve @novanas/schemas/dist
+# and @novanas/db/dist at runtime.
+RUN cp -r packages/schemas/dist /deploy/node_modules/@novanas/schemas/dist && \
+    cp -r packages/db/dist      /deploy/node_modules/@novanas/db/dist
 
 # ----- runtime -----
 FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
@@ -32,7 +49,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080
 
-COPY --from=build --chown=nonroot:nonroot /app/packages/api/dist/bundle.js /app/api.js
+COPY --from=build --chown=nonroot:nonroot /deploy/dist/bundle.js /app/api.js
+COPY --from=build --chown=nonroot:nonroot /deploy/node_modules /app/node_modules
 
 USER nonroot:nonroot
 EXPOSE 8080

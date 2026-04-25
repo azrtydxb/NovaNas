@@ -244,132 +244,104 @@ discovery:
 # subchart; see each project's values reference for the full schema.
 # -----------------------------------------------------------------------------
 
-keycloak:
-  enabled: true
-  # NovaNas realm import. Controls post-install-job.yaml + realm-configmap.yaml.
-  realm:
-    enabled: true
-    name: novanas
-    # Group assigned the `admin` realm role. Used by the operator when
-    # promoting users to admins.
-    adminGroup: admins
-  auth:
-    adminUser: admin
-    # Empty → the post-install job generates and stores the password in OpenBao.
-    adminPassword: ""
-    existingSecret: ""
-  postgresql:
-    enabled: false  # we reuse the shared novanas-postgresql
-  externalDatabase:
-    host: novanas-postgresql.novanas-system.svc
-    port: 5432
-    database: keycloak
-    user: keycloak
-    existingSecret: novanas-bootstrap
-    existingSecretPasswordKey: keycloak-db-password
-  production: true
-  proxy: edge
-  # Mount the novanas-keycloak-theme ConfigMap (rendered from
-  # templates/keycloak-setup/theme-configmap.yaml) into the Bitnami
-  # Keycloak pod so the `novanas` login theme is available at runtime.
-  # subPath values MUST match the ConfigMap keys exactly.
-  extraVolumes:
-    - name: novanas-theme
-      configMap:
-        name: novanas-keycloak-theme
-  extraVolumeMounts:
-    - name: novanas-theme
-      mountPath: /opt/keycloak/themes/novanas/login/theme.properties
-      subPath: login__theme.properties
-    - name: novanas-theme
-      mountPath: /opt/keycloak/themes/novanas/login/resources/css/novanas.css
-      subPath: login__resources__css__novanas.css
-    - name: novanas-theme
-      mountPath: /opt/keycloak/themes/novanas/login/messages/messages_en.properties
-      subPath: login__messages__messages_en.properties
-    - name: novanas-theme
-      mountPath: /opt/keycloak/themes/novanas/login/login.ftl
-      subPath: login__login.ftl
-    - name: novanas-theme
-      mountPath: /opt/keycloak/themes/novanas/login/error.ftl
-      subPath: login__error.ftl
-  resources:
-    requests: { cpu: "250m", memory: "512Mi" }
-    limits:   { cpu: "2",    memory: "2Gi" }
-  # Keycloak image used by the admin-password-rotation CronJob (must
-  # include kcadm.sh). Falls back to a sensible upstream default.
-  image: "quay.io/keycloak/keycloak:26.0"
-  # Internal URL the rotation Job uses to reach the Keycloak server.
-  internalURL: "http://novanas-keycloak:8080"
-  # Realm admin username — must match auth.adminUser.
-  adminUser: admin
-  # Bootstrap Secret name patched by the rotation CronJob so other
-  # components pick up the new admin password on their next restart.
-  bootstrapSecretName: novanas-bootstrap
-  # Admin-password rotation CronJob. Rotates the master-realm admin
-  # password on a fixed cadence, stores the new value in OpenBao under
-  # secret/data/novanas/keycloak/admin, and patches the bootstrap Secret.
-  adminPasswordRotation:
-    enabled: true
-    # Cron schedule (UTC). Default: 03:15 UTC on the 1st of every month.
-    schedule: "15 3 1 * *"
-    # Minimum age (days) before the CronJob actually rotates. If the
-    # existing secret is younger the run is a no-op. Provides a belt-and-
-    # braces gate against accidental over-rotation.
-    minAgeDays: 90
-
-openbao:
-  enabled: true
-  # Internal address used by in-cluster clients (rotation CronJob,
-  # per-tenant policy provisioning in the operators).
-  address: "http://novanas-openbao:8200"
-  # Policy provisioning. Controls policies-configmap.yaml + init-job.yaml.
-  policies:
-    enabled: true
-  server:
-    dataStorage:
-      enabled: false
-    storage:
-      raft:
-        enabled: false
-      postgresql:
-        enabled: true
-        # The literal substitution is performed by OpenBao from the env secret.
-        connectionURL: "postgresql://openbao:$(OPENBAO_DB_PASSWORD)@novanas-postgresql.novanas-system.svc:5432/openbao?sslmode=disable"
-    unseal:
-      # TPM auto-unseal handled by a sidecar exporter on the host (see os/).
-      tpm:
-        enabled: true
-    extraEnvironmentVars:
-      OPENBAO_DB_PASSWORD: ""
-  injector:
-    enabled: true
-
+# -----------------------------------------------------------------------------
+# Postgres — own template under templates/postgres/, official upstream image.
+# -----------------------------------------------------------------------------
 postgresql:
   enabled: true
+  image:
+    registry: docker.io
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
   auth:
     database: novanas
     username: novanas
-    existingSecret: novanas-postgresql
-    secretKeys:
-      adminPasswordKey: postgres-password
-      userPasswordKey: password
-  primary:
-    persistence:
-      enabled: true
-      size: 50Gi
-      storageClass: ""
-
-redis:
-  enabled: true
-  architecture: standalone
-  auth:
+  service:
+    port: 5432
+  persistence:
     enabled: true
-    existingSecret: novanas-redis
-    existingSecretPasswordKey: redis-password
-  master:
-    persistence:
-      enabled: false
+    size: 50Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "2",    memory: "2Gi"   }
+
+# -----------------------------------------------------------------------------
+# Keycloak — own template under templates/keycloak/, official upstream image.
+# -----------------------------------------------------------------------------
+keycloak:
+  enabled: true
+  image:
+    registry: quay.io
+    repository: keycloak/keycloak
+    tag: "26.0"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  # In dev mode we run `start-dev` (no TLS, ephemeral hostname) so the
+  # smoke-test deploy comes up without a CA. Production overlays set this
+  # to false and configure KC_HOSTNAME explicitly.
+  devMode: true
+  service:
+    type: ClusterIP
+  auth:
+    adminUser: admin
+  database:
+    name: keycloak
+    username: keycloak
+  realm:
+    enabled: true
+    name: novanas
+    adminGroup: admins
+  resources:
+    requests: { cpu: "250m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "2Gi"   }
+  # Internal URL the realm-import + rotation Jobs use.
+  internalURL: "http://novanas-keycloak.novanas-system.svc"
+  adminPasswordRotation:
+    enabled: true
+    # Image used by the rotation CronJob (must include kcadm.sh).
+    image: "quay.io/keycloak/keycloak:26.0"
+    schedule: "15 3 1 * *"
+    minAgeDays: 90
+
+# -----------------------------------------------------------------------------
+# OpenBao — own template under templates/openbao/, official upstream image.
+# -----------------------------------------------------------------------------
+openbao:
+  enabled: true
+  image:
+    registry: quay.io
+    repository: openbao/openbao
+    tag: "2.2.0"
+    pullPolicy: IfNotPresent
+  # Dev mode for smoke tests. Production overlays set false and configure
+  # the full HCL config + auto-unseal.
+  devMode: true
+  address: "http://novanas-openbao:8200"
+  service:
+    port: 8200
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "1Gi"   }
+  policies:
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Redis — own template (TODO: write templates/redis/). Disabled by default
+# until needed. Was previously the Bitnami subchart.
+# -----------------------------------------------------------------------------
+redis:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
 
 observability:
   # kube-prometheus-stack subchart.
@@ -546,7 +518,9 @@ networkPolicy:
 bootstrapSecret:
   create: true
   name: novanas-bootstrap
-  postgresPassword: ""       # generated if empty
-  keycloakDbPassword: ""     # generated if empty
-  openbaoDbPassword: ""      # generated if empty
-  redisPassword: ""          # generated if empty
+  postgresPassword: ""        # generated if empty
+  keycloakDbPassword: ""      # generated if empty
+  keycloakAdminPassword: ""   # generated if empty (Keycloak master-realm admin)
+  openbaoDbPassword: ""       # generated if empty
+  openbaoRootToken: ""        # generated if empty (dev-mode root token)
+  redisPassword: ""           # generated if empty

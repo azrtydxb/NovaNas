@@ -24,7 +24,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: psql
-          image: docker.io/bitnami/postgresql:16
+          image: "{{ .Values.postgresql.image.registry }}/{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
           env:
             - name: PGHOST
               value: novanas-postgresql.{{ include "novanas.systemNamespace" . }}.svc
@@ -53,12 +53,13 @@ spec:
                 echo "waiting for postgres..."
                 sleep 3
               done
-              psql -v ON_ERROR_STOP=1 <<SQL
-              SELECT 'CREATE DATABASE novanas'   WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'novanas')\gexec
-              SELECT 'CREATE DATABASE keycloak'  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
-              SELECT 'CREATE DATABASE openbao'   WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'openbao')\gexec
 
+              # Create roles first (idempotent)
+              psql -v ON_ERROR_STOP=1 <<SQL
               DO \$\$ BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'novanas') THEN
+                  CREATE ROLE novanas LOGIN PASSWORD '$PGPASSWORD';
+                END IF;
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak') THEN
                   CREATE ROLE keycloak LOGIN PASSWORD '$KEYCLOAK_DB_PASSWORD';
                 END IF;
@@ -66,7 +67,22 @@ spec:
                   CREATE ROLE openbao LOGIN PASSWORD '$OPENBAO_DB_PASSWORD';
                 END IF;
               END \$\$;
+              SQL
 
+              # Then create databases owned by their respective roles.
+              # CREATE DATABASE cannot run inside a transaction, so each
+              # database goes through its own one-line invocation guarded
+              # by a SELECT against pg_database.
+              for db in "novanas:novanas" "keycloak:keycloak" "openbao:openbao"; do
+                name="${db%:*}"; owner="${db#*:}"
+                exists=$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='${name}'")
+                if [ -z "$exists" ]; then
+                  psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${name} OWNER ${owner}"
+                fi
+              done
+
+              psql -v ON_ERROR_STOP=1 <<SQL
+              GRANT ALL PRIVILEGES ON DATABASE novanas  TO novanas;
               GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
               GRANT ALL PRIVILEGES ON DATABASE openbao  TO openbao;
               SQL

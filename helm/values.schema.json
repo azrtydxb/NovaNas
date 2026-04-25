@@ -8,7 +8,7 @@
       "type": "object",
       "required": ["imageRegistry", "clusterName"],
       "properties": {
-        "imageRegistry":    { "type": "string", "minLength": 1 },
+        "imageRegistry":    { "type": "string" },
         "imagePullPolicy":  { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
         "imagePullSecrets": { "type": "array",  "items": { "type": ["string", "object"] } },
         "clusterName":      { "type": "string", "minLength": 1 },

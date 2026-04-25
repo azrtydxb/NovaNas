@@ -1,0 +1,20 @@
+# Keep build context lean and prevent stale local artifacts from
+# leaking into image builds (most importantly TS incremental build
+# state, which makes tsc skip emit when copied into a fresh image).
+
+**/node_modules
+**/dist
+**/build
+**/.nx
+**/.cache
+**/target
+**/*.tsbuildinfo
+**/coverage
+**/.turbo
+**/.next
+.git
+.github
+docs
+e2e
+perf
+hack

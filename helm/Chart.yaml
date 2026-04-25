@@ -16,52 +16,10 @@ keywords:
 maintainers:
   - name: NovaNas Team
     url: https://github.com/azrtydxb/NovaNas
-# Subchart dependency versions below are the "latest-known-good" at time of
-# writing; Renovate keeps them fresh. See README for the upgrade protocol.
-dependencies:
-  - name: keycloak
-    version: "~24.0"
-    repository: oci://registry-1.docker.io/bitnamicharts
-    condition: keycloak.enabled
-  - name: openbao
-    version: "~0.11"
-    repository: https://openbao.github.io/openbao-helm
-    alias: openbao
-    condition: openbao.enabled
-  - name: postgresql
-    version: "~16.0"
-    repository: oci://registry-1.docker.io/bitnamicharts
-    condition: postgresql.enabled
-  - name: redis
-    version: "~20.0"
-    repository: oci://registry-1.docker.io/bitnamicharts
-    condition: redis.enabled
-  - name: kube-prometheus-stack
-    version: "~65.0"
-    repository: https://prometheus-community.github.io/helm-charts
-    alias: observability
-    condition: observability.enabled
-  - name: loki
-    version: "~6.0"
-    repository: https://grafana.github.io/helm-charts
-    condition: loki.enabled
-  - name: tempo
-    version: "~1.10"
-    repository: https://grafana.github.io/helm-charts
-    condition: tempo.enabled
-  - name: alloy
-    version: "~0.9"
-    repository: https://grafana.github.io/helm-charts
-    condition: alloy.enabled
-  - name: kubevirt
-    version: "~0.4"
-    repository: "oci://ghcr.io/azrtydxb/charts"
-    condition: kubevirt.enabled
-  - name: novanet
-    version: "~0"
-    repository: "oci://ghcr.io/azrtydxb/charts"
-    condition: novanet.enabled
-  - name: novaedge
-    version: "~0"
-    repository: "oci://ghcr.io/azrtydxb/charts"
-    condition: novaedge.enabled
+# NovaNas owns every chart it ships. We deliberately have no third-party
+# Helm dependencies — only third-party container *images*, pulled from
+# their official upstream registries (see values.yaml for the references).
+# This guarantees reproducibility, avoids licensing surprises (e.g. the
+# Bitnami "secure-images" relicensing of 2025), and lets us evolve the
+# operational shape of every component on our own schedule.
+dependencies: []

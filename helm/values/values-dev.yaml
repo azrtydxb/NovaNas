@@ -1,4 +1,8 @@
 # Development channel overrides: single replica, looser limits, debug logs.
+# Subchart-shaped keys (postgresql.primary.*, observability.prometheus.*,
+# loki.singleBinary.*) are gone — see helm/values.yaml for the in-house
+# shape. Observability/loki templates are still TODO; they're disabled by
+# default until we ship our own.
 global:
   imagePullPolicy: Always
 
@@ -24,25 +28,14 @@ storage:
     enabled: false
 
 postgresql:
-  primary:
-    persistence:
-      size: 10Gi
+  persistence:
+    size: 10Gi
 
-observability:
-  prometheus:
-    prometheusSpec:
-      retention: 3d
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            resources:
-              requests:
-                storage: 5Gi
+keycloak:
+  devMode: true
 
-loki:
-  singleBinary:
-    persistence:
-      size: 5Gi
+openbao:
+  devMode: true
 
 alerts:
   enabled: false

@@ -1,0 +1,24 @@
+{{- if .Values.keycloak.enabled -}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-keycloak
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+spec:
+  type: {{ .Values.keycloak.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: http-direct
+      port: 8080
+      targetPort: 8080
+    - name: management
+      port: 9000
+      targetPort: 9000
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "keycloak") | nindent 4 }}
+{{- end }}

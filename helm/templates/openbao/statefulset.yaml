@@ -1,0 +1,86 @@
+{{- if .Values.openbao.enabled -}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: novanas-openbao
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao") | nindent 4 }}
+spec:
+  serviceName: novanas-openbao-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "openbao") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-openbao
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        fsGroup: 1000
+      containers:
+        - name: openbao
+          image: "{{ .Values.openbao.image.registry }}/{{ .Values.openbao.image.repository }}:{{ .Values.openbao.image.tag }}"
+          imagePullPolicy: {{ .Values.openbao.image.pullPolicy | default "IfNotPresent" }}
+          {{- if .Values.openbao.devMode }}
+          args: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-root-token-id=$(BAO_DEV_ROOT_TOKEN_ID)"]
+          {{- else }}
+          args: ["server", "-config=/openbao/config/config.hcl"]
+          {{- end }}
+          env:
+            - name: BAO_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: BAO_API_ADDR
+              value: "http://$(POD_IP):8200"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- if .Values.openbao.devMode }}
+            - name: BAO_DEV_ROOT_TOKEN_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: openbao-root-token
+            {{- end }}
+            - name: SKIP_SETCAP
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8200
+            - name: cluster
+              containerPort: 8201
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&uninitcode=204&sealedcode=204
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&uninitcode=204&sealedcode=204
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /openbao/data
+          resources:
+            {{- toYaml (.Values.openbao.resources | default dict) | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.openbao.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.openbao.persistence.size | default "5Gi" }}
+{{- end }}
