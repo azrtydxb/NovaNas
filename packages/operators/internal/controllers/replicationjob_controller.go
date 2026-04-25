@@ -134,6 +134,8 @@ func (r *ReplicationJobReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager registers the controller with the manager.
 func (r *ReplicationJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ReplicationJob"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "replicationjob-controller")
 	}

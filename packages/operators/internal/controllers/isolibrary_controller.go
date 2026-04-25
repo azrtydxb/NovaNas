@@ -67,6 +67,8 @@ func (r *IsoLibraryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // SetupWithManager registers the controller with the manager.
 func (r *IsoLibraryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "IsoLibrary"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.IsoLibrary{}).
 		Named("IsoLibrary").

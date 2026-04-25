@@ -247,6 +247,8 @@ func (r *CloudBackupJobReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager registers the controller with the manager.
 func (r *CloudBackupJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "CloudBackupJob"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "cloudbackupjob-controller")
 	}

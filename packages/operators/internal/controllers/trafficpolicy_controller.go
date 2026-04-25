@@ -94,6 +94,8 @@ func (r *TrafficPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // SetupWithManager registers the controller with the manager.
 func (r *TrafficPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "TrafficPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.TrafficPolicy{}).
 		Named("TrafficPolicy").

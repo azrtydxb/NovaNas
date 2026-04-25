@@ -85,6 +85,8 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // SetupWithManager registers the controller with the manager.
 func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Bucket"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Bucket{}).
 		Named("Bucket").

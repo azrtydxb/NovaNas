@@ -1,0 +1,113 @@
+{{/*
+Unified appliance Ingress.
+
+Routes a single externally-visible host to the UI, API, and Keycloak
+backends via in-cluster ClusterIP Services. This is the canonical entry
+point — per-component ingresses (templates/api/ingress.yaml,
+templates/ui/ingress.yaml) are deprecated and disabled by default.
+
+NodePorts and external IPs on the component Services are deliberately
+NOT used: every external request enters via this Ingress, which lets
+the IngressClass owner (traefik in k3s, novaedge in production) control
+TLS termination, rate-limits, and proxy headers in one place.
+
+Path layout (longer prefixes first — networking.k8s.io/v1 sorts by
+length within an ingress):
+
+  /api/        → novanas-api:port  (REST + auth callback + websocket)
+  /docs        → novanas-api:port  (OpenAPI/Swagger UI)
+  /metrics     → novanas-api:port  (prometheus scrape, optional)
+  /realms/     → novanas-keycloak:80
+  /resources/  → novanas-keycloak:80  (theme assets, login images)
+  /js/         → novanas-keycloak:80  (kc admin/account console JS)
+  /            → novanas-ui:port   (SPA, catch-all)
+
+The /auth/ rewrite that the SPA uses (legacy keycloak prefix) is handled
+by an IngressClass annotation — see traefik middleware below.
+*/}}
+{{- if .Values.ingress.enabled }}
+{{- $ns := include "novanas.systemNamespace" . -}}
+{{- $host := .Values.ingress.host | default .Values.global.publicHostname | default .Values.global.mdnsDomain -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: novanas
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq .Values.ingress.className "traefik" }}
+    traefik.ingress.kubernetes.io/router.entrypoints: {{ .Values.ingress.tls.enabled | ternary "websecure" "web" | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      {{- with .Values.ingress.tls.secretName }}
+      secretName: {{ . | quote }}
+      {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          # API — REST + websocket + swagger + (optional) metrics scrape.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          {{- if .Values.keycloak.enabled }}
+          # Keycloak — front-channel OIDC endpoints + theme assets.
+          - path: /realms
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-keycloak
+                port:
+                  number: 80
+          - path: /resources
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-keycloak
+                port:
+                  number: 80
+          - path: /js
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-keycloak
+                port:
+                  number: 80
+          {{- end }}
+          # SPA — catch-all, must be last.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: novanas-ui
+                port:
+                  number: {{ .Values.ui.service.port }}
+{{- end }}

@@ -114,6 +114,8 @@ func (r *ShareReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // SetupWithManager registers the controller with the manager.
 func (r *ShareReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Share"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "share-controller")
 	}

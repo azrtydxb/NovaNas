@@ -66,6 +66,8 @@ func (r *AuditPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *AuditPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "AuditPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.AuditPolicy{}).
 		Named("AuditPolicy").

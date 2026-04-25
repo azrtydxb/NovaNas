@@ -185,6 +185,8 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 // SetupWithManager registers the controller with the manager.
 func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "User"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "user-controller")
 	}

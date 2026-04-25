@@ -104,6 +104,8 @@ func (r *BondReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 // SetupWithManager registers the controller with the manager.
 func (r *BondReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Bond"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Bond{}).
 		Named("Bond").

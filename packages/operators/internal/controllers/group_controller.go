@@ -101,6 +101,8 @@ func (r *GroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // SetupWithManager registers the controller with the manager.
 func (r *GroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Group"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "group-controller")
 	}

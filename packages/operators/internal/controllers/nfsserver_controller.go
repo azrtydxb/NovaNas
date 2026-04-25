@@ -109,6 +109,8 @@ func (r *NfsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // SetupWithManager registers the controller with the manager.
 func (r *NfsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "NfsServer"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "nfsserver-controller")
 	}

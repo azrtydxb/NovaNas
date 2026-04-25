@@ -118,6 +118,8 @@ func (r *VmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 // SetupWithManager registers the controller with the manager.
 func (r *VmReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Vm"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Vm{}).
 		Named("Vm").

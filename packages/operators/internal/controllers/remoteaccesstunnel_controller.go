@@ -108,6 +108,8 @@ func (r *RemoteAccessTunnelReconciler) Reconcile(ctx context.Context, req ctrl.R
 // SetupWithManager registers the controller with the manager.
 func (r *RemoteAccessTunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "RemoteAccessTunnel"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.RemoteAccessTunnel{}).
 		Named("RemoteAccessTunnel").

@@ -86,6 +86,8 @@ func (r *DatasetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager registers the controller with the manager.
 func (r *DatasetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Dataset"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Dataset{}).
 		Named("Dataset").

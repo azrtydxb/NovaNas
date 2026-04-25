@@ -94,6 +94,8 @@ func (r *StoragePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *StoragePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "StoragePool"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "storagepool-controller")
 	}

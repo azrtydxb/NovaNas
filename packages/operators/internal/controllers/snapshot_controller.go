@@ -134,6 +134,8 @@ func (r *SnapshotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // SetupWithManager registers the controller with the manager.
 func (r *SnapshotReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Snapshot"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "snapshot-controller")
 	}

@@ -61,6 +61,15 @@ spec:
               value: "false"
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
+            {{- if .Values.keycloak.hostname }}
+            # Pin the externally-visible URL so the well-known document
+            # advertises issuer/auth/token endpoints the browser can
+            # actually reach. Without this, X-Forwarded-Port reflects
+            # the in-pod listen port, not the NodePort/tunnel port, and
+            # the SPA tries to call http://localhost:8080/.../token.
+            - name: KC_HOSTNAME
+              value: {{ .Values.keycloak.hostname | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080

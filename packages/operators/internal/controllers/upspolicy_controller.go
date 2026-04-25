@@ -85,6 +85,8 @@ func (r *UpsPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // SetupWithManager registers the controller with the manager.
 func (r *UpsPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "UpsPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.UpsPolicy{}).
 		Named("UpsPolicy").

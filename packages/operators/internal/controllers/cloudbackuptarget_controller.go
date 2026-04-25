@@ -165,6 +165,8 @@ func (r *CloudBackupTargetReconciler) probeInterval(spec *novanasv1alpha1.CloudB
 // SetupWithManager registers the controller with the manager.
 func (r *CloudBackupTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "CloudBackupTarget"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "cloudbackuptarget-controller")
 	}

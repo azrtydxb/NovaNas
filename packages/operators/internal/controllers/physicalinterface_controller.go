@@ -78,6 +78,8 @@ func (r *PhysicalInterfaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager registers the controller with the manager.
 func (r *PhysicalInterfaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "PhysicalInterface"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.PhysicalInterface{}).
 		Named("PhysicalInterface").

@@ -103,6 +103,8 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *BlockVolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "BlockVolume"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.BlockVolume{}).
 		Named("BlockVolume").

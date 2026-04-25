@@ -154,6 +154,8 @@ func (r *AlertPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *AlertPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "AlertPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "alertpolicy-controller")
 	}

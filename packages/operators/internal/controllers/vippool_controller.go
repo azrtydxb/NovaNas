@@ -116,6 +116,8 @@ func (r *VipPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager registers the controller with the manager.
 func (r *VipPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "VipPool"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.VipPool{}).
 		Named("VipPool").

@@ -90,6 +90,8 @@ func (r *SmartPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *SmartPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SmartPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.SmartPolicy{}).
 		Named("SmartPolicy").

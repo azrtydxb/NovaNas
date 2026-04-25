@@ -282,6 +282,10 @@ keycloak:
   # smoke-test deploy comes up without a CA. Production overlays set this
   # to false and configure KC_HOSTNAME explicitly.
   devMode: true
+  # Externally-visible URL the SPA hits — forwarded into KC_HOSTNAME so
+  # issuer/auth/token URLs are emitted correctly. Empty disables the
+  # explicit hostname (kc falls back to the request's host header).
+  hostname: ""
   service:
     type: ClusterIP
   auth:
@@ -525,6 +529,27 @@ networkPolicy:
 # Bootstrap secrets. These are seeded at first install and subsequently
 # rotated into OpenBao. Empty values mean "generate me".
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Unified Ingress — single external entry point that routes to UI, API,
+# and Keycloak by path. This replaces per-component NodePorts / ingresses
+# in the standard layout. The IngressClass owner (traefik in k3s,
+# novaedge in production) handles TLS termination + headers.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  # External hostname clients use to reach the appliance. Falls back to
+  # global.publicHostname, then global.mdnsDomain when empty.
+  host: ""
+  # Extra annotations passed through to the Ingress (e.g. cert-manager).
+  annotations: {}
+  tls:
+    enabled: false
+    # When empty, the IngressClass uses its default cert (k3s traefik
+    # ships a self-signed cert; production overlays should set this to
+    # a cert-manager-issued Secret).
+    secretName: ""
+
 bootstrapSecret:
   create: true
   name: novanas-bootstrap

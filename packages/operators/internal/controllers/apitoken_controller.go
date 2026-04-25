@@ -181,6 +181,8 @@ func (r *ApiTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // SetupWithManager registers the controller with the manager.
 func (r *ApiTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ApiToken"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "apitoken-controller")
 	}

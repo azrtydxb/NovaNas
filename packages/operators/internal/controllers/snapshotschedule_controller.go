@@ -68,6 +68,8 @@ func (r *SnapshotScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 // SetupWithManager registers the controller with the manager.
 func (r *SnapshotScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SnapshotSchedule"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "snapshotschedule-controller")
 	}

@@ -111,6 +111,8 @@ func (r *SmbServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // SetupWithManager registers the controller with the manager.
 func (r *SmbServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SmbServer"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "smbserver-controller")
 	}

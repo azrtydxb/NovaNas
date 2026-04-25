@@ -88,6 +88,8 @@ func (r *KeycloakRealmReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // SetupWithManager registers the controller with the manager.
 func (r *KeycloakRealmReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "KeycloakRealm"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "keycloakrealm-controller")
 	}

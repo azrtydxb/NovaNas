@@ -133,6 +133,8 @@ func readGpuAssignment(ctx context.Context, c client.Client, name string) (strin
 // SetupWithManager registers the controller with the manager.
 func (r *GpuDeviceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "GpuDevice"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.GpuDevice{}).
 		Named("GpuDevice").

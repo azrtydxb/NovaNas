@@ -66,6 +66,8 @@ func (r *ReplicationTargetReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager registers the controller with the manager.
 func (r *ReplicationTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ReplicationTarget"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "replicationtarget-controller")
 	}

@@ -84,6 +84,8 @@ func (r *ConfigBackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.R
 // SetupWithManager registers the controller with the manager.
 func (r *ConfigBackupPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ConfigBackupPolicy"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ConfigBackupPolicy{}).
 		Named("ConfigBackupPolicy").

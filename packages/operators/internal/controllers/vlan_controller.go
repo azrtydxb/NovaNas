@@ -89,6 +89,8 @@ func (r *VlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 // SetupWithManager registers the controller with the manager.
 func (r *VlanReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Vlan"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Vlan{}).
 		Named("Vlan").

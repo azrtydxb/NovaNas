@@ -131,6 +131,8 @@ func (r *AppInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager registers the controller with the manager.
 func (r *AppInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "AppInstance"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.AppInstance{}).
 		Named("AppInstance").

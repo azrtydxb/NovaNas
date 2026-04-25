@@ -156,6 +156,8 @@ func (r *SshKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // SetupWithManager registers the controller with the manager.
 func (r *SshKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SshKey"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "sshkey-controller")
 	}

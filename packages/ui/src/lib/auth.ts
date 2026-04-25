@@ -24,7 +24,9 @@ export interface OidcConfig {
 export function resolveOidcConfig(): OidcConfig {
   const env = import.meta.env;
   return {
-    issuer: (env.VITE_OIDC_ISSUER as string | undefined) ?? '/auth/realms/novanas',
+    // Keycloak v17+ dropped the /auth prefix — use the modern path.
+    // Override via VITE_OIDC_ISSUER for legacy keycloak servers.
+    issuer: (env.VITE_OIDC_ISSUER as string | undefined) ?? '/realms/novanas',
     clientId: (env.VITE_OIDC_CLIENT_ID as string | undefined) ?? 'novanas-ui',
     redirectUri:
       (env.VITE_OIDC_REDIRECT_URI as string | undefined) ??

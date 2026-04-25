@@ -72,6 +72,8 @@ func (r *SystemSettingsReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager registers the controller with the manager.
 func (r *SystemSettingsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "SystemSettings"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.SystemSettings{}).
 		Named("SystemSettings").

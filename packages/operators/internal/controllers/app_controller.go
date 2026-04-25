@@ -57,6 +57,8 @@ func (r *AppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 // SetupWithManager registers the controller with the manager.
 func (r *AppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "App"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.App{}).
 		Named("App").

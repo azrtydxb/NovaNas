@@ -103,6 +103,8 @@ func (r *KmsKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // SetupWithManager registers the controller with the manager.
 func (r *KmsKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "KmsKey"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "kmskey-controller")
 	}

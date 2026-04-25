@@ -97,6 +97,8 @@ func (r *DiskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 // SetupWithManager registers the controller with the manager.
 func (r *DiskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Disk"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "disk-controller")
 	}

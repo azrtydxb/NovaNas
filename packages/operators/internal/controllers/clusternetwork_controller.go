@@ -97,6 +97,8 @@ func (r *ClusterNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager registers the controller with the manager.
 func (r *ClusterNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "ClusterNetwork"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.ClusterNetwork{}).
 		Named("ClusterNetwork").

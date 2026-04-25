@@ -98,6 +98,8 @@ func (r *HostInterfaceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // SetupWithManager registers the controller with the manager.
 func (r *HostInterfaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "HostInterface"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.HostInterface{}).
 		Named("HostInterface").

@@ -106,6 +106,8 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager registers the controller with the manager.
 func (r *IngressReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "Ingress"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.Ingress{}).
 		Named("Ingress").

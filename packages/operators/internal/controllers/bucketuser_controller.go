@@ -118,6 +118,8 @@ func randomHex(n int) string {
 // SetupWithManager registers the controller with the manager.
 func (r *BucketUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ControllerName = "BucketUser"
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
 	if r.Recorder == nil {
 		r.Recorder = reconciler.NewRecorder(mgr, "bucketuser-controller")
 	}
