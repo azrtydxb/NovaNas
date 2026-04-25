@@ -544,11 +544,24 @@ ingress:
   # Extra annotations passed through to the Ingress (e.g. cert-manager).
   annotations: {}
   tls:
-    enabled: false
-    # When empty, the IngressClass uses its default cert (k3s traefik
-    # ships a self-signed cert; production overlays should set this to
-    # a cert-manager-issued Secret).
+    # HTTPS is the default. Production overlays should set secretName
+    # to a cert-manager-issued Secret (or a Secret synced from an
+    # external secret store). Leaving secretName empty makes the chart
+    # generate a self-signed cert on first install (kept across
+    # upgrades via helm.sh/resource-policy=keep) so the appliance is
+    # immediately reachable over HTTPS without external dependencies.
+    enabled: true
     secretName: ""
+    # Self-signed cert generation parameters (used only when
+    # secretName is empty and tls.enabled is true).
+    selfSigned:
+      # Cert validity in days. Defaults to ~1 year; rotation is
+      # straightforward — delete the Secret and helm upgrade.
+      validityDays: 365
+      # Extra DNS names / IPs added to the SAN list alongside
+      # ingress.host. Useful for LAN access via the IP literal
+      # in addition to the canonical hostname.
+      extraNames: []
 
 bootstrapSecret:
   create: true

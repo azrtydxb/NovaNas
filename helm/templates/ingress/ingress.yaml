@@ -48,9 +48,7 @@ spec:
   tls:
     - hosts:
         - {{ $host | quote }}
-      {{- with .Values.ingress.tls.secretName }}
-      secretName: {{ . | quote }}
-      {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "novanas.fullname" .)) | quote }}
   {{- end }}
   rules:
     - host: {{ $host | quote }}
