@@ -12,8 +12,7 @@
 #   - /etc/novanas/{version,channel} stamps
 #   - install k3s (skip-start/skip-enable, we start it from firstboot)
 #   - enable NovaNas systemd units
-#   - install the Go installer binary (live-profile only)
-#   - regenerate initramfs (picks up live-boot hooks)
+#   - regenerate initramfs
 #
 # See os/build/build-rootfs.sh (removed) for the old equivalent.
 
@@ -22,8 +21,6 @@ set -eu -o pipefail
 VERSION="${NOVANAS_VERSION:-0.0.0-dev}"
 CHANNEL="${NOVANAS_CHANNEL:-dev}"
 K3S_VERSION="${NOVANAS_K3S_VERSION:-v1.31.3+k3s1}"
-PROFILE="${NOVANAS_PROFILE:-live}"
-INSTALLER_BINARY="${NOVANAS_INSTALLER_BINARY:-}"
 
 log() { printf '[mkosi.postinst] %s\n' "$*"; }
 
@@ -34,7 +31,7 @@ log "pin /etc/hosts (locale + timezone + hostname handled by mkosi.conf)"
 # gethostbyname(self) in PAM/sudo/journald waits ~30s for DNS during boot.
 cat > /etc/hosts <<'EOF'
 127.0.0.1   localhost
-127.0.1.1   novanas-installer
+127.0.1.1   novanas
 ::1         localhost ip6-localhost ip6-loopback
 ff02::1     ip6-allnodes
 ff02::2     ip6-allrouters
@@ -55,50 +52,25 @@ if dpkg -l plymouth 2>/dev/null | grep -q '^ii'; then
   apt-get purge -y plymouth plymouth-themes 2>/dev/null || true
 fi
 
-# k3s + first-boot health services are installed-system concerns; the live
-# installer ISO has no RAUC slots, no overlay, and shouldn't run k3s. Skip
-# them entirely in the live profile to keep the installer minimal and avoid
-# noisy restart loops on tty.
-if [[ "$PROFILE" != "live" ]]; then
-  log "install k3s ${K3S_VERSION}"
-  mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
-  curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
-  INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_SKIP_START=true \
-    INSTALL_K3S_SKIP_ENABLE=true \
-    sh /tmp/k3s-install.sh
-  rm -f /tmp/k3s-install.sh
-fi
+log "install k3s ${K3S_VERSION}"
+mkdir -p /var/lib/rancher/k3s/agent/images /opt/novanas
+curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
+INSTALL_K3S_VERSION="$K3S_VERSION" \
+  INSTALL_K3S_SKIP_START=true \
+  INSTALL_K3S_SKIP_ENABLE=true \
+  sh /tmp/k3s-install.sh
+rm -f /tmp/k3s-install.sh
 
 log "enable networking systemd units"
 systemctl disable ssh 2>/dev/null || true
 systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
 
-if [[ "$PROFILE" == "live" ]]; then
-  log "enable installer-only units (live profile)"
-  systemctl enable novanas-installer.service 2>/dev/null || true
-  systemctl enable novanas-installer-watchdog.service 2>/dev/null || true
-else
-  log "enable post-install/runtime units (update profile)"
-  # firstboot + healthcheck are RAUC-slot concerns; only relevant on the
-  # installed system, never on the installer ISO.
-  systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
-fi
+log "enable post-install/runtime units (update profile)"
+# firstboot + healthcheck are RAUC-slot concerns; only relevant on the
+# installed system.
+systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
 
-# Installer binary: shipped via mkosi.extra-live/usr/local/bin/novanas-installer
-# (mkosi ExtraTrees), which lands it directly in the rootfs at build time.
-# Verify it's there so a missing binary fails the build instead of producing
-# a silent broken ISO like before.
-if [[ "$PROFILE" == "live" ]]; then
-  if [[ ! -x /usr/local/bin/novanas-installer ]]; then
-    log "FATAL: novanas-installer binary missing from rootfs"
-    log "       (Makefile should have staged it into mkosi.extra-live/)"
-    exit 1
-  fi
-  log "novanas-installer present: $(stat -c %s /usr/local/bin/novanas-installer) bytes"
-fi
-
-log "regenerate initramfs (live-boot hooks)"
+log "regenerate initramfs"
 update-initramfs -u -k all
 
 log "cleanup apt cache"

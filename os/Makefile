@@ -2,11 +2,10 @@
 #
 # Driven by mkosi (os/mkosi.conf + mkosi.conf.d/). The build graph is:
 #
-#   mkosi-live      -> build/out/mkosi/live/image/        (rootfs tree)
 #   mkosi-update    -> build/out/mkosi/update/image/      (rootfs tree)
-#   build-images.sh -> filesystem.squashfs / rootfs.img / boot.img / kernel.*
+#   build-images.sh -> rootfs.img / boot.img / kernel.*
 #   bundle          -> novanas-<ver>.raucb                (via rauc bundle)
-#   iso             -> novanas-<ver>.iso                  (via grub-mkrescue)
+#   iso             -> novanas-<ver>.iso                  (via d-i repack)
 #
 # Image builds need root for loop mounts; CI invokes this via sudo.
 
@@ -25,24 +24,17 @@ ROOTFS_DIR   ?= $(CURDIR)/rootfs
 RAUC_DIR     ?= $(CURDIR)/rauc
 PACKER_DIR   ?= $(CURDIR)/packer
 
-INSTALLER_BINARY ?= $(CURDIR)/../installer/bin/novanas-installer
-
-MKOSI_LIVE_DIR    := $(BUILD_DIR)/mkosi/live
 MKOSI_UPDATE_DIR  := $(BUILD_DIR)/mkosi/update
 # mkosi v25 names the output directory after ImageId (set in mkosi.conf), not
 # a literal "image".
-LIVE_ROOTFS       := $(MKOSI_LIVE_DIR)/novanas
 UPDATE_ROOTFS     := $(MKOSI_UPDATE_DIR)/novanas
 
 LAYERED_IMG  := $(BUILD_DIR)/rootfs.img
 BOOT_IMG     := $(BUILD_DIR)/boot.img
-SQUASHFS     := $(BUILD_DIR)/filesystem.squashfs
-KERNEL       := $(BUILD_DIR)/kernel.vmlinuz
-INITRD       := $(BUILD_DIR)/kernel.initrd
 BUNDLE       := $(BUILD_DIR)/novanas-$(VERSION).raucb
 ISO          := $(BUILD_DIR)/novanas-$(VERSION).iso
 
-export VERSION CHANNEL ARCH BUILD_DIR ROOTFS_DIR RAUC_DIR INSTALLER_BINARY K3S_VERSION
+export VERSION CHANNEL ARCH BUILD_DIR ROOTFS_DIR RAUC_DIR K3S_VERSION
 
 MKOSI        ?= mkosi
 MKOSI_COMMON := \
@@ -50,20 +42,18 @@ MKOSI_COMMON := \
     --workspace-dir=$(WORKSPACE_DIR) \
     --environment=NOVANAS_VERSION=$(VERSION) \
     --environment=NOVANAS_CHANNEL=$(CHANNEL) \
-    --environment=NOVANAS_K3S_VERSION=$(K3S_VERSION) \
-    --environment=NOVANAS_INSTALLER_BINARY=$(INSTALLER_BINARY)
+    --environment=NOVANAS_K3S_VERSION=$(K3S_VERSION)
 
-.PHONY: all mkosi-live mkosi-update live-artifacts update-artifacts \
+.PHONY: all mkosi-update update-artifacts \
         bundle iso iso-only va va-only clean lint help
 
 help:
 	@echo "NovaNas OS build targets (mkosi-driven):"
-	@echo "  make mkosi-live       - Bootstrap live-ISO rootfs tree via mkosi"
 	@echo "  make mkosi-update     - Bootstrap RAUC-slot rootfs tree via mkosi"
-	@echo "  make live-artifacts   - Squashfs + kernel + initrd for the ISO"
 	@echo "  make update-artifacts - ext4 rootfs.img + boot.img for the bundle"
 	@echo "  make bundle           - RAUC .raucb update bundle"
-	@echo "  make iso              - Hybrid installer ISO"
+	@echo "  make iso              - Hybrid installer ISO (d-i repack)"
+	@echo "  make iso-only         - ISO only (requires bundle already built)"
 	@echo "  make va               - Virtual appliance images (raw/qcow2/vmdk/ova)"
 	@echo "  make all              - bundle + iso + va"
 	@echo "  make clean            - rm -rf $(BUILD_DIR)"
@@ -78,24 +68,6 @@ $(BUILD_DIR):
 
 # ---------- mkosi bootstrap ----------
 
-mkosi-live: | $(BUILD_DIR)
-	# Stage the installer binary into mkosi.extra-live/ so mkosi's ExtraTrees
-	# mechanism copies it into the rootfs at build time. Previous attempt put
-	# it in mkosi.build-src/ expecting /work/src access from postinst — but
-	# mkosi.postinst.chroot runs INSIDE the nspawn chroot and never sees the
-	# host build context, so the copy silently no-op'd and the live ISO
-	# shipped without the installer binary.
-	@if [ -f $(INSTALLER_BINARY) ]; then \
-	  mkdir -p $(CURDIR)/mkosi.extra-live/usr/local/bin && \
-	  install -m 0755 $(INSTALLER_BINARY) \
-	    $(CURDIR)/mkosi.extra-live/usr/local/bin/novanas-installer ; \
-	fi
-	$(MKOSI) $(MKOSI_COMMON) \
-	    --profile=live \
-	    --output-dir=$(MKOSI_LIVE_DIR) \
-	    --environment=NOVANAS_PROFILE=live \
-	    build
-
 mkosi-update: | $(BUILD_DIR)
 	$(MKOSI) $(MKOSI_COMMON) \
 	    --profile=update \
@@ -104,12 +76,6 @@ mkosi-update: | $(BUILD_DIR)
 	    build
 
 # ---------- artefact extraction ----------
-
-live-artifacts: mkosi-live
-	$(CURDIR)/build/build-images.sh \
-	    --rootfs-dir=$(LIVE_ROOTFS) \
-	    --profile=live \
-	    --out-dir=$(BUILD_DIR)
 
 update-artifacts: mkosi-update
 	$(CURDIR)/build/build-images.sh \
@@ -129,28 +95,14 @@ bundle: update-artifacts
 
 # ---------- Installer ISO ----------
 
-iso: live-artifacts
-	$(CURDIR)/build/build-iso.sh \
-	    --version=$(VERSION) --channel=$(CHANNEL) \
-	    --installer-binary=$(INSTALLER_BINARY) \
-	    --squashfs=$(SQUASHFS) \
-	    --kernel=$(KERNEL) \
-	    --initrd=$(INITRD) \
-	    --out=$(ISO)
+iso: bundle
+	OUT_ISO=$(ISO) RAUC_BUNDLE=$(BUNDLE) $(CURDIR)/build/build-iso.sh
 
-# iso-only assumes live-artifacts are already on disk (downloaded as CI
-# artefacts). Skips the mkosi rebuild.
+# iso-only assumes the RAUC bundle is already on disk (downloaded as CI
+# artefact). Skips the mkosi/bundle rebuild.
 iso-only: | $(BUILD_DIR)
-	@test -f $(SQUASHFS) || { echo "SQUASHFS missing: $(SQUASHFS)" >&2; exit 1; }
-	@test -f $(KERNEL)   || { echo "KERNEL missing: $(KERNEL)"     >&2; exit 1; }
-	@test -f $(INITRD)   || { echo "INITRD missing: $(INITRD)"     >&2; exit 1; }
-	$(CURDIR)/build/build-iso.sh \
-	    --version=$(VERSION) --channel=$(CHANNEL) \
-	    --installer-binary=$(INSTALLER_BINARY) \
-	    --squashfs=$(SQUASHFS) \
-	    --kernel=$(KERNEL) \
-	    --initrd=$(INITRD) \
-	    --out=$(ISO)
+	@test -f $(BUNDLE) || { echo "BUNDLE missing: $(BUNDLE)" >&2; exit 1; }
+	OUT_ISO=$(ISO) RAUC_BUNDLE=$(BUNDLE) $(CURDIR)/build/build-iso.sh
 
 # ---------- Virtual appliances (Packer) ----------
 
