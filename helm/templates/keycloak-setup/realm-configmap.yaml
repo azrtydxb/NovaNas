@@ -155,7 +155,7 @@ data:
           "secret": "${NOVANAS_API_CLIENT_SECRET}",
           "standardFlowEnabled": true,
           "implicitFlowEnabled": false,
-          "directAccessGrantsEnabled": false,
+          "directAccessGrantsEnabled": true,
           "serviceAccountsEnabled": true,
           "redirectUris": [
             "https://{{ $hostname }}/api/v1/auth/callback",

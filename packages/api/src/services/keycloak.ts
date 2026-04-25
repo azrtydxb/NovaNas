@@ -21,6 +21,16 @@ export interface KeycloakClient {
   }): Promise<client.TokenEndpointResponse & client.TokenEndpointResponseHelpers>;
   /** Revoke refresh token (best-effort). */
   logout(refreshToken: string): Promise<void>;
+  /**
+   * Direct username/password login (RFC 6749 Resource Owner Password
+   * Credentials Grant). Used by the SPA's single-page login form so
+   * the user never sees the Keycloak-hosted login page. Requires the
+   * Keycloak client to have `directAccessGrantsEnabled=true`.
+   */
+  passwordLogin(
+    username: string,
+    password: string
+  ): Promise<client.TokenEndpointResponse & client.TokenEndpointResponseHelpers>;
 }
 
 export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
@@ -75,6 +85,52 @@ export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
       } catch {
         // best-effort
       }
+    },
+    async passwordLogin(username: string, password: string) {
+      // openid-client doesn't ship a typed wrapper for the deprecated
+      // ROPC grant, so we hit /token directly. Confidential client
+      // auth is the same as for any other grant: client_id +
+      // client_secret in the form body.
+      const tokenEndpoint = config.serverMetadata().token_endpoint;
+      if (!tokenEndpoint) throw new Error('keycloak: token_endpoint missing from discovery');
+      const body = new URLSearchParams({
+        grant_type: 'password',
+        client_id: env.KEYCLOAK_CLIENT_ID,
+        client_secret: env.KEYCLOAK_CLIENT_SECRET,
+        username,
+        password,
+        scope: 'openid profile email',
+      });
+      const res = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        const err = new Error(`keycloak: password grant failed (${res.status}): ${detail}`);
+        // Tag with status so the caller can map 401/400 → user-facing
+        // "invalid credentials" without leaking server internals.
+        (err as Error & { status?: number }).status = res.status;
+        throw err;
+      }
+      const tokens = (await res.json()) as Record<string, unknown>;
+      // Decorate with the same helpers openid-client puts on its
+      // authorizationCodeGrant return value (.claims()).
+      const decorated = tokens as client.TokenEndpointResponse & client.TokenEndpointResponseHelpers;
+      decorated.claims = () => {
+        if (typeof tokens.id_token !== 'string') return undefined;
+        const parts = tokens.id_token.split('.');
+        if (parts.length !== 3) return undefined;
+        try {
+          return JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8'));
+        } catch {
+          return undefined;
+        }
+      };
+      decorated.expiresIn = () =>
+        typeof tokens.expires_in === 'number' ? tokens.expires_in : undefined;
+      return decorated;
     },
   };
 }

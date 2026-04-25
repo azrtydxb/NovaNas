@@ -19,6 +19,11 @@ const LoginBody = z.object({
   redirectTo: z.string().optional(),
 });
 
+const PasswordLoginBody = z.object({
+  username: z.string().min(1).max(128),
+  password: z.string().min(1).max(256),
+});
+
 export interface AuthRouteDeps {
   env: Env;
   keycloak: KeycloakClient;
@@ -150,6 +155,73 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
         maxAge: SESSION_TTL_SECONDS,
       });
       return reply.redirect(stored.redirectTo || '/');
+    }
+  );
+
+  // -- POST /api/v1/auth/password-login ---------------------------------
+  // Single-page login: SPA posts username + password; api uses the
+  // OIDC Resource Owner Password Credentials grant against Keycloak,
+  // creates a session on success, sets the cookie, and returns the
+  // user info. The browser never leaves the SPA.
+  app.post(
+    '/api/v1/auth/password-login',
+    {
+      schema: {
+        description: 'Username/password login (Keycloak ROPC grant).',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: { type: 'string', minLength: 1, maxLength: 128 },
+            password: { type: 'string', minLength: 1, maxLength: 256 },
+          },
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const body = PasswordLoginBody.parse(req.body);
+      let tokens;
+      try {
+        tokens = await keycloak.passwordLogin(body.username, body.password);
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        // Map Keycloak's 400/401 → user-facing "invalid credentials".
+        // Anything else is a server-side problem we shouldn't paper over.
+        if (status === 400 || status === 401) {
+          return reply.code(401).send({ error: 'invalid_credentials' });
+        }
+        req.log.error({ err }, 'password_login.upstream_failed');
+        return reply.code(502).send({ error: 'auth_service_unavailable' });
+      }
+
+      const claims = tokens.claims();
+      if (!claims) {
+        return reply.code(500).send({ error: 'no_id_token_claims' });
+      }
+      const user = userFromClaims(claims as Record<string, unknown>);
+      const now = Date.now();
+      const record: SessionRecord = {
+        userId: user.sub,
+        username: user.username,
+        createdAt: now,
+        expiresAt: now + SESSION_TTL_SECONDS * 1000,
+        idToken: tokens.id_token ?? '',
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        claims: claims as Record<string, unknown>,
+      };
+      const sid = await sessions.create(record);
+      const isHttps = env.API_PUBLIC_URL.startsWith('https://');
+      reply.setCookie(env.SESSION_COOKIE_NAME, sid, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isHttps,
+        path: '/',
+        signed: true,
+        maxAge: SESSION_TTL_SECONDS,
+      });
+      return reply.send({ user });
     }
   );
 

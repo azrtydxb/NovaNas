@@ -208,8 +208,9 @@ spec:
                   -s 'redirectUris=["https://{{ $hostname }}/api/v1/auth/callback","http://{{ $hostname }}/api/v1/auth/callback"]' \
                   -s 'webOrigins=["+"]' \
                   -s 'standardFlowEnabled=true' \
+                  -s 'directAccessGrantsEnabled=true' \
                   2>/dev/null || true
-                echo "[keycloak-setup] synced novanas-api client redirectUris with publicHostname"
+                echo "[keycloak-setup] synced novanas-api client redirectUris/grants with publicHostname"
               fi
 
               echo "[keycloak-setup] complete"
