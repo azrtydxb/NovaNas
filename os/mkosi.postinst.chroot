@@ -96,7 +96,10 @@ log "regenerate initramfs (live-boot hooks)"
 update-initramfs -u -k all
 
 log "cleanup apt cache"
-apt-get clean
+# nspawn chroot may have minimal PATH; reference apt-get explicitly
+if [[ -x /usr/bin/apt-get ]]; then
+  /usr/bin/apt-get clean
+fi
 rm -rf /var/lib/apt/lists/*
 
 log "postinst done"
