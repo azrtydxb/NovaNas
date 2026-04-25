@@ -7,9 +7,14 @@
 !build/*.txt
 build/out/
 
-# mkosi transient build context: the Makefile drops the installer binary here
-# before invoking mkosi so mkosi.postinst can pick it up via /work/src/.
+# mkosi transient build context (legacy path, no longer used; postinst.chroot
+# can't see /work/src so we switched to ExtraTrees).
 mkosi.build-src/
+
+# Installer binary is staged into mkosi.extra-live/ at build time so mkosi
+# ExtraTrees copies it into the rootfs. Tracked layout (etc/, usr/, etc.)
+# stays in git; the freshly-built Go binary is per-build.
+mkosi.extra-live/usr/local/bin/novanas-installer
 
 # Also un-ignore rootfs/usr/local/bin (was caught by `bin/` in root gitignore).
 !rootfs/usr/local/bin/

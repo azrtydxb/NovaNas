@@ -79,11 +79,16 @@ $(BUILD_DIR):
 # ---------- mkosi bootstrap ----------
 
 mkosi-live: | $(BUILD_DIR)
-	# Copy the installer binary into the build context so mkosi.postinst can
-	# pick it up via /work/src/. mkosi scopes the build context strictly.
+	# Stage the installer binary into mkosi.extra-live/ so mkosi's ExtraTrees
+	# mechanism copies it into the rootfs at build time. Previous attempt put
+	# it in mkosi.build-src/ expecting /work/src access from postinst — but
+	# mkosi.postinst.chroot runs INSIDE the nspawn chroot and never sees the
+	# host build context, so the copy silently no-op'd and the live ISO
+	# shipped without the installer binary.
 	@if [ -f $(INSTALLER_BINARY) ]; then \
-	  mkdir -p $(CURDIR)/mkosi.build-src && \
-	  install -m 0755 $(INSTALLER_BINARY) $(CURDIR)/mkosi.build-src/novanas-installer ; \
+	  mkdir -p $(CURDIR)/mkosi.extra-live/usr/local/bin && \
+	  install -m 0755 $(INSTALLER_BINARY) \
+	    $(CURDIR)/mkosi.extra-live/usr/local/bin/novanas-installer ; \
 	fi
 	$(MKOSI) $(MKOSI_COMMON) \
 	    --profile=live \

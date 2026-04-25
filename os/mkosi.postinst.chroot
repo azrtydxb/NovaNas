@@ -85,19 +85,17 @@ else
   systemctl enable novanas-firstboot.service novanas-healthcheck.service 2>/dev/null || true
 fi
 
-# Installer binary: mkosi mounts the build context at /work/src; expect the
-# binary to be copied there by the Makefile before invocation. Fallback to
-# NOVANAS_INSTALLER_BINARY pointing at a host path mkosi has exposed.
+# Installer binary: shipped via mkosi.extra-live/usr/local/bin/novanas-installer
+# (mkosi ExtraTrees), which lands it directly in the rootfs at build time.
+# Verify it's there so a missing binary fails the build instead of producing
+# a silent broken ISO like before.
 if [[ "$PROFILE" == "live" ]]; then
-  if [[ -f /work/src/novanas-installer ]]; then
-    log "install novanas-installer -> /usr/local/bin"
-    install -m 0755 /work/src/novanas-installer /usr/local/bin/novanas-installer
-  elif [[ -n "$INSTALLER_BINARY" && -f "$INSTALLER_BINARY" ]]; then
-    log "install novanas-installer from $INSTALLER_BINARY"
-    install -m 0755 "$INSTALLER_BINARY" /usr/local/bin/novanas-installer
-  else
-    log "WARN: no installer binary found (live ISO autoinstall will fail)"
+  if [[ ! -x /usr/local/bin/novanas-installer ]]; then
+    log "FATAL: novanas-installer binary missing from rootfs"
+    log "       (Makefile should have staged it into mkosi.extra-live/)"
+    exit 1
   fi
+  log "novanas-installer present: $(stat -c %s /usr/local/bin/novanas-installer) bytes"
 fi
 
 log "regenerate initramfs (live-boot hooks)"
