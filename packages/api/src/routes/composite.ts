@@ -12,8 +12,9 @@ import {
   VmSchema,
 } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { canWrite, ownNamespace } from '../auth/authz.js';
+import { AuthzRole, canWrite, ownNamespace } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
+import { hasRole } from '../auth/rbac.js';
 import { buildAppInstanceResource } from '../resources/apps.js';
 import { buildDatasetResource } from '../resources/datasets.js';
 import { buildDiskResource } from '../resources/disks.js';
@@ -246,7 +247,7 @@ export async function compositeRoutes(app: FastifyInstance, deps: CompositeDeps)
         return reply.code(403).send({ error: 'forbidden', message: 'cannot create dataset' });
       }
       // Best-effort; operators construct user namespace as `user-<username>`.
-      if (user && namespace !== ownNamespace(user) && !user.roles.includes('novanas:admin')) {
+      if (user && namespace !== ownNamespace(user) && !hasRole(user, AuthzRole.Admin)) {
         return reply.code(403).send({ error: 'forbidden', message: 'namespace not owned by user' });
       }
 

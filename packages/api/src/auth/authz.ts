@@ -15,11 +15,14 @@ import type { AuthenticatedUser } from '../types.js';
  * user's "own namespace" is `user-<username>` by convention.
  */
 
+// Names mirror the realm roles from the keycloak realm import. Both
+// the bare names and the historical "novanas:" prefixed forms are
+// recognised by hasAnyRole below.
 export const AuthzRole = {
-  Admin: 'novanas:admin',
-  User: 'novanas:user',
-  Viewer: 'novanas:viewer',
-  ShareOnly: 'novanas:share-only',
+  Admin: 'admin',
+  User: 'user',
+  Viewer: 'viewer',
+  ShareOnly: 'share-only',
 } as const;
 export type AuthzRole = (typeof AuthzRole)[keyof typeof AuthzRole];
 
@@ -194,7 +197,15 @@ export function isCluster(kind: Kind): boolean {
 }
 
 function hasAnyRole(user: AuthenticatedUser, roles: readonly string[]): boolean {
-  for (const r of roles) if (user.roles.includes(r)) return true;
+  // Roles arrive in user.roles (from realm_access.roles) or
+  // user.groups (from the keycloak novanas:roles mapper). Search both
+  // and accept the legacy "novanas:" prefix for backwards compat.
+  const haystack = [...(user.roles ?? []), ...(user.groups ?? [])];
+  for (const r of roles) {
+    const bare = r.startsWith('novanas:') ? r.slice('novanas:'.length) : r;
+    const prefixed = `novanas:${bare}`;
+    if (haystack.includes(bare) || haystack.includes(prefixed)) return true;
+  }
   return false;
 }
 

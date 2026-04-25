@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { hasRole } from './rbac.js';
 
 /**
  * Fastify decorators for `request.user`. The `auth` plugin populates
@@ -24,7 +25,7 @@ export function requireRole(role: string) {
       reply.code(401).send({ error: 'unauthorized' });
       return;
     }
-    if (!req.user.roles.includes(role)) {
+    if (!hasRole(req.user, role)) {
       reply.code(403).send({ error: 'forbidden', message: `missing role: ${role}` });
       return;
     }
