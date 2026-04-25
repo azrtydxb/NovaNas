@@ -7,8 +7,8 @@ name: os-build
 # only needs Docker + (for va-images) a working /dev/kvm.
 #
 # Jobs:
-#   1. os-build  - runs mkosi twice (live + update profiles), emits squashfs,
-#                  ext4 images, RAUC bundle, and hybrid installer ISO.
+#   1. os-build  - runs mkosi (update profile only), emits ext4 images,
+#                  RAUC bundle, and hybrid installer ISO via d-i repack.
 #   2. va-images - Packer VM builds from the ISO.
 #
 # Release signing is a separate, human-approved workflow (release.yml).
@@ -18,12 +18,12 @@ on:
     branches: [main]
     paths:
       - "os/**"
-      - "installer/**"
+      - "installer-di/**"
       - ".github/workflows/os-build.yml"
   pull_request:
     paths:
       - "os/**"
-      - "installer/**"
+      - "installer-di/**"
       - ".github/workflows/os-build.yml"
   workflow_dispatch:
 
@@ -41,7 +41,7 @@ env:
 
 jobs:
   os-build:
-    name: mkosi (live + update) + bundle + ISO
+    name: mkosi (update) + bundle + ISO
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
     # Trixie gives us mkosi >= 22 from apt and matches our target OS exactly.
@@ -59,31 +59,20 @@ jobs:
           apt-get install -y --no-install-recommends \
             ca-certificates curl git make sudo \
             mkosi systemd-container \
-            rauc squashfs-tools xorriso \
+            rauc squashfs-tools xorriso cpio \
             grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             e2fsprogs parted \
             debian-archive-keyring \
-            bubblewrap \
-            golang-go
+            bubblewrap
           mkosi --version
-          go version
 
       - uses: actions/checkout@v5
-
-      - name: Build installer binary (baked into live rootfs)
-        run: |
-          cd installer && GOWORK=off go build -o bin/novanas-installer .
 
       - name: Build update (RAUC) rootfs via mkosi
         run: make -C os mkosi-update
 
-      - name: Build live (ISO) rootfs via mkosi
-        run: make -C os mkosi-live
-
-      - name: Extract artefacts (squashfs + ext4 + kernel/initrd)
-        run: |
-          make -C os update-artifacts
-          make -C os live-artifacts
+      - name: Extract artefacts (ext4 + kernel/initrd)
+        run: make -C os update-artifacts
 
       - name: Build RAUC bundle (unsigned dev cert)
         run: make -C os bundle
@@ -91,7 +80,7 @@ jobs:
       - name: Build hybrid installer ISO
         run: make -C os iso-only
 
-      - name: Upload RAUC bundle + kernel + squashfs
+      - name: Upload RAUC bundle + kernel
         uses: actions/upload-artifact@v5
         with:
           name: rauc-bundle-${{ github.sha }}
@@ -99,7 +88,6 @@ jobs:
             os/build/out/*.raucb
             os/build/out/kernel.vmlinuz
             os/build/out/kernel.initrd
-            os/build/out/filesystem.squashfs
           retention-days: 14
 
       - name: Upload ISO
