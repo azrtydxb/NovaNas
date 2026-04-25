@@ -55,6 +55,29 @@ inject_preseed() {
   ( cd "$stage" && find . | cpio --create --format=newc --quiet | gzip > "../../$initrd" )
 }
 
+customize_grub() {
+  log "writing GRUB menu"
+  cp installer-di/grub-installer.cfg "$WORK_DIR/iso/boot/grub/grub.cfg"
+  # Also overwrite isolinux for legacy boot
+  if [[ -f "$WORK_DIR/iso/isolinux/isolinux.cfg" ]]; then
+    cat > "$WORK_DIR/iso/isolinux/isolinux.cfg" <<'EOF'
+default novanas-auto
+prompt 0
+timeout 50
+
+label novanas-auto
+  menu label Install NovaNas (automatic)
+  kernel /install.amd/vmlinuz
+  append auto=true priority=critical preseed/file=/preseed.cfg vga=788 initrd=/install.amd/initrd.gz quiet ---
+
+label novanas-interactive
+  menu label Install NovaNas (interactive)
+  kernel /install.amd/vmlinuz
+  append preseed/file=/preseed.cfg vga=788 initrd=/install.amd/initrd.gz ---
+EOF
+  fi
+}
+
 main() {
   command -v xorriso >/dev/null 2>&1 || { echo "xorriso not installed"; exit 1; }
   command -v gunzip  >/dev/null 2>&1 || { echo "gunzip not installed"; exit 1; }
@@ -68,7 +91,7 @@ main() {
   log "step 3: inject preseed into initrd"
   inject_preseed
   log "step 4: copy late_command + RAUC bundle into ISO"
-  log "step 5: customize grub menu"
+  customize_grub
   log "step 6: rebuild ISO with xorriso"
 
   # implementation in subsequent tasks
