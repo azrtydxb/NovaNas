@@ -17,7 +17,21 @@ DefaultDependencies=no
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'echo "novanas-installer-watchdog: sleeping 5m then poweroff" | tee /dev/console; sleep 300; echo "novanas-installer-watchdog: timeout — forcing poweroff" | tee /dev/console; /sbin/poweroff -f || (echo o > /proc/sysrq-trigger)'
+# DMI sys_vendor signals VM vs bare metal. On real hardware the operator
+# is interactively driving the installer TUI and may legitimately take
+# 30+ minutes; auto-powering-off would yank the rug. Only the CI/VM
+# runs need the timer (Packer's shutdown_timeout depends on it).
+ExecStart=/bin/bash -c ' \
+  vendor=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo unknown); \
+  case "$vendor" in \
+    QEMU|"Red Hat"|Bochs|innotek*|"VMware, Inc."|"Microsoft Corporation") \
+      echo "novanas-installer-watchdog: VM detected ($vendor) — sleeping 5m then poweroff" | tee /dev/console; \
+      sleep 300; \
+      echo "novanas-installer-watchdog: timeout — forcing poweroff" | tee /dev/console; \
+      /sbin/poweroff -f || (echo o > /proc/sysrq-trigger) ;; \
+    *) \
+      echo "novanas-installer-watchdog: real hardware ($vendor) — auto-poweroff disabled" | tee /dev/console ;; \
+  esac'
 
 [Install]
 WantedBy=basic.target
