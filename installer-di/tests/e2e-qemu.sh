@@ -14,13 +14,14 @@ qemu-img create -f raw "$DISK2" 20G
 qemu-system-x86_64 \
   -m 2G -enable-kvm \
   -drive "file=$ISO,media=cdrom" \
-  -drive "file=$DISK1,if=virtio,format=raw" \
-  -drive "file=$DISK2,if=virtio,format=raw" \
+  -device nvme,serial=disk1,drive=d1 \
+  -drive "file=$DISK1,if=none,format=raw,id=d1" \
+  -device nvme,serial=disk2,drive=d2 \
+  -drive "file=$DISK2,if=none,format=raw,id=d2" \
   -boot d \
   -nographic \
   -serial mon:stdio \
   -no-reboot \
-  -append "auto=true priority=critical preseed/file=/preseed.cfg console=ttyS0,115200n8" \
   | tee install.log
 
 grep -q "late_command done" install.log || {
@@ -31,8 +32,10 @@ grep -q "late_command done" install.log || {
 # Phase 2: boot the installed system
 qemu-system-x86_64 \
   -m 2G -enable-kvm \
-  -drive "file=$DISK1,if=virtio,format=raw" \
-  -drive "file=$DISK2,if=virtio,format=raw" \
+  -device nvme,serial=disk1,drive=d1 \
+  -drive "file=$DISK1,if=none,format=raw,id=d1" \
+  -device nvme,serial=disk2,drive=d2 \
+  -drive "file=$DISK2,if=none,format=raw,id=d2" \
   -nographic -serial mon:stdio \
   -no-reboot \
   | tee boot.log &

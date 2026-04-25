@@ -9,7 +9,7 @@ NovaNas ships a customized Debian installer ISO. Boot order:
 5. `late_command` (`installer-di/late_command.sh`):
    - configures RAUC (`/etc/rauc/system.conf`)
    - installs the bundled initial NovaNas RAUC bundle
-   - copies slot A → slot B for redundancy
+   - leaves slot B empty (populated by first OTA update)
 6. System reboots into the NovaNas image
 
 ## Modes

@@ -48,11 +48,11 @@ inject_preseed() {
   rm -rf "$stage"
   mkdir -p "$stage"
   log "unpacking initrd"
-  ( cd "$stage" && gunzip < "../../$initrd" | cpio -id --quiet )
+  ( cd "$stage" && gunzip < "../iso/install.amd/initrd.gz" | cpio -id --quiet )
   log "copying preseed into initrd"
   cp installer-di/preseed.cfg "$stage/preseed.cfg"
   log "repacking initrd"
-  ( cd "$stage" && find . | cpio --create --format=newc --quiet | gzip > "../../$initrd" )
+  ( cd "$stage" && find . | cpio --create --format=newc --quiet | gzip > "../iso/install.amd/initrd.gz" )
 }
 
 customize_grub() {
