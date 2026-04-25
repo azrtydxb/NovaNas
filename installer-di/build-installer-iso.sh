@@ -4,27 +4,51 @@
 
 set -euo pipefail
 
-NETINST_URL="${NETINST_URL:-https://cdimage.debian.org/cdimage/release/current/amd64/iso-cd/debian-13.0.0-amd64-netinst.iso}"
-NETINST_SHA256="${NETINST_SHA256:-}"  # set by caller
+# When NETINST_URL is unset, auto-discover the current Debian netinst from
+# the published SHA256SUMS (so we don't rot to a 404 every point release).
+# Set NETINST_URL+NETINST_SHA256 explicitly for reproducible builds or tests.
+NETINST_MIRROR="${NETINST_MIRROR:-https://cdimage.debian.org/cdimage/release/current/amd64/iso-cd}"
+NETINST_URL="${NETINST_URL:-}"
+NETINST_SHA256="${NETINST_SHA256:-}"
 OUT_ISO="${OUT_ISO:-build/out/novanas-installer.iso}"
 RAUC_BUNDLE="${RAUC_BUNDLE:-build/out/novanas.raucb}"
 WORK_DIR="${WORK_DIR:-build/installer-di-work}"
 
 log() { printf '[build-installer-iso] %s\n' "$*" >&2; }
+die() { log "FATAL: $*"; exit 1; }
 
 download_netinst() {
-  local cache="netinst-cache/$(basename "$NETINST_URL")"
-  mkdir -p "$(dirname "$cache")"
+  local cache_dir="netinst-cache"
+  mkdir -p "$cache_dir"
+
+  local url sha filename
+  if [[ -n "$NETINST_URL" ]]; then
+    url="$NETINST_URL"
+    filename="$(basename "$url")"
+    sha="$NETINST_SHA256"
+  else
+    log "discovering current netinst from $NETINST_MIRROR/SHA256SUMS"
+    curl -fL --retry 3 -o "$cache_dir/SHA256SUMS" "$NETINST_MIRROR/SHA256SUMS" \
+      || die "could not fetch SHA256SUMS from $NETINST_MIRROR"
+    read -r sha filename < <(grep -E 'debian-[0-9.]+-amd64-netinst\.iso$' "$cache_dir/SHA256SUMS" | head -1)
+    [[ -n "$filename" ]] || die "no netinst entry in $cache_dir/SHA256SUMS"
+    url="$NETINST_MIRROR/$filename"
+    log "discovered $filename ($sha)"
+  fi
+
+  local cache="$cache_dir/$filename"
   if [[ ! -f "$cache" ]]; then
-    log "fetching $NETINST_URL"
-    curl -fL --retry 3 -o "$cache.tmp" "$NETINST_URL"
+    log "fetching $url"
+    curl -fL --retry 3 -o "$cache.tmp" "$url" \
+      || { rm -f "$cache.tmp"; die "download failed: $url"; }
     mv "$cache.tmp" "$cache"
   fi
-  if [[ -n "$NETINST_SHA256" ]]; then
+
+  if [[ -n "$sha" ]]; then
     local got
     got=$(sha256sum "$cache" | awk '{print $1}')
-    if [[ "$got" != "$NETINST_SHA256" ]]; then
-      log "checksum mismatch: expected $NETINST_SHA256, got $got"
+    if [[ "$got" != "$sha" ]]; then
+      log "checksum mismatch: expected $sha, got $got"
       rm -f "$cache"
       exit 1
     fi
@@ -117,7 +141,11 @@ main() {
   mkdir -p "$WORK_DIR" "$(dirname "$OUT_ISO")"
 
   log "step 1: download netinst"
-  ISO_PATH=$(download_netinst)
+  # Bash's set -e doesn't propagate failure of $() into assignment; check
+  # explicitly so a 404 / network error stops the build instead of silently
+  # passing an empty path to unpack_iso.
+  ISO_PATH=$(download_netinst) || die "download_netinst failed"
+  [[ -n "$ISO_PATH" && -f "$ISO_PATH" ]] || die "downloaded ISO missing: '$ISO_PATH'"
   log "step 2: unpack ISO contents"
   unpack_iso "$ISO_PATH"
   log "step 3: inject preseed into initrd"
