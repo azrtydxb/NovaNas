@@ -1,0 +1,15 @@
+novanas ::                                                              \
+        1 1 1 free                                                      \
+                $bios_boot{ }                                           \
+                method{ biosgrub } .                                    \
+        538 538 1075 raid                                               \
+                $primary{ } $bootable{ }                                \
+                method{ raid } .                                        \
+        1024 1024 2048 raid                                             \
+                method{ raid } .                                        \
+        4096 4096 4096 raid                                             \
+                method{ raid } .                                        \
+        4096 4096 4096 raid                                             \
+                method{ raid } .                                        \
+        20480 1000000000 1000000000 raid                                \
+                method{ raid } .
