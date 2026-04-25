@@ -139,6 +139,11 @@ function DisksPage() {
                   <TableCell className='mono text-xs'>{d.status?.model ?? '—'}</TableCell>
                   <TableCell>
                     <Badge>{d.status?.deviceClass ?? 'unknown'}</Badge>
+                    {d.metadata?.labels?.['novanas.io/system'] === 'true' && (
+                      <Badge tone='warn' className='ml-1' title='OS disk — cannot be added to a pool'>
+                        System
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className='mono'>
                     {d.status?.sizeBytes ? formatBytes(d.status.sizeBytes) : '—'}
@@ -183,6 +188,11 @@ function DiskCard({ disk, onClick }: { disk: Disk; onClick: () => void }) {
       <div className='flex items-center gap-2'>
         <StatusDot tone={tone} />
         <span className='mono text-sm text-foreground'>slot {disk.status?.slot ?? '—'}</span>
+        {disk.metadata?.labels?.['novanas.io/system'] === 'true' && (
+          <Badge tone='warn' title='OS disk — cannot be added to a pool'>
+            System
+          </Badge>
+        )}
         <span className='ml-auto text-2xs uppercase tracking-wider text-foreground-subtle'>
           {disk.status?.deviceClass ?? '—'}
         </span>

@@ -1,3 +1,6 @@
+import { api } from '@/api/client';
+import { useDisks } from '@/api/disks';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   type PoolCreateBody,
   type PoolUpdateBody,
@@ -46,7 +49,7 @@ import { Trans } from '@lingui/react';
 import type { StoragePool } from '@novanas/schemas';
 import { createFileRoute } from '@tanstack/react-router';
 import { Database, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -227,12 +230,27 @@ function CreatePoolDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const create = useCreatePool();
+  const existing = usePools();
   const toast = useToast();
+  // Tiers are exclusive — each pool owns a distinct performance level.
+  // Filter the dropdown to only the tiers that aren't already taken,
+  // and pick the lowest-numbered free tier as the default.
+  const usedTiers = new Set((existing.data ?? []).map((p) => p.spec?.tier));
+  const freeTiers = tierOptions.filter((t) => !usedTiers.has(t));
+  const defaultTier = freeTiers[0] ?? tierOptions[0];
   const form = useForm<CreatePoolForm>({
     resolver: zodResolver(CreatePoolFormSchema),
     mode: 'onChange',
-    defaultValues: { name: '', tier: '1' },
+    defaultValues: { name: '', tier: defaultTier },
   });
+  // Re-seat the default whenever the set of used tiers changes (e.g. a
+  // pool got created/deleted while the dialog was closed). useForm's
+  // defaultValues only run on mount, so we patch the field manually.
+  useEffect(() => {
+    if (open && form.getValues('tier') && usedTiers.has(form.getValues('tier'))) {
+      form.setValue('tier', defaultTier, { shouldValidate: true });
+    }
+  }, [open, defaultTier, form, usedTiers]);
 
   const onSubmit = form.handleSubmit(async (values) => {
     const body: PoolCreateBody = {
@@ -285,11 +303,15 @@ function CreatePoolDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {tierOptions.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        Tier {t}
-                      </SelectItem>
-                    ))}
+                    {tierOptions.map((t) => {
+                      const taken = usedTiers.has(t);
+                      return (
+                        <SelectItem key={t} value={t} disabled={taken}>
+                          Tier {t}
+                          {taken ? ' · in use' : ''}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               )}
@@ -434,6 +456,7 @@ function PoolDetailDrawer({ pool, onClose }: { pool: StoragePool | null; onClose
               </SelectContent>
             </Select>
           </FormField>
+          {pool && <PoolDisksSection pool={pool} mayMutate={mayMutate} />}
           {pool?.status?.conditions && pool.status.conditions.length > 0 && (
             <div className='border border-border rounded-md p-2 text-xs'>
               <div className='text-foreground-subtle uppercase tracking-wider mb-1'>Conditions</div>
@@ -474,6 +497,204 @@ function PoolDetailDrawer({ pool, onClose }: { pool: StoragePool | null; onClose
               {update.isPending ? 'Saving…' : 'Save changes'}
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// PoolDisksSection — list attached disks + attach unassigned disks.
+// Disk-spec is the source of truth: `disk.spec.pool === pool.metadata.name`
+// indicates membership. The DiskReconciler then transitions IDENTIFIED →
+// ASSIGNED → ACTIVE; the StoragePoolReconciler aggregates capacity from the
+// member set. So the UI only needs to PATCH each disk's spec.
+// -----------------------------------------------------------------------------
+function PoolDisksSection({ pool, mayMutate }: { pool: StoragePool; mayMutate: boolean }) {
+  const disks = useDisks();
+  const toast = useToast();
+  const [picking, setPicking] = useState(false);
+  const all = disks.data ?? [];
+  const attached = all.filter((d) => d.spec?.pool === pool.metadata.name);
+  // Exclude OS disks (novanas.io/system=true label, set by the
+  // disk-agent for any disk hosting a host-mounted partition / swap).
+  // The disk is still visible on the Disks page; it just isn't a
+  // legal target for pool assignment.
+  const isSystem = (d: import('@novanas/schemas').Disk): boolean =>
+    d.metadata?.labels?.['novanas.io/system'] === 'true';
+  // Honour the pool's deviceFilter.preferredClass — if the pool was
+  // created as an HDD pool, don't let the admin attach SSD/NVMe disks
+  // (and vice versa). Pools with no preference accept any class.
+  const requiredClass = pool.spec?.deviceFilter?.preferredClass;
+  const unassigned = all.filter((d) => {
+    if (d.spec?.pool) return false;
+    if (isSystem(d)) return false;
+    if (requiredClass && d.status?.deviceClass !== requiredClass) return false;
+    return true;
+  });
+  const fmtSize = (b?: number): string => {
+    if (!b) return '—';
+    const tb = b / 1e12;
+    if (tb >= 1) return `${tb.toFixed(1)} TB`;
+    return `${(b / 1e9).toFixed(1)} GB`;
+  };
+  return (
+    <div className='border border-border rounded-md p-2 text-xs'>
+      <div className='flex items-center justify-between mb-1.5'>
+        <span className='text-foreground-subtle uppercase tracking-wider'>
+          Disks ({attached.length})
+        </span>
+        {mayMutate && (
+          <Button size='sm' variant='ghost' onClick={() => setPicking(true)}>
+            <Plus size={13} /> Attach disks
+          </Button>
+        )}
+      </div>
+      {attached.length === 0 ? (
+        <div className='text-foreground-muted py-2 text-center'>
+          No disks attached. {mayMutate ? 'Click Attach disks to add some.' : ''}
+        </div>
+      ) : (
+        <ul className='flex flex-col gap-0.5'>
+          {attached.map((d) => (
+            <li key={d.metadata.name} className='flex items-center justify-between mono'>
+              <span>
+                <span className='text-foreground'>{d.status?.slot ?? d.metadata.name}</span>
+                <span className='text-foreground-muted'>
+                  {' '}
+                  · {d.status?.deviceClass ?? '?'} · {fmtSize(d.status?.sizeBytes)}
+                </span>
+              </span>
+              <span className='text-foreground-subtle'>{d.status?.state ?? '—'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <AttachDisksDialog
+        open={picking}
+        onClose={() => setPicking(false)}
+        pool={pool}
+        candidates={unassigned}
+        onAttached={(n) => {
+          toast.success(
+            `Attached ${n} disk${n === 1 ? '' : 's'}`,
+            `to pool ${pool.metadata.name}`
+          );
+          setPicking(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function AttachDisksDialog({
+  open,
+  onClose,
+  pool,
+  candidates,
+  onAttached,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pool: StoragePool;
+  candidates: import('@novanas/schemas').Disk[];
+  onAttached: (count: number) => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
+  const qc = useQueryClient();
+  const fmtSize = (b?: number): string => {
+    if (!b) return '—';
+    const tb = b / 1e12;
+    if (tb >= 1) return `${tb.toFixed(1)} TB`;
+    return `${(b / 1e9).toFixed(1)} GB`;
+  };
+  const toggle = (name: string) => {
+    const next = new Set(selected);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setSelected(next);
+  };
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Attach disks to {pool.metadata.name}</DialogTitle>
+          <DialogDescription>
+            Select unassigned disks to add to this pool. They transition through
+            IDENTIFIED → ASSIGNED → ACTIVE as the operator picks them up.
+          </DialogDescription>
+        </DialogHeader>
+        {candidates.length === 0 ? (
+          <div className='text-sm text-foreground-muted py-3 text-center'>
+            No unassigned disks available.
+          </div>
+        ) : (
+          <ul className='flex flex-col gap-1 max-h-[400px] overflow-y-auto'>
+            {candidates.map((d) => (
+              <li
+                key={d.metadata.name}
+                className='flex items-center gap-2 p-1.5 rounded-md hover:bg-elevated cursor-pointer'
+                onClick={() => toggle(d.metadata.name)}
+              >
+                <input
+                  type='checkbox'
+                  checked={selected.has(d.metadata.name)}
+                  onChange={() => toggle(d.metadata.name)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className='mono text-xs'>
+                  <span className='text-foreground'>{d.status?.slot ?? d.metadata.name}</span>
+                  <span className='text-foreground-muted'>
+                    {' '}
+                    · {d.status?.deviceClass ?? '?'} · {fmtSize(d.status?.sizeBytes)} ·{' '}
+                    {d.status?.model ?? ''}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          <Button variant='ghost' onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant='primary'
+            disabled={selected.size === 0 || submitting}
+            onClick={async () => {
+              const names = Array.from(selected);
+              setSubmitting(true);
+              try {
+                // Bulk-patch each selected disk's spec. The api hook
+                // `useUpdateDisk` is keyed by a single name; for a
+                // multi-select we hit the api endpoint directly so
+                // every patch is independent.
+                await Promise.all(
+                  names.map((n) =>
+                    api
+                      .patch(`/disks/${encodeURIComponent(n)}`, {
+                        spec: { pool: pool.metadata.name, role: 'data' },
+                      })
+                      .catch((e: unknown) => {
+                        throw new Error(`${n}: ${(e as Error).message}`);
+                      })
+                  )
+                );
+                qc.invalidateQueries({ queryKey: ['disks'] });
+                qc.invalidateQueries({ queryKey: ['pools'] });
+                qc.invalidateQueries({ queryKey: ['pool', pool.metadata.name] });
+                onAttached(names.length);
+              } catch (err) {
+                toast.error('Failed to attach disks', (err as Error)?.message);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            {submitting ? 'Attaching…' : `Attach ${selected.size || ''}`}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,0 +1,82 @@
+{{- if .Values.diskAgent.enabled -}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: novanas-disk-agent
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "disk-agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-disk-agent
+      # Tolerate every taint — disks live on every node, including
+      # control-plane nodes in single-box appliance deployments.
+      tolerations:
+        - operator: Exists
+      hostPID: false
+      hostNetwork: false
+      containers:
+        - name: agent
+          image: "{{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}{{ .Values.diskAgent.image.repository }}:{{ .Values.diskAgent.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.diskAgent.image.pullPolicy | default .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - --interval={{ .Values.diskAgent.interval | default "30s" }}
+            - --log-level={{ .Values.diskAgent.logLevel | default "info" }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            # We must read /sys/block/*/device/{model,serial,wwid} —
+            # most fields are world-readable but a few (especially on
+            # NVMe) need elevated privilege. DAC_READ_SEARCH lets us
+            # bypass DAC checks while staying short of CAP_SYS_RAWIO.
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: false
+            runAsUser: 0
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH"]
+          volumeMounts:
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: dev-disk
+              mountPath: /dev/disk
+              readOnly: true
+            # Host /proc gives us /proc/self/mounts and /proc/swaps so
+            # the agent can identify OS disks (any disk with a mounted
+            # partition) and label them novanas.io/system=true.
+            - name: host-proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.diskAgent.resources | nindent 12 }}
+      volumes:
+        - name: sys
+          hostPath:
+            path: /sys
+            type: Directory
+        - name: dev-disk
+          hostPath:
+            path: /dev/disk
+            type: DirectoryOrCreate
+        - name: host-proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: tmp
+          emptyDir: {}
+{{- end }}

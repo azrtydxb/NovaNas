@@ -236,6 +236,23 @@ nfs:
     requests: { cpu: "50m",  memory: "64Mi" }
     limits:   { cpu: "500m", memory: "256Mi" }
 
+# -----------------------------------------------------------------------------
+# disk-agent — node-local DaemonSet that scans /sys/block and creates/updates
+# Disk CRs. Required for any storage to show up in the UI.
+# -----------------------------------------------------------------------------
+diskAgent:
+  enabled: true
+  image:
+    repository: novanas/disk-agent
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: ""
+  # Poll interval. Hot-plug is picked up on the next tick.
+  interval: 30s
+  logLevel: info
+  resources:
+    requests: { cpu: "10m",  memory: "32Mi" }
+    limits:   { cpu: "100m", memory: "128Mi" }
+
 discovery:
   enabled: true
   image:

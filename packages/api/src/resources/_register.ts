@@ -34,6 +34,26 @@ export interface RegisterOptions<T> {
    * is treated as cluster-scoped.
    */
   resolveNamespace?: (req: FastifyRequest, user: AuthenticatedUser) => string;
+  /**
+   * Optional async hook fired BEFORE a CREATE/PATCH/DELETE call hits
+   * Kubernetes. Use it to enforce domain rules that the Zod schema
+   * can't express on its own (cross-resource invariants like "no two
+   * pools share a tier"). Throw `RegisterValidationError` to short-
+   * circuit with a 422 response carrying your message.
+   */
+  validate?: (
+    action: 'create' | 'patch' | 'delete',
+    body: unknown,
+    req: FastifyRequest
+  ) => Promise<void> | void;
+}
+
+/** Thrown by RegisterOptions.validate hooks to surface a 422 with a message. */
+export class RegisterValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegisterValidationError';
+  }
 }
 
 function errorStatus(err: unknown): number {
@@ -139,6 +159,16 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
       if (!parsed.success) {
         return reply.code(400).send({ error: 'invalid_body', message: parsed.error.message });
       }
+      if (opts.validate) {
+        try {
+          await opts.validate('create', parsed.data, req);
+        } catch (err) {
+          if (err instanceof RegisterValidationError) {
+            return reply.code(422).send({ error: 'invalid_request', message: err.message });
+          }
+          throw err;
+        }
+      }
       const name =
         (parsed.data as unknown as { metadata?: { name?: string } })?.metadata?.name ?? '';
       try {
@@ -192,6 +222,16 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
       if (!canWrite(user, kind, namespace)) return forbid(reply);
       if (!req.body || typeof req.body !== 'object') {
         return reply.code(400).send({ error: 'invalid_body', message: 'object required' });
+      }
+      if (opts.validate) {
+        try {
+          await opts.validate('patch', req.body, req);
+        } catch (err) {
+          if (err instanceof RegisterValidationError) {
+            return reply.code(422).send({ error: 'invalid_request', message: err.message });
+          }
+          throw err;
+        }
       }
       try {
         const updated = await resource.patch(req.params.name, req.body, namespace);

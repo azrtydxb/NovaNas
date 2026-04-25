@@ -44,6 +44,13 @@ type DeviceInfo struct {
 	DeviceType DeviceType
 	Model      string
 	Serial     string
+	// Wwn is the World-Wide Name (NVMe nguid / SATA WWN) — globally
+	// unique and stable across reboots and OS reinstalls. Best
+	// candidate for a Disk CR's primary key.
+	Wwn        string
+	// ByIdPath is the persistent /dev/disk/by-id/* symlink, useful
+	// for identifying the device across udev renames.
+	ByIdPath   string
 	Rotational bool
 }
 
@@ -110,7 +117,61 @@ func DiscoverDevices() ([]DeviceInfo, error) {
 		if err == nil {
 			dev.Model = strings.TrimSpace(string(modelData))
 		}
+		// Serial is at different paths for SATA vs NVMe.
+		for _, p := range []string{
+			filepath.Join(sysBlock, name, "device", "serial"),
+			filepath.Join(sysBlock, name, "device", "vpd_pg80"),
+		} {
+			if data, err := os.ReadFile(p); err == nil {
+				if s := strings.TrimSpace(string(data)); s != "" {
+					dev.Serial = s
+					break
+				}
+			}
+		}
+		// WWN: SATA disks expose it under /sys/block/<n>/device/wwid
+		// (preferred) or wwn ; NVMe under /sys/block/<n>/wwid.
+		for _, p := range []string{
+			filepath.Join(sysBlock, name, "device", "wwid"),
+			filepath.Join(sysBlock, name, "wwid"),
+			filepath.Join(sysBlock, name, "device", "wwn"),
+		} {
+			if data, err := os.ReadFile(p); err == nil {
+				if w := strings.TrimSpace(string(data)); w != "" {
+					dev.Wwn = w
+					break
+				}
+			}
+		}
+		// Resolve a /dev/disk/by-id/* symlink for this device — stable
+		// across udev renames and useful for humans. Pick the first
+		// hit; udev creates several (wwn-0x..., ata-MODEL_SERIAL, ...).
+		dev.ByIdPath = lookupByIdPath(name)
 		devices = append(devices, dev)
 	}
 	return devices, nil
+}
+
+// lookupByIdPath returns the first /dev/disk/by-id/* entry whose
+// readlink target points at the given device name (e.g. "sda" → the
+// `ata-WDC...` symlink). Returns "" if /dev/disk/by-id is unreadable
+// or no match is found.
+func lookupByIdPath(devName string) string {
+	const dir = "/dev/disk/by-id"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	want := "/" + devName
+	for _, e := range entries {
+		full := filepath.Join(dir, e.Name())
+		target, err := os.Readlink(full)
+		if err != nil {
+			continue
+		}
+		if strings.HasSuffix(target, want) {
+			return full
+		}
+	}
+	return ""
 }

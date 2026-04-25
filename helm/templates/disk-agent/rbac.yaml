@@ -1,0 +1,39 @@
+{{- if .Values.diskAgent.enabled -}}
+{{- $ns := include "novanas.systemNamespace" . -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-disk-agent
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-disk-agent
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
+rules:
+  - apiGroups: ["novanas.io"]
+    resources: ["disks"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["novanas.io"]
+    resources: ["disks/status"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-disk-agent
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-disk-agent
+subjects:
+  - kind: ServiceAccount
+    name: novanas-disk-agent
+    namespace: {{ $ns }}
+{{- end }}
