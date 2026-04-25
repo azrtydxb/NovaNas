@@ -29,8 +29,10 @@ INSTALLER_BINARY ?= $(CURDIR)/../installer/bin/novanas-installer
 
 MKOSI_LIVE_DIR    := $(BUILD_DIR)/mkosi/live
 MKOSI_UPDATE_DIR  := $(BUILD_DIR)/mkosi/update
-LIVE_ROOTFS       := $(MKOSI_LIVE_DIR)/image
-UPDATE_ROOTFS     := $(MKOSI_UPDATE_DIR)/image
+# mkosi v25 names the output directory after ImageId (set in mkosi.conf), not
+# a literal "image".
+LIVE_ROOTFS       := $(MKOSI_LIVE_DIR)/novanas
+UPDATE_ROOTFS     := $(MKOSI_UPDATE_DIR)/novanas
 
 LAYERED_IMG  := $(BUILD_DIR)/rootfs.img
 BOOT_IMG     := $(BUILD_DIR)/boot.img
