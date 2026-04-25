@@ -12,7 +12,7 @@
 - Creates Boot partition: `parted --script <device> mkpart Boot ext4 513MiB 2561MiB`
 - Creates OS-A partition: `parted --script <device> mkpart OS-A ext4 2561MiB 6657MiB`
 - Creates OS-B partition: `parted --script <device> mkpart OS-B ext4 6657MiB 10753MiB`
-- Creates Persistent partition: `parted --script <device> mkpart Persistent ext4 10753MiB 92161MiB` (consuming up to 80 GiB with 1 MiB lead-in alignment)
+- Creates Persistent partition: `parted --script <device> mkpart Persistent ext4 10753MiB 92673MiB` (consuming up to 80 GiB with 1 MiB lead-in alignment)
 - Formats EFI partition: `mkfs.vfat -F 32 -n EFI <p1>`
 - Formats Boot partition: `mkfs.ext4 -F -L boot <p2>`
 - Formats OS-A partition: `mkfs.ext4 -F -L os-a <p3>`
@@ -101,13 +101,13 @@
 | RAID-1 mirror via `mdadm --create` | `partman-md` preseeding: `partman-md/device_remove_md0` (if present), then `partman-md/confirm_nochanges` false and `partman-md/confirm` true to create mirror |
 | GRUB EFI install with x86_64-efi target | `grub-installer/bootloader_id=novanas`, `grub-installer/grub2_instead_of_grub_legacy=true`, `grub-installer/choose_bootloader=grub2` |
 | GRUB config with A/B boot entries and RAUC integration | `late_command`: execute custom script to generate and write `/boot/grub/grub.cfg` with A/B logic and `load_env` directive |
-| Extract squashfs to Slot A | `late_command`: `unsquashfs -f -d /target/os-a-mount <squashfs_source>` or RAUC install if initial is a RAUC bundle |
-| RAUC signature verification (`rauc verify`) | `late_command`: `rauc verify --keyring=/target/etc/rauc/keyring.pem <bundle>` if using RAUC bundles for slot updates |
-| Initial image deployment to Slot A | `late_command`: either squashfs extraction or `late_command`: `rauc install /cdrom/novanas-initial.raucb` if using RAUC bundle |
+| Extract squashfs to Slot A | RAUC bundle is used for initial image deployment (see below) |
+| RAUC signature verification (`rauc verify`) | `late_command`: verify bundle integrity before installation |
+| Initial image deployment to Slot A | `late_command`: `rauc install /var/cache/novanas-initial.raucb` to overlay the initial bundle to Slot A |
 | RAUC configuration (keyring, system.conf) | `late_command`: write `/target/etc/rauc/system.conf` with slot definitions and RAUC config; ensure keyring at `/target/etc/rauc/keyring.pem` |
-| Persistent partition directory structure and seeding | `late_command`: execute script to create directory tree and write nmstate YAML, version manifest, and installer-done marker |
+| Persistent partition directory structure and seeding | `late_command`: mount `/dev/md/4` to a temporary path under `/target`, create directory tree, write nmstate YAML, version manifest, and installer-done marker, then unmount. At runtime, `/etc/fstab` entry causes system to mount persistent partition on boot at `/var/lib/novanas`. |
 | Network DHCP vs Static configuration | `netcfg/get_hostname=novanas` (default), `netcfg/choose_interface=<iface>`, `netcfg/confirm_static=true` (if static), `netcfg/get_ipaddress=<addr>`, `netcfg/get_netmask=<netmask>`, `netcfg/get_gateway=<gw>`, `netcfg/get_nameservers=<dns_list>` |
-| Persistent mount configuration (fstab) | `late_command`: write `/target/etc/fstab` entries for persistent partition at `/persistent` or mount point determined by recipe |
+| Persistent mount configuration (fstab) | `/etc/fstab` entry mounts persistent partition at `/var/lib/novanas` on boot |
 | NIC enumeration and user selection | `netcfg` preseed keys (`netcfg/choose_interface`) allow pre-selection or preseed to skip wizard |
 | Hostname configuration | `netcfg/get_hostname=<hostname>` preseed key |
 
@@ -115,7 +115,7 @@
 
 ## Notes
 
-- **Squashfs source paths:** The current installer probes multiple live-boot media paths; the d-i migration must ensure the ISO build process places the squashfs at one of these paths or provide it via preseed variable.
-- **RAUC integration:** Current installer supports both direct squashfs extraction and RAUC bundle verification/extraction. The d-i migration should clarify whether to use RAUC bundles or direct squashfs for initial image, then route late_command accordingly.
+- **Initial bundle deployment:** The d-i migration uses RAUC bundles for initial image deployment. Late_command runs `rauc install /var/cache/novanas-initial.raucb` to overlay the initial bundle to Slot A.
+- **RAUC integration:** RAUC is used for both initial deployment and all subsequent slot updates. Bundles are signed and verified before installation.
 - **Persistent seeding:** Network YAML configuration is built from wizard input and seeded during installation. The d-i approach must capture wizard choices (DHCP vs static, DNS, gateway) and either preseed them directly or collect during d-i phases and write to persistent partition in `late_command`.
 - **Partition sizes:** All sizes are hardcoded in `DefaultLayout()`. The d-i recipe should make these easily configurable via variables if needed for different target disk sizes.
