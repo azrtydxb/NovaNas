@@ -332,16 +332,26 @@ openbao:
     enabled: true
 
 # -----------------------------------------------------------------------------
-# Redis — own template (TODO: write templates/redis/). Disabled by default
-# until needed. Was previously the Bitnami subchart.
+# Redis — own template under templates/redis/, official upstream image.
+# Used by the api for pub/sub and ephemeral caches.
 # -----------------------------------------------------------------------------
 redis:
-  enabled: false
+  enabled: true
   image:
     registry: docker.io
     repository: redis
     tag: "7-alpine"
     pullPolicy: IfNotPresent
+  auth:
+    # Disable auth in the default chart — production overlays should
+    # turn this back on and provide a password via bootstrapSecret.
+    enabled: false
+  persistence:
+    # Empty save spec disables RDB snapshots (cache-only role).
+    save: ""
+  resources:
+    requests: { cpu: "50m",  memory: "64Mi"  }
+    limits:   { cpu: "500m", memory: "256Mi" }
 
 observability:
   # kube-prometheus-stack subchart.

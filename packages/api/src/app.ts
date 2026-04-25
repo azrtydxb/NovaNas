@@ -77,8 +77,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     disablePubSub = false,
   } = opts;
 
+  // Fastify v5 split `logger`: a config object goes into `logger`, a
+  // pre-built pino instance goes into `loggerInstance`. We always pass
+  // a real instance (createLogger() in logger.ts).
   const app = Fastify({
-    logger,
+    loggerInstance: logger,
     trustProxy: true,
     disableRequestLogging: false,
     bodyLimit: 5 * 1024 * 1024, // 5 MiB
