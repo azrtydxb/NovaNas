@@ -119,11 +119,16 @@ copy_payload() {
 
 rebuild_iso() {
   log "repacking ISO -> $OUT_ISO"
+  # isohdpfx.bin is shipped by the host's `isolinux` package, NOT inside the
+  # netinst ISO. The path is stable across Debian releases. Allow override
+  # via ISOHYBRID_MBR for non-Debian build hosts.
+  local isohybrid_mbr="${ISOHYBRID_MBR:-/usr/lib/ISOLINUX/isohdpfx.bin}"
+  [[ -f "$isohybrid_mbr" ]] || die "isohdpfx.bin not at $isohybrid_mbr — install the 'isolinux' package"
   xorriso \
     -as mkisofs \
     -r -V "NovaNas Installer" \
     -o "$OUT_ISO" \
-    -isohybrid-mbr "$WORK_DIR/iso/isolinux/isohdpfx.bin" \
+    -isohybrid-mbr "$isohybrid_mbr" \
     -c isolinux/boot.cat \
     -b isolinux/isolinux.bin \
     -no-emul-boot -boot-load-size 4 -boot-info-table \

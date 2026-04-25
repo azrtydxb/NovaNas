@@ -59,7 +59,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             ca-certificates curl git make sudo \
             mkosi systemd-container \
-            rauc squashfs-tools xorriso cpio \
+            rauc squashfs-tools xorriso cpio isolinux \
             grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             e2fsprogs parted \
             debian-archive-keyring \
