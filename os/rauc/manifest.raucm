@@ -11,15 +11,13 @@ build=@BUILD_ID@
 [bundle]
 format=verity
 
+# For format=verity RAUC computes both size and the verity root hash itself
+# at bundle-assembly time and rejects user-supplied digests.
 [image.rootfs]
 filename=rootfs.img
-size=@ROOTFS_SIZE@
-sha256=@ROOTFS_SHA256@
 
 [image.boot]
 filename=boot.img
-size=@BOOT_SIZE@
-sha256=@BOOT_SHA256@
 
 [hooks]
 filename=hooks.sh
