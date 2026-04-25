@@ -6,12 +6,12 @@ export interface KeycloakClient {
   issuerUrl: string;
   clientId: string;
   /** Build the authorization URL and return (url, state, nonce, code_verifier). */
-  buildAuthUrl(redirectUri: string): {
+  buildAuthUrl(redirectUri: string): Promise<{
     url: URL;
     state: string;
     nonce: string;
     codeVerifier: string;
-  };
+  }>;
   /** Exchange auth code for tokens. */
   exchangeCode(params: {
     currentUrl: URL;
@@ -41,22 +41,21 @@ export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
     config,
     issuerUrl: env.KEYCLOAK_ISSUER_URL,
     clientId: env.KEYCLOAK_CLIENT_ID,
-    buildAuthUrl(redirectUri: string) {
+    async buildAuthUrl(redirectUri: string) {
       const state = client.randomState();
       const nonce = client.randomNonce();
       const codeVerifier = client.randomPKCECodeVerifier();
-      // openid-client v6 exposes calculatePKCECodeChallenge as an async helper.
-      // The value is awaited by the caller of buildAuthUrl via Promise.resolve.
-      const calc = (client as unknown as Record<string, unknown>).calculatePKCECodeChallenge as
-        | ((v: string) => string | Promise<string>)
-        | undefined;
-      const codeChallenge = calc ? calc(codeVerifier) : codeVerifier;
+      // openid-client v6's calculatePKCECodeChallenge is async — must
+      // be awaited or `code_challenge` ends up serialised as the
+      // literal string "[object Promise]" and Keycloak rejects the
+      // PKCE check at /token exchange time.
+      const codeChallenge = await client.calculatePKCECodeChallenge(codeVerifier);
       const params: Record<string, string> = {
         redirect_uri: redirectUri,
         scope: 'openid profile email',
         state,
         nonce,
-        code_challenge: String(codeChallenge),
+        code_challenge: codeChallenge,
         code_challenge_method: 'S256',
         response_type: 'code',
       };

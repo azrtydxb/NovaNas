@@ -39,6 +39,10 @@ api:
     tag: ""  # defaults to .Chart.AppVersion
     pullPolicy: ""
   replicas: 1
+  # Browser-facing base URL the api uses to build its OIDC callback URL
+  # (returned to the SPA in /api/v1/auth/login responses). Empty →
+  # derived from ingress.host (recommended).
+  publicUrl: ""
   resources:
     requests:
       cpu: "100m"

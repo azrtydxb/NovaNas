@@ -49,8 +49,27 @@ spec:
               {{- else }}
               value: "memory://"
               {{- end }}
+            # KEYCLOAK_ISSUER_URL must match the issuer keycloak publishes
+            # in its well-known document (the openid-client library does
+            # strict issuer-string comparison). When KC_HOSTNAME is set
+            # to the external ingress URL, that's the issuer kc emits —
+            # so the api has to use the same URL even for in-cluster
+            # backchannel calls. Connections go pod→Service→ingress→kc.
             - name: KEYCLOAK_ISSUER_URL
-              value: "http://novanas-keycloak.{{ include "novanas.systemNamespace" . }}.svc/realms/{{ .Values.keycloak.realm.name | default "novanas" }}"
+              value: {{ printf "%s/realms/%s" (.Values.keycloak.hostname | default (printf "http://novanas-keycloak.%s.svc" (include "novanas.systemNamespace" .))) (.Values.keycloak.realm.name | default "novanas") | quote }}
+            {{- if and .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
+            # Trust the chart-generated self-signed CA so node's TLS
+            # stack accepts our own keycloak cert. The ingress' TLS
+            # Secret holds the cert+key; tls.crt doubles as the CA
+            # bundle for self-signed.
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/novanas/tls/tls.crt
+            {{- end }}
+            # Browser-facing base URL the api uses to construct its OIDC
+            # callback URL. Must match what the SPA reaches the api on,
+            # which in our standard layout is the unified ingress host.
+            - name: API_PUBLIC_URL
+              value: {{ .Values.api.publicUrl | default (printf "%s://%s" (.Values.ingress.tls.enabled | ternary "https" "http") (.Values.ingress.host | default .Values.global.publicHostname | default .Values.global.mdnsDomain)) | quote }}
             - name: KEYCLOAK_CLIENT_ID
               value: "novanas-api"
             - name: KEYCLOAK_CLIENT_SECRET
@@ -85,7 +104,20 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if and .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
+            - name: ingress-ca
+              mountPath: /etc/novanas/tls
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if and .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
+        - name: ingress-ca
+          secret:
+            secretName: {{ printf "%s-tls" (include "novanas.fullname" .) }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+        {{- end }}
 {{- end }}

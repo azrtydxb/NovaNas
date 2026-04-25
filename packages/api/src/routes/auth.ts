@@ -54,7 +54,7 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
     },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const body = LoginBody.parse(req.body ?? {});
-      const auth = keycloak.buildAuthUrl(callbackUrl);
+      const auth = await keycloak.buildAuthUrl(callbackUrl);
       await redis.setex(
         `${OIDC_STATE_PREFIX}${auth.state}`,
         OIDC_STATE_TTL,
