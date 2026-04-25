@@ -78,6 +78,23 @@ EOF
   fi
 }
 
+rebuild_iso() {
+  log "repacking ISO -> $OUT_ISO"
+  xorriso \
+    -as mkisofs \
+    -r -V "NovaNas Installer" \
+    -o "$OUT_ISO" \
+    -isohybrid-mbr "$WORK_DIR/iso/isolinux/isohdpfx.bin" \
+    -c isolinux/boot.cat \
+    -b isolinux/isolinux.bin \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -eltorito-alt-boot \
+    -e boot/grub/efi.img \
+    -no-emul-boot \
+    -isohybrid-gpt-basdat \
+    "$WORK_DIR/iso"
+}
+
 main() {
   command -v xorriso >/dev/null 2>&1 || { echo "xorriso not installed"; exit 1; }
   command -v gunzip  >/dev/null 2>&1 || { echo "gunzip not installed"; exit 1; }
@@ -93,8 +110,8 @@ main() {
   log "step 4: copy late_command + RAUC bundle into ISO"
   customize_grub
   log "step 6: rebuild ISO with xorriso"
-
-  # implementation in subsequent tasks
+  rebuild_iso
+  log "DONE: $OUT_ISO ($(stat -c %s "$OUT_ISO" 2>/dev/null || stat -f %z "$OUT_ISO") bytes)"
 }
 
 main "$@"
