@@ -28,13 +28,16 @@ source "qemu" "novanas" {
   efi_firmware_vars  = "/usr/share/OVMF/OVMF_VARS_4M.fd"
   boot_wait          = "10s"
 
-  # The NovaNas installer runs non-interactively when booted with
-  # novanas.installer=1 + preseed file shipped in the ISO. We simply wait for
-  # shutdown on success.
+  # The NovaNas installer runs non-interactively via debian-installer +
+  # preseed shipped in the ISO. d-i exits via poweroff after install
+  # completes (set in installer-di/preseed.cfg), so we just wait for the
+  # VM to halt itself.
   shutdown_command   = "true"
-  # 8m gives the watchdog (5m) + a little slack for qemu teardown.
-  # Dry-run install powers off in <1m on the happy path.
-  shutdown_timeout   = "8m"
+  # Real timing: d-i auto-install ~10-15m (depends on apt mirror), partman
+  # + RAID setup ~2m, late_command + rauc install of ~500MB initial
+  # bundle ~3-5m. 30m gives comfortable headroom; happy-path completes
+  # well before that.
+  shutdown_timeout   = "30m"
 
   # No SSH in the installer phase; packer needs some signal. The installer
   # powers the VM off when done. boot_command is empty because GRUB autoselect
