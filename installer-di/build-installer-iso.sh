@@ -78,6 +78,21 @@ EOF
   fi
 }
 
+copy_payload() {
+  local payload_dir="$WORK_DIR/iso/novanas"
+  mkdir -p "$payload_dir"
+  cp installer-di/late_command.sh "$payload_dir/"
+  if [[ -f "$RAUC_BUNDLE" ]]; then
+    log "copying RAUC bundle ($(stat -c %s "$RAUC_BUNDLE" 2>/dev/null || stat -f %z "$RAUC_BUNDLE") bytes)"
+    cp "$RAUC_BUNDLE" "$payload_dir/novanas-initial.raucb"
+  else
+    log "WARN: no RAUC bundle at $RAUC_BUNDLE; ISO will install stock Debian"
+  fi
+  if [[ -f os/rauc/keyring.pem ]]; then
+    cp os/rauc/keyring.pem "$payload_dir/novanas-keyring.pem"
+  fi
+}
+
 rebuild_iso() {
   log "repacking ISO -> $OUT_ISO"
   xorriso \
@@ -108,6 +123,8 @@ main() {
   log "step 3: inject preseed into initrd"
   inject_preseed
   log "step 4: copy late_command + RAUC bundle into ISO"
+  copy_payload
+  log "step 5: customize GRUB menu"
   customize_grub
   log "step 6: rebuild ISO with xorriso"
   rebuild_iso
