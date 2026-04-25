@@ -28,8 +28,9 @@ RUN pnpm --filter @novanas/schemas build \
 # ---- runtime ---------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 COPY --from=build /app/packages/ui/dist /usr/share/nginx/html
-# Default upstream config listens on 8080 and serves /usr/share/nginx/html.
-# Override default.conf to add SPA-style fallback to index.html.
+# The chart mounts a ConfigMap-rendered nginx config at
+# /etc/nginx/conf.d/default.conf with the right upstream for the api.
+# We ship a sensible static-only default for `docker run` smoke tests.
 RUN printf 'server {\n  listen 8080;\n  server_name _;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / { try_files $uri $uri/ /index.html; }\n}\n' \
     > /etc/nginx/conf.d/default.conf
 EXPOSE 8080
