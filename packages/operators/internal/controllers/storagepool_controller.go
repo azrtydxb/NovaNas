@@ -6,13 +6,16 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	novanasv1alpha1 "github.com/azrtydxb/novanas/packages/operators/api/v1alpha1"
 	"github.com/azrtydxb/novanas/packages/operators/internal/reconciler"
-	"k8s.io/client-go/tools/record"
 )
 
 // StoragePoolReconciler reconciles a StoragePool object.
@@ -101,6 +104,22 @@ func (r *StoragePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novanasv1alpha1.StoragePool{}).
+		// Re-reconcile a pool whenever any of its member Disks
+		// change. Without this watch the StoragePool's diskCount /
+		// capacity stay at zero until something else (the 30s
+		// requeue or a user-initiated update) wakes the controller.
+		Watches(
+			&novanasv1alpha1.Disk{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
+				d, ok := obj.(*novanasv1alpha1.Disk)
+				if !ok || d.Spec.Pool == "" {
+					return nil
+				}
+				return []reconcile.Request{{
+					NamespacedName: types.NamespacedName{Name: d.Spec.Pool},
+				}}
+			}),
+		).
 		Named("StoragePool").
 		Complete(r)
 }

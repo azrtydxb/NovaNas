@@ -91,6 +91,14 @@ func (r *DiskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		result = "error"
 		return ctrl.Result{}, err
 	}
+	// When the state machine moved (IDENTIFIED → ASSIGNED →
+	// ACTIVE) requeue immediately so the next transition isn't
+	// gated on the 30s defaultRequeue. Without this an admin who
+	// attaches 6 disks waits half a minute per intermediate state
+	// for the conditions to settle.
+	if prev != d.Status.State {
+		return ctrl.Result{Requeue: true}, nil
+	}
 	return ctrl.Result{RequeueAfter: defaultRequeue}, nil
 }
 
