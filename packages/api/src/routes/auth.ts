@@ -137,10 +137,14 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
       };
 
       const sid = await sessions.create(record);
+      // Set the Secure flag only when the public URL is HTTPS — on
+      // plain HTTP (e.g. an appliance reached by raw IP on the LAN)
+      // a Secure cookie would be silently dropped by the browser.
+      const isHttps = env.API_PUBLIC_URL.startsWith('https://');
       reply.setCookie(env.SESSION_COOKIE_NAME, sid, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: env.NODE_ENV === 'production',
+        secure: isHttps,
         path: '/',
         signed: true,
         maxAge: SESSION_TTL_SECONDS,

@@ -28,6 +28,17 @@ by an IngressClass annotation — see traefik middleware below.
 {{- if .Values.ingress.enabled }}
 {{- $ns := include "novanas.systemNamespace" . -}}
 {{- $host := .Values.ingress.host | default .Values.global.publicHostname | default .Values.global.mdnsDomain -}}
+{{/*
+  Kubernetes Ingress validates spec.rules[].host as a DNS name and
+  rejects IP literals — but the appliance use case is "drop on the
+  LAN, type the IP in the browser." When host parses as an IPv4
+  literal we omit the host field on the rule (catch-all that matches
+  any Host header) so http://<ip>/ still routes correctly.
+  TLS hosts list keeps the value verbatim — TLS+IP requires a SAN
+  match anyway, so the user has either turned TLS off or is using a
+  real DNS name.
+*/}}
+{{- $hostIsIP := mustRegexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -51,7 +62,10 @@ spec:
       secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "novanas.fullname" .)) | quote }}
   {{- end }}
   rules:
-    - host: {{ $host | quote }}
+    -
+      {{- if not $hostIsIP }}
+      host: {{ $host | quote }}
+      {{- end }}
       http:
         paths:
           # API — REST + websocket + swagger + (optional) metrics scrape.

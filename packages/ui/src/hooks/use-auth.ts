@@ -1,5 +1,5 @@
 import { ApiError, api } from '@/lib/api';
-import { getUserManager } from '@/lib/auth';
+import { startLogin, startLogout } from '@/lib/auth';
 import { type AuthUser, useAuthStore } from '@/stores/auth';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
@@ -31,20 +31,12 @@ export function useAuth() {
   }, [query.isLoading, query.isError, query.data, setStatus, setUser]);
 
   const login = useCallback(async () => {
-    await getUserManager().signinRedirect();
+    await startLogin();
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await api.post('/auth/logout');
-    } finally {
-      useAuthStore.getState().reset();
-      try {
-        await getUserManager().signoutRedirect();
-      } catch {
-        window.location.href = '/login';
-      }
-    }
+    useAuthStore.getState().reset();
+    await startLogout();
   }, []);
 
   const hasPermission = useCallback((perm: string) => !!user?.permissions?.includes(perm), [user]);

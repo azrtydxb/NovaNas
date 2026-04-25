@@ -1,7 +1,7 @@
 import { Brand } from '@/components/chrome/brand';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
-import { getUserManager } from '@/lib/auth';
+import { startLogin } from '@/lib/auth';
 import { i18n } from '@/lib/i18n';
 import { Trans } from '@lingui/react';
 import { createFileRoute } from '@tanstack/react-router';
@@ -20,7 +20,7 @@ function LoginPage() {
     setBusy(true);
     setErr(null);
     try {
-      await getUserManager().signinRedirect();
+      await startLogin('/');
     } catch (e) {
       setErr(e instanceof Error ? e.message : i18n._('Failed to start sign-in'));
       setBusy(false);

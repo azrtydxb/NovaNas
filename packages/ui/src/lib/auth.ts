@@ -1,59 +1,38 @@
 /**
- * OIDC client wiring via oidc-client-ts for Keycloak.
+ * Backend-For-Frontend OIDC wiring.
  *
- * Flow:
- *   1. /login → signinRedirect() → Keycloak authorize endpoint
- *   2. Keycloak redirects to /auth/callback with ?code=...
- *   3. callback page hands the code to the NovaNas API
- *      (POST /api/v1/auth/callback) which exchanges it for tokens,
- *      sets the session cookie and returns the user.
- *   4. API also handles logout: POST /api/v1/auth/logout then redirect to
- *      the Keycloak end_session_endpoint.
+ * The api owns the OIDC dance: server-side PKCE, code exchange, session
+ * cookie. The SPA's job is to:
+ *   1. Tell the api "I want to log in" → POST /api/v1/auth/login
+ *   2. Send the browser to the URL the api returns (Keycloak's auth
+ *      endpoint).
+ *   3. Wait for Keycloak to redirect the browser back to
+ *      /api/v1/auth/callback (the api handles that route, sets the
+ *      session cookie, and 302's to the original URL).
+ *   4. Read the resulting session via GET /api/v1/auth/me.
+ *
+ * No client-side PKCE → no `crypto.subtle` → no "secure context"
+ * requirement → plain HTTP on a LAN IP works without certificates.
  */
 
-import { UserManager, type UserManagerSettings, WebStorageStateStore } from 'oidc-client-ts';
+import { api } from '@/lib/api';
 
-export interface OidcConfig {
-  issuer: string;
-  clientId: string;
-  redirectUri: string;
-  postLogoutRedirectUri: string;
-  scope: string;
+/** Begin login. Browser leaves this page; never returns from this call. */
+export async function startLogin(redirectTo: string = window.location.pathname): Promise<void> {
+  const { url } = await api.post<{ url: string }>('/auth/login', { redirectTo });
+  window.location.href = url;
 }
 
-export function resolveOidcConfig(): OidcConfig {
-  const env = import.meta.env;
-  return {
-    // Keycloak v17+ dropped the /auth prefix — use the modern path.
-    // Override via VITE_OIDC_ISSUER for legacy keycloak servers.
-    issuer: (env.VITE_OIDC_ISSUER as string | undefined) ?? '/realms/novanas',
-    clientId: (env.VITE_OIDC_CLIENT_ID as string | undefined) ?? 'novanas-ui',
-    redirectUri:
-      (env.VITE_OIDC_REDIRECT_URI as string | undefined) ??
-      `${window.location.origin}/auth/callback`,
-    postLogoutRedirectUri:
-      (env.VITE_OIDC_POST_LOGOUT_URI as string | undefined) ?? `${window.location.origin}/login`,
-    scope: (env.VITE_OIDC_SCOPE as string | undefined) ?? 'openid profile email',
-  };
-}
-
-export function createUserManager(config = resolveOidcConfig()): UserManager {
-  const settings: UserManagerSettings = {
-    authority: config.issuer,
-    client_id: config.clientId,
-    redirect_uri: config.redirectUri,
-    post_logout_redirect_uri: config.postLogoutRedirectUri,
-    response_type: 'code',
-    scope: config.scope,
-    loadUserInfo: true,
-    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-    stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
-  };
-  return new UserManager(settings);
-}
-
-let singleton: UserManager | null = null;
-export function getUserManager(): UserManager {
-  if (!singleton) singleton = createUserManager();
-  return singleton;
+/** Server-side logout: api destroys the session, returns the OIDC end-session URL. */
+export async function startLogout(): Promise<void> {
+  try {
+    const res = await api.post<{ url?: string }>('/auth/logout', {});
+    if (res?.url) {
+      window.location.href = res.url;
+      return;
+    }
+  } catch {
+    /* fall through to local redirect */
+  }
+  window.location.href = '/login';
 }
