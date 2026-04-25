@@ -29,17 +29,9 @@ log() { printf '[mkosi.postinst] %s\n' "$*"; }
 
 export DEBIAN_FRONTEND=noninteractive
 
-log "locale + timezone"
-sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen 2>/dev/null || \
-  echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-locale-gen en_US.UTF-8
-update-locale LANG=en_US.UTF-8
-ln -sf /usr/share/zoneinfo/UTC /etc/localtime
-
-log "pin hostname + /etc/hosts"
+log "pin /etc/hosts (locale + timezone + hostname handled by mkosi.conf)"
 # Same rationale as before: without a matching /etc/hosts entry, every
 # gethostbyname(self) in PAM/sudo/journald waits ~30s for DNS during boot.
-echo 'novanas-installer' > /etc/hostname
 cat > /etc/hosts <<'EOF'
 127.0.0.1   localhost
 127.0.1.1   novanas-installer
