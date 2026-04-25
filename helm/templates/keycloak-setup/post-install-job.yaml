@@ -61,7 +61,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: novanas-bootstrap
-                  key: keycloak-novanas-api-secret
+                  key: keycloak-api-client-secret
                   optional: true
             - name: GRAFANA_CLIENT_SECRET
               valueFrom:
@@ -121,9 +121,6 @@ spec:
               # --- Create or update the realm ------------------------------
               if /opt/keycloak/bin/kcadm.sh get realms/novanas >/dev/null 2>&1; then
                 echo "[keycloak-setup] realm 'novanas' exists — updating partial state"
-                # Keycloak doesn't expose a single 'update realm from file' op
-                # via kcadm, but partial updates of attributes are safe and
-                # trigger a theme-cache clear.
                 /opt/keycloak/bin/kcadm.sh update realms/novanas \
                   -s displayName="NovaNas" \
                   -s loginTheme="{{ default "novanas" "novanas" }}" \
@@ -131,6 +128,74 @@ spec:
               else
                 echo "[keycloak-setup] creating realm 'novanas'"
                 /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
+              fi
+
+              # --- Ensure standard OIDC client scopes exist ---------------
+              # Realm JSON's `clientScopes` array overrides the defaults
+              # keycloak would otherwise create. Re-create the standard
+              # OIDC scopes (profile/email/roles/web-origins) idempotently
+              # so confidential clients can request them. We rely on
+              # kcadm rejecting duplicates (exit code != 0) — `|| true`
+              # turns that into a no-op.
+              EXISTING_SCOPES=$(/opt/keycloak/bin/kcadm.sh get client-scopes -r novanas --fields name 2>/dev/null || echo '[]')
+              for scope in profile email roles web-origins; do
+                if echo "$EXISTING_SCOPES" | grep -q "\"name\" : \"$scope\""; then
+                  continue
+                fi
+                echo "[keycloak-setup] creating client-scope '$scope'"
+                /opt/keycloak/bin/kcadm.sh create client-scopes -r novanas \
+                  -s name=$scope -s protocol=openid-connect \
+                  -s 'attributes."include.in.token.scope"=true' \
+                  -s 'attributes."consent.screen.text"='"$scope" \
+                  -s 'attributes."display.on.consent.screen"=true' >/dev/null \
+                  || echo "[keycloak-setup] scope '$scope' creation skipped"
+              done
+              # Re-fetch — the loop above may have added new ones.
+              SCOPES_JSON=$(/opt/keycloak/bin/kcadm.sh get client-scopes -r novanas --fields id,name 2>/dev/null)
+
+              # --- Assign standard scopes as defaults on novanas-api ------
+              CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients -r novanas \
+                -q clientId=novanas-api --fields id 2>/dev/null \
+                | sed -n 's/.*"id" : "\([^"]*\)".*/\1/p' | head -1)
+              # Map scope name → scope id from the JSON we just fetched.
+              # The keycloak image has neither awk nor python, so we
+              # do it in pure bash: kcadm prints each object as
+              #   "id" : "<uuid>",\n  "name" : "<n>"\n
+              # — the id always immediately precedes its name, so we
+              # remember the last id seen and emit it on a name match.
+              get_scope_id() {
+                local last_id=""
+                while IFS= read -r line; do
+                  case "$line" in
+                    *'"id"'*)
+                      last_id=$(echo "$line" | sed -E 's/.*"id" *: *"([^"]+)".*/\1/')
+                      ;;
+                    *'"name" : "'"$1"'"'*)
+                      echo "$last_id"
+                      return 0
+                      ;;
+                  esac
+                done <<< "$SCOPES_JSON"
+              }
+              if [ -n "$CLIENT_UUID" ]; then
+                for scope in profile email roles web-origins novanas:roles; do
+                  SCOPE_ID=$(get_scope_id "$scope")
+                  if [ -n "$SCOPE_ID" ]; then
+                    /opt/keycloak/bin/kcadm.sh update \
+                      "clients/$CLIENT_UUID/default-client-scopes/$SCOPE_ID" \
+                      -r novanas 2>/dev/null || true
+                  fi
+                done
+                echo "[keycloak-setup] ensured default-client-scopes on novanas-api"
+
+                # --- Sync client secret with the bootstrap Secret -----
+                # When the realm already existed we did NOT re-import it,
+                # so the client's stored secret may diverge from the
+                # value the api reads at boot. Force it back into
+                # alignment on every run (cheap, idempotent).
+                /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r novanas \
+                  -s "secret=$NOVANAS_API_CLIENT_SECRET" 2>/dev/null || true
+                echo "[keycloak-setup] synced novanas-api client secret with bootstrap"
               fi
 
               echo "[keycloak-setup] complete"

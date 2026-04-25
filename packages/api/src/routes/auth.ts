@@ -78,12 +78,18 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
         querystring: {
           type: 'object',
           required: ['code', 'state'],
-          properties: { code: { type: 'string' }, state: { type: 'string' } },
+          properties: {
+            code: { type: 'string' },
+            state: { type: 'string' },
+            iss: { type: 'string' },
+            session_state: { type: 'string' },
+          },
         },
       },
     },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const q = CallbackQuery.parse(req.query);
+      const rawQ = req.query as Record<string, string | undefined>;
       const raw = await redis.get(`${OIDC_STATE_PREFIX}${q.state}`);
       if (!raw) {
         return reply.code(400).send({ error: 'invalid_state' });
@@ -98,6 +104,12 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
       const currentUrl = new URL(callbackUrl);
       currentUrl.searchParams.set('code', q.code);
       currentUrl.searchParams.set('state', q.state);
+      // Forward optional response params produced by Keycloak
+      // (`iss` is required by RFC 9207 and the openid-client library
+      // refuses the exchange without it; `session_state` is harmless
+      // but kept for parity with what KC actually sent).
+      if (rawQ.iss) currentUrl.searchParams.set('iss', rawQ.iss);
+      if (rawQ.session_state) currentUrl.searchParams.set('session_state', rawQ.session_state);
 
       const tokens = await keycloak.exchangeCode({
         currentUrl,

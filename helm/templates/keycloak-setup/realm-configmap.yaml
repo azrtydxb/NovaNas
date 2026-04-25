@@ -148,20 +148,27 @@ data:
         {
           "clientId": "novanas-api",
           "name": "NovaNas API",
-          "description": "Confidential backend client; service account with audience scoping",
+          "description": "Confidential BFF client: standard flow + PKCE for user logins, service account for admin tasks",
           "enabled": true,
           "publicClient": false,
           "clientAuthenticatorType": "client-secret",
           "secret": "${NOVANAS_API_CLIENT_SECRET}",
-          "standardFlowEnabled": false,
+          "standardFlowEnabled": true,
           "implicitFlowEnabled": false,
           "directAccessGrantsEnabled": false,
           "serviceAccountsEnabled": true,
+          "redirectUris": [
+            "https://{{ $hostname }}/api/v1/auth/callback",
+            "http://{{ $hostname }}/api/v1/auth/callback"
+          ],
+          "webOrigins": ["+"],
           "attributes": {
             "access.token.signed.response.alg": "RS256",
-            "use.refresh.tokens": "false"
+            "use.refresh.tokens": "false",
+            "pkce.code.challenge.method": "S256"
           },
-          "defaultClientScopes": ["novanas:roles", "roles"],
+          "defaultClientScopes": ["profile", "email", "roles", "web-origins", "novanas:roles"],
+          "optionalClientScopes": ["offline_access", "address", "phone"],
           "protocolMappers": [
             {
               "name": "audience-novanas-api",
