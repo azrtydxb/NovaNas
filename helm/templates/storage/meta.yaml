@@ -34,14 +34,17 @@ spec:
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.meta.image) }}
           command: ["/usr/local/bin/novanas-storage-meta"]
           args:
-            - --grpc-port={{ .Values.storage.meta.service.grpcPort }}
-            - --data-dir=/var/lib/novanas/meta
+            # Flags must match storage/cmd/meta/main.go — single-dash form,
+            # `-grpc-addr` (not `--grpc-port`), `-data-dir` for the legacy
+            # local-BadgerDB path. Chunk-backed mode requires a running
+            # dataplane (storage.dataplane.enabled=true).
+            - -grpc-addr=:{{ .Values.storage.meta.service.grpcPort }}
+            - -data-dir=/var/lib/novanas/meta
             {{- if .Values.storage.meta.chunkBacked.enabled }}
-            - --chunk-backed=true
-            - --min-metadata-disks={{ .Values.storage.meta.chunkBacked.minMetadataDisks }}
-            - --bootstrap-timeout={{ .Values.storage.meta.chunkBacked.bootstrapTimeout }}
+            - -chunk-backed=true
+            - -bootstrap-timeout={{ .Values.storage.meta.chunkBacked.bootstrapTimeout }}
             {{- end }}
-            - --encryption-mode={{ .Values.storage.meta.encryption.mode }}
+            - -encryption-mode={{ .Values.storage.meta.encryption.mode }}
           ports:
             - name: grpc
               containerPort: {{ .Values.storage.meta.service.grpcPort }}

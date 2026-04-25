@@ -14,5 +14,7 @@ reclaimPolicy: {{ .Values.storage.storageClass.reclaimPolicy }}
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 parameters:
-  encryption: {{ .Values.storage.meta.encryption.mode }}
+  # K8s StorageClass.parameters values must be strings; YAML's "off"
+  # would otherwise unmarshal as a bool. Always quote.
+  encryption: {{ .Values.storage.meta.encryption.mode | quote }}
 {{- end }}

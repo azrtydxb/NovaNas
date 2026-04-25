@@ -26,7 +26,7 @@ spec:
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.controller.image) }}
           command: ["/usr/local/bin/novanas-storage-controller"]
           args:
-            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            - -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
           resources:
             {{- toYaml .Values.storage.controller.resources | nindent 12 }}
           securityContext:

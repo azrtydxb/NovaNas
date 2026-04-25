@@ -26,7 +26,12 @@ spec:
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.scheduler.image) }}
           command: ["/usr/local/bin/novanas-storage-scheduler"]
           args:
-            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            # storage-scheduler is a Kubernetes scheduler-extender —
+            # it talks to the kube-apiserver via in-cluster config,
+            # not directly to meta. See storage/cmd/scheduler/main.go
+            # for the full flag set.
+            - -port=10251
+            - -log-level=info
           securityContext:
             {{- include "novanas.containerSecurityContext" . | nindent 12 }}
 {{- end }}

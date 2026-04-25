@@ -6,7 +6,6 @@ COPY go.work go.work.sum ./
 COPY storage/ storage/
 COPY packages/operators/ packages/operators/
 COPY packages/cli/ packages/cli/
-COPY installer/ installer/
 WORKDIR /src/storage
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/novanas-storage-scheduler ./cmd/scheduler/
 
