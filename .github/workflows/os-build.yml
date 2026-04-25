@@ -122,6 +122,12 @@ jobs:
     needs: os-build
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
+    # The d-i preseed targets /dev/nvme0n1 + /dev/nvme1n1 (real NAS hardware
+    # layout) but Packer's qemu builder creates a single /dev/vda virtio
+    # disk, so partman halts at an interactive RAID dialog. Fixing this
+    # needs a separate VA preseed (single-disk, no RAID) or qemuargs that
+    # emulate two NVMe disks. Until then, don't block the OS build on it.
+    continue-on-error: true
     # KVM passthrough: host /dev/kvm mapped into the container so packer's
     # qemu builder uses hardware acceleration. --privileged also covers the
     # loopback mounts packer performs on the built images.
