@@ -19,6 +19,7 @@ import {
 } from './services/audit-partition-gc.js';
 import type { DbClient } from './services/db.js';
 import { JobsService } from './services/jobs.js';
+import type { KeycloakAdmin } from './services/keycloak-admin.js';
 import type { KeycloakClient } from './services/keycloak.js';
 import type { PromClient } from './services/prom.js';
 import { type RollupGcHandle, startRollupGc } from './services/rollup-gc.js';
@@ -50,6 +51,8 @@ export interface BuildAppOptions {
   prom?: PromClient | null;
   /** Disable scheduled DB maintenance tasks (audit partition GC, rollup GC). */
   disableScheduledTasks?: boolean;
+  /** Keycloak Admin REST client for inlined operator side effects (#51). */
+  keycloakAdmin?: KeycloakAdmin | null;
 }
 
 export interface BuiltApp {
@@ -151,6 +154,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     db: opts.db ?? null,
     jobs: jobsService,
     prom: opts.prom ?? null,
+    keycloakAdmin: opts.keycloakAdmin ?? null,
   });
 
   // 404 fallthrough

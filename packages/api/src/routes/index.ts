@@ -5,6 +5,7 @@ import type { SessionStore } from '../auth/session.js';
 import type { Env } from '../env.js';
 import type { DbClient } from '../services/db.js';
 import type { JobsService } from '../services/jobs.js';
+import type { KeycloakAdmin } from '../services/keycloak-admin.js';
 import type { KeycloakClient } from '../services/keycloak.js';
 import type { PromClient } from '../services/prom.js';
 import type { WsHub } from '../ws/hub.js';
@@ -88,6 +89,8 @@ export interface RouteDeps {
   jobs?: JobsService | null;
   /** Prometheus client for metrics gateway. */
   prom?: PromClient | null;
+  /** Keycloak Admin REST client for inlined operator side effects (#51). */
+  keycloakAdmin?: KeycloakAdmin | null;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
@@ -144,7 +147,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => configBackupPolicyRoutes(s, db));
   await app.register(async (s) => systemSettingsRoutes(s, db));
   await app.register(async (s) => updatePolicyRoutes(s, db));
-  await app.register(async (s) => groupsRoutes(s, db));
+  await app.register(async (s) => groupsRoutes(s, db, deps.keycloakAdmin ?? null));
   await app.register(async (s) => keycloakRealmsRoutes(s, db));
   await app.register(async (s) => apiTokensRoutes(s, db));
   // Grey-set resources flipped via Option B: source of truth in

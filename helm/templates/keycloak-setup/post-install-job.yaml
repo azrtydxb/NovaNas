@@ -211,6 +211,32 @@ spec:
                   -s 'directAccessGrantsEnabled=true' \
                   2>/dev/null || true
                 echo "[keycloak-setup] synced novanas-api client redirectUris/grants with publicHostname"
+
+                # --- Grant realm-management roles to the service account
+                # The api inlines former-operator side effects (#51) by
+                # calling Keycloak's Admin REST API as the novanas-api
+                # confidential client's service account. That account
+                # needs explicit role bindings from the realm-management
+                # client; without these, /admin/realms/... returns 403.
+                SA_USER_ID=$(/opt/keycloak/bin/kcadm.sh get \
+                  "clients/$CLIENT_UUID/service-account-user" \
+                  -r novanas --fields id 2>/dev/null \
+                  | sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1)
+                RM_CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients \
+                  -r novanas -q clientId=realm-management --fields id 2>/dev/null \
+                  | sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1)
+                if [ -n "$SA_USER_ID" ] && [ -n "$RM_CLIENT_UUID" ]; then
+                  for role in manage-users view-users query-users \
+                              manage-clients view-clients query-clients \
+                              manage-realm view-realm; do
+                    /opt/keycloak/bin/kcadm.sh add-roles \
+                      -r novanas \
+                      --uusername service-account-novanas-api \
+                      --cclientid realm-management \
+                      --rolename "$role" 2>/dev/null || true
+                  done
+                  echo "[keycloak-setup] granted realm-management roles to novanas-api service account"
+                fi
               fi
 
               echo "[keycloak-setup] complete"

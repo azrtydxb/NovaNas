@@ -1,11 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/groups.js';
 import type { DbClient } from '../services/db.js';
+import type { KeycloakAdmin } from '../services/keycloak-admin.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function groupsRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+export async function groupsRoutes(
+  app: FastifyInstance,
+  db?: DbClient | null,
+  keycloakAdmin?: KeycloakAdmin | null
+): Promise<void> {
   if (db) {
-    registerImpl(app, db);
+    registerImpl(app, db, keycloakAdmin ?? null);
     return;
   }
   registerUnavailable(app, [

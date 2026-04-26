@@ -8,6 +8,7 @@ import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
 import { startKubeWatch } from './plugins/kube-watch.js';
 import { createDbClient } from './services/db.js';
+import { createKeycloakAdmin } from './services/keycloak-admin.js';
 import { createKeycloakClient } from './services/keycloak.js';
 import { createKubeClients } from './services/kube.js';
 import { createPromClient } from './services/prom.js';
@@ -27,6 +28,11 @@ async function main(): Promise<void> {
   const redis = createRedisClient(env);
   const redisSub = createRedisClient(env);
   const keycloak = await createKeycloakClient(env);
+  // Admin REST client for inlined operator side effects (#51). Uses
+  // the novanas-api confidential client's service account; safe to
+  // construct unconditionally since it doesn't open any connections
+  // until the first hook fires.
+  const keycloakAdmin = createKeycloakAdmin(env);
   const kube = createKubeClients(env);
   const db = await createDbClient(env).catch((err) => {
     logger.error({ err }, 'novanas-api.db.connect_failed');
@@ -68,6 +74,7 @@ async function main(): Promise<void> {
     redis,
     redisSub,
     keycloak,
+    keycloakAdmin,
     kubeCustom: kube.custom,
     kubeAuthn: kube.authn,
     db,
