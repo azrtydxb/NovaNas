@@ -68,8 +68,9 @@ COPY --from=spdk-builder /spdk-out/usr/local/include/ /usr/local/include/
 # Refresh the dynamic linker cache.
 RUN ldconfig
 
-# Copy the Rust source.
-COPY dataplane/ ./
+# Copy the Rust source. Build context is the repo root, so the
+# Rust crate lives under storage/dataplane/.
+COPY storage/dataplane/ ./
 
 # Build in release mode with full SPDK support.
 ARG FEATURES="spdk-sys"
@@ -99,6 +100,6 @@ COPY --from=spdk-builder /usr/lib/ssl/openssl.cnf /usr/lib/ssl/openssl.cnf
 
 # Entrypoint script mounts hugetlbfs inside the container so that
 # DPDK EAL can discover hugepages via /proc/mounts.
-COPY dataplane/entrypoint.sh /usr/local/bin/dataplane-entrypoint.sh
+COPY storage/dataplane/entrypoint.sh /usr/local/bin/dataplane-entrypoint.sh
 RUN chmod +x /usr/local/bin/dataplane-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/dataplane-entrypoint.sh"]

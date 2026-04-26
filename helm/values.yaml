@@ -199,7 +199,7 @@ storage:
     # Default disabled until the host is prepared (see os/ chart from A5-OS).
     enabled: false
     image:
-      repository: novanas/dataplane
+      repository: novanas/storage-dataplane
       tag: ""
     hugepages:
       size: 2Mi

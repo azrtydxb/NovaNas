@@ -110,11 +110,19 @@ data:
     # by operators at runtime via the novanas-operators policy.
     bind_role() {
       role="$1"; sa="$2"; ns="$3"; policy="$4"; ttl="${5:-1h}"
+      # OK if the SA doesn't exist yet — Kubernetes binds names to
+      # SubjectAccessReviews at auth time, not at role-creation time.
+      # The policy must exist though; a typo here would silently bind
+      # nothing.
+      if ! bao policy list 2>/dev/null | grep -q "^${policy}$"; then
+        echo "[openbao-init] skipping role ${role}: policy ${policy} doesn't exist"
+        return 0
+      fi
       bao write "auth/kubernetes/role/${role}" \
         bound_service_account_names="${sa}" \
         bound_service_account_namespaces="${ns}" \
         policies="${policy}" \
-        ttl="${ttl}" >/dev/null
+        ttl="${ttl}" >/dev/null || true
     }
 
     bind_role novanas-api          novanas-api          "${NS}" novanas-api          1h
@@ -176,6 +184,23 @@ spec:
               value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
             - name: VAULT_ADDR
               value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
+            # In dev-mode openbao the root token is known up front
+            # (bootstrapSecret.openbaoRootToken). For production /
+            # file-backend mode the bootstrap key would come from
+            # `bao operator init` and be stored in a separate Secret
+            # — see GH issue for the production hardening path.
+            {{- if .Values.openbao.devMode }}
+            - name: BAO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: openbao-root-token
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: openbao-root-token
+            {{- end }}
           volumeMounts:
             - name: policies
               mountPath: /policies
