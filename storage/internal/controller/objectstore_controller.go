@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	stderrors "errors"
 	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	novanas "github.com/azrtydxb/novanas/packages/sdk/go-client"
 	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 )
 
@@ -30,8 +32,14 @@ const (
 )
 
 // ObjectStoreReconciler reconciles ObjectStore objects.
+//
+// API field (#50): when non-nil the StoragePool the ObjectStore
+// references is fetched from the api instead of from the kube
+// apiserver. The ObjectStore stays a CRD (grey-set per #50
+// acceptance), so the controller-runtime watch on it is preserved.
 type ObjectStoreReconciler struct {
 	client.Client
+	API *novanas.Client
 }
 
 // +kubebuilder:rbac:groups=novanas.io,resources=objectstores,verbs=get;list;watch;create;update;patch;delete
@@ -52,34 +60,35 @@ func (r *ObjectStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	logger.Info("reconciling ObjectStore", "name", req.Name, "namespace", req.Namespace)
 
-	// Look up the referenced StoragePool.
-	var pool novastorev1alpha1.StoragePool
-	poolKey := types.NamespacedName{Name: store.Spec.Pool}
-	if err := r.Get(ctx, poolKey, &pool); err != nil {
-		if errors.IsNotFound(err) {
-			meta.SetStatusCondition(&store.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
-				Status:             metav1.ConditionFalse,
-				Reason:             "PoolNotFound",
-				Message:            fmt.Sprintf("StoragePool %q not found", store.Spec.Pool),
-				ObservedGeneration: store.Generation,
-			})
-			store.Status.Phase = "Pending"
-			if statusErr := r.Status().Update(ctx, &store); statusErr != nil {
-				return ctrl.Result{}, statusErr
-			}
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	// Look up the referenced StoragePool. Source switches based on
+	// whether the api client is wired (#50): api when present, k8s
+	// otherwise (legacy CRD path).
+	poolPhase, found, lookupErr := r.lookupPoolPhase(ctx, store.Spec.Pool)
+	if lookupErr != nil {
+		return ctrl.Result{}, lookupErr
+	}
+	if !found {
+		meta.SetStatusCondition(&store.Status.Conditions, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			Reason:             "PoolNotFound",
+			Message:            fmt.Sprintf("StoragePool %q not found", store.Spec.Pool),
+			ObservedGeneration: store.Generation,
+		})
+		store.Status.Phase = "Pending"
+		if statusErr := r.Status().Update(ctx, &store); statusErr != nil {
+			return ctrl.Result{}, statusErr
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	// Check pool readiness.
-	if pool.Status.Phase != "Ready" {
+	if poolPhase != "Ready" {
 		meta.SetStatusCondition(&store.Status.Conditions, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			Reason:             "PoolNotReady",
-			Message:            fmt.Sprintf("StoragePool %q is not ready (phase: %s)", store.Spec.Pool, pool.Status.Phase),
+			Message:            fmt.Sprintf("StoragePool %q is not ready (phase: %s)", store.Spec.Pool, poolPhase),
 			ObservedGeneration: store.Generation,
 		})
 		store.Status.Phase = "Pending"
@@ -313,6 +322,33 @@ func generateRandomHex(byteLen int) (string, error) {
 }
 
 // SetupWithManager registers the ObjectStore controller with the manager.
+// lookupPoolPhase returns (phase, found, err) for the named pool.
+// Mirrors the helper on BlockVolumeReconciler — keeps the legacy k8s
+// path when r.API is nil, otherwise reads from the api server (#50).
+func (r *ObjectStoreReconciler) lookupPoolPhase(
+	ctx context.Context, name string,
+) (string, bool, error) {
+	if r.API != nil {
+		p, err := r.API.GetPool(ctx, name)
+		if err != nil {
+			var apiErr *novanas.APIError
+			if stderrors.As(err, &apiErr) && apiErr.Status == 404 {
+				return "", false, nil
+			}
+			return "", false, err
+		}
+		return p.Status.Phase, true, nil
+	}
+	var pool novastorev1alpha1.StoragePool
+	if err := r.Get(ctx, types.NamespacedName{Name: name}, &pool); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return pool.Status.Phase, true, nil
+}
+
 func (r *ObjectStoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novastorev1alpha1.ObjectStore{}).

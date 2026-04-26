@@ -2,11 +2,12 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	novanas "github.com/azrtydxb/novanas/packages/sdk/go-client"
 	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 )
 
@@ -24,8 +26,15 @@ const (
 )
 
 // BlockVolumeReconciler reconciles BlockVolume objects.
+//
+// API field (#50): when non-nil, the StoragePool that a BlockVolume
+// references is fetched via HTTP from the NovaNas API server instead
+// of the k8s apiserver. The BlockVolume itself stays a CRD (grey-set
+// per #50 acceptance), so the controller-runtime watch on it is
+// preserved. Set in cmd/controller/main.go when the env opts in.
 type BlockVolumeReconciler struct {
 	client.Client
+	API *novanas.Client
 }
 
 // +kubebuilder:rbac:groups=novanas.io,resources=blockvolumes,verbs=get;list;watch;create;update;patch;delete
@@ -44,34 +53,35 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	logger.Info("reconciling BlockVolume", "name", req.Name, "namespace", req.Namespace)
 
-	// Look up the referenced StoragePool (cluster-scoped, so no namespace).
-	var pool novastorev1alpha1.StoragePool
-	poolKey := types.NamespacedName{Name: volume.Spec.Pool}
-	if err := r.Get(ctx, poolKey, &pool); err != nil {
-		if errors.IsNotFound(err) {
-			meta.SetStatusCondition(&volume.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
-				Status:             metav1.ConditionFalse,
-				Reason:             "PoolNotFound",
-				Message:            fmt.Sprintf("StoragePool %q not found", volume.Spec.Pool),
-				ObservedGeneration: volume.Generation,
-			})
-			volume.Status.Phase = "Pending"
-			if statusErr := r.Status().Update(ctx, &volume); statusErr != nil {
-				return ctrl.Result{}, statusErr
-			}
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	// Look up the referenced StoragePool. Source switches based on
+	// whether the api client is wired (#50): api when present, k8s
+	// otherwise (legacy CRD path).
+	poolPhase, found, lookupErr := r.lookupPoolPhase(ctx, volume.Spec.Pool)
+	if lookupErr != nil {
+		return ctrl.Result{}, lookupErr
+	}
+	if !found {
+		meta.SetStatusCondition(&volume.Status.Conditions, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			Reason:             "PoolNotFound",
+			Message:            fmt.Sprintf("StoragePool %q not found", volume.Spec.Pool),
+			ObservedGeneration: volume.Generation,
+		})
+		volume.Status.Phase = "Pending"
+		if statusErr := r.Status().Update(ctx, &volume); statusErr != nil {
+			return ctrl.Result{}, statusErr
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	// Check pool readiness.
-	if pool.Status.Phase != "Ready" {
+	if poolPhase != "Ready" {
 		meta.SetStatusCondition(&volume.Status.Conditions, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			Reason:             "PoolNotReady",
-			Message:            fmt.Sprintf("StoragePool %q is not ready (phase: %s)", volume.Spec.Pool, pool.Status.Phase),
+			Message:            fmt.Sprintf("StoragePool %q is not ready (phase: %s)", volume.Spec.Pool, poolPhase),
 			ObservedGeneration: volume.Generation,
 		})
 		volume.Status.Phase = "Pending"
@@ -171,6 +181,33 @@ func (r *BlockVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 // SetupWithManager registers the BlockVolume controller with the manager.
+// lookupPoolPhase returns (phase, found, err) for the named pool. It
+// reads via the api when configured, otherwise falls back to the
+// legacy CRD path on the local k8s apiserver.
+func (r *BlockVolumeReconciler) lookupPoolPhase(
+	ctx context.Context, name string,
+) (string, bool, error) {
+	if r.API != nil {
+		p, err := r.API.GetPool(ctx, name)
+		if err != nil {
+			var apiErr *novanas.APIError
+			if errors.As(err, &apiErr) && apiErr.Status == 404 {
+				return "", false, nil
+			}
+			return "", false, err
+		}
+		return p.Status.Phase, true, nil
+	}
+	var pool novastorev1alpha1.StoragePool
+	if err := r.Get(ctx, types.NamespacedName{Name: name}, &pool); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return pool.Status.Phase, true, nil
+}
+
 func (r *BlockVolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&novastorev1alpha1.BlockVolume{}).

@@ -251,17 +251,21 @@ func main() {
 	// Register controllers.
 	// StoragePool reconciler. The legacy controller-runtime watch is
 	// kept by default; when NOVANAS_POOL_POLLER=1 the api-driven
-	// poll loop runs instead (#50). Once the poller is validated on
-	// the dev box, the watch and the legacy reconciler get deleted
-	// in #52 along with the StoragePool CRD.
+	// poll loop runs instead (#50). When the api is enabled, the
+	// BlockVolume + ObjectStore reconcilers also resolve their
+	// referenced StoragePool through the SDK instead of via k8s.
+	// Once both paths are validated, the legacy controller +
+	// StoragePool CRD get deleted in #52.
+	var apiClient *novanas.Client
 	if os.Getenv("NOVANAS_POOL_POLLER") == "1" {
-		api, apiErr := novanas.NewFromEnv()
+		c, apiErr := novanas.NewFromEnv()
 		if apiErr != nil {
 			setupLog.Error(apiErr, "pool poller: failed to build api client")
 			os.Exit(1)
 		}
+		apiClient = c
 		if err := mgr.Add(&poolPollerRunnable{
-			poller: &controller.PoolPoller{K8s: mgr.GetClient(), API: api},
+			poller: &controller.PoolPoller{K8s: mgr.GetClient(), API: apiClient},
 		}); err != nil {
 			setupLog.Error(err, "unable to register pool poller")
 			os.Exit(1)
@@ -278,6 +282,7 @@ func main() {
 
 	if err := (&controller.BlockVolumeReconciler{
 		Client: mgr.GetClient(),
+		API:    apiClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BlockVolume")
 		os.Exit(1)
@@ -285,6 +290,7 @@ func main() {
 
 	if err := (&controller.ObjectStoreReconciler{
 		Client: mgr.GetClient(),
+		API:    apiClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ObjectStore")
 		os.Exit(1)
@@ -372,7 +378,14 @@ func main() {
 				os.Exit(1)
 			}
 
-			poolLookup := policy.NewK8sPoolLookup(mgr.GetClient())
+			// Source pool data from the api when the poller is on (#50);
+			// fall back to the kube apiserver for the legacy CRD path.
+			var poolLookup policy.PoolLookup
+			if apiClient != nil {
+				poolLookup = policy.NewAPIPoolLookup(apiClient)
+			} else {
+				poolLookup = policy.NewK8sPoolLookup(mgr.GetClient())
+			}
 			nodeChecker := policy.NewK8sNodeAvailabilityChecker(mgr.GetClient())
 			metaAdapter := policy.NewGRPCMetadataAdapter(metaClient)
 
