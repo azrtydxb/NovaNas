@@ -1,10 +1,15 @@
 {{/*
-OpenBao bootstrap Job.
+OpenBao bootstrap Job (production mode).
 
 Runs once post-install (and on upgrades) to:
-  1. Wait for the server to respond and be unsealed (TPM auto-unseal is
-     the default; if `bao status` reports sealed, the Job exits with a
-     clear error so the operator can investigate the TPM sidecar).
+  0. INIT — if openbao reports uninitialized, run `bao operator init`
+     with one key share, capture the unseal key + root token, and
+     persist them as Secret `novanas-openbao-keys`. Subsequent runs
+     read the root token back from this Secret.
+  1. UNSEAL — if openbao is sealed, apply unseal shares from the
+     keys Secret. The unseal sidecar in the openbao pod normally
+     handles this on restart; the Job covers the first-install
+     window before the sidecar can find the (not-yet-created) Secret.
   2. Enable the engines: transit, pki, kv-v2 at `secret/`.
   3. Configure a root internal CA at `pki/`.
   4. Enable and configure the Kubernetes auth method.
@@ -15,8 +20,10 @@ Runs once post-install (and on upgrades) to:
 
 Every step uses `|| true` / idempotent checks. Safe to re-run.
 
-NOTE: the separate k8s-auth-job is folded into this job; see
-k8s-auth-job.yaml for the stub retained for operator discoverability.
+NOTE: this is full file-backend production mode. The unseal key lives
+in a Kubernetes Secret on the same cluster, which is fine for a
+single-node appliance but should be replaced with TPM/KMS auto-unseal
+for multi-tenant production.
 */}}
 {{- if and .Values.openbao.enabled .Values.openbao.policies.enabled }}
 apiVersion: v1
@@ -36,30 +43,69 @@ data:
 
     echo "[openbao-init] BAO_ADDR=${BAO_ADDR}"
 
-    # --- 1. Wait for the server ----------------------------------------
+    KEYS_SECRET="novanas-openbao-keys"
+
+    # --- 0a. Wait for the server to respond (any state) ----------------
+    # rc 0 = unsealed, 1 = error/uninitialized/transient, 2 = sealed.
+    # Any of {0,2} means the server is up; rc=1 with "not yet initialized"
+    # also counts as "up". We bail only on persistent connection errors.
     attempts=0
-    until bao status -format=json >/tmp/status.json 2>/dev/null || [ $? -eq 2 ]; do
+    until bao status >/tmp/s.out 2>&1; rc=$?; [ $rc -eq 0 ] || [ $rc -eq 2 ] || grep -qi 'not yet initialized\|not initialized' /tmp/s.out; do
       attempts=$((attempts + 1))
       if [ "$attempts" -gt 60 ]; then
         echo "[openbao-init] timed out waiting for openbao"
+        cat /tmp/s.out
         exit 1
       fi
-      echo "[openbao-init] waiting for openbao..."
+      echo "[openbao-init] waiting for openbao... (rc=$rc)"
       sleep 5
     done
 
-    # Status rc: 0 unsealed, 1 error, 2 sealed.
-    if bao status >/dev/null 2>&1; then
-      echo "[openbao-init] unsealed"
-    else
-      rc=$?
-      if [ $rc -eq 2 ]; then
-        echo "[openbao-init] ERROR: openbao is sealed. TPM auto-unseal should be in place; check the tpm-unseal sidecar."
+    # --- 0b. Initialize if needed --------------------------------------
+    if grep -qi 'not yet initialized\|not initialized\|Initialized.*false' /tmp/s.out 2>/dev/null \
+        || ! bao status -format=json 2>/dev/null | grep -q '"initialized":[[:space:]]*true'; then
+      if kubectl -n "${NS}" get secret "${KEYS_SECRET}" >/dev/null 2>&1; then
+        echo "[openbao-init] keys Secret exists but server says uninitialized — refusing to re-init (data loss risk)"
         exit 1
       fi
-      echo "[openbao-init] ERROR: bao status failed with rc=$rc"
+      echo "[openbao-init] running bao operator init (1 share, threshold 1)"
+      bao operator init -key-shares=1 -key-threshold=1 -format=json > /tmp/init.json
+      UNSEAL_KEY=$(awk -F'"' '/unseal_keys_b64/{f=1;next} f && /"/{print $2; exit}' /tmp/init.json)
+      ROOT_TOKEN=$(awk -F'"' '/"root_token"/{print $4; exit}' /tmp/init.json)
+      if [ -z "${UNSEAL_KEY}" ] || [ -z "${ROOT_TOKEN}" ]; then
+        echo "[openbao-init] failed to parse init output"
+        cat /tmp/init.json
+        exit 1
+      fi
+      kubectl -n "${NS}" create secret generic "${KEYS_SECRET}" \
+        --from-literal=unseal-key-1="${UNSEAL_KEY}" \
+        --from-literal=root-token="${ROOT_TOKEN}"
+      echo "[openbao-init] keys Secret created"
+    else
+      echo "[openbao-init] already initialized"
+    fi
+
+    # --- 0c. Load root token + unseal if sealed ------------------------
+    ROOT_TOKEN=$(kubectl -n "${NS}" get secret "${KEYS_SECRET}" -o jsonpath='{.data.root-token}' | base64 -d)
+    UNSEAL_KEY=$(kubectl -n "${NS}" get secret "${KEYS_SECRET}" -o jsonpath='{.data.unseal-key-1}' | base64 -d)
+    if [ -z "${ROOT_TOKEN}" ] || [ -z "${UNSEAL_KEY}" ]; then
+      echo "[openbao-init] keys Secret missing required fields"
       exit 1
     fi
+    export BAO_TOKEN="${ROOT_TOKEN}"
+    export VAULT_TOKEN="${ROOT_TOKEN}"
+
+    # Unseal if needed. rc 0 = unsealed, 2 = sealed, anything else = error.
+    bao status >/dev/null 2>&1
+    case $? in
+      0) echo "[openbao-init] already unsealed" ;;
+      2)
+        echo "[openbao-init] sealed — unsealing"
+        bao operator unseal "${UNSEAL_KEY}" >/dev/null
+        bao status >/dev/null 2>&1 || { echo "[openbao-init] unseal failed"; exit 1; }
+        ;;
+      *) echo "[openbao-init] bao status unreachable"; exit 1 ;;
+    esac
 
     # Helper: run a command, ignore "already exists"/"path is already in use" style errors.
     ok() { "$@" 2>&1 | tee /tmp/out; grep -qi "already\|exist" /tmp/out && return 0 || return ${PIPESTATUS:-0}; }
@@ -175,40 +221,40 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: novanas-operators
-      containers:
-        - name: bao
+      initContainers:
+        # The openbao image has `bao` but no kubectl; the kubectl image
+        # has kubectl but no bao. Static-link advantage of Go: copy the
+        # bao binary into a shared volume so the main container has both.
+        - name: copy-bao
           image: "{{ .Values.openbao.image.registry }}/{{ .Values.openbao.image.repository }}:{{ .Values.openbao.image.tag }}"
+          command: ["/bin/sh", "-c", "cp /bin/bao /tools/bao && chmod +x /tools/bao"]
+          volumeMounts:
+            - { name: tools, mountPath: /tools }
+      containers:
+        - name: bootstrap
+          # bitnami pruned older tags; use :latest (image is small + stable
+          # across kubectl minor versions, and we only run `get/create secret`).
+          image: "bitnami/kubectl:latest"
           command: ["/bin/sh", "/scripts/init.sh"]
           env:
+            # Prepend /tools (bao binary copied from openbao image) to the
+            # default PATH (which already includes the bitnami kubectl dir).
+            - name: PATH
+              value: "/tools:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             - name: BAO_ADDR
               value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
             - name: VAULT_ADDR
               value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
-            # In dev-mode openbao the root token is known up front
-            # (bootstrapSecret.openbaoRootToken). For production /
-            # file-backend mode the bootstrap key would come from
-            # `bao operator init` and be stored in a separate Secret
-            # — see GH issue for the production hardening path.
-            {{- if .Values.openbao.devMode }}
-            - name: BAO_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.bootstrapSecret.name }}
-                  key: openbao-root-token
-            - name: VAULT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.bootstrapSecret.name }}
-                  key: openbao-root-token
-            {{- end }}
+            # No pre-set token. The script either runs `bao operator init`
+            # (first install) or reads the root token back from the
+            # novanas-openbao-keys Secret created on the previous run.
           volumeMounts:
-            - name: policies
-              mountPath: /policies
-              readOnly: true
-            - name: scripts
-              mountPath: /scripts
-              readOnly: true
+            - { name: tools,    mountPath: /tools }
+            - { name: policies, mountPath: /policies, readOnly: true }
+            - { name: scripts,  mountPath: /scripts,  readOnly: true }
       volumes:
+        - name: tools
+          emptyDir: {}
         - name: policies
           configMap:
             name: novanas-openbao-policies

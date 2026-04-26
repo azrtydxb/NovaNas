@@ -1,0 +1,42 @@
+{{/*
+OpenBao server config. File storage backend on the StatefulSet's PVC.
+
+This is the production-mode config: requires `bao operator init` to
+generate unseal keys + root token (handled by the openbao-init Job),
+and `bao operator unseal` to unseal on every restart (handled by the
+unseal sidecar in the StatefulSet pod).
+
+The api_addr / cluster_addr templates resolve at boot using the pod's
+own IP so HA-aware clients route correctly even with one replica.
+*/}}
+{{- if .Values.openbao.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-openbao-config
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao") | nindent 4 }}
+data:
+  config.hcl: |
+    ui = true
+
+    storage "file" {
+      path = "/openbao/data"
+    }
+
+    listener "tcp" {
+      address     = "0.0.0.0:8200"
+      tls_disable = {{ ternary 0 1 .Values.openbao.tls.enabled }}
+      {{- if .Values.openbao.tls.enabled }}
+      tls_cert_file = "/openbao/tls/tls.crt"
+      tls_key_file  = "/openbao/tls/tls.key"
+      {{- end }}
+    }
+
+    api_addr     = "http://POD_IP:8200"
+    cluster_addr = "https://POD_IP:8201"
+
+    disable_mlock = true
+    log_level     = "info"
+{{- end }}

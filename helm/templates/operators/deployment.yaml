@@ -55,13 +55,17 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPENBAO_ADDR
               value: {{ .Values.openbao.address | default (printf "http://novanas-openbao.%s.svc:8200" (include "novanas.systemNamespace" .)) | quote }}
-            {{- if .Values.openbao.devMode }}
+            # The init Job creates novanas-openbao-keys (root-token,
+            # unseal-key-1) on first install. The Secret is `optional`
+            # so the operators pod can start before it exists; the
+            # openbao client falls back to a no-op until the env is
+            # populated on the next pod restart.
             - name: OPENBAO_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.bootstrapSecret.name }}
-                  key: openbao-root-token
-            {{- end }}
+                  name: novanas-openbao-keys
+                  key: root-token
+                  optional: true
             - name: KEYCLOAK_URL
               value: {{ .Values.keycloak.internalURL | default (printf "http://novanas-keycloak.%s.svc" (include "novanas.systemNamespace" .)) | quote }}
             {{- if and .Values.storage.meta .Values.storage.meta.enabled }}

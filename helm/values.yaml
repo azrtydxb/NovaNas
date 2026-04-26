@@ -340,10 +340,17 @@ openbao:
     repository: openbao/openbao
     tag: "2.2.0"
     pullPolicy: IfNotPresent
-  # Dev mode for smoke tests. Production overlays set false and configure
-  # the full HCL config + auto-unseal.
-  devMode: true
+  # File-backend production mode. The init Job runs `bao operator init`
+  # on first install and persists the unseal key + root token in Secret
+  # novanas-openbao-keys. The unseal sidecar in the StatefulSet pod
+  # reads that Secret to unseal the server on every restart.
+  #
+  # This is a stand-in for proper auto-unseal (TPM, KMS, HSM); see GH
+  # issue for the production-grade hardening path. Removing the keys
+  # Secret will lock the data permanently — back it up.
   address: "http://novanas-openbao:8200"
+  tls:
+    enabled: false
   service:
     port: 8200
   persistence:

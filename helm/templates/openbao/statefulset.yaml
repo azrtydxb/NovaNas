@@ -23,41 +23,45 @@ spec:
         runAsNonRoot: true
         runAsUser: 100
         fsGroup: 1000
+      initContainers:
+        # Render config.hcl with the actual pod IP so api_addr is reachable
+        # from clients hitting the headless Service. Using a templated
+        # ConfigMap doesn't work because pod IP is not known at chart-render.
+        - name: render-config
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              sed "s/POD_IP/${POD_IP}/g" /config-tpl/config.hcl > /openbao/config/config.hcl
+              echo "rendered config:"
+              cat /openbao/config/config.hcl
+          env:
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          volumeMounts:
+            - { name: config-tpl,   mountPath: /config-tpl }
+            - { name: config,       mountPath: /openbao/config }
       containers:
         - name: openbao
           image: "{{ .Values.openbao.image.registry }}/{{ .Values.openbao.image.repository }}:{{ .Values.openbao.image.tag }}"
           imagePullPolicy: {{ .Values.openbao.image.pullPolicy | default "IfNotPresent" }}
-          {{- if .Values.openbao.devMode }}
-          args: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-root-token-id=$(BAO_DEV_ROOT_TOKEN_ID)"]
-          {{- else }}
           args: ["server", "-config=/openbao/config/config.hcl"]
-          {{- end }}
           env:
             - name: BAO_ADDR
               value: "http://127.0.0.1:8200"
-            - name: BAO_API_ADDR
-              value: "http://$(POD_IP):8200"
-            - name: POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            {{- if .Values.openbao.devMode }}
-            - name: BAO_DEV_ROOT_TOKEN_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.bootstrapSecret.name }}
-                  key: openbao-root-token
-            {{- end }}
             - name: SKIP_SETCAP
               value: "true"
           ports:
-            - name: http
-              containerPort: 8200
-            - name: cluster
-              containerPort: 8201
+            - { name: http,    containerPort: 8200 }
+            - { name: cluster, containerPort: 8201 }
+          # Both probes treat uninit/sealed as healthy. The init Job needs
+          # to reach the Service while the server is still uninitialized
+          # to bootstrap it; if readiness gates on initialized=true, the
+          # endpoints stay empty and we deadlock.
           readinessProbe:
             httpGet:
-              path: /v1/sys/health?standbyok=true&uninitcode=204&sealedcode=204
+              path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
@@ -68,10 +72,71 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
           volumeMounts:
-            - name: data
-              mountPath: /openbao/data
+            - { name: data,   mountPath: /openbao/data }
+            - { name: config, mountPath: /openbao/config }
           resources:
             {{- toYaml (.Values.openbao.resources | default dict) | nindent 12 }}
+        # Auto-unseal sidecar. Polls bao status; when sealed AND the keys
+        # Secret exists, calls `bao operator unseal` for each unseal share.
+        # On first install the Secret doesn't exist yet — the post-install
+        # Job creates it after running `bao operator init`. The sidecar
+        # then takes over and keeps openbao unsealed across restarts.
+        #
+        # Note: this is a stand-in for proper auto-unseal (TPM, KMS, HSM).
+        # See GH issue for the production-grade auto-unseal path.
+        - name: unsealer
+          image: "{{ .Values.openbao.image.registry }}/{{ .Values.openbao.image.repository }}:{{ .Values.openbao.image.tag }}"
+          imagePullPolicy: {{ .Values.openbao.image.pullPolicy | default "IfNotPresent" }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              export BAO_ADDR="http://127.0.0.1:8200"
+              while :; do
+                bao status >/dev/null 2>&1
+                rc=$?
+                case "$rc" in
+                  0)
+                    sleep 15
+                    ;;
+                  2)
+                    if [ -f /unseal/unseal-key-1 ]; then
+                      echo "[unsealer] sealed — applying unseal shares"
+                      for f in /unseal/unseal-key-*; do
+                        bao operator unseal "$(cat "$f")" >/dev/null || true
+                      done
+                      sleep 5
+                    else
+                      echo "[unsealer] sealed but no key Secret yet; waiting for init job"
+                      sleep 5
+                    fi
+                    ;;
+                  *)
+                    # Transient — server not yet up, network blip, etc.
+                    sleep 5
+                    ;;
+                esac
+              done
+          env:
+            - name: BAO_ADDR
+              value: "http://127.0.0.1:8200"
+          volumeMounts:
+            - name: unseal-keys
+              mountPath: /unseal
+              readOnly: true
+          resources:
+            requests: { cpu: "10m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "128Mi" }
+      volumes:
+        - name: config-tpl
+          configMap:
+            name: novanas-openbao-config
+        - name: config
+          emptyDir: {}
+        - name: unseal-keys
+          secret:
+            secretName: novanas-openbao-keys
+            optional: true
   volumeClaimTemplates:
     - metadata:
         name: data
