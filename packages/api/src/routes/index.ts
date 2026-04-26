@@ -198,7 +198,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // -----------------------------------------------------------------
   await app.register(async (s) => appRoutes(s, db));
   await app.register(async (s) => appsAvailableRoutes(s, db));
-  await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => vmRoutes(s, db));
   await app.register(async (s) => ingressesRoutes(s, db));
   await app.register(async (s) => remoteAccessTunnelsRoutes(s, db));
   await app.register(async (s) => gpuDevicesRoutes(s, db));
