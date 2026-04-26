@@ -336,7 +336,6 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 		&controllers.AppReconciler{},
 		&controllers.AppInstanceReconciler{},
 		&controllers.VmReconciler{Engine: ec.vmEngine},
-		&controllers.GpuDeviceReconciler{},
 	}
 
 	for _, r := range reconcilers {

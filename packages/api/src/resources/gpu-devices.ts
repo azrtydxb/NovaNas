@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type GpuDevice, GpuDeviceSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerReadOnlyRoutes } from './_register_extras.js';
 
-export function buildGpuDeviceResource(api: CustomObjectsApi): CrdResource<GpuDevice> {
-  return new CrdResource<GpuDevice>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'gpudevices' },
+export function buildGpuDeviceResource(db: DbClient): PgResource<GpuDevice> {
+  return new PgResource<GpuDevice>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'GpuDevice',
     schema: GpuDeviceSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerReadOnlyRoutes<GpuDevice>({
     app,
     basePath: '/api/v1/gpu-devices',
     tag: 'gpu-devices',
     kind: 'GpuDevice',
-    resource: buildGpuDeviceResource(api),
+    resource: buildGpuDeviceResource(db),
     schema: GpuDeviceSchema,
   });
 }

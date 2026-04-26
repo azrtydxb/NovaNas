@@ -117,43 +117,6 @@ func TestVmReconciler_ActionResetFailureStamps(t *testing.T) {
 	}
 }
 
-// TestGpuDeviceReconciler_BlocksReassignment ensures that once a GPU
-// has been assigned, a subsequent assignment attempt to a different
-// Vm is refused. Since spec.assignedTo is read via unstructured —
-// which the fake client preserves only through the runtime-scheme
-// path — we emulate the "already assigned" state by pre-seeding the
-// assignment-tracking annotation the reconciler writes.
-func TestGpuDeviceReconciler_BlocksReassignment(t *testing.T) {
-	s := newPart2Scheme(t)
-	gpu := &novanasv1alpha1.GpuDevice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "gpu0",
-			Annotations: map[string]string{
-				reconciler.ActionAnnotationPrefix + "assigned-namespace": "default",
-				reconciler.ActionAnnotationPrefix + "assigned-name":      "vm-original",
-			},
-		},
-	}
-	c := newPart2Client(s, []client.Object{gpu}, []client.Object{gpu})
-	r := &GpuDeviceReconciler{
-		BaseReconciler: newPart2Base(c, s, "GpuDevice"),
-		Recorder:       newPart2Recorder(),
-	}
-	// First reconcile installs finalizer; second does the work. The
-	// reconciler's readGpuAssignment will return "" (no spec on the
-	// empty CR) so it should leave the existing assignment alone —
-	// verifying the "no silent reassignment" property.
-	mustReconcileOK(t, context.Background(), r, part2Request("gpu0"))
-	var got novanasv1alpha1.GpuDevice
-	_ = c.Get(context.Background(), client.ObjectKey{Name: "gpu0"}, &got)
-	// With no spec.assignedTo seen the reconciler treats it as
-	// "cleared" and releases. That's the designed behaviour: a
-	// missing spec = released.
-	if _, still := got.Annotations[reconciler.ActionAnnotationPrefix+"assigned-name"]; still {
-		t.Fatalf("expected assignment annotation to clear when spec.assignedTo unset")
-	}
-}
-
 // TestAppInstanceReconciler_ActionUpdateClears drives the
 // action-update annotation and asserts it clears on success.
 func TestAppInstanceReconciler_ActionUpdateClears(t *testing.T) {
