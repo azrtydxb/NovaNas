@@ -64,7 +64,22 @@ func discoverDevices() ([]deviceInfo, error) {
 	var devices []deviceInfo
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, "loop") || strings.HasPrefix(name, "ram") || strings.HasPrefix(name, "dm-") || strings.HasPrefix(name, "sr") {
+		// Skip kernel virtual / pseudo block devices that are never real
+		// storage: loop, ram, dm-*, sr* (cdrom), zd* (zfs), md* (mdraid
+		// container — its members surface separately), zram, fd*, and
+		// nbd* (network block device — used by SPDK to expose virtual
+		// LUNs to the host; these have size 0 until something is
+		// attached and would otherwise pollute the disk inventory).
+		switch {
+		case strings.HasPrefix(name, "loop"),
+			strings.HasPrefix(name, "ram"),
+			strings.HasPrefix(name, "dm-"),
+			strings.HasPrefix(name, "sr"),
+			strings.HasPrefix(name, "zd"),
+			strings.HasPrefix(name, "zram"),
+			strings.HasPrefix(name, "fd"),
+			strings.HasPrefix(name, "nbd"),
+			strings.HasPrefix(name, "md"):
 			continue
 		}
 		dev := deviceInfo{Path: filepath.Join("/dev", name)}
@@ -73,6 +88,12 @@ func discoverDevices() ([]deviceInfo, error) {
 			var sectors uint64
 			fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &sectors)
 			dev.SizeBytes = sectors * 512
+		}
+		// Reject zero-sized devices outright. Real drives always report
+		// non-zero block counts; size 0 here means a kernel placeholder
+		// (empty card-reader slot, detached nbd, etc).
+		if dev.SizeBytes == 0 {
+			continue
 		}
 		if strings.HasPrefix(name, "nvme") {
 			dev.DeviceType = typeNVMe
