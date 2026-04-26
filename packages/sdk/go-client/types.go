@@ -20,11 +20,34 @@ type Pool struct {
 	Status     PoolStatus `json:"status,omitempty"`
 }
 
+// LabelSelector mirrors metav1.LabelSelector. Kept local to avoid
+// dragging the k8s.io/apimachinery dep into every consumer.
+type LabelSelector struct {
+	MatchLabels      map[string]string          `json:"matchLabels,omitempty"`
+	MatchExpressions []LabelSelectorRequirement `json:"matchExpressions,omitempty"`
+}
+
+type LabelSelectorRequirement struct {
+	Key      string   `json:"key"`
+	Operator string   `json:"operator"`
+	Values   []string `json:"values,omitempty"`
+}
+
+type DeviceFilter struct {
+	Type    string `json:"type,omitempty"`
+	MinSize string `json:"minSize,omitempty"`
+}
+
+type FileBackendSpec struct {
+	Path             string `json:"path,omitempty"`
+	MaxCapacityBytes *int64 `json:"maxCapacityBytes,omitempty"`
+}
+
 type PoolSpec struct {
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-	// The full Pool spec carries many more fields (raid layout,
-	// encryption, replication, etc.); the storage controller only
-	// reads NodeSelector + the base capacity hints. Extend as needed.
+	NodeSelector *LabelSelector   `json:"nodeSelector,omitempty"`
+	BackendType  string           `json:"backendType,omitempty"`
+	DeviceFilter *DeviceFilter    `json:"deviceFilter,omitempty"`
+	FileBackend  *FileBackendSpec `json:"fileBackend,omitempty"`
 }
 
 type PoolStatus struct {

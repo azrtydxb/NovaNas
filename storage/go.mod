@@ -6,7 +6,12 @@ go 1.24.0
 // API package directly. See docs/CRD-CONSOLIDATION-PLAN.md (#35).
 replace github.com/azrtydxb/novanas/packages/operators => ../packages/operators
 
+// Local replace for the in-tree Go SDK used by the API-polling
+// migrations off controller-runtime watches (#50/#55).
+replace github.com/azrtydxb/novanas/packages/sdk/go-client => ../packages/sdk/go-client
+
 require (
+	github.com/azrtydxb/novanas/packages/sdk/go-client v0.0.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/dgraph-io/badger/v4 v4.9.1
 	github.com/google/uuid v1.6.0
