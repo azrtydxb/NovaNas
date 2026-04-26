@@ -21,6 +21,7 @@ import type { DbClient } from './services/db.js';
 import { JobsService } from './services/jobs.js';
 import type { KeycloakAdmin } from './services/keycloak-admin.js';
 import type { KeycloakClient } from './services/keycloak.js';
+import type { OpenBaoAdmin } from './services/openbao-admin.js';
 import type { PromClient } from './services/prom.js';
 import { type RollupGcHandle, startRollupGc } from './services/rollup-gc.js';
 import { WsHub } from './ws/hub.js';
@@ -53,6 +54,8 @@ export interface BuildAppOptions {
   disableScheduledTasks?: boolean;
   /** Keycloak Admin REST client for inlined operator side effects (#51). */
   keycloakAdmin?: KeycloakAdmin | null;
+  /** OpenBao admin client for inlined operator side effects (#51). */
+  openbao?: OpenBaoAdmin | null;
 }
 
 export interface BuiltApp {
@@ -155,6 +158,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     jobs: jobsService,
     prom: opts.prom ?? null,
     keycloakAdmin: opts.keycloakAdmin ?? null,
+    openbao: opts.openbao ?? null,
   });
 
   // 404 fallthrough

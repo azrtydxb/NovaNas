@@ -10,6 +10,7 @@ import { startKubeWatch } from './plugins/kube-watch.js';
 import { createDbClient } from './services/db.js';
 import { createKeycloakAdmin } from './services/keycloak-admin.js';
 import { createKeycloakClient } from './services/keycloak.js';
+import { createOpenBaoAdmin } from './services/openbao-admin.js';
 import { createKubeClients } from './services/kube.js';
 import { createPromClient } from './services/prom.js';
 import { createRedisClient } from './services/redis.js';
@@ -33,6 +34,10 @@ async function main(): Promise<void> {
   // construct unconditionally since it doesn't open any connections
   // until the first hook fires.
   const keycloakAdmin = createKeycloakAdmin(env);
+  // OpenBao admin client (#51). Returns null when env is missing
+  // OPENBAO_ADDR / OPENBAO_TOKEN, in which case KmsKey hooks become
+  // no-ops and the resource still persists to Postgres.
+  const openbao = createOpenBaoAdmin(env);
   const kube = createKubeClients(env);
   const db = await createDbClient(env).catch((err) => {
     logger.error({ err }, 'novanas-api.db.connect_failed');
@@ -75,6 +80,7 @@ async function main(): Promise<void> {
     redisSub,
     keycloak,
     keycloakAdmin,
+    openbao,
     kubeCustom: kube.custom,
     kubeAuthn: kube.authn,
     db,

@@ -7,6 +7,7 @@ import type { DbClient } from '../services/db.js';
 import type { JobsService } from '../services/jobs.js';
 import type { KeycloakAdmin } from '../services/keycloak-admin.js';
 import type { KeycloakClient } from '../services/keycloak.js';
+import type { OpenBaoAdmin } from '../services/openbao-admin.js';
 import type { PromClient } from '../services/prom.js';
 import type { WsHub } from '../ws/hub.js';
 
@@ -91,6 +92,8 @@ export interface RouteDeps {
   prom?: PromClient | null;
   /** Keycloak Admin REST client for inlined operator side effects (#51). */
   keycloakAdmin?: KeycloakAdmin | null;
+  /** OpenBao admin client for inlined operator side effects (#51). */
+  openbao?: OpenBaoAdmin | null;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
@@ -130,7 +133,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => appCatalogRoutes(s, db));
   await app.register(async (s) => isoLibraryRoutes(s, db));
   await app.register(async (s) => encryptionPoliciesRoutes(s, db));
-  await app.register(async (s) => kmsKeysRoutes(s, db));
+  await app.register(async (s) => kmsKeysRoutes(s, db, deps.openbao ?? null));
   await app.register(async (s) => certificatesRoutes(s, db));
   await app.register(async (s) => snapshotSchedulesRoutes(s, db));
   await app.register(async (s) => replicationTargetsRoutes(s, db));

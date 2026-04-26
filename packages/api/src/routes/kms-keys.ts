@@ -1,11 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/kms-keys.js';
 import type { DbClient } from '../services/db.js';
+import type { OpenBaoAdmin } from '../services/openbao-admin.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function kmsKeysRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+export async function kmsKeysRoutes(
+  app: FastifyInstance,
+  db?: DbClient | null,
+  openbao?: OpenBaoAdmin | null
+): Promise<void> {
   if (db) {
-    registerImpl(app, db);
+    registerImpl(app, db, openbao ?? null);
     return;
   }
   registerUnavailable(app, [
