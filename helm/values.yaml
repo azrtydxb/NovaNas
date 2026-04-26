@@ -528,17 +528,21 @@ alloy:
     requests: { cpu: "100m", memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
 
+# kubevirt / novanet / novaedge are deferred per ADR 0009 (#41).
+# The umbrella chart no longer ships any of them; the values blocks
+# are retained for forward-compatibility but enable-flags default
+# to false. Re-enable requires a follow-up ADR + chart work.
 kubevirt:
-  enabled: true
+  enabled: false
 
 novanet:
-  enabled: true
+  enabled: false
   overlay: geneve
 
 novaedge:
-  enabled: true
+  enabled: false
   vipPool:
-    enabled: true
+    enabled: false
     range: "192.168.1.200-192.168.1.240"
 
 # -----------------------------------------------------------------------------
