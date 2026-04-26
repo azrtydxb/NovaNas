@@ -1,0 +1,79 @@
+{{- if .Values.alertmanager.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-alertmanager-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "alertmanager") | nindent 4 }}
+data:
+  alertmanager.yml: |
+    route:
+      receiver: default
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 12h
+    receivers:
+      - name: default
+{{- with .Values.alertmanager.config }}
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-alertmanager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "alertmanager") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "alertmanager") | nindent 4 }}
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-alertmanager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "alertmanager") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "alertmanager") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "alertmanager") | nindent 8 }}
+    spec:
+      containers:
+        - name: alertmanager
+          image: "{{ .Values.alertmanager.image.repository }}:{{ .Values.alertmanager.image.tag }}"
+          imagePullPolicy: {{ .Values.alertmanager.image.pullPolicy }}
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+          resources:
+            {{- toYaml .Values.alertmanager.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: novanas-alertmanager-config
+        - name: storage
+          emptyDir: {}
+{{- end }}

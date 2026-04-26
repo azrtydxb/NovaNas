@@ -1,0 +1,118 @@
+{{- if .Values.tempo.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-tempo-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "tempo") | nindent 4 }}
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: 3200
+      grpc_listen_port: 9095
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+    ingester:
+      lifecycler:
+        ring:
+          kvstore: { store: inmemory }
+          replication_factor: 1
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/blocks
+        wal:
+          path: /var/tempo/wal
+    compactor:
+      compaction:
+        block_retention: {{ .Values.tempo.retention | default "24h" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-tempo
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "tempo") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "tempo") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3200
+      targetPort: http
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: novanas-tempo
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "tempo") | nindent 4 }}
+spec:
+  serviceName: novanas-tempo
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "tempo") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "tempo") | nindent 8 }}
+    spec:
+      containers:
+        - name: tempo
+          image: "{{ .Values.tempo.image.repository }}:{{ .Values.tempo.image.tag }}"
+          imagePullPolicy: {{ .Values.tempo.image.pullPolicy }}
+          args: ["-config.file=/etc/tempo/tempo.yaml"]
+          ports:
+            - name: http
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            - name: storage
+              mountPath: /var/tempo
+          resources:
+            {{- toYaml .Values.tempo.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: novanas-tempo-config
+{{- if not .Values.tempo.persistence.enabled }}
+        - name: storage
+          emptyDir: {}
+{{- end }}
+{{- if .Values.tempo.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.tempo.persistence.size }}
+        {{- with .Values.tempo.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+{{- end }}
+{{- end }}

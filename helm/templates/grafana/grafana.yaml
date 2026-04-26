@@ -1,0 +1,129 @@
+{{- if .Values.grafanaApp.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-grafana-datasources
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana") | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://novanas-prometheus.{{ $ns }}.svc:9090
+        isDefault: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://novanas-loki.{{ $ns }}.svc:3100
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://novanas-tempo.{{ $ns }}.svc:3200
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-grafana-providers
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana") | nindent 4 }}
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: novanas
+        orgId: 1
+        folder: NovaNas
+        type: file
+        disableDeletion: true
+        editable: false
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-grafana
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "grafana") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-grafana
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "grafana") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "grafana") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "grafana") | nindent 8 }}
+    spec:
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafanaApp.image.repository }}:{{ .Values.grafanaApp.image.tag }}"
+          imagePullPolicy: {{ .Values.grafanaApp.image.pullPolicy }}
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrapSecret.name }}
+                  key: grafana-admin-password
+                  optional: true
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/system-overview.json
+          ports:
+            - name: http
+              containerPort: 3000
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: providers
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+            - name: storage
+              mountPath: /var/lib/grafana
+          resources:
+            {{- toYaml .Values.grafanaApp.resources | nindent 12 }}
+      volumes:
+        - name: datasources
+          configMap:
+            name: novanas-grafana-datasources
+        - name: providers
+          configMap:
+            name: novanas-grafana-providers
+        - name: dashboards
+          projected:
+            sources:
+              # NovaNas-shipped dashboards (already mounted as ConfigMaps
+              # under templates/grafana-setup/) are projected together
+              # via the same label selector the upstream sidecar used.
+              - configMap:
+                  name: novanas-grafana-dashboards
+                  optional: true
+        - name: storage
+          emptyDir: {}
+{{- end }}

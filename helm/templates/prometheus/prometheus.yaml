@@ -1,0 +1,176 @@
+{{- if .Values.prometheus.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-prometheus
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: novanas-prometheus
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: novanas-prometheus
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: novanas-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: novanas-prometheus
+    namespace: {{ $ns }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-prometheus-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 30s
+      evaluation_interval: 30s
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["novanas-alertmanager.{{ $ns }}.svc:9093"]
+    rule_files:
+      - /etc/prometheus/rules/*.yaml
+    scrape_configs:
+      # Self-scrape.
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+      # Kubernetes API server.
+      - job_name: kubernetes-apiservers
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config: { ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt }
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+      # Pods that opt in via the standard prometheus.io/scrape annotation.
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            target_label: app
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: novanas-prometheus
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+spec:
+  selector:
+    {{- include "novanas.selectorLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: novanas-prometheus
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+spec:
+  serviceName: novanas-prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "prometheus") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "prometheus") | nindent 8 }}
+      annotations:
+        # Reload prometheus when the config ConfigMap rotates.
+        checksum/config: {{ tpl (.Files.Get "templates/prometheus/prometheus.yaml" | default "") . | sha256sum }}
+    spec:
+      serviceAccountName: novanas-prometheus
+      containers:
+        - name: prometheus
+          image: "{{ .Values.prometheus.image.repository }}:{{ .Values.prometheus.image.tag }}"
+          imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.prometheus.retention }}
+            - --web.enable-lifecycle
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: storage
+              mountPath: /prometheus
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: novanas-prometheus-config
+{{- if not .Values.prometheus.persistence.enabled }}
+        - name: storage
+          emptyDir: {}
+{{- end }}
+{{- if .Values.prometheus.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.prometheus.persistence.size }}
+        {{- with .Values.prometheus.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+{{- end }}
+{{- end }}

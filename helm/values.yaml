@@ -449,90 +449,84 @@ redis:
     requests: { cpu: "50m",  memory: "64Mi"  }
     limits:   { cpu: "500m", memory: "256Mi" }
 
+# Observability stack — own-templates (#40). Each component is
+# toggleable so dev overlays can stay lean.
 observability:
-  # kube-prometheus-stack subchart.
-  enabled: true
-  fullnameOverride: novanas-observability
-  crds:
+  # Legacy umbrella switch — toggle the whole stack on/off.
+  enabled: false
+prometheus:
+  enabled: false
+  image:
+    repository: prom/prometheus
+    tag: v3.0.1
+    pullPolicy: IfNotPresent
+  retention: 15d
+  resources:
+    requests: { cpu: "200m", memory: "1Gi" }
+    limits:   { cpu: "2",    memory: "4Gi" }
+  persistence:
     enabled: true
-  prometheus:
-    prometheusSpec:
-      retention: 15d
-      resources:
-        requests: { cpu: "200m", memory: "1Gi" }
-        limits:   { cpu: "2",    memory: "4Gi" }
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            accessModes: ["ReadWriteOnce"]
-            resources:
-              requests:
-                storage: 30Gi
-  alertmanager:
-    alertmanagerSpec:
-      resources:
-        requests: { cpu: "50m", memory: "128Mi" }
-        limits:   { cpu: "500m", memory: "512Mi" }
-  grafana:
-    enabled: true
-    adminPassword: ""  # auto-generated and stored in OpenBao
-    defaultDashboardsEnabled: true
-    sidecar:
-      dashboards:
-        enabled: true
-        label: grafana_dashboard
-      datasources:
-        enabled: true
-        label: grafana_datasource
-
+    size: 30Gi
+    storageClass: ""
+alertmanager:
+  enabled: false
+  image:
+    repository: prom/alertmanager
+    tag: v0.27.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+  # Optional extra config merged into alertmanager.yml.
+  config: {}
+grafanaApp:
+  # `grafana` is already taken by NovaNas-shipped dashboard ConfigMaps;
+  # the runtime grafana server lives under `grafanaApp` to avoid the clash.
+  enabled: false
+  image:
+    repository: grafana/grafana
+    tag: 11.4.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "1Gi" }
 loki:
-  enabled: true
-  deploymentMode: SingleBinary
-  loki:
-    auth_enabled: false
-    commonConfig:
-      replication_factor: 1
-    storage:
-      type: filesystem
-    schemaConfig:
-      configs:
-        - from: "2024-04-01"
-          store: tsdb
-          object_store: filesystem
-          schema: v13
-          index:
-            prefix: loki_index_
-            period: 24h
-  singleBinary:
-    replicas: 1
-    persistence:
-      enabled: true
-      size: 20Gi
-  read:
-    replicas: 0
-  write:
-    replicas: 0
-  backend:
-    replicas: 0
-
+  enabled: false
+  image:
+    repository: grafana/loki
+    tag: 3.3.2
+    pullPolicy: IfNotPresent
+  retention: 168h
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "1Gi" }
 tempo:
-  enabled: true
-  tempo:
-    retention: 24h
+  enabled: false
+  image:
+    repository: grafana/tempo
+    tag: 2.6.1
+    pullPolicy: IfNotPresent
+  retention: 24h
   persistence:
     enabled: true
     size: 10Gi
-
+    storageClass: ""
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "1Gi" }
 alloy:
-  enabled: true
-  alloy:
-    extraPorts:
-      - name: otlp-grpc
-        port: 4317
-        targetPort: 4317
-      - name: otlp-http
-        port: 4318
-        targetPort: 4318
+  enabled: false
+  image:
+    repository: grafana/alloy
+    tag: v1.5.1
+    pullPolicy: IfNotPresent
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
 
 kubevirt:
   enabled: true
