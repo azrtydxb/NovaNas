@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { register as registerUsers } from '../resources/users.js';
 import { accepted } from '../services/actions.js';
 import type { DbClient } from '../services/db.js';
+import type { KeycloakAdmin } from '../services/keycloak-admin.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
 
@@ -91,9 +92,13 @@ function registerUserActions(app: FastifyInstance): void {
   });
 }
 
-export async function userRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+export async function userRoutes(
+  app: FastifyInstance,
+  db?: DbClient | null,
+  keycloakAdmin?: KeycloakAdmin | null
+): Promise<void> {
   if (db) {
-    registerUsers(app, db);
+    registerUsers(app, db, keycloakAdmin ?? null);
     registerUserActions(app);
     return;
   }

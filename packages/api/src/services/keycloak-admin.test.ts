@@ -85,6 +85,49 @@ describe('keycloak-admin', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('ensureUser creates when not found, returns id from Location', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 201,
+          headers: { Location: '/admin/realms/novanas/users/u-1' },
+        })
+      );
+    const admin = createKeycloakAdmin(baseEnv);
+    const id = await admin.ensureUser({ username: 'alice', email: 'a@x.io' });
+    expect(id).toBe('u-1');
+    const createCall = fetchMock.mock.calls[2];
+    expect(createCall?.[0]).toContain('/admin/realms/novanas/users');
+    const body = JSON.parse((createCall?.[1] as RequestInit).body as string);
+    expect(body).toMatchObject({ username: 'alice', email: 'a@x.io', enabled: true });
+  });
+
+  it('ensureUser updates existing user', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 'u-2', username: 'bob' }]), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const admin = createKeycloakAdmin(baseEnv);
+    const id = await admin.ensureUser({ username: 'bob', enabled: false });
+    expect(id).toBe('u-2');
+    const putCall = fetchMock.mock.calls[2];
+    expect(putCall?.[0]).toContain('/admin/realms/novanas/users/u-2');
+    expect((putCall?.[1] as RequestInit).method).toBe('PUT');
+  });
+
+  it('deleteUser is a no-op when user missing', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    const admin = createKeycloakAdmin(baseEnv);
+    await admin.deleteUser('', 'gone');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('updateRealm merges updates into the existing realm representation', async () => {
     fetchMock
       .mockResolvedValueOnce(tokenResponse())
