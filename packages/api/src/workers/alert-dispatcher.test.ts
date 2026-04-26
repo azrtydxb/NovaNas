@@ -29,7 +29,11 @@ function alert(severity: AlertEvent['severity'] = 'warning'): AlertEvent {
   };
 }
 
-function webhookChannel(name: string, url: string, minSeverity?: AlertEvent['severity']): AlertChannel {
+function webhookChannel(
+  name: string,
+  url: string,
+  minSeverity?: AlertEvent['severity']
+): AlertChannel {
   return {
     apiVersion: 'novanas.io/v1alpha1',
     kind: 'AlertChannel',

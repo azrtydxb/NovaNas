@@ -55,10 +55,7 @@ export function register(
             enabled: user.spec.enabled ?? true,
             groups: user.spec.groups,
           });
-          req.log.debug(
-            { kind: 'User', name: user.metadata.name },
-            'user updated in keycloak'
-          );
+          req.log.debug({ kind: 'User', name: user.metadata.name }, 'user updated in keycloak');
         }
       : undefined,
     afterDelete: keycloakAdmin

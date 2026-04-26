@@ -15,11 +15,7 @@ export function buildDatasetResource(db: DbClient): PgResource<Dataset> {
   });
 }
 
-export function register(
-  app: FastifyInstance,
-  db: DbClient,
-  openbao?: OpenBaoAdmin | null
-): void {
+export function register(app: FastifyInstance, db: DbClient, openbao?: OpenBaoAdmin | null): void {
   const resource = buildDatasetResource(db);
   registerCrudRoutes<Dataset>({
     app,

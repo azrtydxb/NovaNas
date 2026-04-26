@@ -50,9 +50,7 @@ export function createCertManagerClient(api: CustomObjectsApi): CertManagerClien
       // on its side.
     }
 
-    const renewBefore = c.spec.renewBeforeDays
-      ? `${c.spec.renewBeforeDays * 24}h`
-      : undefined;
+    const renewBefore = c.spec.renewBeforeDays ? `${c.spec.renewBeforeDays * 24}h` : undefined;
 
     return {
       secretName: `${c.metadata.name}-tls`,

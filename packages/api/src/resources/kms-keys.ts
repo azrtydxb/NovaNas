@@ -15,11 +15,7 @@ export function buildKmsKeyResource(db: DbClient): PgResource<KmsKey> {
   });
 }
 
-export function register(
-  app: FastifyInstance,
-  db: DbClient,
-  openbao?: OpenBaoAdmin | null
-): void {
+export function register(app: FastifyInstance, db: DbClient, openbao?: OpenBaoAdmin | null): void {
   registerCrudRoutes<KmsKey>({
     app,
     basePath: '/api/v1/kms-keys',

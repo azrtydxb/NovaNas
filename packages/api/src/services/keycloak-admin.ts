@@ -93,7 +93,11 @@ export function createKeycloakAdmin(env: Env): KeycloakAdmin {
     return t.accessToken;
   }
 
-  async function adminFetch(realm: string, path: string, init: RequestInit = {}): Promise<Response> {
+  async function adminFetch(
+    realm: string,
+    path: string,
+    init: RequestInit = {}
+  ): Promise<Response> {
     // The admin path may target a non-default realm (e.g. realm
     // management endpoints), but the bearer token always comes from
     // the SA's realm — Keycloak issues service-account tokens from the
@@ -136,7 +140,7 @@ export function createKeycloakAdmin(env: Env): KeycloakAdmin {
 
       // Create. Keycloak's POST /groups returns 201 with Location:
       // /admin/realms/<r>/groups/<id>. Parse the id from there.
-      const create = await adminFetch(realm, `/groups`, {
+      const create = await adminFetch(realm, '/groups', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: spec.name }),

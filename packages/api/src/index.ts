@@ -7,17 +7,17 @@ import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
 import { startKubeWatch } from './plugins/kube-watch.js';
-import { createDbClient } from './services/db.js';
+import { buildAlertChannelResource } from './resources/alert-channels.js';
 import { createCertManagerClient } from './services/cert-manager.js';
+import { createDbClient } from './services/db.js';
 import { createKeycloakAdmin } from './services/keycloak-admin.js';
 import { createKeycloakClient } from './services/keycloak.js';
-import { createOpenBaoAdmin } from './services/openbao-admin.js';
 import { createKubeClients } from './services/kube.js';
+import { createOpenBaoAdmin } from './services/openbao-admin.js';
 import { createPromClient } from './services/prom.js';
 import { createRedisClient } from './services/redis.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { AlertDispatcher } from './workers/alert-dispatcher.js';
-import { buildAlertChannelResource } from './resources/alert-channels.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();

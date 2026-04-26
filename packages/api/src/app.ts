@@ -17,9 +17,9 @@ import {
   type AuditPartitionGcHandle,
   startAuditPartitionGc,
 } from './services/audit-partition-gc.js';
+import type { CertManagerClient } from './services/cert-manager.js';
 import type { DbClient } from './services/db.js';
 import { JobsService } from './services/jobs.js';
-import type { CertManagerClient } from './services/cert-manager.js';
 import type { KeycloakAdmin } from './services/keycloak-admin.js';
 import type { KeycloakClient } from './services/keycloak.js';
 import type { OpenBaoAdmin } from './services/openbao-admin.js';
