@@ -1,0 +1,105 @@
+{{/*
+ClusterIssuers used by NovaNas Certificate resources.
+
+cert-manager is a hard prereq for this chart when any TLS-issuing
+feature is enabled. Install it cluster-wide before installing
+NovaNas:
+
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+
+We define three issuers:
+
+- novanas-selfsigned: in-cluster CA built from a self-signed root.
+  Used for the dev box (raw IP, no DNS) and for *internal* certs
+  (openbao server cert, internal mTLS) where browser trust isn't a
+  factor. Always enabled.
+
+- novanas-acme-staging / novanas-acme-prod: Let's Encrypt issuers
+  for browser-trusted ingress certs in production. HTTP-01 solver
+  via the unified ingress. Enabled when certManager.acme.enabled.
+
+novanas-selfsigned is implemented as a self-signed root → CA-issuer
+pair so cert-manager-issued certs share a single signing CA. This
+makes it possible to import the root cert into a browser/laptop
+trust store for the dev box and have *all* NovaNas certs validate
+against that one root.
+*/}}
+{{- if .Values.certManager.enabled -}}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: novanas-selfsigned-bootstrap
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+# Self-signed root Certificate. Lives in the cert-manager namespace
+# so the CA Secret is reachable to the issuer below.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: novanas-root-ca
+  namespace: cert-manager
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: "NovaNas Root CA"
+  secretName: novanas-root-ca
+  duration: 87600h    # 10 years
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: novanas-selfsigned-bootstrap
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: novanas-selfsigned
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: novanas-root-ca
+{{- if .Values.certManager.acme.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: novanas-acme-staging
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: {{ .Values.certManager.acme.email | required "certManager.acme.email is required when acme is enabled" | quote }}
+    privateKeySecretRef:
+      name: novanas-acme-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: {{ .Values.ingress.className | default "traefik" | quote }}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: novanas-acme-prod
+  labels:
+    {{- include "novanas.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: {{ .Values.certManager.acme.email | quote }}
+    privateKeySecretRef:
+      name: novanas-acme-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: {{ .Values.ingress.className | default "traefik" | quote }}
+{{- end }}
+{{- end }}

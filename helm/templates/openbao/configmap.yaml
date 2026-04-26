@@ -34,7 +34,7 @@ data:
       {{- end }}
     }
 
-    api_addr     = "http://POD_IP:8200"
+    api_addr     = "{{ ternary "https" "http" .Values.openbao.tls.enabled }}://POD_IP:8200"
     cluster_addr = "https://POD_IP:8201"
 
     disable_mlock = true

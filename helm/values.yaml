@@ -364,6 +364,43 @@ openbao:
     enabled: true
 
 # -----------------------------------------------------------------------------
+# cert-manager integration.
+#
+# cert-manager (https://cert-manager.io) is a hard prerequisite of this
+# chart whenever any TLS-issuing feature is enabled. Install it cluster-
+# wide before installing NovaNas:
+#
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+#
+# We don't bundle cert-manager itself (CRDs + webhook + cainjector are
+# >500KB of generated YAML and don't fit a "single appliance chart"
+# shape), but we DO own the Issuer + Certificate resources that
+# cert-manager consumes — they live under templates/cert-manager/.
+#
+# Three ClusterIssuers are created when enabled:
+#   - novanas-selfsigned (always): a CA-issuer chained from a self-
+#     signed root, used for internal certs (openbao server cert, etc)
+#     and as the dev-box ingress fallback (raw IP, no DNS).
+#   - novanas-acme-staging / novanas-acme-prod (acme.enabled): Let's
+#     Encrypt HTTP-01 issuers for production browser-trusted certs.
+# -----------------------------------------------------------------------------
+certManager:
+  enabled: true
+  # Issuer the unified ingress requests its cert from. One of:
+  # "selfsigned" (default — dev/raw-IP), "acme-staging", "acme-prod".
+  ingressIssuer: selfsigned
+  # Secret name the Certificate writes to. Must match the ingress's
+  # spec.tls.secretName so traefik picks up the right cert. The default
+  # tracks the helm-baked self-signed Secret name so a single value can
+  # switch between cert-manager and helm-baked TLS without rewiring.
+  ingressSecretName: ""    # empty → defaults to "{fullname}-tls"
+  acme:
+    enabled: false
+    # Email address Let's Encrypt sends expiration warnings to. Required
+    # when acme.enabled is true.
+    email: ""
+
+# -----------------------------------------------------------------------------
 # Redis — own template under templates/redis/, official upstream image.
 # Used by the api for pub/sub and ephemeral caches.
 # -----------------------------------------------------------------------------

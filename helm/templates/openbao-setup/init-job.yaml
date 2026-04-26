@@ -241,10 +241,18 @@ spec:
             # default PATH (which already includes the bitnami kubectl dir).
             - name: PATH
               value: "/tools:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            {{- $scheme := ternary "https" "http" .Values.openbao.tls.enabled }}
+            {{- $svc := printf "novanas-openbao.%s.svc:8200" (include "novanas.systemNamespace" .) }}
             - name: BAO_ADDR
-              value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
+              value: {{ printf "%s://%s" $scheme $svc | quote }}
             - name: VAULT_ADDR
-              value: "http://novanas-openbao.{{ include "novanas.systemNamespace" . }}.svc:8200"
+              value: {{ printf "%s://%s" $scheme $svc | quote }}
+            {{- if .Values.openbao.tls.enabled }}
+            - name: BAO_CACERT
+              value: "/openbao/tls/ca.crt"
+            - name: VAULT_CACERT
+              value: "/openbao/tls/ca.crt"
+            {{- end }}
             # No pre-set token. The script either runs `bao operator init`
             # (first install) or reads the root token back from the
             # novanas-openbao-keys Secret created on the previous run.
@@ -252,6 +260,9 @@ spec:
             - { name: tools,    mountPath: /tools }
             - { name: policies, mountPath: /policies, readOnly: true }
             - { name: scripts,  mountPath: /scripts,  readOnly: true }
+            {{- if .Values.openbao.tls.enabled }}
+            - { name: tls,      mountPath: /openbao/tls, readOnly: true }
+            {{- end }}
       volumes:
         - name: tools
           emptyDir: {}
@@ -262,4 +273,9 @@ spec:
           configMap:
             name: novanas-openbao-init-script
             defaultMode: 0755
+        {{- if .Values.openbao.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: novanas-openbao-tls
+        {{- end }}
 {{- end }}

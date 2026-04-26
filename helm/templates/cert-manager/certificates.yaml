@@ -1,0 +1,95 @@
+{{/*
+NovaNas-issued Certificate resources.
+
+Each one is a request to cert-manager to mint a leaf cert + private
+key into a Secret that the consuming workload mounts.
+
+- novanas-openbao-tls: openbao server cert. SANs cover the cluster
+  DNS names openbao serves (per-NS service, headless service).
+
+- novanas-ingress-tls: external ingress cert. Covers the configured
+  hostname plus the raw IP literal for dev-box deploys. Switches
+  issuer based on certManager.ingressIssuer ("selfsigned" / "acme-
+  staging" / "acme-prod").
+*/}}
+{{- if .Values.certManager.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+
+{{- /* ---- openbao server cert ----------------------------------- */}}
+{{- if and .Values.openbao.enabled .Values.openbao.tls.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: novanas-openbao-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "openbao") | nindent 4 }}
+spec:
+  secretName: novanas-openbao-tls
+  duration: 8760h     # 1 year
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    - novanas-openbao
+    - novanas-openbao.{{ $ns }}
+    - novanas-openbao.{{ $ns }}.svc
+    - novanas-openbao.{{ $ns }}.svc.cluster.local
+    - novanas-openbao-headless
+    - novanas-openbao-headless.{{ $ns }}
+    - novanas-openbao-headless.{{ $ns }}.svc
+    - novanas-openbao-headless.{{ $ns }}.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: novanas-selfsigned
+    kind: ClusterIssuer
+    group: cert-manager.io
+{{- end }}
+
+{{- /* ---- ingress cert ------------------------------------------- */}}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
+{{- $issuer := .Values.certManager.ingressIssuer | default "selfsigned" }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: novanas-ingress-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "ingress") | nindent 4 }}
+spec:
+  secretName: {{ .Values.certManager.ingressSecretName | default (printf "%s-tls" (include "novanas.fullname" .)) | quote }}
+  duration: 2160h    # 90 days (Let's Encrypt max; selfSigned ignores)
+  renewBefore: 360h  # 15 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  {{- $host := .Values.ingress.host -}}
+  {{- $isIP := regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host }}
+  {{- if $isIP }}
+  # ACME does not issue certs for raw IPs; selfSigned can. dnsNames
+  # is required to be non-empty so we add a placeholder for the IP
+  # alongside the ipAddresses entry.
+  dnsNames:
+    - {{ printf "%s.nip.io" $host | quote }}
+  ipAddresses:
+    - {{ $host | quote }}
+  {{- else }}
+  dnsNames:
+    - {{ $host | quote }}
+  {{- end }}
+  issuerRef:
+    {{- if eq $issuer "acme-prod" }}
+    name: novanas-acme-prod
+    {{- else if eq $issuer "acme-staging" }}
+    name: novanas-acme-staging
+    {{- else }}
+    name: novanas-selfsigned
+    {{- end }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+{{- end }}
+{{- end }}

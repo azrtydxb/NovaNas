@@ -48,8 +48,16 @@ spec:
           imagePullPolicy: {{ .Values.openbao.image.pullPolicy | default "IfNotPresent" }}
           args: ["server", "-config=/openbao/config/config.hcl"]
           env:
+            {{- $scheme := ternary "https" "http" .Values.openbao.tls.enabled }}
             - name: BAO_ADDR
-              value: "http://127.0.0.1:8200"
+              value: {{ printf "%s://127.0.0.1:8200" $scheme | quote }}
+            {{- if .Values.openbao.tls.enabled }}
+            # Self-signed CA isn't on the system trust store inside the
+            # openbao image; trust our own root by pointing the bao CLI
+            # at the mounted CA bundle.
+            - name: BAO_CACERT
+              value: "/openbao/tls/ca.crt"
+            {{- end }}
             - name: SKIP_SETCAP
               value: "true"
           ports:
@@ -63,17 +71,26 @@ spec:
             httpGet:
               path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
               port: http
+              {{- if .Values.openbao.tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /v1/sys/health?standbyok=true&uninitcode=204&sealedcode=204
               port: http
+              {{- if .Values.openbao.tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 30
             periodSeconds: 10
           volumeMounts:
             - { name: data,   mountPath: /openbao/data }
             - { name: config, mountPath: /openbao/config }
+            {{- if .Values.openbao.tls.enabled }}
+            - { name: tls,    mountPath: /openbao/tls, readOnly: true }
+            {{- end }}
           resources:
             {{- toYaml (.Values.openbao.resources | default dict) | nindent 12 }}
         # Auto-unseal sidecar. Polls bao status; when sealed AND the keys
@@ -91,7 +108,12 @@ spec:
             - /bin/sh
             - -c
             - |
+              {{- if .Values.openbao.tls.enabled }}
+              export BAO_ADDR="https://127.0.0.1:8200"
+              export BAO_CACERT="/openbao/tls/ca.crt"
+              {{- else }}
               export BAO_ADDR="http://127.0.0.1:8200"
+              {{- end }}
               while :; do
                 bao status >/dev/null 2>&1
                 rc=$?
@@ -124,6 +146,9 @@ spec:
             - name: unseal-keys
               mountPath: /unseal
               readOnly: true
+            {{- if .Values.openbao.tls.enabled }}
+            - { name: tls, mountPath: /openbao/tls, readOnly: true }
+            {{- end }}
           resources:
             requests: { cpu: "10m", memory: "32Mi" }
             limits:   { cpu: "100m", memory: "128Mi" }
@@ -137,6 +162,11 @@ spec:
           secret:
             secretName: novanas-openbao-keys
             optional: true
+        {{- if .Values.openbao.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: novanas-openbao-tls
+        {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: data
