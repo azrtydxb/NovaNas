@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  drizzle-orm: 0.36.4
-
 importers:
 
   .:
@@ -118,7 +115,7 @@ importers:
   packages/db:
     dependencies:
       drizzle-orm:
-        specifier: 0.36.4
+        specifier: ~0.36.0
         version: 0.36.4(@electric-sql/pglite@0.4.4)(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5)
       postgres:
         specifier: ~3.4.0
