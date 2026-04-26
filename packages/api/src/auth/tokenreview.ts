@@ -73,6 +73,32 @@ const DEFAULT_SA_MAP: Record<string, ServicePrincipal> = {
     roles: ['internal:operator'],
     groups: [],
   },
+  // Per-component SAs for the storage data plane after the kube-CRD →
+  // api-polling switch (#50). Each component gets its own SA so the
+  // audit trail can attribute writes back to the right binary.
+  'system:serviceaccount:novanas-system:novanas-storage-controller': {
+    name: 'novanas-storage-controller',
+    roles: ['internal:storage'],
+    groups: [],
+  },
+  'system:serviceaccount:novanas-system:novanas-storage-scheduler': {
+    name: 'novanas-storage-scheduler',
+    roles: ['internal:storage'],
+    groups: [],
+  },
+  'system:serviceaccount:novanas-system:novanas-storage-csi': {
+    name: 'novanas-storage-csi',
+    roles: ['internal:storage'],
+    groups: [],
+  },
+  // Host-side agents (network nmstate, samba, ganesha, keepalived,
+  // iscsi/nvmeof targets) — they all run as the shared host-agent SA
+  // and read their config back out of the api (#55).
+  'system:serviceaccount:novanas-system:novanas-host-agent': {
+    name: 'novanas-host-agent',
+    roles: ['internal:host-agent'],
+    groups: [],
+  },
 };
 
 export function buildTokenReviewMiddleware(opts: TokenReviewOptions): TokenReviewMiddleware {
