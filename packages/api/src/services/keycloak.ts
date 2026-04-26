@@ -34,18 +34,30 @@ export interface KeycloakClient {
 }
 
 export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
-  const issuer = new URL(env.KEYCLOAK_ISSUER_URL);
-  // Allow http:// Keycloak endpoints for in-cluster service URLs and local dev.
-  // Production deployments use the novaedge-fronted https endpoint via Ingress.
+  const publicIssuer = new URL(env.KEYCLOAK_ISSUER_URL);
+  // Prefer the in-cluster Service URL for discovery so we never hit
+  // Node's NODE_EXTRA_CA_CERTS / undici code path for the well-known
+  // fetch (#49). The public issuer URL is still kept as the canonical
+  // `iss` value, since that's what the SPA sees in tokens.
+  const discoveryIssuer = env.KEYCLOAK_INTERNAL_ISSUER_URL
+    ? new URL(env.KEYCLOAK_INTERNAL_ISSUER_URL)
+    : publicIssuer;
   const discoveryOptions =
-    issuer.protocol === 'http:' ? { execute: [client.allowInsecureRequests] } : undefined;
+    discoveryIssuer.protocol === 'http:' ? { execute: [client.allowInsecureRequests] } : undefined;
   const config = await client.discovery(
-    issuer,
+    discoveryIssuer,
     env.KEYCLOAK_CLIENT_ID,
     env.KEYCLOAK_CLIENT_SECRET,
     undefined,
     discoveryOptions
   );
+  // Discovered metadata records the in-cluster issuer; we want token
+  // validation to expect the public issuer (the URL Keycloak actually
+  // stamps into `iss`), so override it on the metadata object.
+  if (env.KEYCLOAK_INTERNAL_ISSUER_URL) {
+    const metadata = config.serverMetadata() as { issuer: string };
+    metadata.issuer = env.KEYCLOAK_ISSUER_URL;
+  }
 
   return {
     config,

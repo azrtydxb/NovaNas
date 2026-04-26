@@ -57,6 +57,12 @@ spec:
             # backchannel calls. Connections go pod→Service→ingress→kc.
             - name: KEYCLOAK_ISSUER_URL
               value: {{ printf "%s/realms/%s" (.Values.keycloak.hostname | default (printf "http://novanas-keycloak.%s.svc" (include "novanas.systemNamespace" .))) (.Values.keycloak.realm.name | default "novanas") | quote }}
+            # In-cluster Service URL for openid-client discovery — plain
+            # HTTP, bypasses Node/undici NODE_EXTRA_CA_CERTS handling for
+            # the well-known fetch (#49). The api still validates token
+            # `iss` against the public KEYCLOAK_ISSUER_URL above.
+            - name: KEYCLOAK_INTERNAL_ISSUER_URL
+              value: {{ printf "http://novanas-keycloak.%s.svc/realms/%s" (include "novanas.systemNamespace" .) (.Values.keycloak.realm.name | default "novanas") | quote }}
             {{- if and .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
             # Trust our own CA (cert-manager-issued Certificate carries
             # ca.crt; the helm self-signed fallback puts the cert at

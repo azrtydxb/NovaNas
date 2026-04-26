@@ -13,6 +13,12 @@ export const EnvSchema = z.object({
   REDIS_URL: z.string().url(),
 
   KEYCLOAK_ISSUER_URL: z.string().url(),
+  // Optional in-cluster Service URL for discovery. When set, we fetch
+  // the well-known doc over plain HTTP to avoid Node/undici's flaky
+  // NODE_EXTRA_CA_CERTS handling for ingress-served HTTPS (#49). Public
+  // KEYCLOAK_ISSUER_URL is still used as the canonical `iss` value the
+  // SPA sees in tokens.
+  KEYCLOAK_INTERNAL_ISSUER_URL: z.string().url().optional(),
   KEYCLOAK_CLIENT_ID: z.string().min(1),
   KEYCLOAK_CLIENT_SECRET: z.string().min(1),
 
