@@ -209,6 +209,35 @@ function hasAnyRole(user: AuthenticatedUser, roles: readonly string[]): boolean 
   return false;
 }
 
+/**
+ * Internal service accounts (disk-agent, storage-meta, etc.) carry
+ * `internal:*` role names from `auth/tokenreview.ts`. They get full
+ * read access on every kind, plus targeted write access on the kinds
+ * they own:
+ *   internal:disk-agent → write Disk
+ *   internal:storage    → write StoragePool, Disk (status only)
+ * Anything else falls through to the normal user/role check above.
+ */
+const INTERNAL_WRITE_KINDS: Record<string, ReadonlySet<Kind>> = {
+  'internal:disk-agent': new Set(['Disk']),
+  'internal:storage': new Set(['Disk', 'StoragePool']),
+  'internal:operator': new Set([]),
+};
+
+function isInternalServiceAccount(user: AuthenticatedUser): boolean {
+  return (user.roles ?? []).some((r) => r.startsWith('internal:'));
+}
+
+function internalCanAccess(user: AuthenticatedUser, action: Action, kind: Kind): boolean {
+  if (action === 'read') return true;
+  // Write or delete — only the explicitly-listed kinds.
+  for (const role of user.roles ?? []) {
+    const allowed = INTERNAL_WRITE_KINDS[role];
+    if (allowed?.has(kind)) return true;
+  }
+  return false;
+}
+
 export function isShareOnly(user: AuthenticatedUser): boolean {
   return (
     hasAnyRole(user, [AuthzRole.ShareOnly]) &&
@@ -223,6 +252,12 @@ function canAccess(
   namespace?: string
 ): boolean {
   if (!user || isShareOnly(user)) return false;
+
+  // Service accounts (TokenReview-authenticated internal callers) take
+  // a separate path with kind-targeted write grants.
+  if (isInternalServiceAccount(user)) {
+    return internalCanAccess(user, action, kind);
+  }
 
   const admin = hasAnyRole(user, [AuthzRole.Admin]);
   const regular = hasAnyRole(user, [AuthzRole.User]);

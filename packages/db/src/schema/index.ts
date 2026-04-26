@@ -7,3 +7,4 @@ export * from './preferences.js';
 export * from './appCatalog.js';
 export * from './apiTokens.js';
 export * from './metricRollups.js';
+export * from './resources.js';

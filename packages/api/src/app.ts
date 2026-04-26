@@ -1,4 +1,4 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
+import type { AuthenticationV1Api, CustomObjectsApi } from '@kubernetes/client-node';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
@@ -33,6 +33,12 @@ export interface BuildAppOptions {
   keycloak: KeycloakClient;
   /** Kubernetes CustomObjects client for CRUD routes. Optional in tests. */
   kubeCustom?: CustomObjectsApi;
+  /**
+   * Kubernetes AuthenticationV1 client for TokenReview-backed
+   * service-to-service auth. Optional; when omitted Bearer tokens
+   * are not validated and only session-cookie auth works.
+   */
+  kubeAuthn?: AuthenticationV1Api;
   /** Disable optional subsystems in tests. */
   disableSwagger?: boolean;
   disablePubSub?: boolean;
@@ -97,7 +103,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
 
   // session + auth
   const sessions = new SessionStore(redis);
-  await registerAuth(app, env, sessions);
+  await registerAuth(app, { env, store: sessions, authnApi: opts.kubeAuthn });
 
   // websocket hub + pubsub
   const hub = new WsHub();
