@@ -1,27 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type ReplicationTarget, ReplicationTargetSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildReplicationTargetResource(
-  api: CustomObjectsApi
-): CrdResource<ReplicationTarget> {
-  return new CrdResource<ReplicationTarget>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'replicationtargets' },
+export function buildReplicationTargetResource(db: DbClient): PgResource<ReplicationTarget> {
+  return new PgResource<ReplicationTarget>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'ReplicationTarget',
     schema: ReplicationTargetSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<ReplicationTarget>({
     app,
     basePath: '/api/v1/replication-targets',
     tag: 'replication-targets',
     kind: 'ReplicationTarget',
-    resource: buildReplicationTargetResource(api),
+    resource: buildReplicationTargetResource(db),
     schema: ReplicationTargetSchema,
   });
 }

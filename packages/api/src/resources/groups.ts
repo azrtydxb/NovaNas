@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type Group, GroupSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildGroupResource(api: CustomObjectsApi): CrdResource<Group> {
-  return new CrdResource<Group>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'groups' },
+export function buildGroupResource(db: DbClient): PgResource<Group> {
+  return new PgResource<Group>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'Group',
     schema: GroupSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<Group>({
     app,
     basePath: '/api/v1/groups',
     tag: 'groups',
     kind: 'Group',
-    resource: buildGroupResource(api),
+    resource: buildGroupResource(db),
     schema: GroupSchema,
   });
 }

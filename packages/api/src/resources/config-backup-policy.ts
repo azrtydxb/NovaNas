@@ -1,27 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type ConfigBackupPolicy, ConfigBackupPolicySchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
-import { registerSingletonRoutes } from './_register_extras.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
+import { registerCrudRoutes } from './_register.js';
 
-export function buildConfigBackupPolicyResource(
-  api: CustomObjectsApi
-): CrdResource<ConfigBackupPolicy> {
-  return new CrdResource<ConfigBackupPolicy>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'configbackuppolicies' },
+export function buildConfigBackupPolicyResource(db: DbClient): PgResource<ConfigBackupPolicy> {
+  return new PgResource<ConfigBackupPolicy>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'ConfigBackupPolicy',
     schema: ConfigBackupPolicySchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
-  registerSingletonRoutes<ConfigBackupPolicy>({
+export function register(app: FastifyInstance, db: DbClient): void {
+  registerCrudRoutes<ConfigBackupPolicy>({
     app,
     basePath: '/api/v1/config-backup-policy',
     tag: 'config-backup-policy',
     kind: 'ConfigBackupPolicy',
-    resource: buildConfigBackupPolicyResource(api),
+    resource: buildConfigBackupPolicyResource(db),
     schema: ConfigBackupPolicySchema,
   });
 }

@@ -321,33 +321,25 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 		SetupWithManager(mgr ctrl.Manager) error
 	}
 
-	// Disk + StoragePool are now Postgres-backed (see packages/api).
-	// disk-agent posts to /api/v1/disks; pool/disk validation runs in
-	// the API. The corresponding reconcilers and CRDs were removed —
-	// nothing in the cluster watches them anymore.
+	// CRD-to-Postgres migration: most business-object reconcilers
+	// have been removed because the API now writes directly to
+	// Postgres + projects synchronously to Keycloak/OpenBao/cert-
+	// manager via afterCreate hooks. What remains here are the
+	// "stay-set" reconcilers that produce real K8s/external CRDs:
+	// VMs (KubeVirt), AppInstance (Helm), NfsServer/SmbServer (Pods),
+	// network projections to novanet (FirewallRule, TrafficPolicy,
+	// ServicePolicy, RemoteAccessTunnel, Ingress) and the grey-set
+	// host-side ConfigMap projectors (Bond, Vlan, *Interface, etc.)
+	// pending the agent-contract flip.
 	reconcilers := []setup{
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.DatasetReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.BucketReconciler{KeyProvisioner: ec.keyProv},
 		&controllers.ShareReconciler{},
 		&controllers.SmbServerReconciler{},
 		&controllers.NfsServerReconciler{},
 		&controllers.IscsiTargetReconciler{},
 		&controllers.NvmeofTargetReconciler{},
 		&controllers.ObjectStoreReconciler{},
-		&controllers.BucketUserReconciler{},
-		&controllers.UserReconciler{Keycloak: ec.keycloak, OpenBao: ec.openbao},
-		&controllers.GroupReconciler{Keycloak: ec.keycloak},
-		&controllers.KeycloakRealmReconciler{Keycloak: ec.keycloak},
-		&controllers.ApiTokenReconciler{},
 		&controllers.SshKeyReconciler{},
-		&controllers.SnapshotReconciler{Storage: ec.storage},
-		&controllers.SnapshotScheduleReconciler{},
-		&controllers.ReplicationTargetReconciler{Storage: ec.storage},
-		&controllers.ReplicationJobReconciler{Storage: ec.storage},
-		&controllers.CloudBackupTargetReconciler{},
-		&controllers.CloudBackupJobReconciler{Storage: ec.storage},
-		&controllers.ScrubScheduleReconciler{Storage: ec.storage},
 		&controllers.PhysicalInterfaceReconciler{Network: ec.network},
 		&controllers.BondReconciler{Network: ec.network},
 		&controllers.VlanReconciler{Network: ec.network},
@@ -359,24 +351,10 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 		&controllers.CustomDomainReconciler{},
 		&controllers.FirewallRuleReconciler{},
 		&controllers.TrafficPolicyReconciler{},
-		&controllers.AppCatalogReconciler{},
 		&controllers.AppReconciler{},
 		&controllers.AppInstanceReconciler{},
 		&controllers.VmReconciler{Engine: ec.vmEngine},
-		&controllers.IsoLibraryReconciler{},
 		&controllers.GpuDeviceReconciler{},
-		&controllers.EncryptionPolicyReconciler{},
-		&controllers.KmsKeyReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.CertificateReconciler{Issuer: ec.certIssuer},
-		&controllers.SmartPolicyReconciler{},
-		&controllers.AlertChannelReconciler{},
-		&controllers.AlertPolicyReconciler{},
-		&controllers.AuditPolicyReconciler{},
-		&controllers.ServiceLevelObjectiveReconciler{},
-		&controllers.UpsPolicyReconciler{},
-		&controllers.ConfigBackupPolicyReconciler{},
-		&controllers.SystemSettingsReconciler{},
-		&controllers.UpdatePolicyReconciler{Updater: ec.updater},
 		&controllers.ServicePolicyReconciler{},
 	}
 

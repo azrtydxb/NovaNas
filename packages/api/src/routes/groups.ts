@@ -1,18 +1,18 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/groups.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function groupsRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerImpl(app, api);
+export async function groupsRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerImpl(app, db);
     return;
   }
   registerUnavailable(app, [
-    { method: 'GET', url: '/api/v1/groups', summary: 'List groups', tag: 'groups' },
-    { method: 'POST', url: '/api/v1/groups', summary: 'Create a group', tag: 'groups' },
-    { method: 'GET', url: '/api/v1/groups/:name', summary: 'Get a group', tag: 'groups' },
-    { method: 'PATCH', url: '/api/v1/groups/:name', summary: 'Update a group', tag: 'groups' },
-    { method: 'DELETE', url: '/api/v1/groups/:name', summary: 'Delete a group', tag: 'groups' },
+    { method: 'GET', url: '/api/v1/groups', summary: 'List Groups', tag: 'groups' },
+    { method: 'POST', url: '/api/v1/groups', summary: 'Create a Group', tag: 'groups' },
+    { method: 'GET', url: '/api/v1/groups/:name', summary: 'Get a Group', tag: 'groups' },
+    { method: 'PATCH', url: '/api/v1/groups/:name', summary: 'Update a Group', tag: 'groups' },
+    { method: 'DELETE', url: '/api/v1/groups/:name', summary: 'Delete a Group', tag: 'groups' },
   ]);
 }

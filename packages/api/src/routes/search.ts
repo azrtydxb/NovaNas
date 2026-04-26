@@ -113,19 +113,19 @@ export async function searchRoutes(app: FastifyInstance, deps: SearchDeps): Prom
   }
 
   const pools = buildPoolResource(db);
-  const datasets = buildDatasetResource(kubeCustom);
-  const buckets = buildBucketResource(kubeCustom);
+  const datasets = buildDatasetResource(db);
+  const buckets = buildBucketResource(db);
   const shares = buildShareResource(kubeCustom);
   const disks = buildDiskResource(db);
   const appsAvailable = buildAppResource(kubeCustom);
   const appInstances = buildAppInstanceResource(kubeCustom);
   const vms = buildVmResource(kubeCustom);
-  const users = buildUserResource(kubeCustom);
+  const users = buildUserResource(db);
   const objectStores = buildObjectStoreResource(kubeCustom);
-  const snapshots = buildSnapshotResource(kubeCustom);
-  const bucketUsers = buildBucketUserResource(kubeCustom);
-  const appCatalogs = buildAppCatalogResource(kubeCustom);
-  const groups = buildGroupResource(kubeCustom);
+  const snapshots = buildSnapshotResource(db);
+  const bucketUsers = buildBucketUserResource(db);
+  const appCatalogs = buildAppCatalogResource(db);
+  const groups = buildGroupResource(db);
 
   const searchables: Searchable[] = [
     {

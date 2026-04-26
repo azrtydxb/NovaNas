@@ -111,40 +111,61 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // Postgres-backed (post-CRD-migration): pools + disks read/write
   // through PgResource. The kubeCustom client is no longer the source
   // of truth for these kinds.
-  await app.register(async (s) => poolRoutes(s, deps.db ?? null));
-  await app.register(async (s) => datasetRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => bucketRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => diskRoutes(s, deps.db ?? null));
-  await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom, { jobs: deps.jobs ?? null }));
-  await app.register(async (s) => appRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => userRoutes(s, deps.kubeCustom));
+  // -----------------------------------------------------------------
+  // Postgres-backed resources (CRD-to-Postgres migration). Routes
+  // take a DbClient and use PgResource. Validation is enforced at
+  // the API layer; there is no kube-apiserver fallback.
+  // -----------------------------------------------------------------
+  const db = deps.db ?? null;
+  await app.register(async (s) => poolRoutes(s, db));
+  await app.register(async (s) => datasetRoutes(s, db));
+  await app.register(async (s) => bucketRoutes(s, db));
+  await app.register(async (s) => diskRoutes(s, db));
+  await app.register(async (s) => snapshotRoutes(s, db));
+  await app.register(async (s) => userRoutes(s, db));
+  await app.register(async (s) => bucketUserRoutes(s, db));
+  await app.register(async (s) => appCatalogRoutes(s, db));
+  await app.register(async (s) => isoLibraryRoutes(s, db));
+  await app.register(async (s) => encryptionPoliciesRoutes(s, db));
+  await app.register(async (s) => kmsKeysRoutes(s, db));
+  await app.register(async (s) => certificatesRoutes(s, db));
+  await app.register(async (s) => snapshotSchedulesRoutes(s, db));
+  await app.register(async (s) => replicationTargetsRoutes(s, db));
+  await app.register(async (s) => replicationJobsRoutes(s, db));
+  await app.register(async (s) => cloudBackupTargetsRoutes(s, db));
+  await app.register(async (s) => cloudBackupJobsRoutes(s, db));
+  await app.register(async (s) => scrubSchedulesRoutes(s, db));
+  await app.register(async (s) => smartPoliciesRoutes(s, db));
+  await app.register(async (s) => alertChannelsRoutes(s, db));
+  await app.register(async (s) => alertPoliciesRoutes(s, db));
+  await app.register(async (s) => auditPolicyRoutes(s, db));
+  await app.register(async (s) => upsPolicyRoutes(s, db));
+  await app.register(async (s) => slosRoutes(s, db));
+  await app.register(async (s) => configBackupPolicyRoutes(s, db));
+  await app.register(async (s) => systemSettingsRoutes(s, db));
+  await app.register(async (s) => updatePolicyRoutes(s, db));
+  await app.register(async (s) => groupsRoutes(s, db));
+  await app.register(async (s) => keycloakRealmsRoutes(s, db));
+  await app.register(async (s) => apiTokensRoutes(s, db));
 
-  // A10-API-More: 10 additional CRUD resources
+  // -----------------------------------------------------------------
+  // CRD-backed resources still on the K8s control path. These are
+  // either workload-producing (Vm, AppInstance, NfsServer/SmbServer/
+  // IscsiTarget/NvmeofTarget Pods) or projected to external CRDs
+  // (novanet/novaedge for Ingress, FirewallRule, TrafficPolicy,
+  // ServicePolicy, RemoteAccessTunnel). The "grey set" (bonds, vlans,
+  // host-interfaces, etc.) projects to host-side ConfigMaps and stays
+  // CRD-backed until a follow-up migration flips the agent contract.
+  // -----------------------------------------------------------------
+  await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appRoutes(s, deps.kubeCustom));
   await app.register(async (s) => objectStoreRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => bucketUserRoutes(s, deps.kubeCustom));
   await app.register(async (s) => smbServerRoutes(s, deps.kubeCustom));
   await app.register(async (s) => nfsServerRoutes(s, deps.kubeCustom));
   await app.register(async (s) => iscsiTargetRoutes(s, deps.kubeCustom));
   await app.register(async (s) => nvmeofTargetRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => appCatalogRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => isoLibraryRoutes(s, deps.kubeCustom));
-
-  // B2-API-Routes: remaining ~30 CRD resources
-  // crypto
-  await app.register(async (s) => encryptionPoliciesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => kmsKeysRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => certificatesRoutes(s, deps.kubeCustom));
-  // data protection
-  await app.register(async (s) => snapshotSchedulesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => replicationTargetsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => replicationJobsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => cloudBackupTargetsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => cloudBackupJobsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => scrubSchedulesRoutes(s, deps.kubeCustom));
-  // networking
   await app.register(async (s) => bondsRoutes(s, deps.kubeCustom));
   await app.register(async (s) => vlansRoutes(s, deps.kubeCustom));
   await app.register(async (s) => hostInterfacesRoutes(s, deps.kubeCustom));
@@ -156,24 +177,8 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => firewallRulesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => trafficPoliciesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => physicalInterfacesRoutes(s, deps.kubeCustom));
-  // ops
-  await app.register(async (s) => smartPoliciesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => alertChannelsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => alertPoliciesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => auditPolicyRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => upsPolicyRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => slosRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => configBackupPolicyRoutes(s, deps.kubeCustom));
-  // system singletons
-  await app.register(async (s) => systemSettingsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => updatePolicyRoutes(s, deps.kubeCustom));
   await app.register(async (s) => servicePolicyRoutes(s, deps.kubeCustom));
-  // identity
-  await app.register(async (s) => groupsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => keycloakRealmsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => apiTokensRoutes(s, deps.kubeCustom));
   await app.register(async (s) => sshKeysRoutes(s, deps.kubeCustom));
-  // devices (read-only)
   await app.register(async (s) => gpuDevicesRoutes(s, deps.kubeCustom));
 
   // B3-API-Infra: cross-resource search

@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type SmartPolicy, SmartPolicySchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildSmartPolicyResource(api: CustomObjectsApi): CrdResource<SmartPolicy> {
-  return new CrdResource<SmartPolicy>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'smartpolicies' },
+export function buildSmartPolicyResource(db: DbClient): PgResource<SmartPolicy> {
+  return new PgResource<SmartPolicy>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'SmartPolicy',
     schema: SmartPolicySchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<SmartPolicy>({
     app,
     basePath: '/api/v1/smart-policies',
     tag: 'smart-policies',
     kind: 'SmartPolicy',
-    resource: buildSmartPolicyResource(api),
+    resource: buildSmartPolicyResource(db),
     schema: SmartPolicySchema,
   });
 }

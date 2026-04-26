@@ -47,6 +47,18 @@ export interface RegisterOptions<T> {
     body: unknown,
     req: FastifyRequest
   ) => Promise<void> | void;
+  /**
+   * Optional hooks fired AFTER a successful Postgres write. Used to
+   * project the resource into external systems that the operator
+   * controllers used to handle synchronously (Keycloak realm users,
+   * OpenBao Transit keys, cert-manager Certificates, etc.). Throwing
+   * here is logged but does not roll back the write — projections
+   * are best-effort and re-converge via background reconciliation.
+   * Saga-style compensating actions are the caller's responsibility.
+   */
+  afterCreate?: (resource: T, req: FastifyRequest) => Promise<void>;
+  afterPatch?: (resource: T, patch: unknown, req: FastifyRequest) => Promise<void>;
+  afterDelete?: (name: string, req: FastifyRequest) => Promise<void>;
 }
 
 /** Thrown by RegisterOptions.validate hooks to surface a 422 with a message. */
@@ -185,6 +197,13 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
           outcome: 'success',
           ip: req.ip,
         });
+        if (opts.afterCreate) {
+          try {
+            await opts.afterCreate(created, req);
+          } catch (err) {
+            req.log.warn({ err, kind, name }, 'afterCreate hook failed');
+          }
+        }
         return reply.code(201).send(created);
       } catch (err) {
         await writeAudit(null, req.log, {
@@ -247,6 +266,13 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
           outcome: 'success',
           ip: req.ip,
         });
+        if (opts.afterPatch) {
+          try {
+            await opts.afterPatch(updated, req.body, req);
+          } catch (err) {
+            req.log.warn({ err, kind, name: req.params.name }, 'afterPatch hook failed');
+          }
+        }
         return updated;
       } catch (err) {
         await writeAudit(null, req.log, {
@@ -295,6 +321,13 @@ export function registerCrudRoutes<T>(opts: RegisterOptions<T>): void {
           outcome: 'success',
           ip: req.ip,
         });
+        if (opts.afterDelete) {
+          try {
+            await opts.afterDelete(req.params.name, req);
+          } catch (err) {
+            req.log.warn({ err, kind, name: req.params.name }, 'afterDelete hook failed');
+          }
+        }
         return reply.code(204).send();
       } catch (err) {
         await writeAudit(null, req.log, {
