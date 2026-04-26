@@ -1,0 +1,50 @@
+{{- if or .Values.nfs.enabled .Values.smb.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novanas-host-agent-templates
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "host-agent") | nindent 4 }}
+data:
+  # NFS-Ganesha config rendered from /api/v1/nfs-servers items.
+  # The Items context is whatever GET /api/v1/<resource> returns, so
+  # each item has metadata + spec + status. Shares are inlined into
+  # each server's exports block via spec.shares (when shipped).
+  ganesha.conf.tmpl: |
+    NFS_CORE_PARAM {
+      Bind_Addr = 0.0.0.0;
+      Plugins_Dir = /usr/lib/x86_64-linux-gnu/ganesha;
+    }
+    {{`{{- range .Items }}`}}
+    {{`{{- $name := .metadata.name }}`}}
+    EXPORT {
+      Export_Id = {{`{{ $name | len }}`}};
+      Path = "/exports/{{`{{ $name }}`}}";
+      Pseudo = "/{{`{{ $name }}`}}";
+      Squash = no_root_squash;
+      Access_Type = RW;
+      Protocols = 4;
+      FSAL { Name = VFS; }
+    }
+    {{`{{- end }}`}}
+
+  # Samba/smb.conf rendered from /api/v1/smb-servers items.
+  smb.conf.tmpl: |
+    [global]
+        workgroup = WORKGROUP
+        server string = NovaNas SMB
+        security = user
+        log file = /var/log/samba/log.%m
+        max log size = 1000
+    {{`{{- range .Items }}`}}
+    {{`{{- $name := .metadata.name }}`}}
+
+    [{{`{{ $name }}`}}]
+        path = /shares/{{`{{ $name }}`}}
+        browseable = yes
+        read only = no
+        guest ok = no
+    {{`{{- end }}`}}
+{{- end }}

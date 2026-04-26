@@ -21,6 +21,7 @@ declare -a images=(
   "operators:packages/operators/Dockerfile"
   "disk-agent:packages/operators/cmd/disk-agent/Dockerfile"
   "discovery:packages/discovery/Dockerfile"
+  "host-agent:packages/host-agent/Dockerfile"
   "storage-meta:storage/cmd/meta/Dockerfile"
   "storage-agent:storage/cmd/agent/Dockerfile"
   "storage-controller:storage/cmd/controller/Dockerfile"

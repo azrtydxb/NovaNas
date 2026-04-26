@@ -253,6 +253,18 @@ smb:
     requests: { cpu: "100m", memory: "128Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
 
+# Generic config-poller sidecar (#55). Bundled into nfs/smb pods to
+# replace ConfigMap-mounted ganesha.conf / smb.conf with a poll-driven
+# render off /api/v1/{nfs-servers,smb-servers,shares}.
+hostAgent:
+  image:
+    repository: novanas/host-agent
+    tag: ""  # defaults to .Chart.AppVersion via novanas.image helper
+    pullPolicy: IfNotPresent
+  # How often to poll the api. Cheaper than a watch; longer values
+  # smooth over transient api blips. Honored by every sidecar.
+  interval: 30s
+
 nfs:
   enabled: true
   image:

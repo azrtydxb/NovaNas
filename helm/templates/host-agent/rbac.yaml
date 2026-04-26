@@ -1,0 +1,10 @@
+{{- if or .Values.nfs.enabled .Values.smb.enabled }}
+{{- $ns := include "novanas.systemNamespace" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-host-agent
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "host-agent") | nindent 4 }}
+{{- end }}
