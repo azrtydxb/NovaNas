@@ -148,7 +148,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => systemSettingsRoutes(s, db));
   await app.register(async (s) => updatePolicyRoutes(s, db));
   await app.register(async (s) => groupsRoutes(s, db, deps.keycloakAdmin ?? null));
-  await app.register(async (s) => keycloakRealmsRoutes(s, db));
+  await app.register(async (s) => keycloakRealmsRoutes(s, db, deps.keycloakAdmin ?? null));
   await app.register(async (s) => apiTokensRoutes(s, db));
   // Grey-set resources flipped via Option B: source of truth in
   // Postgres; host agents (nmstate, sshd, samba/knfsd, keepalived,

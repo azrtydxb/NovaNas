@@ -20,11 +20,25 @@ export interface KeycloakGroupSpec {
   members?: string[];
 }
 
+export interface KeycloakRealmUpdate {
+  displayName?: string;
+  enabled?: boolean;
+  passwordPolicy?: string;
+  defaultLocale?: string;
+}
+
 export interface KeycloakAdmin {
   /** Idempotent group ensure. Returns the Keycloak group id. */
   ensureGroup(spec: KeycloakGroupSpec): Promise<string>;
   /** Best-effort group delete. Missing group is not an error. */
   deleteGroup(realm: string, name: string): Promise<void>;
+  /**
+   * Update mutable fields on an existing realm. Realm CREATION
+   * requires master-realm credentials and is owned by the post-install
+   * Job; this is for runtime updates only. Returns true if the realm
+   * existed and was updated, false if it was missing (404).
+   */
+  updateRealm(name: string, update: KeycloakRealmUpdate): Promise<boolean>;
 }
 
 export function createKeycloakAdmin(env: Env): KeycloakAdmin {
@@ -66,16 +80,22 @@ export function createKeycloakAdmin(env: Env): KeycloakAdmin {
   }
 
   async function adminFetch(realm: string, path: string, init: RequestInit = {}): Promise<Response> {
+    // The admin path may target a non-default realm (e.g. realm
+    // management endpoints), but the bearer token always comes from
+    // the SA's realm — Keycloak issues service-account tokens from the
+    // realm hosting the confidential client, regardless of what realm
+    // the request later operates on. With the realm-management roles
+    // we grant, the SA can only manage its own realm anyway; ops on a
+    // different realm simply 403, which the caller surfaces.
     const url = `${baseUrl}/admin/realms/${realm}${path}`;
-    let token = await getToken(realm);
+    let token = await getToken(defaultRealm);
     let res = await fetch(url, {
       ...init,
       headers: { ...(init.headers ?? {}), authorization: `Bearer ${token}` },
     });
     if (res.status === 401) {
-      // Token rotated under us — invalidate and retry once.
-      tokens.delete(realm);
-      token = await getToken(realm);
+      tokens.delete(defaultRealm);
+      token = await getToken(defaultRealm);
       res = await fetch(url, {
         ...init,
         headers: { ...(init.headers ?? {}), authorization: `Bearer ${token}` },
@@ -126,6 +146,34 @@ export function createKeycloakAdmin(env: Env): KeycloakAdmin {
       const id = location.split('/').pop() ?? '';
       if (!id) throw new Error('keycloak-admin: ensureGroup missing Location header');
       return id;
+    },
+
+    async updateRealm(name: string, update: KeycloakRealmUpdate): Promise<boolean> {
+      // Admin endpoints for realm management are not under
+      // /admin/realms/{realm}/... — they are at /admin/realms/{realm}
+      // directly. We still need a realm-context token for authn, so
+      // route through adminFetch using the same realm.
+      // GET first to surface the 404 case cleanly.
+      const get = await adminFetch(name, '');
+      if (get.status === 404) return false;
+      if (!get.ok) {
+        throw new Error(
+          `keycloak-admin: realm ${name} lookup failed (${get.status}): ${await get.text()}`
+        );
+      }
+      const current = (await get.json()) as Record<string, unknown>;
+      const merged = { ...current, ...update, realm: name };
+      const put = await adminFetch(name, '', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(merged),
+      });
+      if (!put.ok) {
+        throw new Error(
+          `keycloak-admin: realm ${name} update failed (${put.status}): ${await put.text()}`
+        );
+      }
+      return true;
     },
 
     async deleteGroup(realm: string, name: string): Promise<void> {

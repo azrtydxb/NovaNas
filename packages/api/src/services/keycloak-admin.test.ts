@@ -85,6 +85,39 @@ describe('keycloak-admin', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('updateRealm merges updates into the existing realm representation', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      // GET /admin/realms/novanas
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ realm: 'novanas', displayName: 'Old', enabled: true, attributes: {} }),
+          { status: 200 }
+        )
+      )
+      // PUT /admin/realms/novanas
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const admin = createKeycloakAdmin(baseEnv);
+    const ok = await admin.updateRealm('novanas', { displayName: 'New', enabled: true });
+    expect(ok).toBe(true);
+    const putCall = fetchMock.mock.calls[2];
+    const body = JSON.parse((putCall?.[1] as RequestInit).body as string);
+    // Existing fields are preserved; the update is merged on top.
+    expect(body).toMatchObject({ realm: 'novanas', displayName: 'New', attributes: {} });
+  });
+
+  it('updateRealm returns false on 404', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(new Response('not found', { status: 404 }));
+    const admin = createKeycloakAdmin(baseEnv);
+    const ok = await admin.updateRealm('nope', { displayName: 'x' });
+    expect(ok).toBe(false);
+    // No PUT issued.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('retries once on 401 by refreshing the cached token', async () => {
     fetchMock
       .mockResolvedValueOnce(tokenResponse())
