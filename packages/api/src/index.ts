@@ -16,6 +16,8 @@ import { createKubeClients } from './services/kube.js';
 import { createPromClient } from './services/prom.js';
 import { createRedisClient } from './services/redis.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
+import { AlertDispatcher } from './workers/alert-dispatcher.js';
+import { buildAlertChannelResource } from './resources/alert-channels.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -94,11 +96,26 @@ async function main(): Promise<void> {
 
   const watch = startKubeWatch({ config: kube.config, redis, logger });
 
+  // Alert dispatcher (#51). Subscribes to novanas:events:alerts and
+  // forwards each alert to every active AlertChannel whose
+  // minSeverity admits it. Webhook channels are dispatched in-band;
+  // other types are scaffolded but not yet delivered (logged-only).
+  let dispatcher: AlertDispatcher | undefined;
+  if (db) {
+    dispatcher = new AlertDispatcher({
+      redisSub,
+      channels: buildAlertChannelResource(db),
+      logger,
+    });
+    await dispatcher.start();
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'novanas-api.shutdown');
     try {
       await app.close();
       await watch.stop();
+      await dispatcher?.stop();
       await pubsub?.stop();
       redis.disconnect();
       redisSub.disconnect();
