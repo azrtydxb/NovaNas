@@ -8,6 +8,10 @@ go 1.24.0
 // the monorepo without needing a tagged release.
 replace github.com/azrtydxb/novanas/storage => ../../storage
 
+replace github.com/azrtydxb/novanas/packages/runtime => ../runtime
+
+replace github.com/azrtydxb/novanas/packages/sdk/go-client => ../sdk/go-client
+
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/azrtydxb/novanas/storage v0.0.0-00010101000000-000000000000

@@ -119,7 +119,7 @@ export async function searchRoutes(app: FastifyInstance, deps: SearchDeps): Prom
   const disks = buildDiskResource(db);
   const appsAvailable = buildAppResource(db);
   const appInstances = buildAppInstanceResource(db);
-  const vms = buildVmResource(kubeCustom);
+  const vms = buildVmResource(db);
   const users = buildUserResource(db);
   const objectStores = buildObjectStoreResource(db);
   const snapshots = buildSnapshotResource(db);

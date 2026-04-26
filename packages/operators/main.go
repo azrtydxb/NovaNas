@@ -19,6 +19,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -32,6 +33,11 @@ import (
 	"github.com/azrtydxb/novanas/packages/operators/internal/logging"
 	_ "github.com/azrtydxb/novanas/packages/operators/internal/metrics"
 	"github.com/azrtydxb/novanas/packages/operators/internal/reconciler"
+	"github.com/azrtydxb/novanas/packages/operators/internal/vmworker"
+	rtk8s "github.com/azrtydxb/novanas/packages/runtime/k8s"
+	novanasclient "github.com/azrtydxb/novanas/packages/sdk/go-client"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
 var (
@@ -54,7 +60,6 @@ type externalClients struct {
 	certIssuer reconciler.CertificateIssuer
 	network    reconciler.NetworkClient
 	updater    reconciler.UpdateClient
-	vmEngine   reconciler.VmEngine
 	keyProv    reconciler.VolumeKeyProvisioner
 	openbao    reconciler.OpenBaoClient
 }
@@ -66,7 +71,6 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 		certIssuer: reconciler.NoopCertificateIssuer{},
 		network:    reconciler.NoopNetworkClient{},
 		updater:    reconciler.NoopUpdateClient{},
-		vmEngine:   reconciler.NoopVmEngine{},
 		// keyProv intentionally starts nil: populated only when a real
 		// provisioner is wired, or when NOVANAS_DEV=1 overrides.
 		keyProv: nil,
@@ -139,10 +143,6 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 	// --- Update client (ConfigMap-driven host updater) ---
 	ec.updater = reconciler.NewConfigMapUpdateClient(mgr.GetClient(), ns)
 	setupLog.Info("update client wired (ConfigMap host-updater bridge)", "namespace", ns)
-
-	// --- VM engine (KubeVirt via unstructured) ---
-	ec.vmEngine = reconciler.NewKubeVirtEngine(mgr.GetClient())
-	setupLog.Info("kubevirt engine wired (unstructured VirtualMachine client)")
 
 	// --- Volume-key provisioner ---
 	//
@@ -217,6 +217,50 @@ func (j jobConsumerRunnable) Start(ctx context.Context) error {
 	}
 	<-ctx.Done()
 	return nil
+}
+
+// vmWorkerRunnable adapts the VM worker onto manager.Runnable so it
+// shares the manager's leader-election + signal handling.
+type vmWorkerRunnable struct {
+	worker *vmworker.Worker
+}
+
+func (v vmWorkerRunnable) Start(ctx context.Context) error { return v.worker.Start(ctx) }
+
+// buildVmWorker constructs the VM worker if both the API server URL
+// and an in-cluster (or KUBECONFIG) k8s config are available. Returns
+// nil when either piece is missing — the manager logs and continues.
+func buildVmWorker(log logr.Logger) *vmworker.Worker {
+	if os.Getenv("NOVANAS_API_URL") == "" {
+		return nil
+	}
+	cfg, err := ctrl.GetConfig()
+	if err != nil {
+		log.Error(err, "vm worker: get k8s config")
+		return nil
+	}
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		log.Error(err, "vm worker: build kubernetes client")
+		return nil
+	}
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		log.Error(err, "vm worker: build dynamic client")
+		return nil
+	}
+	api, err := novanasclient.NewFromEnv()
+	if err != nil {
+		log.Error(err, "vm worker: build novanas api client")
+		return nil
+	}
+	adapter := rtk8s.New(cs).WithDynamicClient(dyn)
+	return &vmworker.Worker{
+		Client:   api,
+		Adapter:  adapter,
+		Interval: 30 * time.Second,
+		Log:      log.WithName("vmworker"),
+	}
 }
 
 func envDefault(key, def string) string {
@@ -303,6 +347,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// --- VM worker: poll API server, drive runtime.Adapter ---
+	if vmw := buildVmWorker(setupLog); vmw != nil {
+		if err := mgr.Add(vmWorkerRunnable{worker: vmw}); err != nil {
+			setupLog.Error(err, "unable to add vm worker to manager")
+			os.Exit(1)
+		}
+		setupLog.Info("vm worker wired (api -> runtime.Adapter k8s+kubevirt)")
+	} else {
+		setupLog.Info("vm worker disabled (NOVANAS_API_URL or kubeconfig unavailable)")
+	}
+
 	setupLog.Info("starting manager",
 		"metricsAddr", metricsAddr,
 		"probeAddr", probeAddr,
@@ -323,15 +378,13 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 
 	// CRD-to-Postgres migration: most business-object reconcilers
 	// have been removed. FirewallRule, TrafficPolicy and ServicePolicy
-	// joined the grey set in this PR — flipped to PgResource; the
-	// novanet/host-agent consumer becomes an API client in a follow-up.
-	// What remains are reconcilers that produce real runtime objects:
-	// VMs (KubeVirt), AppInstance (Helm), Ingress and
-	// RemoteAccessTunnel (novaedge), and BlockVolume (storage data
-	// plane — flips with #50).
+	// All policy / network / appinstance / vm CRDs have flipped to
+	// PgResource. VM reconciliation moved to internal/vmworker which
+	// polls the API server and drives runtime.Adapter (k8s impl uses
+	// KubeVirt via dynamic client). Only BlockVolume remains here,
+	// scheduled to flip with #50.
 	reconcilers := []setup{
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.VmReconciler{Engine: ec.vmEngine},
 	}
 
 	for _, r := range reconcilers {

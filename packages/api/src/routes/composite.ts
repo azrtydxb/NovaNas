@@ -88,7 +88,7 @@ export async function compositeRoutes(app: FastifyInstance, deps: CompositeDeps)
 
   const datasets = buildDatasetResource(db);
   const shares = buildShareResource(db);
-  const vms = buildVmResource(kubeCustom);
+  const vms = buildVmResource(db);
   const disks = buildDiskResource(db);
   const apps = buildAppInstanceResource(db);
 

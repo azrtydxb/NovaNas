@@ -1,26 +1,29 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
+import type { Vm } from '@novanas/schemas';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { canAction } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
-import { register as registerVms } from '../resources/vms.js';
+import { buildVmResource, register as registerVms } from '../resources/vms.js';
 import {
   accepted,
-  kubeErrorReply,
   nowIso,
-  patchSpec,
   requireDestructiveConfirm,
-  setAnnotation,
+  setAnnotationOnResource,
 } from '../services/actions.js';
+import type { DbClient } from '../services/db.js';
+import type { PgResource } from '../services/pg-resource.js';
+import { isNotFound } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
-
-const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'vms' };
 
 function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
 }
 
-function registerVmActions(app: FastifyInstance, api: CustomObjectsApi): void {
+function notFound(reply: FastifyReply, name: string): FastifyReply {
+  return reply.code(404).send({ error: 'not_found', message: `vm '${name}' not found` });
+}
+
+function registerVmActions(app: FastifyInstance, resource: PgResource<Vm>): void {
   const security = [{ sessionCookie: [] }];
 
   const powerAction = (
@@ -44,14 +47,14 @@ function registerVmActions(app: FastifyInstance, api: CustomObjectsApi): void {
         if (!canAction(user, 'Vm', action, namespace)) return forbid(reply);
         const force = req.query.force === 'true';
         try {
-          const patch = buildPatch(force);
-          await patchSpec(api, GVR, name, patch, namespace);
+          await resource.patch(name, buildPatch(force), namespace);
           if (annotation) {
-            await setAnnotation(api, GVR, name, annotation, nowIso(), namespace);
+            await setAnnotationOnResource(resource, name, annotation, nowIso(), namespace);
           }
           return accepted({ message: `${action} requested for ${name}` });
         } catch (err) {
-          return kubeErrorReply(reply, err);
+          if (isNotFound(err)) return notFound(reply, name);
+          throw err;
         }
       },
     });
@@ -82,7 +85,6 @@ function registerVmActions(app: FastifyInstance, api: CustomObjectsApi): void {
     spec: { powerState: 'Running' },
   }));
 
-  // DELETE /api/v1/vms/:namespace/:name?deleteDisks=true|false
   app.route<{
     Params: { namespace: string; name: string };
     Querystring: { deleteDisks?: string; confirm?: string };
@@ -109,21 +111,21 @@ function registerVmActions(app: FastifyInstance, api: CustomObjectsApi): void {
       const deleteDisks = req.query.deleteDisks === 'true';
       if (deleteDisks && !requireDestructiveConfirm(req, reply, name)) return reply;
       try {
-        const { group, version, plural } = GVR;
-        await api.deleteNamespacedCustomObject(group, version, namespace, plural, name);
+        await resource.delete(name, namespace);
         const warnings = deleteDisks ? ['attached disks will be deleted'] : undefined;
         return accepted({ message: `delete requested for ${name}`, warnings });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, name);
+        throw err;
       }
     },
   });
 }
 
-export async function vmRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerVms(app, api);
-    registerVmActions(app, api);
+export async function vmRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerVms(app, db);
+    registerVmActions(app, buildVmResource(db));
     return;
   }
   registerUnavailable(app, [
