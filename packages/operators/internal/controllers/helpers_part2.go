@@ -6,14 +6,11 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // defaultRequeuePart2 is the standard "success, but check again soon" backoff
@@ -23,32 +20,6 @@ const defaultRequeuePart2 = 5 * time.Minute
 // errKindMissing is returned when a projected CRD is not installed. Controllers
 // treat this as a soft failure and update status-only.
 var errKindMissing = fmt.Errorf("kind not installed")
-
-// ensureConfigMap projects a CR into a downstream ConfigMap. When owner is
-// namespace-scoped and lives in the target namespace, a controller reference
-// is attached so Kubernetes GC removes the child on CR deletion. Cluster-
-// scoped owners rely on the label selector (novanas.io/owner) for sweep.
-func ensureConfigMap(ctx context.Context, c client.Client, namespace, name string, owner client.Object, data map[string]string, labels map[string]string) (controllerutil.OperationResult, error) {
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-	}
-	op, err := controllerutil.CreateOrUpdate(ctx, c, cm, func() error {
-		if cm.Labels == nil {
-			cm.Labels = map[string]string{}
-		}
-		for k, v := range labels {
-			cm.Labels[k] = v
-		}
-		cm.Labels["novanas.io/owner"] = owner.GetName()
-		cm.Data = data
-		if owner.GetNamespace() != "" && owner.GetNamespace() == namespace {
-			// Best-effort owner ref; ignore scheme errors in test.
-			_ = controllerutil.SetControllerReference(owner, cm, c.Scheme())
-		}
-		return nil
-	})
-	return op, err
-}
 
 // ensureUnstructured creates/updates a resource described by a dynamic
 // template. It is the primitive used by controllers that project into
@@ -99,15 +70,6 @@ func isNoKindErr(err error) bool {
 	return strings.Contains(msg, "no matches for kind") ||
 		strings.Contains(msg, "no kind is registered") ||
 		strings.Contains(msg, "failed to get API group resources")
-}
-
-// childName builds a deterministic child-resource name for an owner CR.
-func childName(owner, suffix string) string {
-	name := owner + "-" + suffix
-	if len(name) > 63 {
-		name = name[:63]
-	}
-	return name
 }
 
 // setSpec writes spec into an unstructured object. Helper for controllers

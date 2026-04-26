@@ -496,4 +496,5 @@ const MIGRATED_PLURALS: Record<string, string> = {
   ingresses: 'Ingress',
   remoteaccesstunnels: 'RemoteAccessTunnel',
   apps: 'App',
+  appinstances: 'AppInstance',
 };

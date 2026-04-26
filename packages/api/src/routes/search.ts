@@ -118,7 +118,7 @@ export async function searchRoutes(app: FastifyInstance, deps: SearchDeps): Prom
   const shares = buildShareResource(db);
   const disks = buildDiskResource(db);
   const appsAvailable = buildAppResource(db);
-  const appInstances = buildAppInstanceResource(kubeCustom);
+  const appInstances = buildAppInstanceResource(db);
   const vms = buildVmResource(kubeCustom);
   const users = buildUserResource(db);
   const objectStores = buildObjectStoreResource(db);

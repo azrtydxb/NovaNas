@@ -117,31 +117,3 @@ func TestVmReconciler_ActionResetFailureStamps(t *testing.T) {
 	}
 }
 
-// TestAppInstanceReconciler_ActionUpdateClears drives the
-// action-update annotation and asserts it clears on success.
-func TestAppInstanceReconciler_ActionUpdateClears(t *testing.T) {
-	s := newPart2Scheme(t)
-	app := &novanasv1alpha1.AppInstance{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "app1",
-			Namespace: "default",
-			Annotations: map[string]string{
-				reconciler.ActionAnnotationName("update"): "2026-04-22T00:00:00Z",
-			},
-		},
-	}
-	c := newPart2Client(s, []client.Object{app}, []client.Object{app})
-	r := &AppInstanceReconciler{
-		BaseReconciler: newPart2Base(c, s, "AppInstance"),
-		Recorder:       newPart2Recorder(),
-	}
-	mustReconcileOK(t, context.Background(), r, part2NsRequest("default", "app1"))
-	var got novanasv1alpha1.AppInstance
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "app1"}, &got)
-	if _, still := got.Annotations[reconciler.ActionAnnotationName("update")]; still {
-		t.Fatalf("update annotation still present")
-	}
-	if _, done := got.Annotations[reconciler.ActionCompletedAnnotationName("update")]; !done {
-		t.Fatalf("update-completed annotation not stamped")
-	}
-}

@@ -1,29 +1,31 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
-import type { FastifyInstance } from 'fastify';
+import type { AppInstance } from '@novanas/schemas';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { canAction } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
-import { register as registerApps } from '../resources/apps.js';
+import { buildAppInstanceResource, register as registerApps } from '../resources/apps.js';
 import {
   accepted,
-  kubeErrorReply,
   nowIso,
-  patchSpec,
   requireDestructiveConfirm,
-  setAnnotation,
+  setAnnotationOnResource,
 } from '../services/actions.js';
+import type { DbClient } from '../services/db.js';
+import type { PgResource } from '../services/pg-resource.js';
+import { isNotFound } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
 
-const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'appinstances' };
-
-function forbid(reply: Parameters<typeof kubeErrorReply>[0]) {
+function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
 }
 
-function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
+function notFound(reply: FastifyReply, name: string): FastifyReply {
+  return reply.code(404).send({ error: 'not_found', message: `app '${name}' not found` });
+}
+
+function registerAppActions(app: FastifyInstance, resource: PgResource<AppInstance>): void {
   const security = [{ sessionCookie: [] }];
 
-  // POST /api/v1/apps/:namespace/:name/start
   app.route<{ Params: { namespace: string; name: string } }>({
     method: 'POST',
     url: '/api/v1/apps/:namespace/:name/start',
@@ -34,15 +36,15 @@ function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
       const { namespace, name } = req.params;
       if (!canAction(user, 'AppInstance', 'start', namespace)) return forbid(reply);
       try {
-        await patchSpec(api, GVR, name, { spec: { desiredState: 'Running' } }, namespace);
+        await resource.patch(name, { spec: { desiredState: 'Running' } }, namespace);
         return accepted({ message: `start requested for ${name}` });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, name);
+        throw err;
       }
     },
   });
 
-  // POST /api/v1/apps/:namespace/:name/stop
   app.route<{ Params: { namespace: string; name: string } }>({
     method: 'POST',
     url: '/api/v1/apps/:namespace/:name/stop',
@@ -53,15 +55,15 @@ function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
       const { namespace, name } = req.params;
       if (!canAction(user, 'AppInstance', 'stop', namespace)) return forbid(reply);
       try {
-        await patchSpec(api, GVR, name, { spec: { desiredState: 'Stopped' } }, namespace);
+        await resource.patch(name, { spec: { desiredState: 'Stopped' } }, namespace);
         return accepted({ message: `stop requested for ${name}` });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, name);
+        throw err;
       }
     },
   });
 
-  // POST /api/v1/apps/:namespace/:name/update — body: { version: string }
   app.route<{
     Params: { namespace: string; name: string };
     Body: { version?: string };
@@ -90,16 +92,22 @@ function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
           .send({ error: 'invalid_body', message: 'version (string) required' });
       }
       try {
-        await patchSpec(api, GVR, name, { spec: { version } }, namespace);
-        await setAnnotation(api, GVR, name, 'novanas.io/action-update', nowIso(), namespace);
+        await resource.patch(name, { spec: { version } }, namespace);
+        await setAnnotationOnResource(
+          resource,
+          name,
+          'novanas.io/action-update',
+          nowIso(),
+          namespace
+        );
         return accepted({ message: `update to ${version} requested` });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, name);
+        throw err;
       }
     },
   });
 
-  // DELETE /api/v1/apps/:namespace/:name?deleteData=true|false
   app.route<{
     Params: { namespace: string; name: string };
     Querystring: { deleteData?: string; confirm?: string };
@@ -126,8 +134,7 @@ function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
       const deleteData = req.query.deleteData === 'true';
       if (deleteData && !requireDestructiveConfirm(req, reply, name)) return reply;
       try {
-        const { group, version, plural } = GVR;
-        await api.deleteNamespacedCustomObject(group, version, namespace, plural, name);
+        await resource.delete(name, namespace);
         const warnings: string[] = [];
         if (deleteData) warnings.push('persistent volumes for this app will be deleted');
         return accepted({
@@ -136,16 +143,17 @@ function registerAppActions(app: FastifyInstance, api: CustomObjectsApi): void {
           warnings: warnings.length ? warnings : undefined,
         });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, name);
+        throw err;
       }
     },
   });
 }
 
-export async function appRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerApps(app, api);
-    registerAppActions(app, api);
+export async function appRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerApps(app, db);
+    registerAppActions(app, buildAppInstanceResource(db));
     return;
   }
   registerUnavailable(app, [
