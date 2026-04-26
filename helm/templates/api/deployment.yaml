@@ -58,12 +58,12 @@ spec:
             - name: KEYCLOAK_ISSUER_URL
               value: {{ printf "%s/realms/%s" (.Values.keycloak.hostname | default (printf "http://novanas-keycloak.%s.svc" (include "novanas.systemNamespace" .))) (.Values.keycloak.realm.name | default "novanas") | quote }}
             {{- if and .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
-            # Trust the chart-generated self-signed CA so node's TLS
-            # stack accepts our own keycloak cert. The ingress' TLS
-            # Secret holds the cert+key; tls.crt doubles as the CA
-            # bundle for self-signed.
+            # Trust our own CA (cert-manager-issued Certificate carries
+            # ca.crt; the helm self-signed fallback puts the cert at
+            # tls.crt and there's no separate ca.crt — fall back to
+            # tls.crt in that case so the chart works without cert-manager).
             - name: NODE_EXTRA_CA_CERTS
-              value: /etc/novanas/tls/tls.crt
+              value: {{ ternary "/etc/novanas/tls/ca.crt" "/etc/novanas/tls/tls.crt" .Values.certManager.enabled | quote }}
             {{- end }}
             # Browser-facing base URL the api uses to construct its OIDC
             # callback URL. Must match what the SPA reaches the api on,
@@ -119,5 +119,9 @@ spec:
             items:
               - key: tls.crt
                 path: tls.crt
+              {{- if .Values.certManager.enabled }}
+              - key: ca.crt
+                path: ca.crt
+              {{- end }}
         {{- end }}
 {{- end }}
