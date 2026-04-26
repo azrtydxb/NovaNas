@@ -44,3 +44,4 @@ Thumbs.db
 helm/values/values-novabox.yaml
 helm/values/values-local.yaml
 helm/values/values-personal*.yaml
+host-agent
