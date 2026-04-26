@@ -493,4 +493,6 @@ const MIGRATED_PLURALS: Record<string, string> = {
   nfsservers: 'NfsServer',
   smbservers: 'SmbServer',
   gpudevices: 'GpuDevice',
+  ingresses: 'Ingress',
+  remoteaccesstunnels: 'RemoteAccessTunnel',
 };

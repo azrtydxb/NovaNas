@@ -110,16 +110,6 @@ func childName(owner, suffix string) string {
 	return name
 }
 
-// childNamespace returns the namespace to use for a cluster-scoped owner's
-// child resources. Defaults to "novanas-system" when the owner is cluster-
-// scoped (empty namespace).
-func childNamespace(owner client.Object) string {
-	if ns := owner.GetNamespace(); ns != "" {
-		return ns
-	}
-	return "novanas-system"
-}
-
 // setSpec writes spec into an unstructured object. Helper for controllers
 // projecting a small typed spec onto a CRD they don't statically type.
 func setSpec(u *unstructured.Unstructured, spec map[string]interface{}) {
