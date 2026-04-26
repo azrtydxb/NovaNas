@@ -16,6 +16,7 @@ type Adapter struct {
 	tenants   map[rt.Tenant]struct{}
 	networks  map[networkKey]rt.NetworkSpec
 	workloads map[workloadKey]workloadEntry
+	vms       map[vmKey]vmEntry
 	watchers  map[rt.Tenant][]chan rt.Event
 }
 
@@ -34,11 +35,22 @@ type workloadEntry struct {
 	status rt.WorkloadStatus
 }
 
+type vmKey struct {
+	tenant rt.Tenant
+	name   string
+}
+
+type vmEntry struct {
+	spec   rt.VMSpec
+	status rt.VMStatus
+}
+
 func New() *Adapter {
 	return &Adapter{
 		tenants:   make(map[rt.Tenant]struct{}),
 		networks:  make(map[networkKey]rt.NetworkSpec),
 		workloads: make(map[workloadKey]workloadEntry),
+		vms:       make(map[vmKey]vmEntry),
 		watchers:  make(map[rt.Tenant][]chan rt.Event),
 	}
 }
@@ -195,6 +207,67 @@ func (a *Adapter) fanout(tenant rt.Tenant, ev rt.Event) {
 		default:
 		}
 	}
+}
+
+func (a *Adapter) EnsureVM(_ context.Context, spec rt.VMSpec) (rt.VMStatus, error) {
+	if spec.Ref.Name == "" || spec.Ref.Tenant == "" {
+		return rt.VMStatus{}, fmt.Errorf("%w: vm name and tenant required", rt.ErrInvalidSpec)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.tenants[spec.Ref.Tenant]; !ok {
+		return rt.VMStatus{}, fmt.Errorf("%w: tenant %q not found", rt.ErrNotFound, spec.Ref.Tenant)
+	}
+	prev, existed := a.vms[vmKey{spec.Ref.Tenant, spec.Ref.Name}]
+	phase := rt.VMRunning
+	if existed {
+		phase = prev.status.Phase
+	}
+	status := rt.VMStatus{Ref: spec.Ref, Phase: phase}
+	a.vms[vmKey{spec.Ref.Tenant, spec.Ref.Name}] = vmEntry{spec: spec, status: status}
+	return status, nil
+}
+
+func (a *Adapter) DeleteVM(_ context.Context, ref rt.VMRef) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.vms, vmKey{ref.Tenant, ref.Name})
+	return nil
+}
+
+func (a *Adapter) ObserveVM(_ context.Context, ref rt.VMRef) (rt.VMStatus, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry, ok := a.vms[vmKey{ref.Tenant, ref.Name}]
+	if !ok {
+		return rt.VMStatus{}, rt.ErrNotFound
+	}
+	return entry.status, nil
+}
+
+func (a *Adapter) SetVMPowerState(_ context.Context, ref rt.VMRef, state rt.VMPowerState) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry, ok := a.vms[vmKey{ref.Tenant, ref.Name}]
+	if !ok {
+		return rt.ErrNotFound
+	}
+	entry.status.Phase = state
+	a.vms[vmKey{ref.Tenant, ref.Name}] = entry
+	return nil
+}
+
+func (a *Adapter) RestartVM(_ context.Context, ref rt.VMRef) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry, ok := a.vms[vmKey{ref.Tenant, ref.Name}]
+	if !ok {
+		return rt.ErrNotFound
+	}
+	entry.status.Phase = rt.VMRunning
+	entry.status.Message = "restarted"
+	a.vms[vmKey{ref.Tenant, ref.Name}] = entry
+	return nil
 }
 
 func validate(spec rt.WorkloadSpec) error {

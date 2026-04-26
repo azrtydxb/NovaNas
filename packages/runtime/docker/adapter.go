@@ -52,3 +52,19 @@ func (a *Adapter) Exec(_ context.Context, _ rt.ExecRequest, _, _ io.Writer) (int
 func (a *Adapter) WatchEvents(_ context.Context, _ rt.Tenant) (<-chan rt.Event, error) {
 	return nil, rt.ErrNotImplemented
 }
+
+func (a *Adapter) EnsureVM(_ context.Context, _ rt.VMSpec) (rt.VMStatus, error) {
+	return rt.VMStatus{}, rt.ErrNotImplemented
+}
+
+func (a *Adapter) DeleteVM(_ context.Context, _ rt.VMRef) error { return rt.ErrNotImplemented }
+
+func (a *Adapter) ObserveVM(_ context.Context, _ rt.VMRef) (rt.VMStatus, error) {
+	return rt.VMStatus{}, rt.ErrNotImplemented
+}
+
+func (a *Adapter) SetVMPowerState(_ context.Context, _ rt.VMRef, _ rt.VMPowerState) error {
+	return rt.ErrNotImplemented
+}
+
+func (a *Adapter) RestartVM(_ context.Context, _ rt.VMRef) error { return rt.ErrNotImplemented }
