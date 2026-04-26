@@ -163,6 +163,11 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => objectStoreRoutes(s, db));
   await app.register(async (s) => iscsiTargetRoutes(s, db));
   await app.register(async (s) => nvmeofTargetRoutes(s, db));
+  // nfs-ganesha and samba run on the host (no Pod-per-server model);
+  // API just holds the config, host agent renders ganesha.conf /
+  // smb.conf and reloads. Tracked under #55.
+  await app.register(async (s) => nfsServerRoutes(s, db));
+  await app.register(async (s) => smbServerRoutes(s, db));
 
   // -----------------------------------------------------------------
   // CRD-backed resources still on the K8s control path. These are
@@ -174,8 +179,6 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // read-only view.
   // -----------------------------------------------------------------
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => smbServerRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => nfsServerRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, deps.kubeCustom));

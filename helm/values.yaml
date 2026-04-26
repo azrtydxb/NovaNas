@@ -216,25 +216,11 @@ storage:
 # Access protocols
 # -----------------------------------------------------------------------------
 
-smb:
-  enabled: true
-  image:
-    repository: novanas/samba
-    tag: ""
-  replicas: 1
-  resources:
-    requests: { cpu: "100m", memory: "128Mi" }
-    limits:   { cpu: "1",    memory: "512Mi" }
-
-nfs:
-  # Privileged operator pod that manages host knfsd. Single instance per node.
-  enabled: true
-  image:
-    repository: novanas/nfs-operator
-    tag: ""
-  resources:
-    requests: { cpu: "50m",  memory: "64Mi" }
-    limits:   { cpu: "500m", memory: "256Mi" }
+# NFS-Ganesha and Samba run on the host directly, not as Pods.
+# NovaNas API holds the Share + NfsServer + SmbServer config rows;
+# the host-side config-writer agent (#55) renders ganesha.conf /
+# smb.conf and reloads the services. The chart no longer ships a
+# nfs/smb DaemonSet or Deployment.
 
 # -----------------------------------------------------------------------------
 # disk-agent — node-local DaemonSet that scans /sys/block and creates/updates

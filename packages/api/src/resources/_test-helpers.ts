@@ -489,4 +489,6 @@ const MIGRATED_PLURALS: Record<string, string> = {
   objectstores: 'ObjectStore',
   iscsitargets: 'IscsiTarget',
   nvmeoftargets: 'NvmeofTarget',
+  nfsservers: 'NfsServer',
+  smbservers: 'SmbServer',
 };

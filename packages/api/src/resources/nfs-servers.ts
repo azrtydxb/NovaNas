@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type NfsServer, NfsServerSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildNfsServerResource(api: CustomObjectsApi): CrdResource<NfsServer> {
-  return new CrdResource<NfsServer>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'nfsservers' },
+export function buildNfsServerResource(db: DbClient): PgResource<NfsServer> {
+  return new PgResource<NfsServer>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'NfsServer',
     schema: NfsServerSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<NfsServer>({
     app,
     basePath: '/api/v1/nfs-servers',
     tag: 'nfs-servers',
     kind: 'NfsServer',
-    resource: buildNfsServerResource(api),
+    resource: buildNfsServerResource(db),
     schema: NfsServerSchema,
   });
 }
