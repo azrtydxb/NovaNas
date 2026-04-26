@@ -201,7 +201,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => remoteAccessTunnelsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => gpuDevicesRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => gpuDevicesRoutes(s, db));
 
   // B3-API-Infra: cross-resource search
   await app.register(async (s) =>

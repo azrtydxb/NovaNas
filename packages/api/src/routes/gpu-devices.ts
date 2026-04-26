@@ -1,22 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
+import type { GpuDevice } from '@novanas/schemas';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { canAction } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
-import { register as registerImpl } from '../resources/gpu-devices.js';
-import { accepted, kubeErrorReply, patchSpec } from '../services/actions.js';
+import { buildGpuDeviceResource, register as registerImpl } from '../resources/gpu-devices.js';
+import { accepted } from '../services/actions.js';
+import type { DbClient } from '../services/db.js';
+import type { PgResource } from '../services/pg-resource.js';
+import { isNotFound } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
-
-const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'gpudevices' };
 
 function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
 }
 
-function registerGpuActions(app: FastifyInstance, api: CustomObjectsApi): void {
+function notFound(reply: FastifyReply, name: string): FastifyReply {
+  return reply.code(404).send({ error: 'not_found', message: `gpu '${name}' not found` });
+}
+
+function registerGpuActions(app: FastifyInstance, resource: PgResource<GpuDevice>): void {
   const security = [{ sessionCookie: [] }];
 
-  // POST /api/v1/gpu-devices/:name/assign — body: { vmNamespace, vmName }
   app.route<{
     Params: { name: string };
     Body: { vmNamespace?: string; vmName?: string };
@@ -47,17 +51,17 @@ function registerGpuActions(app: FastifyInstance, api: CustomObjectsApi): void {
           .send({ error: 'invalid_body', message: 'vmNamespace and vmName required' });
       }
       try {
-        await patchSpec(api, GVR, req.params.name, {
+        await resource.patch(req.params.name, {
           spec: { assignedTo: { namespace: vmNamespace, name: vmName } },
         });
         return accepted({ message: `assigned to ${vmNamespace}/${vmName}` });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, req.params.name);
+        throw err;
       }
     },
   });
 
-  // POST /api/v1/gpu-devices/:name/unassign
   app.route<{ Params: { name: string } }>({
     method: 'POST',
     url: '/api/v1/gpu-devices/:name/unassign',
@@ -71,22 +75,20 @@ function registerGpuActions(app: FastifyInstance, api: CustomObjectsApi): void {
       const user = req.user as AuthenticatedUser;
       if (!canAction(user, 'GpuDevice', 'unassign')) return forbid(reply);
       try {
-        await patchSpec(api, GVR, req.params.name, { spec: { assignedTo: null } });
+        await resource.patch(req.params.name, { spec: { assignedTo: null } });
         return accepted({ message: `unassigned ${req.params.name}` });
       } catch (err) {
-        return kubeErrorReply(reply, err);
+        if (isNotFound(err)) return notFound(reply, req.params.name);
+        throw err;
       }
     },
   });
 }
 
-export async function gpuDevicesRoutes(
-  app: FastifyInstance,
-  api?: CustomObjectsApi
-): Promise<void> {
-  if (api) {
-    registerImpl(app, api);
-    registerGpuActions(app, api);
+export async function gpuDevicesRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerImpl(app, db);
+    registerGpuActions(app, buildGpuDeviceResource(db));
     return;
   }
   registerUnavailable(app, [
