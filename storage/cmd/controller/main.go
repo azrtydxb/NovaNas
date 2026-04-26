@@ -21,6 +21,7 @@ import (
 	crzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	novanas "github.com/azrtydxb/novanas/packages/sdk/go-client"
 	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 	"github.com/azrtydxb/novanas/storage/internal/controller"
 	"github.com/azrtydxb/novanas/storage/internal/logging"
@@ -248,11 +249,31 @@ func main() {
 	eventRecorder := mgr.GetEventRecorder("policy-engine")
 
 	// Register controllers.
-	if err := (&controller.StoragePoolReconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "StoragePool")
-		os.Exit(1)
+	// StoragePool reconciler. The legacy controller-runtime watch is
+	// kept by default; when NOVANAS_POOL_POLLER=1 the api-driven
+	// poll loop runs instead (#50). Once the poller is validated on
+	// the dev box, the watch and the legacy reconciler get deleted
+	// in #52 along with the StoragePool CRD.
+	if os.Getenv("NOVANAS_POOL_POLLER") == "1" {
+		api, apiErr := novanas.NewFromEnv()
+		if apiErr != nil {
+			setupLog.Error(apiErr, "pool poller: failed to build api client")
+			os.Exit(1)
+		}
+		if err := mgr.Add(&poolPollerRunnable{
+			poller: &controller.PoolPoller{K8s: mgr.GetClient(), API: api},
+		}); err != nil {
+			setupLog.Error(err, "unable to register pool poller")
+			os.Exit(1)
+		}
+		setupLog.Info("pool poller registered (api-driven; legacy watch disabled)")
+	} else {
+		if err := (&controller.StoragePoolReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "StoragePool")
+			os.Exit(1)
+		}
 	}
 
 	if err := (&controller.BlockVolumeReconciler{

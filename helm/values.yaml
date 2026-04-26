@@ -176,6 +176,10 @@ storage:
       repository: novanas/storage-controller
       tag: ""
     replicas: 1
+    # Switch StoragePool reconciliation off the legacy CRD watch and
+    # onto API polling (#50). Off by default until validated on the
+    # dev box; flip to true once the new path is exercised.
+    poolPoller: false
     resources:
       requests: { cpu: "100m", memory: "128Mi" }
       limits:   { cpu: "500m", memory: "512Mi" }

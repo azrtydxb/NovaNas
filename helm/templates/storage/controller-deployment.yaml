@@ -27,6 +27,16 @@ spec:
           command: ["/usr/local/bin/novanas-storage-controller"]
           args:
             - -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          env:
+            # NovaNas API endpoint for the pool poller (#50). When
+            # storage.controller.poolPoller is true the legacy
+            # controller-runtime watch is replaced with an HTTP poll.
+            - name: NOVANAS_API_URL
+              value: "http://novanas-api.{{ include "novanas.systemNamespace" . }}.svc:8080"
+            {{- if .Values.storage.controller.poolPoller }}
+            - name: NOVANAS_POOL_POLLER
+              value: "1"
+            {{- end }}
           resources:
             {{- toYaml .Values.storage.controller.resources | nindent 12 }}
           securityContext:
