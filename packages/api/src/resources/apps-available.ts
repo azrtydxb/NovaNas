@@ -1,45 +1,25 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type App, AppSchema } from '@novanas/schemas';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { canRead } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
-import {
-  CrdApiError,
-  CrdConflictError,
-  CrdInvalidError,
-  CrdNotFoundError,
-  CrdResource,
-} from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
+import { isNotFound } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 
 /**
- * `App` CRs are synthesized from `AppCatalog` sources — they represent
- * observed catalog state, not user-authored configuration. We expose only
- * read endpoints; writes return 405 Method Not Allowed.
+ * `App` is a synthesized catalog reflection — it represents observed
+ * catalog state, not user-authored configuration. Reads only; writes
+ * return 405.
  */
-export function buildAppResource(api: CustomObjectsApi): CrdResource<App> {
-  return new CrdResource<App>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'apps' },
+export function buildAppResource(db: DbClient): PgResource<App> {
+  return new PgResource<App>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'App',
     schema: AppSchema,
     namespaced: false,
   });
-}
-
-function errorStatus(err: unknown): number {
-  if (err instanceof CrdNotFoundError) return 404;
-  if (err instanceof CrdConflictError) return 409;
-  if (err instanceof CrdInvalidError) return 422;
-  if (err instanceof CrdApiError) return err.statusCode || 500;
-  return 500;
-}
-
-function errorBody(err: unknown): { error: string; message: string } {
-  if (err instanceof CrdApiError) {
-    return { error: err.name, message: err.message };
-  }
-  const msg = (err as { message?: string })?.message ?? 'internal error';
-  return { error: 'internal_error', message: msg };
 }
 
 function forbid(reply: FastifyReply): FastifyReply {
@@ -53,8 +33,8 @@ function methodNotAllowed(reply: FastifyReply): FastifyReply {
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
-  const resource = buildAppResource(api);
+export function register(app: FastifyInstance, db: DbClient): void {
+  const resource = buildAppResource(db);
   const security = [{ sessionCookie: [] }];
   const basePath = '/api/v1/apps-available';
   const tag = 'apps-available';
@@ -67,12 +47,8 @@ export function register(app: FastifyInstance, api: CustomObjectsApi): void {
     handler: async (req, reply) => {
       const user = req.user as AuthenticatedUser;
       if (!canRead(user, 'App')) return forbid(reply);
-      try {
-        const out = await resource.list();
-        return { items: out.items };
-      } catch (err) {
-        return reply.code(errorStatus(err)).send(errorBody(err));
-      }
+      const out = await resource.list();
+      return { items: out.items };
     },
   });
 
@@ -96,12 +72,16 @@ export function register(app: FastifyInstance, api: CustomObjectsApi): void {
       try {
         return await resource.get(req.params.name);
       } catch (err) {
-        return reply.code(errorStatus(err)).send(errorBody(err));
+        if (isNotFound(err)) {
+          return reply
+            .code(404)
+            .send({ error: 'not_found', message: `app '${req.params.name}' not found` });
+        }
+        throw err;
       }
     },
   });
 
-  // Explicit 405 handlers for mutating methods.
   for (const method of ['POST', 'PATCH', 'DELETE'] as const) {
     app.route({
       method,
