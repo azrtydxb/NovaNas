@@ -39,15 +39,29 @@ interface CompositeDeps {
 }
 
 function errorStatus(err: unknown): number {
-  if (err instanceof CrdNotFoundError) return 404;
-  if (err instanceof CrdConflictError) return 409;
-  if (err instanceof CrdInvalidError) return 422;
-  if (err instanceof CrdApiError) return err.statusCode || 500;
+  const name = (err as { name?: string })?.name ?? '';
+  if (name === 'CrdNotFoundError' || name === 'PgNotFoundError') return 404;
+  if (name === 'CrdConflictError' || name === 'PgConflictError') return 409;
+  if (name === 'CrdInvalidError' || name === 'PgInvalidError') return 422;
+  const sc = (err as { statusCode?: number })?.statusCode;
+  if (typeof sc === 'number' && sc >= 400) return sc;
   return 500;
 }
 
 function errorBody(err: unknown): { error: string; message: string } {
-  if (err instanceof CrdApiError) return { error: err.name, message: err.message };
+  const name = (err as { name?: string })?.name ?? '';
+  if (
+    name === 'CrdApiError' ||
+    name === 'CrdNotFoundError' ||
+    name === 'CrdConflictError' ||
+    name === 'CrdInvalidError' ||
+    name === 'PgApiError' ||
+    name === 'PgNotFoundError' ||
+    name === 'PgConflictError' ||
+    name === 'PgInvalidError'
+  ) {
+    return { error: name, message: (err as Error).message };
+  }
   const msg = (err as { message?: string })?.message ?? 'internal error';
   return { error: 'internal_error', message: msg };
 }
@@ -73,7 +87,7 @@ export async function compositeRoutes(app: FastifyInstance, deps: CompositeDeps)
   }
 
   const datasets = buildDatasetResource(db);
-  const shares = buildShareResource(kubeCustom);
+  const shares = buildShareResource(db);
   const vms = buildVmResource(kubeCustom);
   const disks = buildDiskResource(db);
   const apps = buildAppInstanceResource(kubeCustom);

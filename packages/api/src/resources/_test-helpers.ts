@@ -476,4 +476,17 @@ const MIGRATED_PLURALS: Record<string, string> = {
   cloudbackupjobs: 'CloudBackupJob',
   replicationtargets: 'ReplicationTarget',
   replicationjobs: 'ReplicationJob',
+  // Grey-set (Option B):
+  shares: 'Share',
+  sshkeys: 'SshKey',
+  bonds: 'Bond',
+  vlans: 'Vlan',
+  physicalinterfaces: 'PhysicalInterface',
+  hostinterfaces: 'HostInterface',
+  clusternetworks: 'ClusterNetwork',
+  vippools: 'VipPool',
+  customdomains: 'CustomDomain',
+  objectstores: 'ObjectStore',
+  iscsitargets: 'IscsiTarget',
+  nvmeoftargets: 'NvmeofTarget',
 };

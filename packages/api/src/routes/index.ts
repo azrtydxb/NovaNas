@@ -147,38 +147,42 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => groupsRoutes(s, db));
   await app.register(async (s) => keycloakRealmsRoutes(s, db));
   await app.register(async (s) => apiTokensRoutes(s, db));
+  // Grey-set resources flipped via Option B: source of truth in
+  // Postgres; host agents (nmstate, sshd, samba/knfsd, keepalived,
+  // s3gw, iscsi/nvmeof targets) become API clients via TokenReview.
+  // Tracked separately: host-agent rewrite issue.
+  await app.register(async (s) => shareRoutes(s, db));
+  await app.register(async (s) => sshKeysRoutes(s, db));
+  await app.register(async (s) => bondsRoutes(s, db));
+  await app.register(async (s) => vlansRoutes(s, db));
+  await app.register(async (s) => physicalInterfacesRoutes(s, db));
+  await app.register(async (s) => hostInterfacesRoutes(s, db));
+  await app.register(async (s) => clusterNetworkRoutes(s, db));
+  await app.register(async (s) => vipPoolsRoutes(s, db));
+  await app.register(async (s) => customDomainsRoutes(s, db));
+  await app.register(async (s) => objectStoreRoutes(s, db));
+  await app.register(async (s) => iscsiTargetRoutes(s, db));
+  await app.register(async (s) => nvmeofTargetRoutes(s, db));
 
   // -----------------------------------------------------------------
   // CRD-backed resources still on the K8s control path. These are
-  // either workload-producing (Vm, AppInstance, NfsServer/SmbServer/
-  // IscsiTarget/NvmeofTarget Pods) or projected to external CRDs
+  // workload-producing (Vm via KubeVirt, AppInstance via Helm,
+  // NfsServer/SmbServer Pods) or project to external CRDs
   // (novanet/novaedge for Ingress, FirewallRule, TrafficPolicy,
-  // ServicePolicy, RemoteAccessTunnel). The "grey set" (bonds, vlans,
-  // host-interfaces, etc.) projects to host-side ConfigMaps and stays
-  // CRD-backed until a follow-up migration flips the agent contract.
+  // ServicePolicy, RemoteAccessTunnel). GpuDevice surfaces device-
+  // plugin state. apps-available is the AppCatalog-synthesised
+  // read-only view.
   // -----------------------------------------------------------------
-  await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => objectStoreRoutes(s, deps.kubeCustom));
   await app.register(async (s) => smbServerRoutes(s, deps.kubeCustom));
   await app.register(async (s) => nfsServerRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => iscsiTargetRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => nvmeofTargetRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => bondsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => vlansRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => hostInterfacesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => clusterNetworkRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => vipPoolsRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => remoteAccessTunnelsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => customDomainsRoutes(s, deps.kubeCustom));
   await app.register(async (s) => firewallRulesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => trafficPoliciesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => physicalInterfacesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => servicePolicyRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => sshKeysRoutes(s, deps.kubeCustom));
   await app.register(async (s) => gpuDevicesRoutes(s, deps.kubeCustom));
 
   // B3-API-Infra: cross-resource search

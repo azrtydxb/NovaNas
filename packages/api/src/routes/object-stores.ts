@@ -1,45 +1,42 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
-import { register as registerObjectStores } from '../resources/object-stores.js';
+import { register as registerImpl } from '../resources/object-stores.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function objectStoreRoutes(
-  app: FastifyInstance,
-  api?: CustomObjectsApi
-): Promise<void> {
-  if (api) {
-    registerObjectStores(app, api);
+export async function objectStoreRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerImpl(app, db);
     return;
   }
   registerUnavailable(app, [
     {
       method: 'GET',
       url: '/api/v1/object-stores',
-      summary: 'List object stores',
+      summary: 'List ObjectStores',
       tag: 'object-stores',
     },
     {
       method: 'POST',
       url: '/api/v1/object-stores',
-      summary: 'Create an object store',
+      summary: 'Create a ObjectStore',
       tag: 'object-stores',
     },
     {
       method: 'GET',
       url: '/api/v1/object-stores/:name',
-      summary: 'Get an object store',
+      summary: 'Get a ObjectStore',
       tag: 'object-stores',
     },
     {
       method: 'PATCH',
       url: '/api/v1/object-stores/:name',
-      summary: 'Update an object store',
+      summary: 'Update a ObjectStore',
       tag: 'object-stores',
     },
     {
       method: 'DELETE',
       url: '/api/v1/object-stores/:name',
-      summary: 'Delete an object store',
+      summary: 'Delete a ObjectStore',
       tag: 'object-stores',
     },
   ]);

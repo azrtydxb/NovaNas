@@ -322,33 +322,23 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 	}
 
 	// CRD-to-Postgres migration: most business-object reconcilers
-	// have been removed because the API now writes directly to
-	// Postgres + projects synchronously to Keycloak/OpenBao/cert-
-	// manager via afterCreate hooks. What remains here are the
-	// "stay-set" reconcilers that produce real K8s/external CRDs:
-	// VMs (KubeVirt), AppInstance (Helm), NfsServer/SmbServer (Pods),
-	// network projections to novanet (FirewallRule, TrafficPolicy,
-	// ServicePolicy, RemoteAccessTunnel, Ingress) and the grey-set
-	// host-side ConfigMap projectors (Bond, Vlan, *Interface, etc.)
-	// pending the agent-contract flip.
+	// have been removed. The grey set (Share, SshKey, Bond, Vlan,
+	// PhysicalInterface, HostInterface, ClusterNetwork, VipPool,
+	// CustomDomain, ObjectStore, IscsiTarget, NvmeofTarget) was
+	// flipped to PgResource via Option B — host agents will become
+	// API clients; ConfigMap projection by an operator is no longer
+	// the contract. What remains here are the "stay-set" reconcilers
+	// that produce real K8s/external CRDs: VMs (KubeVirt),
+	// AppInstance (Helm), NfsServer/SmbServer (Pods), network
+	// projections to novanet (FirewallRule, TrafficPolicy,
+	// ServicePolicy, RemoteAccessTunnel, Ingress), and BlockVolume
+	// (storage data plane — flips with #50).
 	reconcilers := []setup{
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.ShareReconciler{},
 		&controllers.SmbServerReconciler{},
 		&controllers.NfsServerReconciler{},
-		&controllers.IscsiTargetReconciler{},
-		&controllers.NvmeofTargetReconciler{},
-		&controllers.ObjectStoreReconciler{},
-		&controllers.SshKeyReconciler{},
-		&controllers.PhysicalInterfaceReconciler{Network: ec.network},
-		&controllers.BondReconciler{Network: ec.network},
-		&controllers.VlanReconciler{Network: ec.network},
-		&controllers.HostInterfaceReconciler{Network: ec.network},
-		&controllers.ClusterNetworkReconciler{},
-		&controllers.VipPoolReconciler{},
 		&controllers.IngressReconciler{},
 		&controllers.RemoteAccessTunnelReconciler{},
-		&controllers.CustomDomainReconciler{},
 		&controllers.FirewallRuleReconciler{},
 		&controllers.TrafficPolicyReconciler{},
 		&controllers.AppReconciler{},

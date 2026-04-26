@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type NvmeofTarget, NvmeofTargetSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildNvmeofTargetResource(api: CustomObjectsApi): CrdResource<NvmeofTarget> {
-  return new CrdResource<NvmeofTarget>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'nvmeoftargets' },
+export function buildNvmeofTargetResource(db: DbClient): PgResource<NvmeofTarget> {
+  return new PgResource<NvmeofTarget>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'NvmeofTarget',
     schema: NvmeofTargetSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<NvmeofTarget>({
     app,
     basePath: '/api/v1/nvmeof-targets',
     tag: 'nvmeof-targets',
     kind: 'NvmeofTarget',
-    resource: buildNvmeofTargetResource(api),
+    resource: buildNvmeofTargetResource(db),
     schema: NvmeofTargetSchema,
   });
 }

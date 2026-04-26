@@ -7,8 +7,6 @@ import type { DbClient } from '../services/db.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
 
-const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'certificates' };
-
 function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
 }
@@ -17,7 +15,6 @@ function registerCertificateActions(app: FastifyInstance, db: DbClient): void {
   const security = [{ sessionCookie: [] }];
   const resource = buildCertificateResource(db);
 
-  // POST /api/v1/certificates/:name/renew
   app.route<{ Params: { name: string } }>({
     method: 'POST',
     url: '/api/v1/certificates/:name/renew',
@@ -39,7 +36,6 @@ function registerCertificateActions(app: FastifyInstance, db: DbClient): void {
         );
         return accepted({ message: `renewal requested for ${req.params.name}` });
       } catch (err) {
-        req.log.error({ err }, 'cert renew action failed');
         if ((err as { name?: string })?.name === 'PgNotFoundError') {
           return reply.code(404).send({ error: 'not_found', message: (err as Error).message });
         }

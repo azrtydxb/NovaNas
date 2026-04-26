@@ -10,22 +10,22 @@ import type { DbClient } from '../services/db.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
 
-const GVR = { group: 'novanas.io', version: 'v1alpha1', plural: 'cloudbackupjobs' };
-
 function forbid(reply: FastifyReply): FastifyReply {
   return reply.code(403).send({ error: 'forbidden', message: 'insufficient role' });
+}
+
+function actionError(reply: FastifyReply, err: unknown) {
+  if ((err as { name?: string })?.name === 'PgNotFoundError') {
+    return reply.code(404).send({ error: 'not_found', message: (err as Error).message });
+  }
+  return reply
+    .code(500)
+    .send({ error: 'internal_error', message: (err as Error)?.message ?? String(err) });
 }
 
 function registerCloudBackupActions(app: FastifyInstance, db: DbClient): void {
   const security = [{ sessionCookie: [] }];
   const resource = buildCloudBackupJobResource(db);
-
-  function actionError(reply: FastifyReply, err: unknown) {
-    if ((err as { name?: string })?.name === 'PgNotFoundError') {
-      return reply.code(404).send({ error: 'not_found', message: (err as Error).message });
-    }
-    return reply.code(500).send({ error: 'internal_error', message: (err as Error).message });
-  }
 
   app.route<{ Params: { name: string } }>({
     method: 'POST',

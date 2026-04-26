@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type SshKey, SshKeySchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildSshKeyResource(api: CustomObjectsApi): CrdResource<SshKey> {
-  return new CrdResource<SshKey>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'sshkeys' },
+export function buildSshKeyResource(db: DbClient): PgResource<SshKey> {
+  return new PgResource<SshKey>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'SshKey',
     schema: SshKeySchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<SshKey>({
     app,
     basePath: '/api/v1/ssh-keys',
     tag: 'ssh-keys',
     kind: 'SshKey',
-    resource: buildSshKeyResource(api),
+    resource: buildSshKeyResource(db),
     schema: SshKeySchema,
   });
 }
