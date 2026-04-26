@@ -1,25 +1,26 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type FirewallRule, FirewallRuleSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildFirewallRuleResource(api: CustomObjectsApi): CrdResource<FirewallRule> {
-  return new CrdResource<FirewallRule>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'firewallrules' },
+export function buildFirewallRuleResource(db: DbClient): PgResource<FirewallRule> {
+  return new PgResource<FirewallRule>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'FirewallRule',
     schema: FirewallRuleSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
+export function register(app: FastifyInstance, db: DbClient): void {
   registerCrudRoutes<FirewallRule>({
     app,
     basePath: '/api/v1/firewall-rules',
     tag: 'firewall-rules',
     kind: 'FirewallRule',
-    resource: buildFirewallRuleResource(api),
+    resource: buildFirewallRuleResource(db),
     schema: FirewallRuleSchema,
   });
 }

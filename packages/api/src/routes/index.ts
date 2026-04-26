@@ -180,23 +180,27 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => nfsServerRoutes(s, db));
   await app.register(async (s) => smbServerRoutes(s, db));
 
+  // FirewallRule / TrafficPolicy / ServicePolicy: flipped to Postgres
+  // alongside the other config-only resources. The novanet projection
+  // (host-agent reading the API and applying eBPF policy) is the
+  // follow-up; until then the system holds the policy state, no
+  // operator-side reconciler watches a CRD.
+  await app.register(async (s) => firewallRulesRoutes(s, db));
+  await app.register(async (s) => trafficPoliciesRoutes(s, db));
+  await app.register(async (s) => servicePolicyRoutes(s, db));
+
   // -----------------------------------------------------------------
   // CRD-backed resources still on the K8s control path. These are
-  // workload-producing (Vm via KubeVirt, AppInstance via Helm,
-  // NfsServer/SmbServer Pods) or project to external CRDs
-  // (novanet/novaedge for Ingress, FirewallRule, TrafficPolicy,
-  // ServicePolicy, RemoteAccessTunnel). GpuDevice surfaces device-
-  // plugin state. apps-available is the AppCatalog-synthesised
-  // read-only view.
+  // workload-producing (Vm via KubeVirt, AppInstance via Helm) or
+  // project to external CRDs (novaedge for Ingress, RemoteAccessTunnel).
+  // GpuDevice surfaces device-plugin state. apps-available is the
+  // AppCatalog-synthesised read-only view.
   // -----------------------------------------------------------------
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
   await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, deps.kubeCustom));
   await app.register(async (s) => remoteAccessTunnelsRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => firewallRulesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => trafficPoliciesRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => servicePolicyRoutes(s, deps.kubeCustom));
   await app.register(async (s) => gpuDevicesRoutes(s, deps.kubeCustom));
 
   // B3-API-Infra: cross-resource search

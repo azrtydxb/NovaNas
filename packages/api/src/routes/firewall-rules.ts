@@ -1,14 +1,14 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/firewall-rules.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
 export async function firewallRulesRoutes(
   app: FastifyInstance,
-  api?: CustomObjectsApi
+  db?: DbClient | null
 ): Promise<void> {
-  if (api) {
-    registerImpl(app, api);
+  if (db) {
+    registerImpl(app, db);
     return;
   }
   registerUnavailable(app, [
