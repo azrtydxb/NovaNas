@@ -16,6 +16,7 @@ const baseEnv: Env = {
   SESSION_SECRET: 'a-very-long-test-secret',
   API_VERSION: '0.0.0',
   API_PUBLIC_URL: 'https://kc.example.com',
+  SYSTEM_NAMESPACE: 'novanas-system',
 };
 
 describe('keycloak-admin', () => {

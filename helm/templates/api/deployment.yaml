@@ -36,6 +36,10 @@ spec:
             {{- end }}
             - name: PORT
               value: {{ .Values.api.service.port | quote }}
+            # Pod's namespace via downward API. Used as the target for
+            # cert-manager Certificate projections in #51.
+            - name: SYSTEM_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

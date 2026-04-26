@@ -19,6 +19,7 @@ import {
 } from './services/audit-partition-gc.js';
 import type { DbClient } from './services/db.js';
 import { JobsService } from './services/jobs.js';
+import type { CertManagerClient } from './services/cert-manager.js';
 import type { KeycloakAdmin } from './services/keycloak-admin.js';
 import type { KeycloakClient } from './services/keycloak.js';
 import type { OpenBaoAdmin } from './services/openbao-admin.js';
@@ -56,6 +57,8 @@ export interface BuildAppOptions {
   keycloakAdmin?: KeycloakAdmin | null;
   /** OpenBao admin client for inlined operator side effects (#51). */
   openbao?: OpenBaoAdmin | null;
+  /** cert-manager projection client for Certificate hooks (#51). */
+  certManager?: CertManagerClient | null;
 }
 
 export interface BuiltApp {
@@ -159,6 +162,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
     prom: opts.prom ?? null,
     keycloakAdmin: opts.keycloakAdmin ?? null,
     openbao: opts.openbao ?? null,
+    certManager: opts.certManager ?? null,
   });
 
   // 404 fallthrough

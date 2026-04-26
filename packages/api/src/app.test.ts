@@ -87,6 +87,7 @@ const testEnv: Env = Object.freeze({
   OPENBAO_ADDR: undefined,
   OPENBAO_TOKEN: undefined,
   PROMETHEUS_URL: undefined,
+  SYSTEM_NAMESPACE: 'novanas-system',
 });
 
 describe('NovaNas API app', () => {

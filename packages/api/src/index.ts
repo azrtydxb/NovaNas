@@ -8,6 +8,7 @@ import { loadEnv } from './env.js';
 import { createLogger } from './logger.js';
 import { startKubeWatch } from './plugins/kube-watch.js';
 import { createDbClient } from './services/db.js';
+import { createCertManagerClient } from './services/cert-manager.js';
 import { createKeycloakAdmin } from './services/keycloak-admin.js';
 import { createKeycloakClient } from './services/keycloak.js';
 import { createOpenBaoAdmin } from './services/openbao-admin.js';
@@ -39,6 +40,9 @@ async function main(): Promise<void> {
   // no-ops and the resource still persists to Postgres.
   const openbao = createOpenBaoAdmin(env);
   const kube = createKubeClients(env);
+  // cert-manager Certificate projection (#51). Skip when there is no
+  // kube custom-objects client (test envs / kubeconfig-less startup).
+  const certManager = kube.custom ? createCertManagerClient(kube.custom) : null;
   const db = await createDbClient(env).catch((err) => {
     logger.error({ err }, 'novanas-api.db.connect_failed');
     return null;
@@ -81,6 +85,7 @@ async function main(): Promise<void> {
     keycloak,
     keycloakAdmin,
     openbao,
+    certManager,
     kubeCustom: kube.custom,
     kubeAuthn: kube.authn,
     db,

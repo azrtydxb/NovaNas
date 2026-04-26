@@ -32,6 +32,10 @@ export const EnvSchema = z.object({
 
   API_VERSION: z.string().default('0.0.0'),
   API_PUBLIC_URL: z.string().url().default('http://localhost:8080'),
+  // Namespace the api pod runs in. Used as the target namespace when
+  // projecting NovaNas resources onto cert-manager / k8s objects (#51).
+  // Helm wires this from the downward API.
+  SYSTEM_NAMESPACE: z.string().default('novanas-system'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

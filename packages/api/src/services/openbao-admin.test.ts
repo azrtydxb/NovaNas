@@ -17,6 +17,7 @@ const env: Env = {
   API_PUBLIC_URL: 'https://kc.example.com',
   OPENBAO_ADDR: 'http://bao.example.com:8200',
   OPENBAO_TOKEN: 't0k3n',
+  SYSTEM_NAMESPACE: 'novanas-system',
 };
 
 describe('openbao-admin', () => {

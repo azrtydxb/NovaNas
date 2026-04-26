@@ -5,6 +5,7 @@ import type { SessionStore } from '../auth/session.js';
 import type { Env } from '../env.js';
 import type { DbClient } from '../services/db.js';
 import type { JobsService } from '../services/jobs.js';
+import type { CertManagerClient } from '../services/cert-manager.js';
 import type { KeycloakAdmin } from '../services/keycloak-admin.js';
 import type { KeycloakClient } from '../services/keycloak.js';
 import type { OpenBaoAdmin } from '../services/openbao-admin.js';
@@ -94,6 +95,8 @@ export interface RouteDeps {
   keycloakAdmin?: KeycloakAdmin | null;
   /** OpenBao admin client for inlined operator side effects (#51). */
   openbao?: OpenBaoAdmin | null;
+  /** cert-manager projection client for Certificate hooks (#51). */
+  certManager?: CertManagerClient | null;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
@@ -134,7 +137,9 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => isoLibraryRoutes(s, db));
   await app.register(async (s) => encryptionPoliciesRoutes(s, db));
   await app.register(async (s) => kmsKeysRoutes(s, db, deps.openbao ?? null));
-  await app.register(async (s) => certificatesRoutes(s, db));
+  await app.register(async (s) =>
+    certificatesRoutes(s, db, deps.certManager ?? null, deps.env.SYSTEM_NAMESPACE)
+  );
   await app.register(async (s) => snapshotSchedulesRoutes(s, db));
   await app.register(async (s) => replicationTargetsRoutes(s, db));
   await app.register(async (s) => replicationJobsRoutes(s, db));
