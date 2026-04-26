@@ -54,12 +54,25 @@ export const DatasetSpecSchema = z.object({
 });
 export type DatasetSpec = z.infer<typeof DatasetSpecSchema>;
 
+export const DatasetEncryptionStatusSchema = z.object({
+  // Provisioned data-key envelope: ciphertext only — the plaintext DK
+  // is never persisted by the api. Agents recover it via /transit/decrypt
+  // at mount time. Set by the api's afterCreate hook for encrypted
+  // datasets (#51).
+  provisioned: z.boolean(),
+  wrappedDK: z.string().optional(),
+  keyVersion: z.number().int().nonnegative().optional(),
+  provisionedAt: z.string().datetime({ offset: true }).optional(),
+});
+export type DatasetEncryptionStatus = z.infer<typeof DatasetEncryptionStatusSchema>;
+
 export const DatasetStatusSchema = z
   .object({
     phase: z.enum(['Pending', 'Mounted', 'Degraded', 'Failed']),
     mountPoint: z.string(),
     usedBytes: z.number().int().nonnegative(),
     conditions: z.array(ConditionSchema),
+    encryption: DatasetEncryptionStatusSchema,
   })
   .partial();
 export type DatasetStatus = z.infer<typeof DatasetStatusSchema>;

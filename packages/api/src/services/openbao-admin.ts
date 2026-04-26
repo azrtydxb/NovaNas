@@ -34,6 +34,14 @@ export interface OpenBaoAdmin {
    * key is not an error.
    */
   deleteTransitKey(name: string): Promise<void>;
+  /**
+   * Generate a fresh data key wrapped by the named Transit key. Returns
+   * the ciphertext (the "wrapped DK") and the key version that produced
+   * it. The plaintext is intentionally NOT returned — callers persist
+   * only the ciphertext, and recover the plaintext later via decrypt
+   * at the consumer site.
+   */
+  generateDataKey(keyName: string): Promise<{ ciphertext: string; keyVersion: number }>;
 }
 
 export function createOpenBaoAdmin(env: Env): OpenBaoAdmin | null {
@@ -105,6 +113,25 @@ export function createOpenBaoAdmin(env: Env): OpenBaoAdmin | null {
         }
       }
       return !exists;
+    },
+
+    async generateDataKey(keyName: string): Promise<{ ciphertext: string; keyVersion: number }> {
+      // /transit/datakey/wrapped/{name} is the variant that returns
+      // ONLY the ciphertext (no plaintext). That's what we want here —
+      // the api never sees the plaintext DK, the agent recovers it at
+      // mount time via /transit/decrypt.
+      const res = await bao(`/v1/transit/datakey/wrapped/${encodeURIComponent(keyName)}`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        throw new Error(
+          `openbao-admin: generateDataKey ${keyName} failed (${res.status}): ${await res.text()}`
+        );
+      }
+      const body = (await res.json()) as {
+        data: { ciphertext: string; key_version: number };
+      };
+      return { ciphertext: body.data.ciphertext, keyVersion: body.data.key_version };
     },
 
     async deleteTransitKey(name: string): Promise<void> {

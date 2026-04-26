@@ -127,7 +127,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // -----------------------------------------------------------------
   const db = deps.db ?? null;
   await app.register(async (s) => poolRoutes(s, db));
-  await app.register(async (s) => datasetRoutes(s, db));
+  await app.register(async (s) => datasetRoutes(s, db, deps.openbao ?? null));
   await app.register(async (s) => bucketRoutes(s, db));
   await app.register(async (s) => diskRoutes(s, db));
   await app.register(async (s) => snapshotRoutes(s, db, { jobs: deps.jobs ?? null }));
