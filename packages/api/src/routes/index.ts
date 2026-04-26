@@ -197,7 +197,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // AppCatalog-synthesised read-only view.
   // -----------------------------------------------------------------
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => appsAvailableRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appsAvailableRoutes(s, db));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, db));
   await app.register(async (s) => remoteAccessTunnelsRoutes(s, db));

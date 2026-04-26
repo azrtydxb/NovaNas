@@ -495,4 +495,5 @@ const MIGRATED_PLURALS: Record<string, string> = {
   gpudevices: 'GpuDevice',
   ingresses: 'Ingress',
   remoteaccesstunnels: 'RemoteAccessTunnel',
+  apps: 'App',
 };
