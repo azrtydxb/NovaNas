@@ -12,7 +12,7 @@
 -- baseline migration in 0003_baseline_schema.sql creates the
 -- partitioned shape directly for fresh installs.
 
-BEGIN;
+
 
 -- Only run the legacy-to-partitioned conversion if a non-partitioned
 -- audit_log exists. PARTITIONED tables show up in pg_partitioned_table;
@@ -123,4 +123,4 @@ BEGIN
 END
 $rehydrate$;
 
-COMMIT;
+

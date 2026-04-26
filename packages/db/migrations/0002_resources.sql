@@ -8,7 +8,7 @@
 --
 -- See packages/db/src/schema/resources.ts for the design rationale.
 
-BEGIN;
+
 
 CREATE TABLE IF NOT EXISTS resources (
     kind         varchar(64)  NOT NULL,
@@ -36,4 +36,4 @@ CREATE INDEX IF NOT EXISTS resources_kind_idx ON resources (kind);
 -- for changes since a known timestamp.
 CREATE INDEX IF NOT EXISTS resources_updated_idx ON resources (updated_at);
 
-COMMIT;
+

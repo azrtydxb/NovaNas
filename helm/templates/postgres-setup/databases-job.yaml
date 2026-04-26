@@ -86,4 +86,12 @@ spec:
               GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
               GRANT ALL PRIVILEGES ON DATABASE openbao  TO openbao;
               SQL
+
+              # Reassign anything already owned by `postgres` in the
+              # novanas db to the `novanas` role. Covers the case where
+              # something seeded a table as superuser before the api's
+              # migration runner came online (#43): the api connects as
+              # `novanas` and \`CREATE INDEX ... ON <table>\` requires
+              # ownership of <table>.
+              psql -v ON_ERROR_STOP=1 -d novanas -c "REASSIGN OWNED BY postgres TO novanas;" || true
 {{- end }}

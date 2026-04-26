@@ -15,7 +15,7 @@
 --
 -- Schema mirrors packages/db/src/schema/*.ts — keep in sync.
 
-BEGIN;
+
 
 -- Enums --------------------------------------------------------------------
 
@@ -238,4 +238,4 @@ SELECT novanas_create_audit_partition((date_trunc('month', now()) + interval '3 
 
 CREATE TABLE IF NOT EXISTS audit_log_default PARTITION OF audit_log DEFAULT;
 
-COMMIT;
+
