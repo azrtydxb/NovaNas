@@ -196,7 +196,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // GpuDevice surfaces device-plugin state. apps-available is the
   // AppCatalog-synthesised read-only view.
   // -----------------------------------------------------------------
-  await app.register(async (s) => appRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => appRoutes(s, db));
   await app.register(async (s) => appsAvailableRoutes(s, db));
   await app.register(async (s) => vmRoutes(s, deps.kubeCustom));
   await app.register(async (s) => ingressesRoutes(s, db));

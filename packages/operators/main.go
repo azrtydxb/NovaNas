@@ -331,7 +331,6 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 	// plane — flips with #50).
 	reconcilers := []setup{
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.AppInstanceReconciler{},
 		&controllers.VmReconciler{Engine: ec.vmEngine},
 	}
 
