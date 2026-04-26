@@ -5,11 +5,11 @@ import { requireAuth } from '../auth/decorators.js';
 import { writeAudit } from '../services/audit.js';
 import { CrdApiError } from '../services/crd.js';
 import {
+  type Resource,
+  isResourceApiError,
   isConflict as isResourceConflict,
   isInvalid as isResourceInvalid,
   isNotFound as isResourceNotFound,
-  isResourceApiError,
-  type Resource,
 } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 

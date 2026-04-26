@@ -1,10 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import type { DbClient } from '../services/db.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { canAction } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
 import { register as registerUsers } from '../resources/users.js';
 import { accepted } from '../services/actions.js';
+import type { DbClient } from '../services/db.js';
 import type { AuthenticatedUser } from '../types.js';
 import { registerUnavailable } from './_unavailable.js';
 

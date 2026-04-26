@@ -64,11 +64,8 @@ function SidebarFooter() {
   const total = health.data?.capacity?.totalBytes;
   const pct = used != null && total && total > 0 ? Math.min(100, (used / total) * 100) : 0;
   const capacityLabel =
-    used != null && total != null
-      ? `${formatBytes(used)} / ${formatBytes(total)}`
-      : '—';
-  const uptime =
-    info.data?.uptimeSeconds != null ? formatUptime(info.data.uptimeSeconds) : '—';
+    used != null && total != null ? `${formatBytes(used)} / ${formatBytes(total)}` : '—';
+  const uptime = info.data?.uptimeSeconds != null ? formatUptime(info.data.uptimeSeconds) : '—';
 
   return (
     <div className='mt-auto pt-2.5 px-2.5 border-t border-border flex flex-col gap-1.5 text-xs text-foreground-subtle'>

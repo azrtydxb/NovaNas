@@ -274,7 +274,7 @@ export class PgResource<T> {
       const spec = p.spec ? mergePatch(row.spec, p.spec) : row.spec;
       const status = p.status ? mergePatch(row.status, p.status) : row.status;
 
-      const next = (parseInt(row.revision, 10) + 1).toString();
+      const next = (Number.parseInt(row.revision, 10) + 1).toString();
 
       const updated = (await tx
         .update(resources)

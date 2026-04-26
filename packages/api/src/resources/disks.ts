@@ -54,8 +54,7 @@ export function register(app: FastifyInstance, db: DbClient): void {
       const labels = disk.metadata?.labels ?? {};
       if (labels['novanas.io/system'] === 'true') {
         throw new RegisterValidationError(
-          `Disk '${disk.metadata.name}' hosts the operating system and ` +
-            `cannot be added to a pool.`
+          `Disk '${disk.metadata.name}' hosts the operating system and cannot be added to a pool.`
         );
       }
 

@@ -6,7 +6,7 @@ const sample = {
   apiVersion: 'novanas.io/v1alpha1',
   kind: 'StoragePool',
   metadata: { name: 'pool-a' },
-  spec: { tier: 'hot' },
+  spec: { tier: '1' },
 };
 
 describe('pools resource', () => {
@@ -47,7 +47,7 @@ describe('pools resource', () => {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'StoragePool',
       metadata: { name: 'pool-b' },
-      spec: { tier: 'cold' },
+      spec: { tier: '4' },
     };
     const r = await h.built.app.inject({
       method: 'POST',

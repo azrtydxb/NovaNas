@@ -1,5 +1,5 @@
 import type { AuthenticationV1Api, CustomObjectsApi } from '@kubernetes/client-node';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { Registry, collectDefaultMetrics } from 'prom-client';
@@ -27,7 +27,7 @@ import { PubSub } from './ws/pubsub.js';
 
 export interface BuildAppOptions {
   env: Env;
-  logger: Logger;
+  logger: Logger | FastifyBaseLogger;
   redis: Redis;
   redisSub?: Redis; // optional dedicated sub connection
   keycloak: KeycloakClient;
@@ -86,8 +86,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuiltApp> {
   // Fastify v5 split `logger`: a config object goes into `logger`, a
   // pre-built pino instance goes into `loggerInstance`. We always pass
   // a real instance (createLogger() in logger.ts).
+  // Cast: pino's `Logger` and Fastify's `FastifyBaseLogger` are
+  // structurally identical at the methods we use, but Fastify's
+  // generic plumbing carries the logger type through every `register`
+  // signature — accepting a wider type up-front keeps the
+  // `FastifyInstance<..., FastifyBaseLogger, ...>` shape that all the
+  // plugins expect.
   const app = Fastify({
-    loggerInstance: logger,
+    loggerInstance: logger as FastifyBaseLogger,
     trustProxy: true,
     disableRequestLogging: false,
     bodyLimit: 5 * 1024 * 1024, // 5 MiB

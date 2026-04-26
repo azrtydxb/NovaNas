@@ -6,7 +6,6 @@ import { requireAuth } from '../auth/decorators.js';
 import { buildAppCatalogResource } from '../resources/app-catalogs.js';
 import { buildAppResource } from '../resources/apps-available.js';
 import { buildAppInstanceResource } from '../resources/apps.js';
-import type { Resource } from '../services/resource.js';
 import { buildBucketUserResource } from '../resources/bucket-users.js';
 import { buildBucketResource } from '../resources/buckets.js';
 import { buildDatasetResource } from '../resources/datasets.js';
@@ -18,6 +17,7 @@ import { buildShareResource } from '../resources/shares.js';
 import { buildSnapshotResource } from '../resources/snapshots.js';
 import { buildUserResource } from '../resources/users.js';
 import { buildVmResource } from '../resources/vms.js';
+import type { Resource } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 
 export interface SearchDeps {

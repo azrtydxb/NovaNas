@@ -13,6 +13,11 @@ export async function kmsKeysRoutes(app: FastifyInstance, db?: DbClient | null):
     { method: 'POST', url: '/api/v1/kms-keys', summary: 'Create a KmsKey', tag: 'kms-keys' },
     { method: 'GET', url: '/api/v1/kms-keys/:name', summary: 'Get a KmsKey', tag: 'kms-keys' },
     { method: 'PATCH', url: '/api/v1/kms-keys/:name', summary: 'Update a KmsKey', tag: 'kms-keys' },
-    { method: 'DELETE', url: '/api/v1/kms-keys/:name', summary: 'Delete a KmsKey', tag: 'kms-keys' },
+    {
+      method: 'DELETE',
+      url: '/api/v1/kms-keys/:name',
+      summary: 'Delete a KmsKey',
+      tag: 'kms-keys',
+    },
   ]);
 }

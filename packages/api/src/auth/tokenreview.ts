@@ -99,8 +99,9 @@ export function buildTokenReviewMiddleware(opts: TokenReviewOptions): TokenRevie
         spec: { token },
       } as Parameters<typeof opts.api.createTokenReview>[0]);
       const body = (res as { body?: unknown; status?: unknown }).body ?? res;
-      const status = (body as { status?: { authenticated?: boolean; user?: { username?: string } } })
-        .status;
+      const status = (
+        body as { status?: { authenticated?: boolean; user?: { username?: string } } }
+      ).status;
       if (!status?.authenticated || !status.user?.username) {
         reply.code(401).send({ error: 'unauthorized', message: 'token not valid' });
         return;

@@ -1,1 +1,20 @@
-{"version":"7","dialect":"postgresql","entries":[{"idx":1,"version":"7","when":1714010000000,"tag":"0001_audit_partitioning","breakpoints":true},{"idx":2,"version":"7","when":1714060000000,"tag":"0002_resources","breakpoints":true}]}
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1714010000000,
+      "tag": "0001_audit_partitioning",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1714060000000,
+      "tag": "0002_resources",
+      "breakpoints": true
+    }
+  ]
+}

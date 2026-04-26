@@ -74,6 +74,7 @@ function LoginPage() {
                   type='text'
                   name='username'
                   autoComplete='username'
+                  // biome-ignore lint/a11y/noAutofocus: login form is the only meaningful input on the page
                   autoFocus
                   required
                   value={username}

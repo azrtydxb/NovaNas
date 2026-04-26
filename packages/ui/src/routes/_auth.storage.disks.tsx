@@ -140,7 +140,11 @@ function DisksPage() {
                   <TableCell>
                     <Badge>{d.status?.deviceClass ?? 'unknown'}</Badge>
                     {d.metadata?.labels?.['novanas.io/system'] === 'true' && (
-                      <Badge tone='warn' className='ml-1' title='OS disk — cannot be added to a pool'>
+                      <Badge
+                        tone='warn'
+                        className='ml-1'
+                        title='OS disk — cannot be added to a pool'
+                      >
                         System
                       </Badge>
                     )}

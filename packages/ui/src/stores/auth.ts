@@ -7,6 +7,12 @@ export interface AuthUser {
   username: string;
   roles: string[];
   permissions: string[];
+  /**
+   * Optional Keycloak-style groups claim. Some installs project roles
+   * into groups via the `novanas:roles` mapper rather than the standard
+   * `realm_access.roles`, so role-checks should consult both.
+   */
+  groups?: string[];
 }
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated';

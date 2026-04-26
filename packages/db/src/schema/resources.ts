@@ -56,7 +56,11 @@ export const resources = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => ({
-    pk: uniqueIndex('resources_kind_namespace_name_idx').on(table.kind, table.namespace, table.name),
+    pk: uniqueIndex('resources_kind_namespace_name_idx').on(
+      table.kind,
+      table.namespace,
+      table.name
+    ),
     kindIdx: index('resources_kind_idx').on(table.kind),
     updatedIdx: index('resources_updated_idx').on(table.updatedAt),
   })

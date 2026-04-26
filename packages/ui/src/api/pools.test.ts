@@ -20,7 +20,7 @@ describe('pools api hooks', () => {
             apiVersion: 'novanas.io/v1alpha1',
             kind: 'StoragePool',
             metadata: { name: 'fast' },
-            spec: { tier: 'hot' },
+            spec: { tier: '1' },
           },
         ],
       },
@@ -50,14 +50,14 @@ describe('pools api hooks', () => {
         apiVersion: 'novanas.io/v1alpha1',
         kind: 'StoragePool',
         metadata: { name: 'fast' },
-        spec: { tier: 'hot' },
+        spec: { tier: '1' },
       },
     });
     const { result } = renderHookWithClient(() => useCreatePool());
     await act(async () => {
       await result.current.mutateAsync({
         metadata: { name: 'fast' },
-        spec: { tier: 'hot' },
+        spec: { tier: '1' },
       });
     });
     expect(fetchMock.calls[0]?.init?.method).toBe('POST');

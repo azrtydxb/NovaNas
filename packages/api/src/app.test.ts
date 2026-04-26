@@ -1,5 +1,5 @@
-import pino from "pino";
 import type { Redis } from 'ioredis';
+import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type BuiltApp, buildApp } from './app.js';
 import type { Env } from './env.js';
@@ -50,7 +50,7 @@ function fakeKeycloak(): KeycloakClient {
     config: {} as never,
     issuerUrl: 'http://localhost/realms/test',
     clientId: 'test',
-    buildAuthUrl() {
+    async buildAuthUrl(_redirectUri: string) {
       return {
         url: new URL('http://localhost/authorize'),
         state: 's',
@@ -59,6 +59,9 @@ function fakeKeycloak(): KeycloakClient {
       };
     },
     async exchangeCode() {
+      throw new Error('not used in this test');
+    },
+    async passwordLogin() {
       throw new Error('not used in this test');
     },
     async logout() {

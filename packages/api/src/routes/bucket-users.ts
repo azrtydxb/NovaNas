@@ -9,10 +9,35 @@ export async function bucketUserRoutes(app: FastifyInstance, db?: DbClient | nul
     return;
   }
   registerUnavailable(app, [
-    { method: 'GET', url: '/api/v1/bucket-users', summary: 'List BucketUsers', tag: 'bucket-users' },
-    { method: 'POST', url: '/api/v1/bucket-users', summary: 'Create a BucketUser', tag: 'bucket-users' },
-    { method: 'GET', url: '/api/v1/bucket-users/:name', summary: 'Get a BucketUser', tag: 'bucket-users' },
-    { method: 'PATCH', url: '/api/v1/bucket-users/:name', summary: 'Update a BucketUser', tag: 'bucket-users' },
-    { method: 'DELETE', url: '/api/v1/bucket-users/:name', summary: 'Delete a BucketUser', tag: 'bucket-users' },
+    {
+      method: 'GET',
+      url: '/api/v1/bucket-users',
+      summary: 'List BucketUsers',
+      tag: 'bucket-users',
+    },
+    {
+      method: 'POST',
+      url: '/api/v1/bucket-users',
+      summary: 'Create a BucketUser',
+      tag: 'bucket-users',
+    },
+    {
+      method: 'GET',
+      url: '/api/v1/bucket-users/:name',
+      summary: 'Get a BucketUser',
+      tag: 'bucket-users',
+    },
+    {
+      method: 'PATCH',
+      url: '/api/v1/bucket-users/:name',
+      summary: 'Update a BucketUser',
+      tag: 'bucket-users',
+    },
+    {
+      method: 'DELETE',
+      url: '/api/v1/bucket-users/:name',
+      summary: 'Delete a BucketUser',
+      tag: 'bucket-users',
+    },
   ]);
 }

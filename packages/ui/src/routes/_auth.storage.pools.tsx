@@ -1,6 +1,5 @@
 import { api } from '@/api/client';
 import { useDisks } from '@/api/disks';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   type PoolCreateBody,
   type PoolUpdateBody,
@@ -47,6 +46,7 @@ import { i18n } from '@/lib/i18n';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Trans } from '@lingui/react';
 import type { StoragePool } from '@novanas/schemas';
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { Database, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -90,7 +90,9 @@ function PoolsPage() {
     <>
       <PageHeader
         title={i18n._('Pools')}
-        subtitle={i18n._('Performance tiers (1 = fastest, 4 = slowest) backed by the chunk engine.')}
+        subtitle={i18n._(
+          'Performance tiers (1 = fastest, 4 = slowest) backed by the chunk engine.'
+        )}
         actions={
           mayMutate ? (
             <Button variant='primary' onClick={() => setCreateOpen(true)}>
@@ -576,10 +578,7 @@ function PoolDisksSection({ pool, mayMutate }: { pool: StoragePool; mayMutate: b
         pool={pool}
         candidates={unassigned}
         onAttached={(n) => {
-          toast.success(
-            `Attached ${n} disk${n === 1 ? '' : 's'}`,
-            `to pool ${pool.metadata.name}`
-          );
+          toast.success(`Attached ${n} disk${n === 1 ? '' : 's'}`, `to pool ${pool.metadata.name}`);
           setPicking(false);
         }}
       />
@@ -622,8 +621,8 @@ function AttachDisksDialog({
         <DialogHeader>
           <DialogTitle>Attach disks to {pool.metadata.name}</DialogTitle>
           <DialogDescription>
-            Select unassigned disks to add to this pool. They transition through
-            IDENTIFIED → ASSIGNED → ACTIVE as the operator picks them up.
+            Select unassigned disks to add to this pool. They transition through IDENTIFIED →
+            ASSIGNED → ACTIVE as the operator picks them up.
           </DialogDescription>
         </DialogHeader>
         {candidates.length === 0 ? (
@@ -637,6 +636,12 @@ function AttachDisksDialog({
                 key={d.metadata.name}
                 className='flex items-center gap-2 p-1.5 rounded-md hover:bg-elevated cursor-pointer'
                 onClick={() => toggle(d.metadata.name)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle(d.metadata.name);
+                  }
+                }}
               >
                 <input
                   type='checkbox'

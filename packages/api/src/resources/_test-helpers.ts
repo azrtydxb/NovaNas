@@ -64,10 +64,16 @@ export class FakeCustomObjectsApi {
    * (Vm, AppInstance, network projections, etc.) still use the
    * in-memory map. The plural→kind+migrated lookup is in
    * MIGRATED_PLURALS at the bottom of this file.
+   *
+   * For migrated kinds we go through the same drizzle binding the
+   * test app uses — using a separate connection (or a different
+   * drizzle-orm install) would create a row that the route's
+   * PgResource cannot see, since pnpm produces distinct module
+   * instances under different peer-dep variants.
    */
   async seed(plural: string, obj: Record<string, unknown>, namespace?: string): Promise<void> {
     const migrated = MIGRATED_PLURALS[plural];
-    if (migrated && this.pgClient) {
+    if (migrated && this.dbInsert) {
       const meta = (obj.metadata ?? {}) as {
         name?: string;
         namespace?: string;
@@ -76,26 +82,12 @@ export class FakeCustomObjectsApi {
       };
       const name = meta.name ?? '';
       const ns = namespace ?? meta.namespace ?? '';
-      await this.pgClient.query(
-        `INSERT INTO resources (kind, name, namespace, labels, annotations, spec, status)
-         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb)
-         ON CONFLICT (kind, namespace, name) DO UPDATE
-         SET labels = EXCLUDED.labels,
-             annotations = EXCLUDED.annotations,
-             spec = EXCLUDED.spec,
-             status = EXCLUDED.status,
-             revision = (resources.revision::int + 1)::text,
-             updated_at = now()`,
-        [
-          migrated,
-          name,
-          ns,
-          JSON.stringify(meta.labels ?? {}),
-          JSON.stringify(meta.annotations ?? {}),
-          JSON.stringify(obj.spec ?? {}),
-          JSON.stringify(obj.status ?? {}),
-        ]
-      );
+      await this.dbInsert(migrated, name, ns, {
+        labels: meta.labels ?? {},
+        annotations: meta.annotations ?? {},
+        spec: (obj.spec ?? {}) as Record<string, unknown>,
+        status: (obj.status ?? {}) as Record<string, unknown>,
+      });
       return;
     }
     const name = (obj.metadata as { name?: string } | undefined)?.name ?? '';
@@ -103,8 +95,18 @@ export class FakeCustomObjectsApi {
     bucket.set(name, obj);
   }
 
-  /** pglite handle for migrated kinds. Set by buildTestApp. */
-  pgClient?: import('@electric-sql/pglite').PGlite;
+  /** Inserter for migrated kinds. Provided by buildTestApp. */
+  dbInsert?: (
+    kind: string,
+    name: string,
+    namespace: string,
+    body: {
+      labels: Record<string, string>;
+      annotations: Record<string, string>;
+      spec: Record<string, unknown>;
+      status: Record<string, unknown>;
+    }
+  ) => Promise<void>;
 
   // cluster-scoped
   async listClusterCustomObject(
@@ -279,7 +281,7 @@ export function fakeKeycloak(): KeycloakClient {
     config: {} as never,
     issuerUrl: 'http://localhost/realms/test',
     clientId: 'test',
-    buildAuthUrl() {
+    async buildAuthUrl(_redirectUri: string) {
       return {
         url: new URL('http://localhost/authorize'),
         state: 's',
@@ -288,6 +290,9 @@ export function fakeKeycloak(): KeycloakClient {
       };
     },
     async exchangeCode() {
+      throw new Error('not used in this test');
+    },
+    async passwordLogin() {
       throw new Error('not used in this test');
     },
     async logout() {
@@ -345,7 +350,32 @@ export async function buildTestApp(): Promise<TestAppHandle> {
   const dbSchema = await import('@novanas/db');
   const pgClient = new PGlite();
   const db = drizzlePglite(pgClient, { schema: dbSchema }) as unknown as DbClient;
-  kube.pgClient = pgClient;
+  // Use raw pglite query for seeding — going through drizzle here
+  // would resolve through a peer-dep-duplicated copy of drizzle-orm
+  // (one with pglite peer, one without) and the table reference
+  // wouldn't unify with what PgResource later reads through.
+  kube.dbInsert = async (kind, name, namespace, body) => {
+    await pgClient.query(
+      `INSERT INTO resources (kind, name, namespace, labels, annotations, spec, status, revision)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, '1')
+       ON CONFLICT (kind, namespace, name) DO UPDATE
+       SET labels = EXCLUDED.labels,
+           annotations = EXCLUDED.annotations,
+           spec = EXCLUDED.spec,
+           status = EXCLUDED.status,
+           revision = (resources.revision::int + 1)::text,
+           updated_at = now()`,
+      [
+        kind,
+        name,
+        namespace,
+        JSON.stringify(body.labels),
+        JSON.stringify(body.annotations),
+        JSON.stringify(body.spec),
+        JSON.stringify(body.status),
+      ]
+    );
+  };
   // Apply the resources-table migration (the one PgResource needs).
   await pgClient.exec(`
     CREATE TABLE IF NOT EXISTS resources (

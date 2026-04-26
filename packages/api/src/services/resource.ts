@@ -54,5 +54,11 @@ export function isInvalid(err: unknown): boolean {
 
 export function isResourceApiError(err: unknown): err is ResourceErrorLike {
   const n = (err as { name?: string })?.name ?? '';
-  return n === 'CrdApiError' || n === 'PgApiError' || isNotFound(err) || isConflict(err) || isInvalid(err);
+  return (
+    n === 'CrdApiError' ||
+    n === 'PgApiError' ||
+    isNotFound(err) ||
+    isConflict(err) ||
+    isInvalid(err)
+  );
 }

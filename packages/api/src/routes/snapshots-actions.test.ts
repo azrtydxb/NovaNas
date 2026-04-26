@@ -1,7 +1,7 @@
-import pino from "pino";
 import { randomUUID } from 'node:crypto';
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { Job } from '@novanas/db';
+import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type BuiltApp, buildApp } from '../app.js';
 import { AuthzRole } from '../auth/authz.js';

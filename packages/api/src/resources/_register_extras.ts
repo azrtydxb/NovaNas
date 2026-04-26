@@ -4,7 +4,7 @@ import { type Kind, canRead, canWrite } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
 import { writeAudit } from '../services/audit.js';
 import { CrdApiError } from '../services/crd.js';
-import { isNotFound as isResourceNotFound, isResourceApiError } from '../services/resource.js';
+import { isResourceApiError, isNotFound as isResourceNotFound } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 
 /**

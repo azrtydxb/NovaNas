@@ -17,7 +17,19 @@
   },
   "devDependencies": {
     "@biomejs/biome": "~1.9.0",
+    "@electric-sql/pglite": "^0.4.4",
     "nx": "~20.0.0",
     "typescript": "~5.6.0"
+  },
+  "pnpm": {
+    "//": "Force a single drizzle-orm install across the workspace. With @electric-sql/pglite as a devDep in the api package, pnpm would otherwise generate two peer-resolved instances that TypeScript treats as different modules and refuses to unify in the cross-package type graph.",
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "drizzle-orm": "0.36.4"
+      }
+    },
+    "overrides": {
+      "drizzle-orm": "0.36.4"
+    }
   }
 }

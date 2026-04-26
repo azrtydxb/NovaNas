@@ -181,7 +181,7 @@ export async function authRoutes(app: FastifyInstance, deps: AuthRouteDeps): Pro
     },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const body = PasswordLoginBody.parse(req.body);
-      let tokens;
+      let tokens: Awaited<ReturnType<typeof keycloak.passwordLogin>>;
       try {
         tokens = await keycloak.passwordLogin(body.username, body.password);
       } catch (err) {

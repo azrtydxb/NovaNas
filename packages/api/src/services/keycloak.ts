@@ -117,7 +117,8 @@ export async function createKeycloakClient(env: Env): Promise<KeycloakClient> {
       const tokens = (await res.json()) as Record<string, unknown>;
       // Decorate with the same helpers openid-client puts on its
       // authorizationCodeGrant return value (.claims()).
-      const decorated = tokens as client.TokenEndpointResponse & client.TokenEndpointResponseHelpers;
+      const decorated = tokens as client.TokenEndpointResponse &
+        client.TokenEndpointResponseHelpers;
       decorated.claims = () => {
         if (typeof tokens.id_token !== 'string') return undefined;
         const parts = tokens.id_token.split('.');

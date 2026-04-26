@@ -1,5 +1,5 @@
-import pino from "pino";
 import type { CustomObjectsApi } from '@kubernetes/client-node';
+import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type BuiltApp, buildApp } from '../app.js';
 import { AuthzRole } from '../auth/authz.js';

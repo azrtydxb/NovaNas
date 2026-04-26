@@ -4,7 +4,9 @@ import type { DbClient } from '../services/db.js';
 import { PgResource } from '../services/pg-resource.js';
 import { registerCrudRoutes } from './_register.js';
 
-export function buildServiceLevelObjectiveResource(db: DbClient): PgResource<ServiceLevelObjective> {
+export function buildServiceLevelObjectiveResource(
+  db: DbClient
+): PgResource<ServiceLevelObjective> {
   return new PgResource<ServiceLevelObjective>({
     db,
     apiVersion: 'novanas.io/v1alpha1',

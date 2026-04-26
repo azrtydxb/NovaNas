@@ -39,8 +39,7 @@ export function register(app: FastifyInstance, db: DbClient): void {
       for (const pool of existing.items) {
         if (pool.spec?.tier === tier) {
           throw new RegisterValidationError(
-            `Tier ${tier} is already used by pool '${pool.metadata.name}'. ` +
-              `Each pool must use a distinct performance tier.`
+            `Tier ${tier} is already used by pool '${pool.metadata.name}'. Each pool must use a distinct performance tier.`
           );
         }
       }

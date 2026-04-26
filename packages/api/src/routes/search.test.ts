@@ -15,13 +15,13 @@ describe('search route', () => {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'StoragePool',
       metadata: { name: 'pool-foo' },
-      spec: { tier: 'hot' },
+      spec: { tier: '1' },
     });
     await h.kube.seed('storagepools', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'StoragePool',
       metadata: { name: 'pool-bar', labels: { match: 'foo' } },
-      spec: { tier: 'cold' },
+      spec: { tier: '4' },
     });
     await h.kube.seed('datasets', {
       apiVersion: 'novanas.io/v1alpha1',

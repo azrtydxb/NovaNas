@@ -12,7 +12,17 @@ export async function datasetRoutes(app: FastifyInstance, db?: DbClient | null):
     { method: 'GET', url: '/api/v1/datasets', summary: 'List Datasets', tag: 'datasets' },
     { method: 'POST', url: '/api/v1/datasets', summary: 'Create a Dataset', tag: 'datasets' },
     { method: 'GET', url: '/api/v1/datasets/:name', summary: 'Get a Dataset', tag: 'datasets' },
-    { method: 'PATCH', url: '/api/v1/datasets/:name', summary: 'Update a Dataset', tag: 'datasets' },
-    { method: 'DELETE', url: '/api/v1/datasets/:name', summary: 'Delete a Dataset', tag: 'datasets' },
+    {
+      method: 'PATCH',
+      url: '/api/v1/datasets/:name',
+      summary: 'Update a Dataset',
+      tag: 'datasets',
+    },
+    {
+      method: 'DELETE',
+      url: '/api/v1/datasets/:name',
+      summary: 'Delete a Dataset',
+      tag: 'datasets',
+    },
   ]);
 }
