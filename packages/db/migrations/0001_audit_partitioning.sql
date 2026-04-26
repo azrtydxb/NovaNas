@@ -6,22 +6,46 @@
 -- NOTE: Partitioned tables in Postgres require the partition key to be part
 -- of the primary key; we therefore drop the old single-column PK and replace
 -- it with a composite (id, timestamp) PK.
+--
+-- Made idempotent (#43): on fresh installs there is no pre-existing
+-- audit_log to migrate, so the legacy stash + DROP are skipped. The
+-- baseline migration in 0003_baseline_schema.sql creates the
+-- partitioned shape directly for fresh installs.
 
 BEGIN;
 
--- Stash existing rows so we can rehydrate into the partitioned parent.
-CREATE TABLE IF NOT EXISTS audit_log__legacy (LIKE audit_log INCLUDING ALL);
-INSERT INTO audit_log__legacy SELECT * FROM audit_log;
+-- Only run the legacy-to-partitioned conversion if a non-partitioned
+-- audit_log exists. PARTITIONED tables show up in pg_partitioned_table;
+-- their absence + presence in pg_class means "legacy table to migrate."
+DO $migrate$
+DECLARE
+  has_legacy boolean;
+BEGIN
+  SELECT EXISTS(
+    SELECT 1 FROM pg_class c
+    LEFT JOIN pg_partitioned_table p ON p.partrelid = c.oid
+    WHERE c.relname = 'audit_log' AND c.relkind = 'r' AND p.partrelid IS NULL
+  ) INTO has_legacy;
 
--- Drop dependent indexes + the original table.
-DROP INDEX IF EXISTS audit_log_timestamp_actor_idx;
-DROP INDEX IF EXISTS audit_log_resource_idx;
-DROP INDEX IF EXISTS audit_log_timestamp_idx;
-DROP INDEX IF EXISTS audit_log_action_idx;
-DROP TABLE audit_log;
+  IF NOT has_legacy THEN
+    RETURN;
+  END IF;
 
--- Recreate as a PARTITION BY RANGE parent.
-CREATE TABLE audit_log (
+  CREATE TABLE IF NOT EXISTS audit_log__legacy (LIKE audit_log INCLUDING ALL);
+  INSERT INTO audit_log__legacy SELECT * FROM audit_log;
+
+  DROP INDEX IF EXISTS audit_log_timestamp_actor_idx;
+  DROP INDEX IF EXISTS audit_log_resource_idx;
+  DROP INDEX IF EXISTS audit_log_timestamp_idx;
+  DROP INDEX IF EXISTS audit_log_action_idx;
+  DROP TABLE audit_log;
+END
+$migrate$;
+
+-- Recreate as a PARTITION BY RANGE parent. IF NOT EXISTS so a fresh
+-- install (where 0003 might run first, depending on journal order)
+-- doesn't double-create.
+CREATE TABLE IF NOT EXISTS audit_log (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   "timestamp" timestamptz NOT NULL DEFAULT now(),
   actor_id uuid,
@@ -78,18 +102,25 @@ SELECT novanas_create_audit_partition((date_trunc('month', now()) + interval '1 
 SELECT novanas_create_audit_partition((date_trunc('month', now()) + interval '2 month')::date);
 SELECT novanas_create_audit_partition((date_trunc('month', now()) + interval '3 month')::date);
 
--- Rehydrate legacy rows — each one lands in the matching partition. Older
--- rows (outside any existing partition) are routed into a catch-all
--- "default" partition so we don't error on historical data.
+-- Catch-all "default" partition for rows whose timestamp falls outside
+-- the bootstrapped range (e.g. legacy rows from before partitioning).
 CREATE TABLE IF NOT EXISTS audit_log_default PARTITION OF audit_log DEFAULT;
 
-INSERT INTO audit_log
-  (id, "timestamp", actor_id, actor_type, action, resource_kind,
-   resource_name, resource_namespace, payload, outcome, source_ip, details)
-SELECT id, "timestamp", actor_id, actor_type, action, resource_kind,
-       resource_name, resource_namespace, payload, outcome, source_ip, details
-FROM audit_log__legacy;
+-- Rehydrate legacy rows only if the legacy stash exists (skipped on
+-- fresh installs by the DO block above).
+DO $rehydrate$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log__legacy') THEN
+    INSERT INTO audit_log
+      (id, "timestamp", actor_id, actor_type, action, resource_kind,
+       resource_name, resource_namespace, payload, outcome, source_ip, details)
+    SELECT id, "timestamp", actor_id, actor_type, action, resource_kind,
+           resource_name, resource_namespace, payload, outcome, source_ip, details
+    FROM audit_log__legacy;
 
-DROP TABLE audit_log__legacy;
+    DROP TABLE audit_log__legacy;
+  END IF;
+END
+$rehydrate$;
 
 COMMIT;

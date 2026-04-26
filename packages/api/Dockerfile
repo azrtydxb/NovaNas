@@ -51,6 +51,10 @@ ENV NODE_ENV=production \
 
 COPY --from=build --chown=nonroot:nonroot /deploy/dist/bundle.js /app/api.js
 COPY --from=build --chown=nonroot:nonroot /deploy/node_modules /app/node_modules
+# Drizzle migrations applied on api startup (#43). Ship the SQL files
+# alongside the bundle; api/src/index.ts points the migrator at this
+# path before serving any request.
+COPY --from=build --chown=nonroot:nonroot /app/packages/db/migrations /app/migrations
 
 USER nonroot:nonroot
 EXPOSE 8080
