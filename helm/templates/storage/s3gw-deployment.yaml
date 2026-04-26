@@ -25,9 +25,19 @@ spec:
           image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.s3gw.image) }}
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.s3gw.image) }}
           command: ["/usr/local/bin/novanas-storage-s3gw"]
+          # Flag set per storage/cmd/s3gw/main.go (#38).
           args:
-            - --listen=:{{ .Values.storage.s3gw.service.port }}
-            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            - -listen=:{{ .Values.storage.s3gw.service.port }}
+            - -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            - -agent-addr=novanas-storage-agent.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.agent.service.grpcPort }}
+          envFrom:
+            - secretRef:
+                # access-key/secret-key sourced from a Secret rather than
+                # baked into args. Operator pre-creates it as part of an
+                # ObjectStore reconcile, or chart bootstrap when s3gw is
+                # the default cluster ObjectStore.
+                name: {{ .Values.storage.s3gw.credentialsSecret | default "novanas-s3gw-credentials" }}
+                optional: true
           ports:
             - name: s3
               containerPort: {{ .Values.storage.s3gw.service.port }}

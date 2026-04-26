@@ -22,10 +22,19 @@ spec:
         - name: csi-node
           image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.csi.node.image) }}
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.csi.node.image) }}
-          command: ["/usr/local/bin/novanas-storage-csi"]
+          command: ["/bin/sh", "-c"]
+          # Flag set per storage/cmd/csi/main.go (#38). The same binary
+          # serves the controller and the node CSI plugin; the role is
+          # decided by the unix socket the kubelet/sidecars connect to,
+          # not by an explicit -mode flag.
           args:
-            - --mode=node
-            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            - exec /usr/local/bin/novanas-storage-csi
+              -endpoint=unix:///csi/csi.sock
+              -node-id=$NODE_ID
+              -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+          env:
+            - name: NODE_ID
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
           securityContext:
             privileged: true
             capabilities:

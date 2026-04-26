@@ -26,10 +26,23 @@ spec:
         - name: agent
           image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.agent.image) }}
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.agent.image) }}
-          command: ["/usr/local/bin/novanas-storage-agent"]
+          command: ["/bin/sh", "-c"]
+          # Flag set per storage/cmd/agent/main.go (#38). Host/pod IPs
+          # come from the downward API; substituted in by sh because
+          # K8s args don't shell-expand $(...) on their own at runtime.
           args:
-            - --grpc-port={{ .Values.storage.agent.service.grpcPort }}
-            - --data-dir={{ .Values.storage.agent.dataDir }}
+            - exec /usr/local/bin/novanas-storage-agent
+              -listen=:{{ .Values.storage.agent.service.grpcPort }}
+              -host-ip=$HOST_IP
+              -pod-ip=$POD_IP
+              -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+              -dataplane-addr={{ .Values.storage.agent.dataplaneAddr | default "localhost:9500" }}
+              -spdk-base-bdev={{ .Values.storage.agent.spdkBaseBdev | default "novanas_pool" }}
+          env:
+            - name: HOST_IP
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
           ports:
             - name: grpc
               containerPort: {{ .Values.storage.agent.service.grpcPort }}

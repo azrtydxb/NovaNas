@@ -73,24 +73,63 @@ The single most visible part of the product. A NAS lives or dies on its UI.
 - **Domain shapes**: `/api/v1/datasets`, `/api/v1/shares`, `/api/v1/apps`, `/api/v1/pools`, `/api/v1/disks` — not CRD names
 - **Composite operations**: single call creating dataset + share + snapshot schedule, transactional best-effort
 - **Authoritative authorization**: resolves Keycloak token, checks user's scope, runs only what they're allowed to
-- **Auxiliary state** in Postgres: sessions (mirrored from Redis for persistence), preferences, audit log, job/task history, notification history, app catalog cache, metric rollups
+- **Authoritative store** in Postgres: every business object (Datasets, Shares, Pools, Disks, Snapshots, Users, Groups, ApiTokens, Certificates, KmsKeys, network resources, …) plus sessions, audit log, jobs, preferences, app-catalog cache, metric rollups
 - **Long-running op tracking**: jobs table; K8s events integrated; WebSocket subscription per job
 - **Proxy endpoints**: SPICE over WS, log tailing, admin shell (via `kubectl exec` equivalent, audited)
 
 ## Where data lives
 
+NovaNas's source-of-truth model: **Postgres is the source of truth for every business object**. `packages/api` is the only Postgres client. Kubernetes is the runtime that hosts our containers; it is *not* a database. CRDs that survive in the system are projection targets — workloads K8s itself runs (KubeVirt VMs, Helm-installed AppInstances, novanet/novaedge controllers) — not where business state lives.
+
 | Data | Home | Durability |
 |---|---|---|
-| CRDs (Datasets, Shares, Pools, ...) | etcd (via k3s) | k3s snapshots + config backup |
-| Users, groups, roles | Keycloak → Postgres | Postgres dump in config backup |
-| Secrets, DKs, certs | OpenBao → Postgres | OpenBao snapshot + sealed unseal keys |
-| API state (sessions, audit, jobs, prefs) | Postgres (API server schema) | Postgres dump |
-| Session tokens, rate limits, pub/sub | Redis | Ephemeral; rebuilds on restart |
+| Business objects (Datasets, Shares, Pools, Disks, Snapshots, Users, Groups, ApiTokens, Certificates, KmsKeys, Bonds, Vlans, …) | Postgres `resources` polymorphic table — see `packages/db/src/schema/resources.ts` | Postgres dump |
+| Identity glue | Keycloak (auth + group membership) → Postgres mirror | Postgres dump in config backup |
+| Secrets, DKs, internal CA | OpenBao | OpenBao snapshot + TPM-/KMS-sealed unseal keys |
+| Sessions, audit, jobs, prefs, app-catalog cache, metric rollups | Postgres (own schemas under `packages/db/src/schema/`) | Postgres dump |
+| Session tokens, rate limits, WebSocket pub/sub | Redis | Ephemeral; rebuilds on restart |
+| Workload-producing CRDs (KubeVirt VirtualMachine, AppInstance, NfsServer/SmbServer Pods, Ingress, FirewallRule, …) | etcd via kube-apiserver | k3s snapshots; same lifecycle as Pods |
 | Chunk metadata (placement, volume maps) | BadgerDB on chunk engine (stored as chunks) | Storage engine |
 | User data (volumes, buckets) | Chunk engine on data disks | Protection policy |
 | Metrics, logs, traces | Prometheus / Loki / Tempo on NovaNas buckets | Self-hosted on chunk engine |
 
 Postgres is on the **persistent partition of the OS disk** — survives chunk-engine issues; API stays up for diagnostics even during storage failures.
+
+## Service-to-service auth (in-cluster)
+
+Components that aren't a browser — disk-agent, storage-meta, storage-agent, samba/ganesha sidecar pollers, etc. — talk to the API the same way: HTTP request with their pod's projected ServiceAccount JWT in `Authorization: Bearer …`. The API forwards the token to the kube-apiserver's TokenReview endpoint, which verifies it and returns the SA identity. The mapping from `system:serviceaccount:<ns>:<sa>` to an internal NovaNas principal (with kind-targeted read/write scopes) lives in [`packages/api/src/auth/tokenreview.ts`](../packages/api/src/auth/tokenreview.ts). No new credentials are minted — we ride on the SA tokens kubelet already projects into every pod.
+
+Why TokenReview rather than a separate token system: there's exactly one set of credentials per pod, with rotation handled by kubelet, and the kube-apiserver is already a trusted authority in this cluster. Adding a parallel token store buys nothing.
+
+## Control flow
+
+```
+        ┌─────────────────────────────────────────────┐
+        │  packages/api  (Fastify, source of truth)   │
+        │                                             │
+        │     ┌───────────┐      ┌───────────────┐    │
+        │     │ PgResource│◄────►│   Postgres    │    │
+        │     └─────▲─────┘      └───────────────┘    │
+        │           │                                 │
+        │     ┌─────┴─────┐                           │
+        │     │ afterCreate│                          │
+        │     │ /Patch hooks: synchronous projection  │
+        │     │ to Keycloak / OpenBao / cert-manager  │
+        │     └───────────┘                           │
+        └────────▲───────────▲──────────────▲─────────┘
+                 │ session   │ Bearer JWT   │ kubectl
+                 │ cookie    │ (TokenReview)│ (admin only)
+                 │           │              │
+        ┌────────┴───┐  ┌────┴──────────┐  ┌┴──────────────┐
+        │ Browser SPA│  │ disk-agent    │  │ K8s workloads │
+        │ (TanStack) │  │ storage-*     │  │ that consume  │
+        │            │  │ ganesha/samba │  │ surviving CRDs│
+        │            │  │ network agents│  │ (KubeVirt,    │
+        │            │  │ (poll API)    │  │  Helm, etc.)  │
+        └────────────┘  └───────────────┘  └───────────────┘
+```
+
+Writes always start at the API. Postgres commits before any side effect runs. Side effects (Keycloak admin call, OpenBao Transit key creation, cert-manager Certificate submission, ConfigMap or sidecar-rendered config file) are best-effort: failures log but don't roll back the Postgres write. Eventual consistency on the projection side is reached either via the next API write touching that resource, or via an out-of-band reconciler.
 
 ## Auth flow
 

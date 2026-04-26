@@ -25,9 +25,12 @@ spec:
           image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.csi.controller.image) }}
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.csi.controller.image) }}
           command: ["/usr/local/bin/novanas-storage-csi"]
+          # Flag set per storage/cmd/csi/main.go (#38). Controller mode
+          # uses the gRPC endpoint over TCP (rather than the unix socket
+          # the node plugin uses for kubelet).
           args:
-            - --mode=controller
-            - --meta-endpoint=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
+            - -endpoint=tcp://0.0.0.0:9810
+            - -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
           resources:
             {{- toYaml .Values.storage.csi.controller.resources | nindent 12 }}
           securityContext:

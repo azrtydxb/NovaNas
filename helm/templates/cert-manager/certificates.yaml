@@ -49,6 +49,34 @@ spec:
     group: cert-manager.io
 {{- end }}
 
+{{- /* ---- storage admission webhook cert ------------------------ */}}
+{{- if .Values.storage.webhook.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: novanas-storage-webhook-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "storage-webhook") | nindent 4 }}
+spec:
+  secretName: {{ .Values.storage.webhook.tlsSecretName | default "novanas-storage-webhook-tls" }}
+  duration: 8760h     # 1 year
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    - novanas-storage-webhook
+    - novanas-storage-webhook.{{ $ns }}
+    - novanas-storage-webhook.{{ $ns }}.svc
+    - novanas-storage-webhook.{{ $ns }}.svc.cluster.local
+  issuerRef:
+    name: novanas-selfsigned
+    kind: ClusterIssuer
+    group: cert-manager.io
+{{- end }}
+
 {{- /* ---- ingress cert ------------------------------------------- */}}
 {{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) }}
 {{- $issuer := .Values.certManager.ingressIssuer | default "selfsigned" }}

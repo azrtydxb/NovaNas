@@ -123,7 +123,15 @@ storage:
     persistence:
       enabled: true
       size: 20Gi
-      storageClass: ""  # hostPath fallback if empty
+      # storage-meta's PVC must NOT use the NovaNas CSI (the chunk
+      # engine doesn't exist yet on first install — chicken-and-egg
+      # if meta's bootstrap depends on it). #46. Default to whatever
+      # node-local provisioner the underlying cluster ships:
+      #   - k3s: `local-path` (built-in)
+      #   - kubeadm + local-static-provisioner: `local-storage`
+      #   - cloud: any non-NovaNas StorageClass (gp3/standard/etc.)
+      # Empty string falls back to the cluster default StorageClass.
+      storageClass: "local-path"
     # Metadata-as-chunks mode is a forward-looking scheme (see A4). Default off.
     chunkBacked:
       enabled: false
@@ -183,6 +191,10 @@ storage:
       repository: novanas/storage-webhook
       tag: ""
     replicas: 1
+    # cert-manager mints the TLS material into this Secret; the
+    # deployment mounts it at /etc/webhook-cert.
+    tlsSecretName: novanas-storage-webhook-tls
+    resources: {}
   s3gw:
     enabled: true
     image:

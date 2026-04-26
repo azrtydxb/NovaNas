@@ -25,9 +25,30 @@ spec:
           image: {{ include "novanas.image" (dict "ctx" . "image" .Values.storage.webhook.image) }}
           imagePullPolicy: {{ include "novanas.imagePullPolicy" (dict "ctx" . "image" .Values.storage.webhook.image) }}
           command: ["/usr/local/bin/novanas-storage-webhook"]
+          # Flag set per storage/cmd/webhook/main.go (#38). TLS cert is
+          # issued by cert-manager (see cert-manager/certificates.yaml)
+          # and mounted from the novanas-storage-webhook-tls Secret.
+          args:
+            - -port=9443
+            - -tls-cert=/etc/webhook-cert/tls.crt
+            - -tls-key=/etc/webhook-cert/tls.key
+            - -metrics-bind-address=:8080
+            - -health-probe-bind-address=:8081
           ports:
             - name: https
               containerPort: 9443
+            - name: metrics
+              containerPort: 8080
+          resources:
+            {{- toYaml .Values.storage.webhook.resources | nindent 12 }}
           securityContext:
             {{- include "novanas.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: webhook-tls
+              mountPath: /etc/webhook-cert
+              readOnly: true
+      volumes:
+        - name: webhook-tls
+          secret:
+            secretName: {{ .Values.storage.webhook.tlsSecretName | default "novanas-storage-webhook-tls" }}
 {{- end }}
