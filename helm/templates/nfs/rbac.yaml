@@ -1,0 +1,17 @@
+{{/*
+ServiceAccount for the nfs-ganesha Pod. The Pod's projected JWT is
+the Bearer credential its API-config-poller sidecar (#55) presents
+to packages/api so it can read /api/v1/{nfs-servers,shares}.
+TokenReview maps system:serviceaccount:<ns>:novanas-nfs to the
+internal:nfs-ganesha principal — see packages/api/src/auth/
+tokenreview.ts.
+*/}}
+{{- if .Values.nfs.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-nfs
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "nfs") | nindent 4 }}
+{{- end }}

@@ -1,0 +1,16 @@
+{{/*
+ServiceAccount for the samba Pod. The Pod's projected JWT is the
+Bearer credential its API-config-poller sidecar (#55) presents to
+packages/api so it can read /api/v1/{smb-servers,shares}.
+TokenReview maps system:serviceaccount:<ns>:novanas-smb to the
+internal:samba principal — see packages/api/src/auth/tokenreview.ts.
+*/}}
+{{- if .Values.smb.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novanas-smb
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "smb") | nindent 4 }}
+{{- end }}

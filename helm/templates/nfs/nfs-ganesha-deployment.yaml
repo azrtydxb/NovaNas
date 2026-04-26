@@ -1,0 +1,53 @@
+{{/*
+NFS-Ganesha server Pod.
+
+Runs upstream nfs-ganesha userspace NFSv3/v4 server in a container.
+Replaces the previous privileged-host-knfsd DaemonSet ("our own
+build of kubernetes/nfs"). Configuration comes from the NovaNas API
+(NfsServer + Share rows) — a polling sidecar will read
+/api/v1/{nfs-servers,shares} via TokenReview-authenticated SA JWT
+and write /etc/ganesha/ganesha.conf, then SIGHUP ganesha.nfsd.
+The sidecar is tracked in #55; until it ships the Pod runs with
+stock config and exports nothing.
+*/}}
+{{- if .Values.nfs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novanas-nfs
+  namespace: {{ include "novanas.systemNamespace" . }}
+  labels:
+    {{- include "novanas.componentLabels" (dict "ctx" . "component" "nfs") | nindent 4 }}
+spec:
+  replicas: {{ .Values.nfs.replicas }}
+  selector:
+    matchLabels:
+      {{- include "novanas.selectorLabels" (dict "ctx" . "component" "nfs") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "novanas.selectorLabels" (dict "ctx" . "component" "nfs") | nindent 8 }}
+    spec:
+      serviceAccountName: novanas-nfs
+      {{- include "novanas.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: ganesha
+          image: "{{ .Values.nfs.image.registry }}/{{ .Values.nfs.image.repository }}:{{ .Values.nfs.image.tag }}"
+          imagePullPolicy: {{ .Values.nfs.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: nfs
+              containerPort: 2049
+              protocol: TCP
+            - name: rpcbind
+              containerPort: 111
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.nfs.resources | nindent 12 }}
+          securityContext:
+            # nfs-ganesha needs SYS_ADMIN for nfs4 mount-flagged dentries
+            # and DAC_READ_SEARCH to traverse exported filesystems.
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["SYS_ADMIN", "DAC_READ_SEARCH", "SETUID", "SETGID"]
+              drop: ["ALL"]
+{{- end }}

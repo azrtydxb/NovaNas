@@ -216,11 +216,40 @@ storage:
 # Access protocols
 # -----------------------------------------------------------------------------
 
-# NFS-Ganesha and Samba run on the host directly, not as Pods.
-# NovaNas API holds the Share + NfsServer + SmbServer config rows;
-# the host-side config-writer agent (#55) renders ganesha.conf /
-# smb.conf and reloads the services. The chart no longer ships a
-# nfs/smb DaemonSet or Deployment.
+# NFS / SMB Pods run upstream nfs-ganesha and samba (no in-house
+# build). Configuration is sourced from the NovaNas API (NfsServer +
+# SmbServer + Share rows in Postgres) — a poller sidecar reads
+# /api/v1/{nfs-servers,smb-servers,shares} and writes ganesha.conf /
+# smb.conf into the Pod, then SIGHUPs the daemon. Sidecar is tracked
+# in #55; until it ships the Pod runs with stock config.
+
+smb:
+  enabled: true
+  image:
+    # Upstream-community samba container. Override to pin a tag /
+    # registry mirror as needed.
+    registry: ghcr.io
+    repository: servercontainers/samba
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
+
+nfs:
+  enabled: true
+  image:
+    # Upstream nfs-ganesha; the Ceph community ships a maintained
+    # build at quay.io/ceph/nfs-ganesha. Override to pin / mirror.
+    registry: quay.io
+    repository: ceph/nfs-ganesha
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
 
 # -----------------------------------------------------------------------------
 # disk-agent — node-local DaemonSet that scans /sys/block and creates/updates
