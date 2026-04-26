@@ -152,17 +152,15 @@ func BootstrapChunkBacked(ctx context.Context, cfg BootstrapConfig, src Superblo
 	report.MetadataVolumeRoot = winner.MetaVolumeRootChunk
 	report.MetadataVolumeVer = winner.MetaVolumeVersion
 
-	// TODO(integration): once the NBD-backed BlockVolume export exists in
-	// storage/dataplane/nbd/, this function will additionally:
-	//   1. Assemble the metadata BlockVolume from the chunk list rooted at
-	//      report.MetadataVolumeRoot.
-	//   2. Export it as a local block device (/dev/nbdN or a loopback).
-	//   3. mkfs.xfs on first boot; mount at cfg.MetaMountPath.
-	//   4. Return, letting the caller open BadgerDB on the mount.
-	//
-	// Until then, the report suffices to prove superblock → locator flow,
-	// and the caller must either fall back to BootstrapLocal or expose
-	// the report via an admin API.
+	// The NBD-backed BlockVolume export is implemented in
+	// storage/dataplane/src/transport/dataplane_service.rs::
+	// export_metadata_volume_nbd (gated behind the spdk-sys feature)
+	// and consumed via DataplaneNBDMounter (see cmd/meta/main.go).
+	// The mount + mkfs + Badger-open stages happen in
+	// bootstrap_mount.go::MountAndOpen — see
+	// NewRaftStoreChunkBackedMounted for the fully-wired entry point.
+	// This function is the pure superblock-resolution step; callers
+	// chain it with the mounter via bootstrapWithMounter (#13).
 
 	return report, nil
 }
@@ -177,8 +175,12 @@ func NewRaftStoreChunkBacked(ctx context.Context, nodeID string, cfg BootstrapCo
 	if err != nil {
 		return nil, nil, err
 	}
-	// TODO(integration): once the mount step is wired, pass the mount path
-	// (cfg.MetaMountPath) here instead of cfg.LocalDataDir.
+	// The mount step is wired in bootstrap_mount.go. This legacy
+	// helper is preserved for tests that exercise the bootstrap
+	// resolution path without the SPDK mounter; production callers
+	// use NewRaftStoreChunkBackedMounted, which opens BadgerDB on
+	// the mounted volume (see bootstrap_mount.go) and falls back to
+	// LocalDataDir only when the mounter is unsupported.
 	store, err := NewRaftStore(RaftConfig{
 		NodeID:  nodeID,
 		DataDir: cfg.LocalDataDir,

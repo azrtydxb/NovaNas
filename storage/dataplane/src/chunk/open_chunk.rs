@@ -203,17 +203,92 @@ impl OpenChunk {
     }
 }
 
+/// Replicator is the seam where CRUSH-driven fan-out is wired (#14).
+///
+/// On every `append`, the registry calls `replicate_append`; on
+/// `seal`, `replicate_seal`. Implementations are responsible for:
+///
+///  - Picking replicas via CRUSH for the (pool_id, chunk_id) tuple.
+///  - Fanning the operation to each replica synchronously — the
+///    registry blocks the caller until acks return.
+///  - Surfacing replica out-of-sync via the returned `Result`.
+///
+/// The registry uses a `NoopReplicator` when no replicator is set,
+/// preserving the legacy single-node behavior. Production code wires
+/// `GrpcReplicator` (lives in transport/, separate change).
+pub trait Replicator: Send + Sync + std::fmt::Debug {
+    /// Fan an append to replicas. Called *after* the local append
+    /// succeeds; replication is best-effort if it fails the registry
+    /// will surface the error and the caller can choose to roll back.
+    fn replicate_append(
+        &self,
+        chunk: &OpenChunkId,
+        offset: usize,
+        data: &[u8],
+    ) -> Result<(), OpenChunkError>;
+
+    /// Fan a seal to replicas. ALL replicas must ack before the seal
+    /// is considered complete (#14 acceptance: "all replicas must ack
+    /// the seal before returning"). Returns Err on partial acks; the
+    /// caller treats the seal as failed and the chunk stays open for
+    /// retry.
+    fn replicate_seal(
+        &self,
+        chunk: &OpenChunkId,
+        sealed: &[u8],
+    ) -> Result<(), OpenChunkError>;
+}
+
+/// No-op Replicator: used in tests and single-node deployments.
+#[derive(Debug, Default)]
+pub struct NoopReplicator;
+
+impl Replicator for NoopReplicator {
+    fn replicate_append(
+        &self,
+        _chunk: &OpenChunkId,
+        _offset: usize,
+        _data: &[u8],
+    ) -> Result<(), OpenChunkError> {
+        Ok(())
+    }
+
+    fn replicate_seal(&self, _chunk: &OpenChunkId, _sealed: &[u8]) -> Result<(), OpenChunkError> {
+        Ok(())
+    }
+}
+
 /// In-memory registry of open chunks. Thread-safe via a single Mutex;
 /// suitable for the modest number of concurrently-open chunks
 /// (typically O(number of pools) for WAL traffic).
-#[derive(Default)]
 pub struct OpenChunkRegistry {
     inner: Mutex<HashMap<OpenChunkId, OpenChunk>>,
+    replicator: Box<dyn Replicator>,
+}
+
+impl Default for OpenChunkRegistry {
+    fn default() -> Self {
+        Self {
+            inner: Mutex::new(HashMap::new()),
+            replicator: Box::new(NoopReplicator),
+        }
+    }
 }
 
 impl OpenChunkRegistry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Build a registry with a custom Replicator (e.g. the gRPC
+    /// fan-out used in multi-node deployments). The replicator is
+    /// invoked synchronously inside `append` and `seal` so callers
+    /// observe the same ordering as a single-node store.
+    pub fn with_replicator(replicator: Box<dyn Replicator>) -> Self {
+        Self {
+            inner: Mutex::new(HashMap::new()),
+            replicator,
+        }
     }
 
     /// Allocate a new open chunk and return its id.
@@ -228,28 +303,48 @@ impl OpenChunkRegistry {
         Ok(id)
     }
 
-    /// Append to the chunk with the given id.
+    /// Append to the chunk with the given id, then fan the append
+    /// out to replicas (#14). The fan-out is synchronous so the
+    /// caller observes a single linearisable order — when this
+    /// returns Ok the data is durable on every selected replica.
     pub fn append(
         &self,
         id: &OpenChunkId,
         offset: usize,
         data: &[u8],
     ) -> Result<usize, OpenChunkError> {
-        let mut g = self.inner.lock().unwrap();
-        let c = g
-            .get_mut(id)
-            .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
-        c.append(offset, data)?;
-        Ok(c.len())
+        let chunk_len = {
+            let mut g = self.inner.lock().unwrap();
+            let c = g
+                .get_mut(id)
+                .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
+            c.append(offset, data)?;
+            c.len()
+        };
+        // Replicate outside the lock — replicator may issue gRPC.
+        self.replicator.replicate_append(id, offset, data)?;
+        Ok(chunk_len)
     }
 
-    /// Seal the chunk and remove it from the registry.
+    /// Seal the chunk locally, fan the seal out to replicas, and
+    /// remove it from the registry once all replicas ack. If any
+    /// replica fails to ack, the chunk is reinstated so the caller
+    /// can retry (#14 acceptance).
     pub fn seal(&self, id: &OpenChunkId) -> Result<([u8; 32], Vec<u8>), OpenChunkError> {
-        let mut g = self.inner.lock().unwrap();
-        let mut c = g
-            .remove(id)
-            .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?;
-        c.seal()
+        let mut c = {
+            let mut g = self.inner.lock().unwrap();
+            g.remove(id)
+                .ok_or_else(|| OpenChunkError::NotFound(id.clone()))?
+        };
+        let result = c.seal()?;
+        if let Err(err) = self.replicator.replicate_seal(id, &result.1) {
+            // Roll back: the local seal is irreversible (state machine
+            // only goes one way), but we put the chunk back so a retry
+            // can re-issue the seal RPC against the same content.
+            self.inner.lock().unwrap().insert(id.clone(), c);
+            return Err(err);
+        }
+        Ok(result)
     }
 
     pub fn len(&self) -> usize {
