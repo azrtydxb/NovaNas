@@ -2,6 +2,7 @@ import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { Redis } from 'ioredis';
 import { type BuiltApp, buildApp } from '../app.js';
 import type { Env } from '../env.js';
+import type { DbClient } from '../services/db.js';
 import type { KeycloakClient } from '../services/keycloak.js';
 import type { AuthenticatedUser } from '../types.js';
 
@@ -56,11 +57,54 @@ export class FakeCustomObjectsApi {
     return b;
   }
 
-  seed(plural: string, obj: Record<string, unknown>, namespace?: string): void {
+  /**
+   * Seed a resource for a test. After the CRD-to-Postgres migration,
+   * migrated kinds (Disk, StoragePool, Dataset, …) are stored in
+   * pglite via the polymorphic `resources` table. Non-migrated kinds
+   * (Vm, AppInstance, network projections, etc.) still use the
+   * in-memory map. The plural→kind+migrated lookup is in
+   * MIGRATED_PLURALS at the bottom of this file.
+   */
+  async seed(plural: string, obj: Record<string, unknown>, namespace?: string): Promise<void> {
+    const migrated = MIGRATED_PLURALS[plural];
+    if (migrated && this.pgClient) {
+      const meta = (obj.metadata ?? {}) as {
+        name?: string;
+        namespace?: string;
+        labels?: Record<string, string>;
+        annotations?: Record<string, string>;
+      };
+      const name = meta.name ?? '';
+      const ns = namespace ?? meta.namespace ?? '';
+      await this.pgClient.query(
+        `INSERT INTO resources (kind, name, namespace, labels, annotations, spec, status)
+         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb)
+         ON CONFLICT (kind, namespace, name) DO UPDATE
+         SET labels = EXCLUDED.labels,
+             annotations = EXCLUDED.annotations,
+             spec = EXCLUDED.spec,
+             status = EXCLUDED.status,
+             revision = (resources.revision::int + 1)::text,
+             updated_at = now()`,
+        [
+          migrated,
+          name,
+          ns,
+          JSON.stringify(meta.labels ?? {}),
+          JSON.stringify(meta.annotations ?? {}),
+          JSON.stringify(obj.spec ?? {}),
+          JSON.stringify(obj.status ?? {}),
+        ]
+      );
+      return;
+    }
     const name = (obj.metadata as { name?: string } | undefined)?.name ?? '';
     const bucket = namespace ? this.nsBucket(namespace, plural) : this.clusterBucket(plural);
     bucket.set(name, obj);
   }
+
+  /** pglite handle for migrated kinds. Set by buildTestApp. */
+  pgClient?: import('@electric-sql/pglite').PGlite;
 
   // cluster-scoped
   async listClusterCustomObject(
@@ -285,14 +329,54 @@ export interface TestAppHandle {
 export async function buildTestApp(): Promise<TestAppHandle> {
   const kube = new FakeCustomObjectsApi();
   const redis = fakeRedis();
+  // Fastify v5 splits the logger config: a config object goes in
+  // `logger`, a pre-built pino instance in `loggerInstance`. Tests need
+  // the latter. Use a real pino in silent mode rather than a typed-as-
+  // never POJO that doesn't satisfy the BaseLogger interface.
+  const { default: pino } = await import('pino');
+
+  // In-memory Postgres for the migrated PgResource routes. pglite ships
+  // a wasm Postgres; drizzle-orm/pglite is a thin adapter. We cast to
+  // the postgres-js DbClient type because every call PgResource makes
+  // is structurally compatible — Drizzle's query builder is the same
+  // surface across adapters at runtime, just typed differently.
+  const { PGlite } = await import('@electric-sql/pglite');
+  const { drizzle: drizzlePglite } = await import('drizzle-orm/pglite');
+  const dbSchema = await import('@novanas/db');
+  const pgClient = new PGlite();
+  const db = drizzlePglite(pgClient, { schema: dbSchema }) as unknown as DbClient;
+  kube.pgClient = pgClient;
+  // Apply the resources-table migration (the one PgResource needs).
+  await pgClient.exec(`
+    CREATE TABLE IF NOT EXISTS resources (
+      kind        varchar(64)  NOT NULL,
+      name        varchar(253) NOT NULL,
+      namespace   varchar(253) NOT NULL DEFAULT '',
+      labels      jsonb        NOT NULL DEFAULT '{}'::jsonb,
+      annotations jsonb        NOT NULL DEFAULT '{}'::jsonb,
+      spec        jsonb        NOT NULL DEFAULT '{}'::jsonb,
+      status      jsonb        NOT NULL DEFAULT '{}'::jsonb,
+      revision    text         NOT NULL DEFAULT '1',
+      created_at  timestamptz  NOT NULL DEFAULT now(),
+      updated_at  timestamptz  NOT NULL DEFAULT now(),
+      deleted_at  timestamptz
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS resources_kind_namespace_name_idx
+      ON resources (kind, namespace, name);
+    CREATE INDEX IF NOT EXISTS resources_kind_idx ON resources (kind);
+    CREATE INDEX IF NOT EXISTS resources_updated_idx ON resources (updated_at);
+  `);
+
   const built = await buildApp({
     env: testEnv,
-    logger: { level: 'silent' } as never,
+    logger: pino({ level: 'silent' }),
     redis,
     keycloak: fakeKeycloak(),
     kubeCustom: kube as unknown as CustomObjectsApi,
+    db,
     disableSwagger: true,
     disablePubSub: true,
+    disableScheduledTasks: true,
   });
 
   async function authAs(user: Partial<AuthenticatedUser> & { username: string; roles: string[] }) {
@@ -324,3 +408,42 @@ export function cookieFor(built: BuiltApp, sid: string): string {
   const signed = built.app.signCookie(sid);
   return `${testEnv.SESSION_COOKIE_NAME}=${encodeURIComponent(signed)}`;
 }
+
+/**
+ * Plural → Kind for resources that have moved to Postgres. Used by
+ * FakeCustomObjectsApi.seed() to route writes to the right backend.
+ * Mirror of the migration commit list — when a new resource flips
+ * onto PgResource, add an entry here so its tests keep working.
+ */
+const MIGRATED_PLURALS: Record<string, string> = {
+  storagepools: 'StoragePool',
+  disks: 'Disk',
+  datasets: 'Dataset',
+  snapshots: 'Snapshot',
+  snapshotschedules: 'SnapshotSchedule',
+  scrubschedules: 'ScrubSchedule',
+  smartpolicies: 'SmartPolicy',
+  encryptionpolicies: 'EncryptionPolicy',
+  users: 'User',
+  groups: 'Group',
+  apitokens: 'ApiToken',
+  keycloakrealms: 'KeycloakRealm',
+  kmskeys: 'KmsKey',
+  certificates: 'Certificate',
+  appcatalogs: 'AppCatalog',
+  isolibraries: 'IsoLibrary',
+  buckets: 'Bucket',
+  bucketusers: 'BucketUser',
+  systemsettings: 'SystemSettings',
+  servicelevelobjectives: 'ServiceLevelObjective',
+  alertpolicies: 'AlertPolicy',
+  auditpolicies: 'AuditPolicy',
+  configbackuppolicies: 'ConfigBackupPolicy',
+  updatepolicies: 'UpdatePolicy',
+  upspolicies: 'UpsPolicy',
+  alertchannels: 'AlertChannel',
+  cloudbackuptargets: 'CloudBackupTarget',
+  cloudbackupjobs: 'CloudBackupJob',
+  replicationtargets: 'ReplicationTarget',
+  replicationjobs: 'ReplicationJob',
+};

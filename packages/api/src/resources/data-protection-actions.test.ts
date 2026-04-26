@@ -36,9 +36,9 @@ describe('data-protection action routes', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('certificates', sampleCert('letsencrypt'));
-    h.kube.seed('replicationjobs', sampleRepl('rep1'));
-    h.kube.seed('cloudbackupjobs', sampleCloudBackup('cb1'));
+    await h.kube.seed('certificates', sampleCert('letsencrypt'));
+    await h.kube.seed('replicationjobs', sampleRepl('rep1'));
+    await h.kube.seed('cloudbackupjobs', sampleCloudBackup('cb1'));
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     viewerSid = await h.authAs({ username: 'obs', roles: [AuthzRole.Viewer] });
   });

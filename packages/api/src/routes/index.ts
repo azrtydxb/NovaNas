@@ -121,7 +121,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await app.register(async (s) => datasetRoutes(s, db));
   await app.register(async (s) => bucketRoutes(s, db));
   await app.register(async (s) => diskRoutes(s, db));
-  await app.register(async (s) => snapshotRoutes(s, db));
+  await app.register(async (s) => snapshotRoutes(s, db, { jobs: deps.jobs ?? null }));
   await app.register(async (s) => userRoutes(s, db));
   await app.register(async (s) => bucketUserRoutes(s, db));
   await app.register(async (s) => appCatalogRoutes(s, db));

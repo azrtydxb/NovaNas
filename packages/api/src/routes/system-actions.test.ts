@@ -1,3 +1,4 @@
+import pino from "pino";
 import { randomUUID } from 'node:crypto';
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { Job } from '@novanas/db';
@@ -88,7 +89,7 @@ describe('system action routes (E1-API-Actions)', () => {
   beforeAll(async () => {
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       kubeCustom: new FakeCustomObjectsApi() as unknown as CustomObjectsApi,

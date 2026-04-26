@@ -1,3 +1,4 @@
+import pino from "pino";
 import { randomUUID } from 'node:crypto';
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { Job } from '@novanas/db';
@@ -121,7 +122,7 @@ describe('jobs routes', () => {
   beforeAll(async () => {
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       kubeCustom: new FakeCustomObjectsApi() as unknown as CustomObjectsApi,
@@ -191,7 +192,7 @@ describe('jobs routes', () => {
   it('returns 503 when db is not wired', async () => {
     const built2 = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       disableSwagger: true,

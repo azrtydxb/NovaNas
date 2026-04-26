@@ -18,7 +18,7 @@ describe('gpu-devices action routes', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('gpudevices', sampleGpu('gpu0'));
+    await h.kube.seed('gpudevices', sampleGpu('gpu0'));
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

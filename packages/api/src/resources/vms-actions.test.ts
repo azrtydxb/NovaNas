@@ -18,7 +18,7 @@ describe('vms action routes (E1-API-Actions)', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('vms', sampleVm('alice', 'vm1'), 'user-alice');
+    await h.kube.seed('vms', sampleVm('alice', 'vm1'), 'user-alice');
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
     viewerSid = await h.authAs({ username: 'obs', roles: [AuthzRole.Viewer] });
   });

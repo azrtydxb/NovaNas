@@ -18,7 +18,7 @@ describe('app-catalogs resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('appcatalogs', sample);
+    await h.kube.seed('appcatalogs', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

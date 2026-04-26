@@ -1,3 +1,4 @@
+import pino from "pino";
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type BuiltApp, buildApp } from '../app.js';
@@ -17,7 +18,7 @@ describe('system info/network/alerts/events routes', () => {
   beforeAll(async () => {
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       kubeCustom: new FakeCustomObjectsApi() as unknown as CustomObjectsApi,
@@ -108,7 +109,7 @@ describe('CRD routes fallback when kubeCustom is missing', () => {
   beforeAll(async () => {
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       disableSwagger: true,

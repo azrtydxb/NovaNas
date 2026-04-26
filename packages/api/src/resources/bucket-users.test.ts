@@ -18,7 +18,7 @@ describe('bucket-users resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('bucketusers', sample);
+    await h.kube.seed('bucketusers', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     viewerSid = await h.authAs({ username: 'vic', roles: [AuthzRole.Viewer] });
   });

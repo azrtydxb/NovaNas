@@ -18,7 +18,7 @@ describe('apps action routes (E1-API-Actions)', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('appinstances', sampleFor('alice', 'jelly'), 'user-alice');
+    await h.kube.seed('appinstances', sampleFor('alice', 'jelly'), 'user-alice');
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
     viewerSid = await h.authAs({ username: 'obs', roles: [AuthzRole.Viewer] });
   });

@@ -2,7 +2,7 @@ import { type UpdatePolicy, UpdatePolicySchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
 import type { DbClient } from '../services/db.js';
 import { PgResource } from '../services/pg-resource.js';
-import { registerCrudRoutes } from './_register.js';
+import { registerSingletonRoutes } from './_register_extras.js';
 
 export function buildUpdatePolicyResource(db: DbClient): PgResource<UpdatePolicy> {
   return new PgResource<UpdatePolicy>({
@@ -15,7 +15,7 @@ export function buildUpdatePolicyResource(db: DbClient): PgResource<UpdatePolicy
 }
 
 export function register(app: FastifyInstance, db: DbClient): void {
-  registerCrudRoutes<UpdatePolicy>({
+  registerSingletonRoutes<UpdatePolicy>({
     app,
     basePath: '/api/v1/update-policy',
     tag: 'update-policy',

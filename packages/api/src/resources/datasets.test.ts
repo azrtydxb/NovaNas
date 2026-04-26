@@ -16,7 +16,7 @@ describe('datasets resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('datasets', sample);
+    await h.kube.seed('datasets', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     viewerSid = await h.authAs({ username: 'vic', roles: [AuthzRole.Viewer] });
   });

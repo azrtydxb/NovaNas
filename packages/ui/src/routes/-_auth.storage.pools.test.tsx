@@ -38,7 +38,10 @@ describe('PoolsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('fast')).toBeInTheDocument();
     });
-    expect(screen.getByText('hot')).toBeInTheDocument();
+    // The Tier badge renders "Tier <value>"; match the inner span only.
+    const tierMatches = screen
+      .getAllByText((_content, el) => el?.tagName === 'SPAN' && el.textContent?.trim() === 'Tier hot');
+    expect(tierMatches.length).toBeGreaterThan(0);
   });
 
   it('shows empty state when no pools', async () => {

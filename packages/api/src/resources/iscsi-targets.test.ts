@@ -19,7 +19,7 @@ describe('iscsi-targets resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('iscsitargets', sample);
+    await h.kube.seed('iscsitargets', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

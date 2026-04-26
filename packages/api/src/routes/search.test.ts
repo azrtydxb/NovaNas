@@ -11,25 +11,25 @@ describe('search route', () => {
     h = await buildTestApp();
     // Seed a handful of resources so the cross-resource fan-out has something
     // to return.
-    h.kube.seed('storagepools', {
+    await h.kube.seed('storagepools', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'StoragePool',
       metadata: { name: 'pool-foo' },
       spec: { tier: 'hot' },
     });
-    h.kube.seed('storagepools', {
+    await h.kube.seed('storagepools', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'StoragePool',
       metadata: { name: 'pool-bar', labels: { match: 'foo' } },
       spec: { tier: 'cold' },
     });
-    h.kube.seed('datasets', {
+    await h.kube.seed('datasets', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'Dataset',
       metadata: { name: 'ds-foo-a' },
       spec: { pool: 'pool-foo', size: '10Gi', filesystem: 'xfs' },
     });
-    h.kube.seed('datasets', {
+    await h.kube.seed('datasets', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'Dataset',
       metadata: { name: 'unrelated' },

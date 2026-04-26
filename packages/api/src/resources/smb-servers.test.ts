@@ -16,7 +16,7 @@ describe('smb-servers resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('smbservers', sample);
+    await h.kube.seed('smbservers', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

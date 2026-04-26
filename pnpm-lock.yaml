@@ -59,9 +59,6 @@ importers:
       '@opentelemetry/sdk-node':
         specifier: ~0.55.0
         version: 0.55.0(@opentelemetry/api@1.9.1)
-      drizzle-orm:
-        specifier: ~0.36.0
-        version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5)
       fastify:
         specifier: ~5.0.0
         version: 5.0.0
@@ -84,12 +81,18 @@ importers:
         specifier: ~3.23.0
         version: 3.23.8
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.4.4
+        version: 0.4.4
       '@types/node':
         specifier: ~22.0.0
         version: 22.0.3
       '@types/ws':
         specifier: ~8.5.0
         version: 8.5.14
+      drizzle-orm:
+        specifier: ~0.36.4
+        version: 0.36.4(@electric-sql/pglite@0.4.4)(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5)
       esbuild:
         specifier: ~0.24.0
         version: 0.24.2
@@ -110,7 +113,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ~0.36.0
-        version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5)
+        version: 0.36.4(@electric-sql/pglite@0.4.4)(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5)
       postgres:
         specifier: ~3.4.0
         version: 3.4.9
@@ -502,6 +505,9 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+
+  '@electric-sql/pglite@0.4.4':
+    resolution: {integrity: sha512-g/6CWAJ4XOkObWCWAQ2IReZD8VvsDy3poRHSKvpRR2F96F8WJ3HVbjpso3gN7l0q6QPPgvxSSpl/qo5k8a7mkQ==}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -5897,6 +5903,8 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
+  '@electric-sql/pglite@0.4.4': {}
+
   '@emnapi/core@1.10.0':
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
@@ -8999,8 +9007,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5):
+  drizzle-orm@0.36.4(@electric-sql/pglite@0.4.4)(@opentelemetry/api@1.9.1)(@types/pg@8.6.1)(@types/react@19.0.14)(postgres@3.4.9)(react@19.0.5):
     optionalDependencies:
+      '@electric-sql/pglite': 0.4.4
       '@opentelemetry/api': 1.9.1
       '@types/pg': 8.6.1
       '@types/react': 19.0.14

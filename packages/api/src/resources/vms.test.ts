@@ -22,7 +22,7 @@ describe('vms resource (namespaced)', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('vms', sampleFor('alice', 'vm-a'), 'user-alice');
+    await h.kube.seed('vms', sampleFor('alice', 'vm-a'), 'user-alice');
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
     shareOnlySid = await h.authAs({ username: 'bob', roles: [AuthzRole.ShareOnly] });
   });

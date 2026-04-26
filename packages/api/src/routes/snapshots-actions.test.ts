@@ -1,3 +1,4 @@
+import pino from "pino";
 import { randomUUID } from 'node:crypto';
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { Job } from '@novanas/db';
@@ -84,7 +85,7 @@ describe('snapshot action routes (restore)', () => {
 
   beforeAll(async () => {
     const kube = new FakeCustomObjectsApi();
-    kube.seed('snapshots', {
+    await kube.seed('snapshots', {
       apiVersion: 'novanas.io/v1alpha1',
       kind: 'Snapshot',
       metadata: { name: 'snap1' },
@@ -92,7 +93,7 @@ describe('snapshot action routes (restore)', () => {
     });
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       kubeCustom: kube as unknown as CustomObjectsApi,

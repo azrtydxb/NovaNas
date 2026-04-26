@@ -16,7 +16,7 @@ describe('nfs-servers resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('nfsservers', sample);
+    await h.kube.seed('nfsservers', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

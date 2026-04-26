@@ -2,7 +2,7 @@ import { type ConfigBackupPolicy, ConfigBackupPolicySchema } from '@novanas/sche
 import type { FastifyInstance } from 'fastify';
 import type { DbClient } from '../services/db.js';
 import { PgResource } from '../services/pg-resource.js';
-import { registerCrudRoutes } from './_register.js';
+import { registerSingletonRoutes } from './_register_extras.js';
 
 export function buildConfigBackupPolicyResource(db: DbClient): PgResource<ConfigBackupPolicy> {
   return new PgResource<ConfigBackupPolicy>({
@@ -15,7 +15,7 @@ export function buildConfigBackupPolicyResource(db: DbClient): PgResource<Config
 }
 
 export function register(app: FastifyInstance, db: DbClient): void {
-  registerCrudRoutes<ConfigBackupPolicy>({
+  registerSingletonRoutes<ConfigBackupPolicy>({
     app,
     basePath: '/api/v1/config-backup-policy',
     tag: 'config-backup-policy',

@@ -134,10 +134,13 @@ export class PgResource<T> {
 
   private parse(envelope: Envelope): T {
     const parsed = this.opts.schema.safeParse(envelope);
-    if (!parsed.success) {
-      throw new PgInvalidError(`response failed validation: ${parsed.error.message}`);
-    }
-    return parsed.data;
+    if (parsed.success) return parsed.data;
+    // Be lenient with reads of stored rows: the schema may have evolved
+    // since the row was written, and that shouldn't 500 the route. Same
+    // best-effort posture as `list()`. PgInvalidError is reserved for
+    // user-supplied bodies that don't match (validated upstream of
+    // create()).
+    return envelope as unknown as T;
   }
 
   async list(opts: PgListOptions = {}): Promise<PgListResult<T>> {

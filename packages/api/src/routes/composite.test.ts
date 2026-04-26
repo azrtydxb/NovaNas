@@ -54,7 +54,7 @@ describe('composite routes', () => {
 
     it('rolls back dataset when a share fails', async () => {
       // Seed a conflicting share name so the second step fails with 409.
-      h.kube.seed('shares', {
+      await h.kube.seed('shares', {
         apiVersion: 'novanas.io/v1alpha1',
         kind: 'Share',
         metadata: { name: 'sh-conflict' },
@@ -129,7 +129,7 @@ describe('composite routes', () => {
 
     it('rolls back dataset when AppInstance creation fails', async () => {
       // Pre-seed a conflicting AppInstance.
-      h.kube.seed(
+      await h.kube.seed(
         'appinstances',
         {
           apiVersion: 'novanas.io/v1alpha1',
@@ -198,7 +198,7 @@ describe('composite routes', () => {
 
     it('rolls back disks when VM create fails', async () => {
       // Pre-seed a conflicting VM to force VM create to fail.
-      h.kube.seed(
+      await h.kube.seed(
         'vms',
         {
           apiVersion: 'novanas.io/v1alpha1',

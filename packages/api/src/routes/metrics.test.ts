@@ -1,3 +1,4 @@
+import pino from "pino";
 import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type BuiltApp, buildApp } from '../app.js';
@@ -46,7 +47,7 @@ describe('metrics routes', () => {
     const prom = createPromClient(env, { fetchImpl: fetchImpl as unknown as typeof fetch });
     built = await buildApp({
       env,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       kubeCustom: new FakeCustomObjectsApi() as unknown as CustomObjectsApi,
@@ -106,7 +107,7 @@ describe('metrics routes', () => {
   it('returns 503 when prom client missing', async () => {
     const built2 = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       disableSwagger: true,

@@ -2,7 +2,7 @@ import { type SystemSettings, SystemSettingsSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
 import type { DbClient } from '../services/db.js';
 import { PgResource } from '../services/pg-resource.js';
-import { registerCrudRoutes } from './_register.js';
+import { registerSingletonRoutes } from './_register_extras.js';
 
 export function buildSystemSettingsResource(db: DbClient): PgResource<SystemSettings> {
   return new PgResource<SystemSettings>({
@@ -15,9 +15,9 @@ export function buildSystemSettingsResource(db: DbClient): PgResource<SystemSett
 }
 
 export function register(app: FastifyInstance, db: DbClient): void {
-  registerCrudRoutes<SystemSettings>({
+  registerSingletonRoutes<SystemSettings>({
     app,
-    basePath: '/api/v1/system-settings',
+    basePath: '/api/v1/system/settings',
     tag: 'system-settings',
     kind: 'SystemSettings',
     resource: buildSystemSettingsResource(db),

@@ -16,7 +16,7 @@ describe('pools resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('storagepools', sample);
+    await h.kube.seed('storagepools', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

@@ -19,7 +19,7 @@ describe('apps resource (namespaced)', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('appinstances', sampleFor('alice', 'app-a'), 'user-alice');
+    await h.kube.seed('appinstances', sampleFor('alice', 'app-a'), 'user-alice');
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
     shareOnlySid = await h.authAs({ username: 'bob', roles: [AuthzRole.ShareOnly] });

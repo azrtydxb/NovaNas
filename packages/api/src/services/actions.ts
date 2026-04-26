@@ -79,6 +79,22 @@ export async function setAnnotation(
 }
 
 /**
+ * Set an annotation on a Postgres-backed resource. Used by action
+ * handlers (renew / run-now / cancel) on migrated kinds — same wire
+ * shape as setAnnotation but goes through PgResource.patch instead of
+ * the kube custom client.
+ */
+export async function setAnnotationOnResource(
+  resource: import('./resource.js').Resource<unknown>,
+  name: string,
+  key: string,
+  value: string,
+  namespace?: string
+): Promise<void> {
+  await resource.patch(name, { metadata: { annotations: { [key]: value } } }, namespace);
+}
+
+/**
  * Check whether the target CRD exists. Returns `true` if found, `false` if
  * the API responded 404, re-throws on anything else.
  */

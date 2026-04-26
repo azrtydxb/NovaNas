@@ -20,7 +20,7 @@ describe('apps-available resource (read-only)', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('apps', sample);
+    await h.kube.seed('apps', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

@@ -2,7 +2,7 @@ import { type AuditPolicy, AuditPolicySchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
 import type { DbClient } from '../services/db.js';
 import { PgResource } from '../services/pg-resource.js';
-import { registerCrudRoutes } from './_register.js';
+import { registerSingletonRoutes } from './_register_extras.js';
 
 export function buildAuditPolicyResource(db: DbClient): PgResource<AuditPolicy> {
   return new PgResource<AuditPolicy>({
@@ -15,7 +15,7 @@ export function buildAuditPolicyResource(db: DbClient): PgResource<AuditPolicy> 
 }
 
 export function register(app: FastifyInstance, db: DbClient): void {
-  registerCrudRoutes<AuditPolicy>({
+  registerSingletonRoutes<AuditPolicy>({
     app,
     basePath: '/api/v1/audit-policy',
     tag: 'audit-policy',

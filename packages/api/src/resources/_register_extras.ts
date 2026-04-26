@@ -3,13 +3,8 @@ import type { z } from 'zod';
 import { type Kind, canRead, canWrite } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
 import { writeAudit } from '../services/audit.js';
-import {
-  CrdApiError,
-  CrdConflictError,
-  CrdInvalidError,
-  CrdNotFoundError,
-  type CrdResource,
-} from '../services/crd.js';
+import { CrdApiError } from '../services/crd.js';
+import { isNotFound as isResourceNotFound, isResourceApiError } from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 
 /**
@@ -21,15 +16,14 @@ import type { AuthenticatedUser } from '../types.js';
  */
 
 function errorStatus(err: unknown): number {
-  if (err instanceof CrdNotFoundError) return 404;
-  if (err instanceof CrdConflictError) return 409;
-  if (err instanceof CrdInvalidError) return 422;
+  if (isResourceNotFound(err)) return 404;
   if (err instanceof CrdApiError) return err.statusCode || 500;
+  if (isResourceApiError(err)) return err.statusCode || 500;
   return 500;
 }
 
 function errorBody(err: unknown): { error: string; message: string } {
-  if (err instanceof CrdApiError) {
+  if (isResourceApiError(err)) {
     return { error: err.name, message: err.message };
   }
   const msg = (err as { message?: string })?.message ?? 'internal error';
@@ -45,7 +39,7 @@ export interface SingletonOptions<T> {
   basePath: string;
   tag: string;
   kind: Kind;
-  resource: CrdResource<T>;
+  resource: import('../services/resource.js').Resource<T>;
   schema: z.ZodType<T>;
   /** The singleton's fixed metadata name. Defaults to `default`. */
   singletonName?: string;
@@ -70,7 +64,7 @@ export function registerSingletonRoutes<T>(opts: SingletonOptions<T>): void {
       try {
         return await resource.get(name);
       } catch (err) {
-        if (err instanceof CrdNotFoundError) {
+        if (isResourceNotFound(err)) {
           return reply.code(404).send({
             error: 'not_found',
             message: `${kind} singleton '${name}' is not configured yet`,
@@ -125,7 +119,7 @@ export interface ReadOnlyOptions<T> {
   basePath: string;
   tag: string;
   kind: Kind;
-  resource: CrdResource<T>;
+  resource: import('../services/resource.js').Resource<T>;
   schema: z.ZodType<T>;
 }
 

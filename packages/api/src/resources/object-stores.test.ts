@@ -16,7 +16,7 @@ describe('object-stores resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('objectstores', sample);
+    await h.kube.seed('objectstores', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     viewerSid = await h.authAs({ username: 'vic', roles: [AuthzRole.Viewer] });
   });

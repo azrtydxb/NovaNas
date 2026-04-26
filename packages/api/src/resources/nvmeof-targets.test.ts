@@ -19,7 +19,7 @@ describe('nvmeof-targets resource', () => {
 
   beforeAll(async () => {
     h = await buildTestApp();
-    h.kube.seed('nvmeoftargets', sample);
+    await h.kube.seed('nvmeoftargets', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
     userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });

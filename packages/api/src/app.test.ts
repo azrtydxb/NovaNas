@@ -1,3 +1,4 @@
+import pino from "pino";
 import type { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type BuiltApp, buildApp } from './app.js';
@@ -91,7 +92,7 @@ describe('NovaNas API app', () => {
   beforeAll(async () => {
     built = await buildApp({
       env: testEnv,
-      logger: { level: 'silent' } as never,
+      logger: pino({ level: 'silent' }),
       redis: fakeRedis(),
       keycloak: fakeKeycloak(),
       disableSwagger: true,
