@@ -25,12 +25,10 @@ const (
 	FinalizerEncryptionPolicy   = FinalizerPrefix + "encryptionpolicy"
 	FinalizerKmsKey             = FinalizerPrefix + "kmskey"
 	FinalizerCertificate        = FinalizerPrefix + "certificate"
-	FinalizerObjectStore        = FinalizerPrefix + "objectstore"
 	FinalizerBucketUser         = FinalizerPrefix + "bucketuser"
 	FinalizerUser               = FinalizerPrefix + "user"
 	FinalizerGroup              = FinalizerPrefix + "group"
 	FinalizerApiToken           = FinalizerPrefix + "apitoken"
-	FinalizerSshKey             = FinalizerPrefix + "sshkey"
 	FinalizerKeycloakRealm      = FinalizerPrefix + "keycloakrealm"
 )
 
