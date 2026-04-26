@@ -9,8 +9,6 @@
 // implementations when un-wired.
 package controllers
 
-import "time"
-
 const (
 	// ConditionReady is the standard condition name controllers should use
 	// to summarise overall resource health. Kept for backward compatibility
@@ -27,8 +25,4 @@ const (
 	// extra import; the reconciler package is the source of truth.
 	FinalizerPrefix = "novanas.io/"
 
-	// defaultRequeue is the polling interval used by controllers whose
-	// resource depends on external-system state we cannot watch directly
-	// (e.g., Keycloak, storage-engine jobs).
-	defaultRequeue = 30 * time.Second
 )
