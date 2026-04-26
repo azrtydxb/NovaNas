@@ -34,6 +34,15 @@ type Adapter interface {
 	Exec(ctx context.Context, req ExecRequest, stdout, stderr io.Writer) (int, error)
 
 	WatchEvents(ctx context.Context, tenant Tenant) (<-chan Event, error)
+
+	// VM lifecycle. Implementations that don't support VMs return
+	// ErrNotImplemented from each method. The k8s adapter uses
+	// KubeVirt; a future docker adapter would use libvirt/qemu.
+	EnsureVM(ctx context.Context, spec VMSpec) (VMStatus, error)
+	DeleteVM(ctx context.Context, ref VMRef) error
+	ObserveVM(ctx context.Context, ref VMRef) (VMStatus, error)
+	SetVMPowerState(ctx context.Context, ref VMRef, state VMPowerState) error
+	RestartVM(ctx context.Context, ref VMRef) error
 }
 
 type Event struct {

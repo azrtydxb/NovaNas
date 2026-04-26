@@ -37,6 +37,7 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("JobCompletes", func(t *testing.T) { testJobCompletes(t, factory) })
 	t.Run("WatchEvents", func(t *testing.T) { testWatchEvents(t, factory) })
 	t.Run("LogsRequiresWorkload", func(t *testing.T) { testLogsRequiresWorkload(t, factory) })
+	t.Run("VMLifecycle", func(t *testing.T) { testVMLifecycle(t, factory) })
 }
 
 func testTenantLifecycle(t *testing.T, factory Factory) {
@@ -242,6 +243,54 @@ func testLogsRequiresWorkload(t *testing.T, factory Factory) {
 	err := a.Logs(ctx, rt.LogOptions{Ref: rt.WorkloadRef{Tenant: "alpha", Name: "ghost"}}, &buf)
 	if !errors.Is(err, rt.ErrNotFound) && !errors.Is(err, rt.ErrNotImplemented) {
 		t.Fatalf("Logs(missing) = %v, want ErrNotFound or ErrNotImplemented", err)
+	}
+}
+
+// testVMLifecycle exercises EnsureVM / SetVMPowerState / RestartVM /
+// ObserveVM / DeleteVM. Adapters that don't support VMs (docker stub)
+// signal that by returning ErrNotImplemented from EnsureVM; the suite
+// then skips the rest of the subtests for that adapter.
+func testVMLifecycle(t *testing.T, factory Factory) {
+	a, done := factory(t)
+	defer done()
+	ctx := context.Background()
+
+	if err := a.EnsureTenant(ctx, "alpha"); err != nil {
+		t.Fatalf("EnsureTenant: %v", err)
+	}
+	ref := rt.VMRef{Tenant: "alpha", Name: "win11"}
+	spec := rt.VMSpec{Ref: ref, Spec: map[string]any{"running": true}}
+
+	status, err := a.EnsureVM(ctx, spec)
+	if errors.Is(err, rt.ErrNotImplemented) {
+		t.Skipf("adapter does not implement VM lifecycle: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("EnsureVM: %v", err)
+	}
+	if status.Ref != ref {
+		t.Fatalf("status.Ref = %v, want %v", status.Ref, ref)
+	}
+
+	if err := a.SetVMPowerState(ctx, ref, rt.VMStopped); err != nil {
+		t.Fatalf("SetVMPowerState(Stopped): %v", err)
+	}
+	if err := a.RestartVM(ctx, ref); err != nil {
+		t.Fatalf("RestartVM: %v", err)
+	}
+
+	if _, err := a.ObserveVM(ctx, ref); err != nil {
+		t.Fatalf("ObserveVM: %v", err)
+	}
+
+	if err := a.DeleteVM(ctx, ref); err != nil {
+		t.Fatalf("DeleteVM: %v", err)
+	}
+	if err := a.DeleteVM(ctx, ref); err != nil {
+		t.Fatalf("DeleteVM idempotent: %v", err)
+	}
+	if _, err := a.ObserveVM(ctx, ref); !errors.Is(err, rt.ErrNotFound) {
+		t.Fatalf("ObserveVM after delete = %v, want ErrNotFound", err)
 	}
 }
 

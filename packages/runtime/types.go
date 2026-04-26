@@ -164,3 +164,32 @@ type LogOptions struct {
 	Follow    bool
 	TailLines int64
 }
+
+type VMRef struct {
+	Tenant Tenant
+	Name   string
+}
+
+// VMSpec is a runtime-neutral description of a virtual machine. Spec is
+// kept as a free-form map so the K8s adapter can pass through KubeVirt
+// VirtualMachineSpec shapes without the runtime package having to model
+// every KubeVirt field. A typed surface can be added once a Docker
+// (libvirt) adapter exists and the union of fields is known.
+type VMSpec struct {
+	Ref  VMRef
+	Spec map[string]any
+}
+
+type VMPowerState string
+
+const (
+	VMRunning VMPowerState = "Running"
+	VMStopped VMPowerState = "Stopped"
+	VMPaused  VMPowerState = "Paused"
+)
+
+type VMStatus struct {
+	Ref     VMRef
+	Phase   VMPowerState
+	Message string
+}

@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -22,6 +23,7 @@ import (
 // "<NamespacePrefix><tenant>". Defaults to "novanas-".
 type Adapter struct {
 	cs              kubernetes.Interface
+	dyn             dynamic.Interface
 	NamespacePrefix string
 
 	mu       sync.Mutex
@@ -34,6 +36,16 @@ func New(cs kubernetes.Interface) *Adapter {
 		NamespacePrefix: "novanas-",
 		watchers:        make(map[rt.Tenant][]chan rt.Event),
 	}
+}
+
+// WithDynamicClient wires the dynamic client used for resources the
+// adapter does not statically type (KubeVirt VirtualMachine today).
+// Splitting it from the constructor keeps the conformance suite —
+// which only exercises typed objects — usable with just a fake
+// kubernetes.Interface.
+func (a *Adapter) WithDynamicClient(dyn dynamic.Interface) *Adapter {
+	a.dyn = dyn
+	return a
 }
 
 func (a *Adapter) Name() string { return "k8s" }

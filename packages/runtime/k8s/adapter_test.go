@@ -9,17 +9,24 @@ import (
 	"github.com/azrtydxb/novanas/packages/runtime/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestConformance(t *testing.T) {
 	conformance.Run(t, func(_ *testing.T) (rt.Adapter, func()) {
 		cs := fake.NewClientset()
-		a := k8s.New(cs)
-		// The fake client's reactor for Deployments populates Status
-		// from Spec on Create — so a freshly-created Deployment
-		// reports Ready replicas immediately. That's what the
-		// conformance suite needs (no wait for a real scheduler).
+		// The dynamic fake client backs the KubeVirt VirtualMachine
+		// path. We register the GVR list-kind explicitly so the fake
+		// client's tracker can route List/Watch on that resource.
+		scheme := runtime.NewScheme()
+		gvr := schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
+		dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+			gvr: "VirtualMachineList",
+		})
+		a := k8s.New(cs).WithDynamicClient(dyn)
 		simulateDeploymentReady(cs)
 		return a, func() {}
 	})
