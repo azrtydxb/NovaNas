@@ -102,6 +102,7 @@ jobs:
             ghcr.io/azrtydxb/novanas/ui \
             ghcr.io/azrtydxb/novanas/operators \
             ghcr.io/azrtydxb/novanas/disk-agent \
+            ghcr.io/azrtydxb/novanas/discovery \
             ghcr.io/azrtydxb/novanas/storage-meta \
             ghcr.io/azrtydxb/novanas/storage-agent \
             ghcr.io/azrtydxb/novanas/storage-controller \

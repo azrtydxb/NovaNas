@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">${NOVANAS_CLUSTER_NAME}</name>
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+  </service>
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+  <service>
+    <type>_nfs._tcp</type>
+    <port>2049</port>
+  </service>
+</service-group>

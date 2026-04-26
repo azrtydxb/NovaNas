@@ -20,6 +20,7 @@ declare -a images=(
   "ui:packages/ui/Dockerfile"
   "operators:packages/operators/Dockerfile"
   "disk-agent:packages/operators/cmd/disk-agent/Dockerfile"
+  "discovery:packages/discovery/Dockerfile"
   "storage-meta:storage/cmd/meta/Dockerfile"
   "storage-agent:storage/cmd/agent/Dockerfile"
   "storage-controller:storage/cmd/controller/Dockerfile"
