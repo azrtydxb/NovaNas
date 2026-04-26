@@ -322,28 +322,21 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 	}
 
 	// CRD-to-Postgres migration: most business-object reconcilers
-	// have been removed. The grey set (Share, SshKey, Bond, Vlan,
-	// PhysicalInterface, HostInterface, ClusterNetwork, VipPool,
-	// CustomDomain, ObjectStore, IscsiTarget, NvmeofTarget) was
-	// flipped to PgResource via Option B — host agents will become
-	// API clients; ConfigMap projection by an operator is no longer
-	// the contract. What remains here are the "stay-set" reconcilers
-	// that produce real K8s/external CRDs: VMs (KubeVirt),
-	// AppInstance (Helm), NfsServer/SmbServer (Pods), network
-	// projections to novanet (FirewallRule, TrafficPolicy,
-	// ServicePolicy, RemoteAccessTunnel, Ingress), and BlockVolume
-	// (storage data plane — flips with #50).
+	// have been removed. FirewallRule, TrafficPolicy and ServicePolicy
+	// joined the grey set in this PR — flipped to PgResource; the
+	// novanet/host-agent consumer becomes an API client in a follow-up.
+	// What remains are reconcilers that produce real runtime objects:
+	// VMs (KubeVirt), AppInstance (Helm), Ingress and
+	// RemoteAccessTunnel (novaedge), and BlockVolume (storage data
+	// plane — flips with #50).
 	reconcilers := []setup{
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
 		&controllers.IngressReconciler{},
 		&controllers.RemoteAccessTunnelReconciler{},
-		&controllers.FirewallRuleReconciler{},
-		&controllers.TrafficPolicyReconciler{},
 		&controllers.AppReconciler{},
 		&controllers.AppInstanceReconciler{},
 		&controllers.VmReconciler{Engine: ec.vmEngine},
 		&controllers.GpuDeviceReconciler{},
-		&controllers.ServicePolicyReconciler{},
 	}
 
 	for _, r := range reconcilers {
