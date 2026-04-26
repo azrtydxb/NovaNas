@@ -1,11 +1,11 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerImpl } from '../resources/ingresses.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function ingressesRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerImpl(app, api);
+export async function ingressesRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerImpl(app, db);
     return;
   }
   registerUnavailable(app, [
