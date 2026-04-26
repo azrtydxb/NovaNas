@@ -36,7 +36,7 @@ Observability data uses a **low-priority protection class** (rep×2 on a warm po
 
 | Target | Source |
 |---|---|
-| k3s / kubelet | Built-in `/metrics` |
+| Runtime (k3s/kubelet on K8s, dockerd on Docker) | Built-in `/metrics` |
 | NovaStor agent, meta, csi, s3gw | Existing `internal/metrics` |
 | novanet / novaedge | Own `/metrics` |
 | NovaNas API | `prom-client` |
@@ -46,8 +46,8 @@ Observability data uses a **low-priority protection class** (rep×2 on a warm po
 | Redis | `redis_exporter` sidecar |
 | Node (host, CPU, temp, SMART) | `node_exporter` + `smartctl_exporter` |
 | Disks | NovaStor agent |
-| App pods | Auto-scrape on `prometheus.io/scrape: true` annotation (default ON); opt-out per-app |
-| VMs | KubeVirt exporter |
+| App containers | Auto-scrape via API resource (`appInstance.observability.scrape`, default ON; opt-out per-app); the runtime adapter wires the scrape config |
+| VMs | The runtime's VM exporter (KubeVirt exporter on K8s; libvirt-exporter on Docker) |
 
 ### NovaNas curated query gateway
 
@@ -90,7 +90,7 @@ Templatized by instance/pool/app so they work without config on any appliance.
 
 ### Sources
 
-- **k8s container logs** — Alloy tails `/var/log/pods/...` and ships to Loki
+- **Container logs** — Alloy tails the runtime's container log path (`/var/log/pods/...` on K8s, `/var/lib/docker/containers/.../*-json.log` on Docker) and ships to Loki
 - **Host journald** — Alloy ships node logs (kernel, systemd, RAUC update logs)
 - **Audit log** — NovaNas API writes to Postgres (indexed for fast UI queries) AND emits to Loki for long-term
 - **Access logs** — SMB auth events, NFS mount events, S3 requests, UI access
@@ -101,11 +101,11 @@ Templatized by instance/pool/app so they work without config on any appliance.
 All NovaNas components log structured JSON. Common fields:
 
 ```
-component         api | storage-meta | storage-agent | chunk-engine | filer | ...
-request_id        correlates UI click → API → CRD write → reconcile
+component         api | storage-meta | storage-agent | chunk-engine | filer | controller | ...
+request_id        correlates UI click → API → controller → runtime adapter
 user              who initiated the request
 session_id        browser session
-resource_kind     Dataset, Pool, Disk, App, VM, ...
+resource_kind     dataset | pool | disk | appInstance | vm | ...
 resource_name     specific target
 severity          debug | info | warn | error
 error.type        typed error classification (when applicable)
@@ -117,51 +117,51 @@ Libraries: pino (Node), zap (Go), tracing-subscriber JSON (Rust).
 
 ### Log viewer in UI
 
-- Per-resource log panel — click on Dataset/Pool/App/VM/Disk, see last 500 lines + live tail via WS
+- Per-resource log panel — click on `dataset`/`pool`/`appInstance`/`vm`/`disk`, see last 500 lines + live tail via WS
 - Global search with pre-built filter UI
 - Advanced mode: raw LogQL for power users
 - Audit log tab — queried from Postgres for the last 30 days (fast); Loki for older history
 
 ## Traces
 
-- OpenTelemetry instrumentation in api, operators, storage gRPC clients/servers, chunk engine, dataplane
+- OpenTelemetry instrumentation in api, controllers, runtime adapter, storage gRPC clients/servers, chunk engine, dataplane
 - Default sample rate 1% (bounded overhead)
 - UI toggle: "debug window — 100% sampling for 60s" — for deliberate investigation
-- Most useful for diagnosing slow operations that cross layers (UI click → API → CRD → operator → gRPC → chunk engine → disk)
+- Most useful for diagnosing slow operations that cross layers (UI click → API → controller → runtime adapter → gRPC → chunk engine → disk)
 
 ## Alerting
 
-**Prometheus Alertmanager** under the hood; admin-facing CRDs provide nicer UX.
+**Prometheus Alertmanager** under the hood; the API server exposes `alertChannel` and `alertPolicy` resources that the alerting controller compiles into Alertmanager config.
 
-### AlertChannel
+### alertChannel
 
-```yaml
-kind: AlertChannel
-metadata: { name: admin-email }
-spec:
-  type: email              # email | webhook | ntfy | pushover | slack | telegram | teams
-  recipients: [admin@example.com]
-  throttling: { repeatInterval: 1h }
+`POST /api/v1/alertChannels`:
+
+```json
+{
+  "name": "admin-email",
+  "type": "email",
+  "recipients": ["admin@example.com"],
+  "throttling": { "repeatInterval": "1h" }
+}
 ```
 
-### AlertPolicy
+### alertPolicy
 
-```yaml
-kind: AlertPolicy
-metadata: { name: disk-health }
-spec:
-  enabled: true
-  severity: critical
-  conditions:
-    - metric: novanas_disk_smart_failing
-      operator: eq
-      value: 1
-      for: 5m
-    - metric: novanas_disk_reallocated_sectors
-      operator: gt
-      value: 10
-  channels: [admin-email, admin-ntfy]
-  autoResolve: true
+`POST /api/v1/alertPolicies`:
+
+```json
+{
+  "name": "disk-health",
+  "enabled": true,
+  "severity": "critical",
+  "conditions": [
+    { "metric": "novanas_disk_smart_failing",       "operator": "eq", "value": 1,  "for": "5m" },
+    { "metric": "novanas_disk_reallocated_sectors", "operator": "gt", "value": 10 }
+  ],
+  "channels": ["admin-email", "admin-ntfy"],
+  "autoResolve": true
+}
 ```
 
 ### Default alert rules shipped
@@ -185,16 +185,19 @@ Every appliance ships these pre-enabled (user can disable or customize):
 
 ## SLOs
 
-```yaml
-kind: ServiceLevelObjective
-metadata: { name: s3-availability }
-spec:
-  target: { kind: ObjectStore, name: main }
-  objective: 99.9
-  window: 30d
-  sli:
-    type: availability                # availability | latency | error-budget
-    metric: novanas_s3_request_success_ratio
+`POST /api/v1/serviceLevelObjectives`:
+
+```json
+{
+  "name": "s3-availability",
+  "target": { "kind": "objectStore", "name": "main" },
+  "objective": 99.9,
+  "window": "30d",
+  "sli": {
+    "type": "availability",
+    "metric": "novanas_s3_request_success_ratio"
+  }
+}
 ```
 
 Prometheus rules auto-generated → burn-rate alerts fire when error budget depletes too fast. Hidden behind "Advanced" in UI for admins who want them.
@@ -222,13 +225,13 @@ UI top-bar badge summarizes to worst-child. Green/yellow/red; click to drill in.
 Admin UI button: "Generate support bundle" → NovaNas API creates encrypted tarball:
 
 - Last N hours of structured logs (all components)
-- CRD dump (secrets redacted)
+- API resource dump (Postgres export, secrets redacted)
 - Prometheus metrics snapshot
-- `kubectl describe` for all pods
+- Runtime adapter dump (`kubectl describe` for all pods on K8s; `docker inspect` on Docker)
 - `nmstate show`, `ip`, `dmesg`, SMART outputs
 - NovaStor chunk engine diagnostics (scrub results, recent I/O errors)
 - System journal (journald)
-- k3s state
+- Runtime state (k3s server state on K8s; dockerd state on Docker)
 
 **Encryption**: bundle is encrypted against a published NovaNas support public key so it can be shared over email/chat without leaking secrets. Admin can also decrypt locally with a passphrase.
 

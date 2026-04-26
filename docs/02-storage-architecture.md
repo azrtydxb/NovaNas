@@ -128,14 +128,14 @@ Chunk-level, always-on when enabled per-volume.
 - **Cryptographic erase**: destroy DK = erase entire volume in O(1)
 - **SSE translation** (S3):
   - SSE-S3 → uses Bucket DK (free, automatic)
-  - SSE-KMS → references `KmsKey` CRD = named DK with its own lifecycle
+  - SSE-KMS → references a `kmsKey` API resource = named DK with its own lifecycle
   - SSE-C → client-supplied key, segregated chunk namespace, no dedup (inherent)
 
 Key material never leaves OpenBao Transit; chunk engine calls unwrap operations, caches DKs in-memory per mount.
 
 ## Data protection operations
 
-- **Scrub**: periodic background integrity check (CRC verify, replica compare); `ScrubSchedule` CRD per-pool
+- **Scrub**: periodic background integrity check (CRC verify, replica compare); driven by `scrubSchedule` API resources, one per pool
 - **Rebuild**: on disk failure, immediate re-replication from surviving copies onto other healthy disks; rate-limited by `recoveryRate`
 - **Rebalance**: on disk add, optionally migrate chunks to include new disk (admin-approved, default off)
 - **Replication**: dataset/bucket-level, snapshot-diff-based, push or pull, to another NovaNas or cloud S3

@@ -5,78 +5,89 @@ Two network planes:
 - **Host networking** — physical NICs, bonds, VLANs, IP addresses
 - **Cluster networking** — pods, services, ingress, VIPs
 
-NovaNas provides declarative CRDs; under the hood nmstate handles the host plane and novanet + novaedge handle the cluster plane.
+NovaNas exposes both planes as API resources owned by the API server (Postgres-backed; no CRDs). Under the hood, nmstate handles the host plane and novanet + novaedge handle the cluster plane — both are driven by NovaNas controllers reading the API resources, not by users authoring Kubernetes objects.
 
 ## Stack
 
 ```
-Pods (apps, VMs, storage services)
-  ↕ novanet (eBPF CNI, overlay, identity policy)
-Cluster network (pod CIDR, service CIDR)
+Containers / VMs (apps, storage services)
+  ↕ novanet (eBPF, overlay, identity policy) — runtime adapter wires this in
+Workload network (overlay CIDR, service VIPs)
   ↕ novaedge (VIPs, ingress, reverse proxy, SD-WAN)
 Host network (physical NICs, bonds, VLANs)
-  ↕ nmstate / systemd-networkd
+  ↕ nmstate / systemd-networkd (host-agent, runtime-agnostic)
 Physical: eth0, eth1, ... (NICs)
 ```
 
-## Host networking CRDs
+## Host networking resources
 
-### PhysicalInterface (observed)
+These are API-server-owned resources. The host-agent (a runtime-neutral process) reads them via `/api/v1/*` and applies them with nmstate. There are no CRDs.
 
-Read-only NIC reflection, like `Disk`:
+### physicalInterface (observed)
 
-```yaml
-kind: PhysicalInterface
-metadata: { name: enp4s0 }
-status:
-  macAddress: 00:1a:2b:3c:4d:5e
-  speedMbps: 10000
-  duplex: full
-  link: up
-  driver: ixgbe
-  pcieSlot: "0000:04:00.0"
-  capabilities: [rx-checksumming, tx-checksumming, tso, gro, rss]
-  usedBy: bond0
+Read-only NIC reflection, populated by the host-agent:
+
+```json
+{
+  "name": "enp4s0",
+  "status": {
+    "macAddress": "00:1a:2b:3c:4d:5e",
+    "speedMbps": 10000,
+    "duplex": "full",
+    "link": "up",
+    "driver": "ixgbe",
+    "pcieSlot": "0000:04:00.0",
+    "capabilities": ["rx-checksumming", "tx-checksumming", "tso", "gro", "rss"],
+    "usedBy": "bond0"
+  }
+}
 ```
 
-### Bond
+### bond
 
-```yaml
-kind: Bond
-metadata: { name: bond0 }
-spec:
-  interfaces: [enp4s0, enp5s0]
-  mode: 802.3ad          # active-backup | balance-alb | 802.3ad | balance-tlb
-  lacp: { rate: fast, aggregatorSelect: bandwidth }
-  xmitHashPolicy: layer3+4
-  mtu: 9000
+`POST /api/v1/bonds`:
+
+```json
+{
+  "name": "bond0",
+  "interfaces": ["enp4s0", "enp5s0"],
+  "mode": "802.3ad",
+  "lacp": { "rate": "fast", "aggregatorSelect": "bandwidth" },
+  "xmitHashPolicy": "layer3+4",
+  "mtu": 9000
+}
 ```
 
-### Vlan
+### vlan
 
-```yaml
-kind: Vlan
-metadata: { name: storage-vlan }
-spec:
-  parent: bond0          # Bond | PhysicalInterface
-  vlanId: 42
-  mtu: 9000
+`POST /api/v1/vlans`:
+
+```json
+{
+  "name": "storage-vlan",
+  "parent": "bond0",
+  "vlanId": 42,
+  "mtu": 9000
+}
 ```
 
-### HostInterface — the IP-bearing interface
+### hostInterface — the IP-bearing interface
 
-```yaml
-kind: HostInterface
-metadata: { name: storage }
-spec:
-  backing: storage-vlan
-  addresses:
-    - { cidr: 10.10.42.10/24, type: static }
-    - { cidr: fd42::10/64, type: static }
-  gateway: 10.10.42.1
-  dns: [10.10.42.1, 1.1.1.1]
-  mtu: 9000
-  usage: [storage]       # management | storage | cluster | vmBridge | appIngress
+`POST /api/v1/hostInterfaces`:
+
+```json
+{
+  "name": "storage",
+  "backing": "storage-vlan",
+  "addresses": [
+    { "cidr": "10.10.42.10/24", "type": "static" },
+    { "cidr": "fd42::10/64", "type": "static" }
+  ],
+  "gateway": "10.10.42.1",
+  "dns": ["10.10.42.1", "1.1.1.1"],
+  "mtu": 9000,
+  "usage": ["storage"]
+}
 ```
 
 A single interface can serve multiple `usage` roles. Small boxes with one NIC share everything. Multi-NIC boxes split roles.
@@ -87,28 +98,30 @@ A single interface can serve multiple `usage` roles. Small boxes with one NIC sh
 |---|---|
 | `management` | UI, API, SSH, metrics scrape |
 | `storage` | iSCSI, NVMe-oF, replication, NFS/SMB, S3 |
-| `cluster` | k3s node-local traffic |
+| `cluster` | Runtime-internal traffic (k3s node-local on K8s adapter; docker bridge on Docker adapter) |
 | `vmBridge` | L2 bridge to VMs |
 | `appIngress` | Inbound to user-facing apps, novaedge VIPs |
 
 ## Cluster networking
 
-### ClusterNetwork (singleton)
+### clusterNetwork (singleton)
 
-```yaml
-kind: ClusterNetwork
-spec:
-  podCidr: 10.244.0.0/16
-  serviceCidr: 10.96.0.0/12
-  overlay:
-    type: geneve          # geneve | vxlan | none
-    egressInterface: bond0
-  policy:
-    defaultDeny: true
-  mtu: auto               # account for overlay overhead, or explicit
+`PUT /api/v1/clusterNetwork`:
+
+```json
+{
+  "podCidr": "10.244.0.0/16",
+  "serviceCidr": "10.96.0.0/12",
+  "overlay": {
+    "type": "geneve",
+    "egressInterface": "bond0"
+  },
+  "policy": { "defaultDeny": true },
+  "mtu": "auto"
+}
 ```
 
-Set at install time; rarely changed.
+Set at install time; rarely changed. Consumed by the runtime adapter to configure the runtime's networking (CNI on K8s; equivalent bridge/network setup on Docker).
 
 ### novanet
 
@@ -123,64 +136,70 @@ Set at install time; rarely changed.
 
 - Unified LB + ingress + reverse proxy + SD-WAN gateway
 - Handles:
-  - VIP allocation from `VipPool`
+  - VIP allocation from `vipPool`
   - Reverse-proxy ingress at `nas.local` and per-app subdomains
-  - TLS termination (integrates with OpenBao for certs, preferred; or K8s Secrets synced from OpenBao)
+  - TLS termination (integrates with OpenBao for certs)
   - Remote access via SD-WAN tunnels
 
-### VipPool
+novaedge is configured exclusively via the NovaNas API. Its config bundle is rendered by the networking controller from `vipPool` / `ingress` / `remoteAccessTunnel` / `customDomain` API resources.
 
-```yaml
-kind: VipPool
-spec:
-  range: 192.168.1.200-192.168.1.240
-  interface: mgmt         # HostInterface to advertise on
-  announce: arp           # arp | bgp
+### vipPool
+
+`POST /api/v1/vipPools`:
+
+```json
+{
+  "name": "lan",
+  "range": "192.168.1.200-192.168.1.240",
+  "interface": "mgmt",
+  "announce": "arp"
+}
 ```
 
-### Ingress
+### ingress
 
-```yaml
-kind: Ingress
-spec:
-  hostname: nas.local
-  tls: { certificate: nas-cert }    # wildcard *.nas.local
-  rules:
-    - host: plex.nas.local
-      backend: family-plex.novanas-users-pascal.svc:32400
-    - host: nextcloud.nas.local
-      backend: nextcloud.novanas-users-pascal.svc:80
+`POST /api/v1/ingresses`:
+
+```json
+{
+  "name": "default",
+  "hostname": "nas.local",
+  "tls": { "certificate": "nas-cert" },
+  "rules": [
+    { "host": "plex.nas.local",      "backend": { "appInstance": "family-plex",  "port": 32400 } },
+    { "host": "nextcloud.nas.local", "backend": { "appInstance": "nextcloud",    "port": 80    } }
+  ]
+}
 ```
 
-Admin decision locked in: **subdomain routing** (not path-prefix), wildcard cert.
+Admin decision locked in: **subdomain routing** (not path-prefix), wildcard cert. Backends reference API resources by name, not Kubernetes Services — the runtime adapter resolves the service endpoint.
 
-### RemoteAccessTunnel
+### remoteAccessTunnel
 
-```yaml
-kind: RemoteAccessTunnel
-spec:
-  type: sdwan                       # sdwan | wireguard | tailscale
-  endpoint:
-    hostname: nas.example.com
-    port: 443
-  auth:
-    secretRef: openbao://novanas/tunnel/auth
-  exposes:
-    - app: family/plex
-      via: tunnel
+`POST /api/v1/remoteAccessTunnels`:
+
+```json
+{
+  "name": "wan",
+  "type": "sdwan",
+  "endpoint": { "hostname": "nas.example.com", "port": 443 },
+  "auth": { "secretRef": "openbao://novanas/tunnel/auth" },
+  "exposes": [{ "app": "family/plex", "via": "tunnel" }]
+}
 ```
 
-### CustomDomain
+### customDomain
 
 For user-supplied branded hostnames (e.g., `movies.example.com`):
 
-```yaml
-kind: CustomDomain
-spec:
-  hostname: movies.example.com
-  target: { kind: AppInstance, namespace: novanas-users/pascal, name: family-plex }
-  tls:
-    provider: letsencrypt           # ACME via novaedge, keys in OpenBao
+`POST /api/v1/customDomains`:
+
+```json
+{
+  "hostname": "movies.example.com",
+  "target": { "kind": "appInstance", "owner": "pascal", "name": "family-plex" },
+  "tls": { "provider": "letsencrypt" }
+}
 ```
 
 ## Discovery
@@ -195,7 +214,7 @@ Advertisements:
 - `nas.local` (IPv4 + IPv6)
 - Per-share SMB (`_smb._tcp`)
 - Web UI (`_https._tcp`)
-- Per-app `<app>.nas.local` — default on, opt-out per-app via `AppInstance.spec.network.expose`
+- Per-app `<app>.nas.local` — default on, opt-out per-app via `appInstance.network.expose`
 
 ## DNS
 
@@ -206,13 +225,13 @@ Two stories:
 - Admin-configured public DNS for WAN (e.g., `nas.example.com` with wildcard) used via novaedge SD-WAN tunnel
 
 **Outbound** (NAS resolving):
-- systemd-resolved on host using DNS from HostInterface DHCP or static
-- In-cluster: CoreDNS (k3s default) forwards to host
+- systemd-resolved on host using DNS from `hostInterface` DHCP or static
+- For workload-internal lookup the runtime adapter wires DNS (CoreDNS on K8s, embedded resolver on Docker) to forward to the host resolver
 
 ## IPv6
 
 - **Enabled by default** when the network provides v6 (SLAAC or DHCPv6 detected)
-- Every HostInterface can hold v6 addresses
+- Every `hostInterface` can hold v6 addresses
 - novanet and novaedge support v6 VIPs
 - v6-only mode deferred; plumbing in place
 
@@ -220,51 +239,53 @@ Two stories:
 
 ### Host firewall
 
-```yaml
-kind: FirewallRule
-metadata: { name: management-access }
-spec:
-  scope: host                       # host | pod
-  direction: inbound
-  action: allow
-  interface: mgmt
-  source:
-    cidrs: [192.168.1.0/24]
-  destination:
-    ports: [22, 443]
-    protocol: tcp
-  priority: 100
+`POST /api/v1/firewallRules`:
+
+```json
+{
+  "name": "management-access",
+  "scope": "host",
+  "direction": "inbound",
+  "action": "allow",
+  "interface": "mgmt",
+  "source": { "cidrs": ["192.168.1.0/24"] },
+  "destination": { "ports": [22, 443], "protocol": "tcp" },
+  "priority": 100
+}
 ```
 
-**No default host firewall.** All NovaNas service ports are open per `ServicePolicy`. Admin opts into restrictions.
+**No default host firewall.** All NovaNas service ports are open per `servicePolicy`. Admin opts into restrictions.
 
-### Pod firewall
+### Workload firewall
 
-`FirewallRule` with `scope: pod` synthesizes novanet identity policies. User-friendly CRD; novanet provides the eBPF enforcement.
+A `firewallRule` with `scope: workload` is translated into novanet identity policies by the networking controller. Users author the API resource; the controller emits the runtime-native enforcement objects (eBPF programs via novanet on K8s; equivalent ipset/nftables-driven novanet config on Docker).
 
 ## Traffic QoS
 
-Unified `TrafficPolicy` CRD:
+Unified `trafficPolicy` API resource:
 
-```yaml
-kind: TrafficPolicy
-metadata: { name: storage-isolation }
-spec:
-  scope:
-    kind: HostInterface             # HostInterface | Namespace | App | Vm | ReplicationJob | ObjectStore
-    name: storage
-  limits:
-    egress: { max: 1Gbps, burst: 2Gbps }
-    ingress: { max: 10Gbps }
-  scheduling:
-    offHours:
-      cron: "0 22 * * *"
-      durationMinutes: 480
-      overrideEgress: { max: 500Mbps }
-  priority: 100
+`POST /api/v1/trafficPolicies`:
+
+```json
+{
+  "name": "storage-isolation",
+  "scope": { "kind": "hostInterface", "name": "storage" },
+  "limits": {
+    "egress":  { "max": "1Gbps",  "burst": "2Gbps" },
+    "ingress": { "max": "10Gbps" }
+  },
+  "scheduling": {
+    "offHours": {
+      "cron": "0 22 * * *",
+      "durationMinutes": 480,
+      "overrideEgress": { "max": "500Mbps" }
+    }
+  },
+  "priority": 100
+}
 ```
 
-Replaces scattered bandwidth fields across `ReplicationTarget`, `AppInstance`, etc. Those fields become sugar that synthesize `TrafficPolicy` under the hood.
+`scope.kind` may be `hostInterface | tenant | app | vm | replicationJob | objectStore`. Replaces scattered bandwidth fields across `replicationTarget`, `appInstance`, etc. — those fields become sugar that synthesize a `trafficPolicy` under the hood.
 
 ## Installer networking
 
@@ -308,11 +329,11 @@ UI: per-interface graphs on the Network page; per-app request metrics via novaed
 
 ### VM bridge
 
-- HostInterface(vm-br0) with `usage: [vmBridge]` — no IP, pure bridge
-- KubeVirt VMs attach to `bridge: vm-br0` for L2 access to the physical LAN
+- `hostInterface(vm-br0)` with `usage: [vmBridge]` — no IP, pure bridge
+- VMs attach to `bridge: vm-br0` for L2 access to the physical LAN; the runtime adapter wires the VM NIC to the bridge (KubeVirt on K8s, libvirt on Docker)
 
 ### Remote access
 
-- `RemoteAccessTunnel` provisions novaedge SD-WAN tunnel
+- `remoteAccessTunnel` provisions a novaedge SD-WAN tunnel
 - Per-app `expose: internet` flag opts apps into being reachable from outside
 - Admin-gated permission; users cannot self-expose

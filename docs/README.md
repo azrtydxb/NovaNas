@@ -1,16 +1,16 @@
 # NovaNas — Design Documentation
 
-NovaNas is a Kubernetes-native single-node NAS appliance providing unified block, file, and object storage with integrated container and VM hosting. It is forked from NovaStor (an SDS project) and evolves independently.
+NovaNas is a single-node NAS appliance providing unified block, file, and object storage with integrated container and VM hosting. It is forked from NovaStor (an SDS project) and evolves independently. The NovaNas API server (Postgres-backed) is the sole source of truth; the container runtime is a swappable adapter (k3s today, Docker planned). NovaNas defines no CRDs — see [ADR 0005](adr/0005-hide-kubernetes-behind-api.md).
 
 ## Product summary
 
 - **Form factor**: single-node appliance (QNAP/TrueNAS class hardware and up)
 - **Storage protocols**: iSCSI, NVMe-oF, NFS, SMB, S3
-- **Compute**: user-deployable containers (Helm) and VMs (KubeVirt)
-- **Orchestration**: k3s (single-node Kubernetes)
+- **Compute**: user-deployable containers (packaged as Helm charts) and VMs
+- **Runtime**: k3s today (default); Docker planned. Selected via the runtime adapter at install time.
 - **Identity**: Keycloak (local users, AD/LDAP, OIDC)
 - **Secrets**: OpenBao (Vault-compatible, TPM auto-unseal)
-- **Networking**: novanet (eBPF CNI) + novaedge (LB/ingress/SD-WAN)
+- **Networking**: novanet (eBPF) + novaedge (LB/ingress/SD-WAN)
 - **OS**: immutable Debian with RAUC A/B updates
 
 ## Document index
@@ -20,8 +20,8 @@ NovaNas is a Kubernetes-native single-node NAS appliance providing unified block
 | 01 | [Architecture Overview](01-architecture-overview.md) | Layered architecture, component stack, data flow |
 | 02 | [Storage Architecture](02-storage-architecture.md) | Pools, volumes, chunks, protection, tiering, encryption |
 | 03 | [Access Protocols](03-access-protocols.md) | Block, NFS, SMB, S3 — how each is served |
-| 04 | [Tenancy & Isolation](04-tenancy-isolation.md) | System vs user workloads, RBAC, PSA, NetworkPolicy |
-| 05 | [CRD Reference](05-crd-reference.md) | Every NovaNas CRD with example manifests |
+| 04 | [Tenancy & Isolation](04-tenancy-isolation.md) | System vs user workloads, authZ, runtime profile, network policy |
+| 05 | [Resource Reference](05-resource-reference.md) | Every NovaNas API resource with example payloads |
 | 06 | [Boot, Install, Update](06-boot-install-update.md) | OS layering, RAUC, installer, factory reset, config backup |
 | 07 | [Disk Lifecycle](07-disk-lifecycle.md) | Disk states, hot-swap, rebuild, foreign imports |
 | 08 | [Apps & VMs](08-apps-and-vms.md) | App catalog, AppInstance, KubeVirt integration |
@@ -47,9 +47,12 @@ NovaNas is a Kubernetes-native single-node NAS appliance providing unified block
 
 ## Planning
 
-- [CRD consolidation plan](CRD-CONSOLIDATION-PLAN.md) — tracking doc
-  for unifying `storage/api/v1alpha1` and
-  `packages/operators/api/v1alpha1`
+- [CRD removal & runtime-adapter refactor](CRD-REMOVAL-PLAN.md) —
+  active task list for deleting the remaining 24 CRDs and replacing
+  the kubebuilder operators with runtime-neutral controllers. Driven
+  by ADR 0005.
+- [CRD consolidation plan](CRD-CONSOLIDATION-PLAN.md) — **superseded**;
+  retained for historical context.
 
 ## Scope status
 

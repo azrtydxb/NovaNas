@@ -6,8 +6,8 @@ Consolidated list of every design decision locked in during the initial design r
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| F1 | Keep Kubernetes (k3s) as the base | User runs containers + VMs on NAS; Harvester/TrueNAS-SCALE model fits |
-| F2 | K8s is an implementation detail, hidden from users | UX consistency; users think in NAS terms, not cluster terms |
+| F1 | Default container runtime is k3s; runtime is swappable via a runtime adapter (Docker planned) | Avoid lock-in to a single runtime; appliance must run on whatever the deployment requires |
+| F2 | The container runtime is an implementation detail, hidden from users; the API server is the sole source of truth and exposes zero CRDs | UX consistency; runtime portability; no second source of truth |
 | F3 | Single-node only in v1; multi-box out of scope | Focused product; don't conflate clustering with appliance |
 | F4 | Fork NovaStor, no ongoing upstream sync | NovaStor becomes independent; NovaNas owns its storage code |
 | F5 | Immutable Debian OS with RAUC A/B partitions | Appliance model, atomic updates, rollback, familiar ecosystem |
@@ -44,13 +44,13 @@ Consolidated list of every design decision locked in during the initial design r
 | A2 | Drop NovaStor's `internal/filer` (custom NFS/VFS) | Use kernel NFS; no reason to maintain custom |
 | A3 | NFS via host knfsd managed by a privileged operator pod | TrueNAS pattern; best performance on appliance |
 | A4 | SMB via Samba in a userspace pod | Upstream Samba handles ACLs, oplocks, shadow-copies |
-| A5 | Multi-protocol Share (one CRD exports SMB + NFS together) | Matches typical NAS UX |
+| A5 | Multi-protocol Share (one `share` API resource exports SMB + NFS together) | Matches typical NAS UX |
 | A6 | xfs default, ext4 optional for formatted volumes | xfs better for large files (media, VMs) |
 | A7 | S3 option A: native gateway, chunks direct | Preserves dedup; no MinIO license issues |
 | A8 | Bucket = volume (peer of BlockVolume, Dataset) | Consistent mental model |
 | A9 | Full AWS S3 API surface in v1 | Including Object Select, event notifications, Glacier semantics, S3 website, replication rules |
 | A10 | Object Lock: enabled only at bucket creation (immutable after); no default mode; bypassGovernance as explicit user flag | AWS-compat; conscious choice |
-| A11 | SSE translation: SSE-S3 → Bucket DK; SSE-KMS → KmsKey CRD; SSE-C → segregated, non-dedup | Fits convergent-encryption model |
+| A11 | SSE translation: SSE-S3 → Bucket DK; SSE-KMS → `kmsKey` API resource; SSE-C → segregated, non-dedup | Fits convergent-encryption model |
 | A12 | ACL model: per-Dataset `posix \| nfsv4`; UI auto-picks based on share type, Advanced exposes choice | Covers Linux-native and Windows-native needs |
 | A13 | MinIO `mint` + Ceph `s3-tests` + AWS SDK smokes as CI quality gate | Objective compatibility bar |
 
@@ -58,21 +58,22 @@ Consolidated list of every design decision locked in during the initial design r
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| T1 | Namespaces: `novanas-system`, `novanas-users/*`, `novanas-vms`, `novanas-shared/*`, `novanas-apps-system` | System/user separation |
-| T2 | RBAC, Pod Security Admission, novanet identity policy, admission webhook — all enforced | Defense in depth |
-| T3 | User namespaces default-deny via novanet | Zero-trust starting point |
-| T4 | One UI, role-driven navigation | Simpler; RBAC is the boundary, not the UI |
-| T5 | NovaNas API server is the authZ boundary | K8s RBAC coarse (API SA has cluster-wide); fine-grained auth in API |
+| T1 | Tenants: `novanas-system`, `novanas-users/*`, `novanas-vms`, `novanas-shared/*`, `novanas-apps-system` projected by the runtime adapter onto runtime-native scopes | System/user separation, runtime-agnostic |
+| T2 | API-server admission, runtime-side privilege profile, novanet identity policy — all enforced | Defense in depth |
+| T3 | User tenants default-deny via novanet | Zero-trust starting point |
+| T4 | One UI, role-driven navigation | Simpler; authZ is the boundary, not the UI |
+| T5 | NovaNas API server is the sole authZ boundary; runtime-native authorization is coarse and reserved for the API server / runtime adapter | Fine-grained auth in one place; runtime-agnostic |
 
-## CRDs
+## API model & runtime
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| C1 | All CRDs in `novanas.io/v1alpha1` | One API group |
-| C2 | Cluster-scoped for v1 (appliance, not multi-tenant platform) | Simpler |
-| C3 | `Dataset` as unifying abstraction for file storage | Industry-standard mental model (ZFS, QNAP, Synology, NetApp) |
-| C4 | Disk events: last-20 inline + K8s Events for full history + AuditPolicy long-term | Hybrid; UI-fast + audit-complete |
-| C5 | Bucket volume peers Dataset + BlockVolume | Consistent; object storage gets full protection/tiering/snapshots/replication |
+| C1 | All resources are API-server-owned objects under `/api/v1alpha1/*`, backed by Postgres. No CRDs anywhere. | Single source of truth; runtime-pluggable; no spec/status drift |
+| C2 | Resources are global by default for v1 (single-appliance) but carry a tenant field | Appliance simplicity, with a path to multi-tenant later |
+| C3 | `dataset` is the unifying abstraction for file storage | Industry-standard mental model (ZFS, QNAP, Synology, NetApp) |
+| C4 | Disk events: last-20 inline + Postgres event store for full history + `auditPolicy` long-term | Hybrid; UI-fast + audit-complete |
+| C5 | `bucket` peers `dataset` + `blockVolume` | Consistent; object storage gets full protection/tiering/snapshots/replication |
+| C6 | The runtime is reached via a single internal **runtime adapter** interface; k8s adapter today, docker adapter planned | Lets the rest of the system stay runtime-agnostic |
 
 ## Boot, install, update
 
@@ -87,7 +88,7 @@ Consolidated list of every design decision locked in during the initial design r
 | B7 | Config backup daily by default; destinations: dataset/cloud/email | Admin DR |
 | B8 | Postgres on persistent partition (not chunk engine) | API server stays up during storage issues |
 | B9 | Persistent partition ~80 GB (Postgres + OpenBao + logs + state) | Sized for Postgres growth |
-| B10 | Bootstrap order: k3s → Postgres → OpenBao (TPM unseal) → Keycloak → storage → novaedge/novanet → API → UI | Dependency-correct |
+| B10 | Bootstrap order: container runtime (k3s/docker) → Postgres → OpenBao (TPM unseal) → Keycloak → storage → novaedge/novanet → API → UI | Dependency-correct, runtime-agnostic |
 
 ## Disk lifecycle
 
@@ -143,25 +144,25 @@ Consolidated list of every design decision locked in during the initial design r
 | I1 | Keycloak for all IAM (users, groups, 2FA, OIDC, federation) | Industry-standard; federation for free |
 | I2 | Single Keycloak realm (`novanas`) with groups | Simpler than per-tenant realms |
 | I3 | Custom NovaNas theme on Keycloak login | Consistent branding |
-| I4 | `User`/`Group` CRDs as Keycloak projections | Source of truth in Keycloak |
+| I4 | `user`/`group` API resources are projections of Keycloak (synced into Postgres) | Source of truth in Keycloak; stable IDs in API for audit/authZ |
 | I5 | OpenBao for all secrets, PKI, Transit | Consolidates crypto/secrets concerns |
 | I6 | OpenBao Postgres backend | Shared instance; one backup covers |
 | I7 | OpenBao path-scoped ACLs (not namespaces) | Works in OSS; portable |
 | I8 | Chunk engine master key in OpenBao Transit; chunks unwrap per-mount | Master key never leaves OpenBao |
-| I9 | `Certificate` CRD backed by OpenBao PKI / ACME via novaedge | One source for TLS material |
+| I9 | `certificate` API resource backed by OpenBao PKI / ACME via novaedge | One source for TLS material |
 
 ## Networking
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| N1 | novanet as CNI; novaedge as LB/ingress/SD-WAN | In-house Nova stack |
-| N2 | nmstate for host network management | Declarative, k8s-friendly |
+| N1 | novanet as the workload-network layer; novaedge as LB/ingress/SD-WAN; both configured exclusively via the NovaNas API | In-house Nova stack; runtime-agnostic |
+| N2 | nmstate for host network management, applied by a runtime-neutral host-agent | Declarative, runtime-portable |
 | N3 | Discovery: mDNS + SSDP + WS-Discovery | Cover Mac, Linux, old and new Windows |
 | N4 | Per-app DNS default on (`<app>.nas.local`) | Zero-config for users |
 | N5 | novaedge handles ACME (Let's Encrypt); OpenBao stores key material | Preferred integration |
 | N6 | IPv6 enabled by default when network provides it | Future-friendly |
 | N7 | No default host firewall | Appliance default; admin opts into rules |
-| N8 | `TrafficPolicy` CRD unifies QoS (v1) | One model for interface/namespace/app/vm/job |
+| N8 | `trafficPolicy` API resource unifies QoS (v1) | One model for interface/tenant/app/vm/job |
 
 ## Observability
 
@@ -170,7 +171,7 @@ Consolidated list of every design decision locked in during the initial design r
 | O1 | Grafana LGTM stack: Prometheus + Loki + Tempo + Grafana + Alloy | Coherent, battle-tested |
 | O2 | Prometheus long retention (no Mimir) | Simpler at single-box scale |
 | O3 | Tempo/tracing in v1 with 1% default sampling + debug-window toggle | Useful for cross-layer slow ops |
-| O4 | SLO CRDs in v1 | Admins who want them get them |
+| O4 | `serviceLevelObjective` API resource in v1 | Admins who want them get them |
 | O5 | Observability data self-hosted on NovaNas buckets (dog-food) | Exercise the product on the product |
 | O6 | Curated ship-with alert ruleset enabled by default | Good UX out of the box |
 | O7 | Per-app auto-scrape default on | Expected appliance behavior |
