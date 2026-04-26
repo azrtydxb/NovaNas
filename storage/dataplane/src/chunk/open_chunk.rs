@@ -232,11 +232,7 @@ pub trait Replicator: Send + Sync + std::fmt::Debug {
     /// the seal before returning"). Returns Err on partial acks; the
     /// caller treats the seal as failed and the chunk stays open for
     /// retry.
-    fn replicate_seal(
-        &self,
-        chunk: &OpenChunkId,
-        sealed: &[u8],
-    ) -> Result<(), OpenChunkError>;
+    fn replicate_seal(&self, chunk: &OpenChunkId, sealed: &[u8]) -> Result<(), OpenChunkError>;
 }
 
 /// No-op Replicator: used in tests and single-node deployments.
