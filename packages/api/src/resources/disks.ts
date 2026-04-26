@@ -1,26 +1,27 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type Disk, DiskSchema, type StoragePool, StoragePoolSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { RegisterValidationError, registerCrudRoutes } from './_register.js';
 
-export function buildDiskResource(api: CustomObjectsApi): CrdResource<Disk> {
-  return new CrdResource<Disk>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'disks' },
+export function buildDiskResource(db: DbClient): PgResource<Disk> {
+  return new PgResource<Disk>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'Disk',
     schema: DiskSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
-  const disks = buildDiskResource(api);
-  // We need to look up pools to enforce deviceFilter compatibility.
-  // Build a sibling resource handle once — same api client, no new
-  // route registrations.
-  const pools = new CrdResource<StoragePool>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'storagepools' },
+export function register(app: FastifyInstance, db: DbClient): void {
+  const disks = buildDiskResource(db);
+  // Sibling pool resource for cross-kind validation (deviceFilter
+  // compatibility). Same db handle, no extra route registrations.
+  const pools = new PgResource<StoragePool>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'StoragePool',
     schema: StoragePoolSchema,
     namespaced: false,
   });
@@ -49,6 +50,7 @@ export function register(app: FastifyInstance, api: CustomObjectsApi): void {
       }
 
       // 1. System disks (OS / mounted partitions) are never poolable.
+      // Now actually enforced — there's no kube-apiserver backdoor.
       const labels = disk.metadata?.labels ?? {};
       if (labels['novanas.io/system'] === 'true') {
         throw new RegisterValidationError(

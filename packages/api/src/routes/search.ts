@@ -6,6 +6,7 @@ import { requireAuth } from '../auth/decorators.js';
 import { buildAppCatalogResource } from '../resources/app-catalogs.js';
 import { buildAppResource } from '../resources/apps-available.js';
 import { buildAppInstanceResource } from '../resources/apps.js';
+import type { Resource } from '../services/resource.js';
 import { buildBucketUserResource } from '../resources/bucket-users.js';
 import { buildBucketResource } from '../resources/buckets.js';
 import { buildDatasetResource } from '../resources/datasets.js';
@@ -17,11 +18,12 @@ import { buildShareResource } from '../resources/shares.js';
 import { buildSnapshotResource } from '../resources/snapshots.js';
 import { buildUserResource } from '../resources/users.js';
 import { buildVmResource } from '../resources/vms.js';
-import type { CrdResource } from '../services/crd.js';
 import type { AuthenticatedUser } from '../types.js';
 
 export interface SearchDeps {
   kubeCustom?: CustomObjectsApi;
+  /** Drizzle client for Postgres-backed resources (pools, disks). */
+  db?: import('../services/db.js').DbClient | null;
   redis?: Redis | null;
   /** Concurrency for the fan-out. Default 4. */
   concurrency?: number;
@@ -87,7 +89,7 @@ function matches(obj: ResourceLike, qLower: string): boolean {
 }
 
 function listFromResource<T>(
-  resource: CrdResource<T>,
+  resource: Resource<T>,
   namespace?: string
 ): Promise<Array<Record<string, unknown>>> {
   return resource
@@ -98,9 +100,9 @@ function listFromResource<T>(
 
 export async function searchRoutes(app: FastifyInstance, deps: SearchDeps): Promise<void> {
   const security = [{ sessionCookie: [] }];
-  const { kubeCustom, redis, concurrency = 4, cacheTtlSeconds = 10 } = deps;
+  const { kubeCustom, db, redis, concurrency = 4, cacheTtlSeconds = 10 } = deps;
 
-  if (!kubeCustom) {
+  if (!kubeCustom || !db) {
     app.get(
       '/api/v1/search',
       { preHandler: requireAuth, schema: { tags: ['search'], security } },
@@ -110,11 +112,11 @@ export async function searchRoutes(app: FastifyInstance, deps: SearchDeps): Prom
     return;
   }
 
-  const pools = buildPoolResource(kubeCustom);
+  const pools = buildPoolResource(db);
   const datasets = buildDatasetResource(kubeCustom);
   const buckets = buildBucketResource(kubeCustom);
   const shares = buildShareResource(kubeCustom);
-  const disks = buildDiskResource(kubeCustom);
+  const disks = buildDiskResource(db);
   const appsAvailable = buildAppResource(kubeCustom);
   const appInstances = buildAppInstanceResource(kubeCustom);
   const vms = buildVmResource(kubeCustom);

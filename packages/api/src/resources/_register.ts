@@ -3,13 +3,14 @@ import type { z } from 'zod';
 import { type Kind, canDelete, canRead, canWrite, ownNamespace } from '../auth/authz.js';
 import { requireAuth } from '../auth/decorators.js';
 import { writeAudit } from '../services/audit.js';
+import { CrdApiError } from '../services/crd.js';
 import {
-  CrdApiError,
-  CrdConflictError,
-  CrdInvalidError,
-  CrdNotFoundError,
-  type CrdResource,
-} from '../services/crd.js';
+  isConflict as isResourceConflict,
+  isInvalid as isResourceInvalid,
+  isNotFound as isResourceNotFound,
+  isResourceApiError,
+  type Resource,
+} from '../services/resource.js';
 import type { AuthenticatedUser } from '../types.js';
 
 /**
@@ -25,8 +26,8 @@ export interface RegisterOptions<T> {
   tag: string;
   /** Resource kind (used for authz + audit). */
   kind: Kind;
-  /** Backing CRD resource. */
-  resource: CrdResource<T>;
+  /** Backing resource (CRD or Postgres-backed; routes don't care). */
+  resource: Resource<T>;
   /** Zod schema for responses + payload validation. */
   schema: z.ZodType<T>;
   /**
@@ -57,15 +58,16 @@ export class RegisterValidationError extends Error {
 }
 
 function errorStatus(err: unknown): number {
-  if (err instanceof CrdNotFoundError) return 404;
-  if (err instanceof CrdConflictError) return 409;
-  if (err instanceof CrdInvalidError) return 422;
+  if (isResourceNotFound(err)) return 404;
+  if (isResourceConflict(err)) return 409;
+  if (isResourceInvalid(err)) return 422;
   if (err instanceof CrdApiError) return err.statusCode || 500;
+  if (isResourceApiError(err)) return err.statusCode || 500;
   return 500;
 }
 
 function errorBody(err: unknown): { error: string; message: string } {
-  if (err instanceof CrdApiError) {
+  if (isResourceApiError(err)) {
     return { error: err.name, message: err.message };
   }
   const msg = (err as { message?: string })?.message ?? 'internal error';

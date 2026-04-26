@@ -1,20 +1,21 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import { type StoragePool, StoragePoolSchema } from '@novanas/schemas';
 import type { FastifyInstance } from 'fastify';
-import { CrdResource } from '../services/crd.js';
+import type { DbClient } from '../services/db.js';
+import { PgResource } from '../services/pg-resource.js';
 import { RegisterValidationError, registerCrudRoutes } from './_register.js';
 
-export function buildPoolResource(api: CustomObjectsApi): CrdResource<StoragePool> {
-  return new CrdResource<StoragePool>({
-    api,
-    gvr: { group: 'novanas.io', version: 'v1alpha1', plural: 'storagepools' },
+export function buildPoolResource(db: DbClient): PgResource<StoragePool> {
+  return new PgResource<StoragePool>({
+    db,
+    apiVersion: 'novanas.io/v1alpha1',
+    kind: 'StoragePool',
     schema: StoragePoolSchema,
     namespaced: false,
   });
 }
 
-export function register(app: FastifyInstance, api: CustomObjectsApi): void {
-  const resource = buildPoolResource(api);
+export function register(app: FastifyInstance, db: DbClient): void {
+  const resource = buildPoolResource(db);
   registerCrudRoutes<StoragePool>({
     app,
     basePath: '/api/v1/pools',
@@ -29,6 +30,8 @@ export function register(app: FastifyInstance, api: CustomObjectsApi): void {
       // with a 422 the SPA can show inline. The dropdown already
       // disables used tiers in the UI; this guard catches CLI/API
       // callers and races between two simultaneous create attempts.
+      // Postgres-backed: this validation now actually holds, because
+      // there is no kubectl backdoor to the resource.
       const incoming = body as { spec?: { tier?: string } };
       const tier = incoming?.spec?.tier;
       if (!tier) return;

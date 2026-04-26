@@ -1,11 +1,11 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerDisks } from '../resources/disks.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function diskRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerDisks(app, api);
+export async function diskRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerDisks(app, db);
     return;
   }
   registerUnavailable(app, [

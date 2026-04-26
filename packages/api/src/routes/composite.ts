@@ -56,8 +56,8 @@ export async function compositeRoutes(app: FastifyInstance, deps: CompositeDeps)
   const { kubeCustom, db, jobs } = deps;
   const security = [{ sessionCookie: [] }];
 
-  if (!kubeCustom) {
-    // stub when kubeCustom unavailable (test / missing kubeconfig)
+  if (!kubeCustom || !db) {
+    // stub when kubeCustom or db unavailable (test / missing config)
     for (const url of [
       '/api/v1/composite/dataset-with-share',
       '/api/v1/composite/install-app',
@@ -75,7 +75,7 @@ export async function compositeRoutes(app: FastifyInstance, deps: CompositeDeps)
   const datasets = buildDatasetResource(kubeCustom);
   const shares = buildShareResource(kubeCustom);
   const vms = buildVmResource(kubeCustom);
-  const disks = buildDiskResource(kubeCustom);
+  const disks = buildDiskResource(db);
   const apps = buildAppInstanceResource(kubeCustom);
 
   // --------------------------------------------------------------------------

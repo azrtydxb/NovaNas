@@ -108,11 +108,14 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // domain routes (all require session). The 8 CRUD modules use kubeCustom
   // when available; otherwise they fall back to 503 stubs so the app still
   // boots in test environments without a kubeconfig.
-  await app.register(async (s) => poolRoutes(s, deps.kubeCustom));
+  // Postgres-backed (post-CRD-migration): pools + disks read/write
+  // through PgResource. The kubeCustom client is no longer the source
+  // of truth for these kinds.
+  await app.register(async (s) => poolRoutes(s, deps.db ?? null));
   await app.register(async (s) => datasetRoutes(s, deps.kubeCustom));
   await app.register(async (s) => bucketRoutes(s, deps.kubeCustom));
   await app.register(async (s) => shareRoutes(s, deps.kubeCustom));
-  await app.register(async (s) => diskRoutes(s, deps.kubeCustom));
+  await app.register(async (s) => diskRoutes(s, deps.db ?? null));
   await app.register(async (s) => snapshotRoutes(s, deps.kubeCustom, { jobs: deps.jobs ?? null }));
   await app.register(async (s) => appRoutes(s, deps.kubeCustom));
   await app.register(async (s) => userRoutes(s, deps.kubeCustom));
@@ -175,7 +178,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   // B3-API-Infra: cross-resource search
   await app.register(async (s) =>
-    searchRoutes(s, { kubeCustom: deps.kubeCustom, redis: deps.redis })
+    searchRoutes(s, { kubeCustom: deps.kubeCustom, db: deps.db ?? null, redis: deps.redis })
   );
 
   await app.register(async (s) => systemRoutes(s, { jobs: deps.jobs ?? null }));

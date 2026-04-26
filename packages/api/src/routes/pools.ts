@@ -1,14 +1,13 @@
-import type { CustomObjectsApi } from '@kubernetes/client-node';
 import type { FastifyInstance } from 'fastify';
 import { register as registerPools } from '../resources/pools.js';
+import type { DbClient } from '../services/db.js';
 import { registerUnavailable } from './_unavailable.js';
 
-export async function poolRoutes(app: FastifyInstance, api?: CustomObjectsApi): Promise<void> {
-  if (api) {
-    registerPools(app, api);
+export async function poolRoutes(app: FastifyInstance, db?: DbClient | null): Promise<void> {
+  if (db) {
+    registerPools(app, db);
     return;
   }
-  // TODO(wave-10): remove once kube client is mandatory
   registerUnavailable(app, [
     { method: 'GET', url: '/api/v1/pools', summary: 'List ZFS pools', tag: 'pools' },
     { method: 'POST', url: '/api/v1/pools', summary: 'Create a pool', tag: 'pools' },
