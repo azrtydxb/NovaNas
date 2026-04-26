@@ -58,6 +58,17 @@ jobs:
 
       - uses: sigstore/cosign-installer@v3
 
+      # cosign uses its own keychain — `helm registry login` above
+      # only auths the helm CLI. Without this step, `cosign sign`
+      # fails on the read-back of the just-pushed manifest.
+      - name: Cosign login to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TOKEN="${GHCR_TOKEN:-$GITHUB_TOKEN}"
+          echo "$TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Sign published chart artifacts
         run: ./apps/scripts/sign-all.sh
         env:
@@ -99,6 +110,14 @@ jobs:
         run: helm push "${{ steps.pkg.outputs.tgz }}" oci://ghcr.io/azrtydxb/charts
 
       - uses: sigstore/cosign-installer@v3
+
+      - name: Cosign login to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TOKEN="${GHCR_TOKEN:-$GITHUB_TOKEN}"
+          echo "$TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Cosign sign umbrella chart
         env:
