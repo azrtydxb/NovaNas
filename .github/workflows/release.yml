@@ -85,18 +85,38 @@ jobs:
           VERSION: ${{ github.ref_name }}
 
       # ---------- sign containers ----------
+      # cosign uses its own keychain; the docker login above doesn't
+      # auth it, so sign would fail with "unauthenticated" on the
+      # signature push. Log cosign in explicitly.
+      - name: Cosign login to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: cosign sign containers
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           set -euo pipefail
+          # Must mirror the build matrix in hack/ci/build-images.sh.
           for img in \
             ghcr.io/azrtydxb/novanas/api \
             ghcr.io/azrtydxb/novanas/ui \
             ghcr.io/azrtydxb/novanas/operators \
+            ghcr.io/azrtydxb/novanas/disk-agent \
             ghcr.io/azrtydxb/novanas/storage-meta \
-            ghcr.io/azrtydxb/novanas/storage-agent; do
-            cosign sign --yes "${img}:${VERSION}"
+            ghcr.io/azrtydxb/novanas/storage-agent \
+            ghcr.io/azrtydxb/novanas/storage-controller \
+            ghcr.io/azrtydxb/novanas/storage-scheduler \
+            ghcr.io/azrtydxb/novanas/storage-webhook \
+            ghcr.io/azrtydxb/novanas/storage-csi \
+            ghcr.io/azrtydxb/novanas/storage-s3gw \
+            ghcr.io/azrtydxb/novanas/storage-dataplane; do
+            # Skip images that weren't actually built (build-images.sh
+            # silently skips missing Dockerfiles).
+            if docker manifest inspect "${img}:${VERSION}" >/dev/null 2>&1; then
+              cosign sign --yes "${img}:${VERSION}"
+            else
+              echo "skip sign: ${img}:${VERSION} (not present in registry)"
+            fi
           done
 
       # ---------- charts ----------

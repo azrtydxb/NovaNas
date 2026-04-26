@@ -11,32 +11,36 @@ REGISTRY="${REGISTRY:-ghcr.io/azrtydxb/novanas}"
 VERSION="${VERSION:?VERSION must be set (e.g. v1.2.3)}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# image -> build context (Dockerfile assumed at <context>/Dockerfile unless overridden)
+# image -> Dockerfile path. Build context is always ROOT — every
+# Dockerfile in this repo COPYs go.work / pnpm-lock from the monorepo
+# root. Skip silently if the Dockerfile is missing (so partial-tree
+# tags still work in early development).
 declare -a images=(
-  "api:packages/api"
-  "ui:packages/ui"
-  "operators:packages/operators"
-  "storage-meta:storage/meta"
-  "storage-agent:storage/agent"
+  "api:packages/api/Dockerfile"
+  "ui:packages/ui/Dockerfile"
+  "operators:packages/operators/Dockerfile"
+  "disk-agent:packages/operators/cmd/disk-agent/Dockerfile"
+  "storage-meta:storage/cmd/meta/Dockerfile"
+  "storage-agent:storage/cmd/agent/Dockerfile"
+  "storage-controller:storage/cmd/controller/Dockerfile"
+  "storage-scheduler:storage/cmd/scheduler/Dockerfile"
+  "storage-webhook:storage/cmd/webhook/Dockerfile"
+  "storage-csi:storage/cmd/csi/Dockerfile"
+  "storage-s3gw:storage/cmd/s3gw/Dockerfile"
+  "storage-dataplane:storage/dataplane/Dockerfile.build"
 )
 
 for entry in "${images[@]}"; do
   name="${entry%%:*}"
-  ctx="${entry#*:}"
-  dockerfile="$ROOT/$ctx/Dockerfile"
+  dockerfile_rel="${entry#*:}"
+  dockerfile="$ROOT/$dockerfile_rel"
   if [ ! -f "$dockerfile" ]; then
-    # Fall back to dataplane's Dockerfile.build for storage-agent variant.
-    if [ "$name" = "storage-agent" ] && [ -f "$ROOT/storage/dataplane/Dockerfile.build" ]; then
-      ctx="storage/dataplane"
-      dockerfile="$ROOT/$ctx/Dockerfile.build"
-    else
-      echo "skip: $name (no Dockerfile at $dockerfile)"
-      continue
-    fi
+    echo "skip: $name (no Dockerfile at $dockerfile_rel)"
+    continue
   fi
   tag="$REGISTRY/$name:$VERSION"
-  echo "==> build+push $tag  (context: $ctx)"
-  docker build -f "$dockerfile" -t "$tag" "$ROOT/$ctx"
+  echo "==> build+push $tag  (Dockerfile: $dockerfile_rel)"
+  docker build -f "$dockerfile" -t "$tag" "$ROOT"
   docker push "$tag"
 done
 
