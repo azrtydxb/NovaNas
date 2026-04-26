@@ -35,6 +35,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Post-migration: agent talks to the NovaNas API, not
+            # kube-apiserver. The API is served HTTP inside the cluster
+            # (TLS terminates at the ingress); use the ClusterIP Service.
+            - name: NOVANAS_API_URL
+              value: {{ printf "http://novanas-api.%s.svc:%d" $ns (.Values.api.service.port | int) | quote }}
           securityContext:
             # We must read /sys/block/*/device/{model,serial,wwid} —
             # most fields are world-readable but a few (especially on

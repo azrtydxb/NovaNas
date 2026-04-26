@@ -37,6 +37,7 @@ async function main(): Promise<void> {
     redisSub,
     keycloak,
     kubeCustom: kube.custom,
+    kubeAuthn: kube.authn,
     db,
     prom,
   });

@@ -18,36 +18,9 @@ import (
 // controller-runtime client + Noop* interface defaults keep these
 // self-contained and fast.
 
-func TestStoragePoolReconciler_HappyPath(t *testing.T) {
-	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.StoragePool{ObjectMeta: newClusterMeta("fast")}
-	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &StoragePoolReconciler{BaseReconciler: newPart2Base(c, s, "StoragePool"), Recorder: newPart2Recorder()}
-	mustReconcileOK(t, context.Background(), r, part2Request("fast"))
-	var got novanasv1alpha1.StoragePool
-	if err := c.Get(context.Background(), client.ObjectKey{Name: "fast"}, &got); err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if got.Status.Phase == "" {
-		t.Fatalf("phase empty")
-	}
-	if len(got.Status.Conditions) == 0 {
-		t.Fatalf("expected conditions to be set")
-	}
-}
-
-func TestDiskReconciler_HappyPath(t *testing.T) {
-	s := newPart2Scheme(t)
-	cr := &novanasv1alpha1.Disk{ObjectMeta: newClusterMeta("disk-a")}
-	c := newPart2Client(s, []client.Object{cr}, []client.Object{cr})
-	r := &DiskReconciler{BaseReconciler: newPart2Base(c, s, "Disk"), Recorder: newPart2Recorder()}
-	mustReconcileOK(t, context.Background(), r, part2Request("disk-a"))
-	var got novanasv1alpha1.Disk
-	_ = c.Get(context.Background(), client.ObjectKey{Name: "disk-a"}, &got)
-	if got.Status.State == "" {
-		t.Fatalf("expected disk state to be set")
-	}
-}
+// StoragePool / Disk reconciler tests removed: those CRDs no longer
+// exist after the CRD-to-Postgres migration; the API server owns the
+// validation that the controllers used to perform.
 
 func TestSnapshotReconciler_HappyPath(t *testing.T) {
 	s := newPart2Scheme(t)

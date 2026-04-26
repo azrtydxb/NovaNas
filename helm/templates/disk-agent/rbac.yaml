@@ -1,5 +1,19 @@
 {{- if .Values.diskAgent.enabled -}}
 {{- $ns := include "novanas.systemNamespace" . -}}
+{{/*
+Disk agent ServiceAccount.
+
+Post CRD-to-Postgres migration the disk-agent no longer writes
+disks.novanas.io directly; it POSTs/PATCHes via the NovaNas API
+(authenticated by its projected SA JWT, validated by the API's
+TokenReview middleware — see packages/api/src/auth/tokenreview.ts).
+That removes the need for any cluster-level RBAC on the novanas.io
+API group; the SA only needs a token Kubernetes will project into
+the pod automatically.
+
+Kept as a dedicated SA (rather than `default`) so the API can map
+this exact subject to the `internal:disk-agent` principal.
+*/}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -7,33 +21,4 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: novanas-disk-agent
-  labels:
-    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
-rules:
-  - apiGroups: ["novanas.io"]
-    resources: ["disks"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: ["novanas.io"]
-    resources: ["disks/status"]
-    verbs: ["get", "update", "patch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: novanas-disk-agent
-  labels:
-    {{- include "novanas.componentLabels" (dict "ctx" . "component" "disk-agent") | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: novanas-disk-agent
-subjects:
-  - kind: ServiceAccount
-    name: novanas-disk-agent
-    namespace: {{ $ns }}
 {{- end }}

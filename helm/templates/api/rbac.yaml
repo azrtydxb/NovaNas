@@ -26,6 +26,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch"]
+  # TokenReview is the API's mechanism for verifying ServiceAccount JWTs
+  # presented by in-cluster callers (disk-agent, storage-meta, …) on the
+  # `Authorization: Bearer …` header. See packages/api/src/auth/tokenreview.ts.
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

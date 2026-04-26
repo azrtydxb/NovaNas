@@ -321,12 +321,14 @@ func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
 		SetupWithManager(mgr ctrl.Manager) error
 	}
 
+	// Disk + StoragePool are now Postgres-backed (see packages/api).
+	// disk-agent posts to /api/v1/disks; pool/disk validation runs in
+	// the API. The corresponding reconcilers and CRDs were removed —
+	// nothing in the cluster watches them anymore.
 	reconcilers := []setup{
-		&controllers.StoragePoolReconciler{},
 		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
 		&controllers.DatasetReconciler{KeyProvisioner: ec.keyProv},
 		&controllers.BucketReconciler{KeyProvisioner: ec.keyProv},
-		&controllers.DiskReconciler{},
 		&controllers.ShareReconciler{},
 		&controllers.SmbServerReconciler{},
 		&controllers.NfsServerReconciler{},
