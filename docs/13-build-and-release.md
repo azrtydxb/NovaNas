@@ -9,13 +9,13 @@ novanas/
 ├── api/                 # Fastify + TypeScript
 ├── ui/                  # React + Vite
 ├── cli/                 # novanasctl (Go, static binary)
-├── operators/           # Go (controller-runtime) — NovaNas CRD operators
+├── controllers/        # Go — runtime-neutral controllers (read API state, emit runtime objects via the runtime adapter). Replaces the former kubebuilder operators package.
+├── runtime/            # Go — runtime adapter; one impl per backend (k8s, docker, …)
 ├── schemas/             # Shared Zod (TS) + generated Go types
 ├── storage/             # Forked from NovaStor
-│   ├── cmd/             #   agent, meta, csi, scheduler, webhook, s3gw
-│   ├── internal/        #   chunk, metadata, placement, operator, filer (to delete), s3
-│   ├── dataplane/       #   Rust SPDK dataplane
-│   └── api/v1alpha1/    #   CRD types → renamed to novanas.io group
+│   ├── cmd/             #   agent, meta, csi, scheduler, s3gw
+│   ├── internal/        #   chunk, metadata, placement, controller, filer (to delete), s3
+│   └── dataplane/       #   Rust SPDK dataplane
 ├── proto/               # gRPC contracts (owned)
 ├── os/                  # RAUC bundle + Debian image build
 ├── installer/           # Text-mode curses installer (Rust or Go)
@@ -31,7 +31,7 @@ novanas/
 **Monorepo + Nx** orchestrating multi-language workspaces:
 
 - pnpm workspaces (TypeScript: api, ui, schemas, cli if TS tools)
-- Go workspaces (operators, cli, csi, agent, meta, s3gw)
+- Go workspaces (controllers, runtime, cli, csi, agent, meta, s3gw)
 - Cargo workspaces (dataplane)
 - Nx manages cross-language dependency graph, caching, affected-command semantics
 
@@ -41,8 +41,8 @@ Pulled as-is, not vendored into monorepo:
 
 | Project | Consumed as |
 |---|---|
-| novanet | OCI images + Helm subchart (separate repo) |
-| novaedge | OCI images + Helm subchart (separate repo) |
+| novanet | OCI images + runtime manifests (separate repo); installed by NovaNas runtime adapter, not by users |
+| novaedge | OCI images + runtime manifests (separate repo); installed by NovaNas runtime adapter, not by users |
 | Keycloak, OpenBao, Postgres, Redis, k3s, KubeVirt, Prometheus/Loki/Tempo/Grafana | Upstream Helm charts (vendored as subcharts in our umbrella) |
 | Debian, Linux, Samba | OS package / container base |
 
@@ -52,7 +52,7 @@ Pulled as-is, not vendored into monorepo:
 
 - **CalVer** for product release: `YY.MM.patch` (e.g., `26.07.3`) — appliance convention
 - **SemVer** for API: `/api/v1`, `/api/v2` — maintained separately
-- **CRD API versioning**: `v1alpha1` → `v1beta1` → `v1` as features stabilize; conversion webhooks for in-place upgrades
+- **API versioning**: `/api/v1alpha1` → `/api/v1beta1` → `/api/v1` as features stabilize; backward compatibility maintained for one minor version after each promotion. No CRD conversion webhooks (no CRDs).
 
 ## Branching
 
@@ -78,10 +78,10 @@ Pulled as-is, not vendored into monorepo:
 ## CI pipeline per PR
 
 ```
-├─ Lint & format (biome/TS, golangci-lint/Go, cargo fmt+clippy/Rust, helm lint, kubeconform/CRDs)
+├─ Lint & format (biome/TS, golangci-lint/Go, cargo fmt+clippy/Rust, helm lint on app catalog charts only)
 ├─ Build (all targets, parallelized)
 ├─ Unit tests (vitest, go test, cargo test)
-├─ Type check (tsc, proto lint, CRD schema validation)
+├─ Type check (tsc, proto lint, OpenAPI schema validation against `@novanas/schemas`)
 ├─ Container images built but not pushed (cached layers)
 ├─ Security scans (grype, gitleaks, semgrep, govulncheck)
 ├─ License scan (cyclonedx-cli, reject copyleft in runtime deps)
@@ -158,16 +158,16 @@ CI on catalog changes:
 3. Smoke-test (HTTP probe, basic functional test)
 4. Sign with cosign
 5. Publish → `oci://ghcr.io/azrtydxb/novanas-apps/{app-name}:{version}`
-6. Update `AppCatalog` index
+6. Update the `appCatalog` index
 
-Appliances poll the catalog index per `AppCatalog.spec.refreshInterval`.
+Appliances poll the catalog index per `appCatalog.refreshInterval`.
 
 ## Testing strategy
 
 Layered pyramid:
 
 1. **Unit** — per-package, every PR, seconds
-2. **Integration** — kind cluster, real CRD reconciliation, mocked K8s where needed; minutes
+2. **Integration** — controllers + runtime adapter against an ephemeral kind cluster (K8s adapter) and an ephemeral dockerd (Docker adapter), driven from the API server; minutes
 3. **E2E** — QEMU/KVM: boot fresh ISO, run installer, pool/dataset/share/snapshot/replicate/restart cycle
 4. **Compatibility** — AWS SDK smokes, MinIO mint, Ceph s3-tests, NFSv3/v4 compliance, SMB2/3 compliance (smbtorture), CSI conformance
 5. **Upgrade** — install old release, RAUC-upgrade to current, verify state preserved
@@ -183,7 +183,7 @@ E2E runs on **self-hosted bare-metal runners** for hardware-shape realism.
 | ISO images | `.iso` hybrid, bootable | Bare-metal install |
 | Virtual appliance images | `.ova`, `.qcow2`, `.vmdk`, raw | Virtualized deployments |
 | Container images | OCI, amd64 | All NovaNas services |
-| Helm charts | OCI | Umbrella + subcharts |
+| Helm charts (app catalog only) | OCI | Catalog entries; not used for the system itself |
 | App catalog charts | OCI, signed | Catalog entries |
 | CLI binary | Static binary | `novanasctl` |
 | SDKs | npm / pypi / go mod / rust crate | Generated from OpenAPI |

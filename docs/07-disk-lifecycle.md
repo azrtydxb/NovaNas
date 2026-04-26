@@ -1,6 +1,6 @@
 # 07 — Disk Lifecycle
 
-Every physical disk is represented by a `Disk` CR with a persistent state machine. Identity is by WWN/NAA — surviving slot moves and device renames.
+Every physical disk is represented by a `disk` API resource (Postgres-backed, owned by the NovaNas API server) with a persistent state machine. Identity is by WWN/NAA — surviving slot moves and device renames. There is no Kubernetes CRD; the disk controller updates the API record directly.
 
 ## States
 
@@ -18,7 +18,7 @@ UNKNOWN ──► IDENTIFIED ──► ASSIGNED ──► ACTIVE ──► DRAIN
 |---|---|
 | UNKNOWN | Kernel sees a block device; not yet probed |
 | IDENTIFIED | SMART/GUID/model/serial read; in UI "Available" list |
-| ASSIGNED | Admin added to a StoragePool; not yet initialized |
+| ASSIGNED | Admin added to a `pool`; not yet initialized |
 | ACTIVE | Live member; chunk engine using it |
 | DEGRADED | Chunk engine sees errors but disk still operating |
 | FAILED | Engine stopped using it; recovery in progress |
@@ -38,15 +38,15 @@ There is **no** `metadata` or `cache` role — metadata is a chunk-engine-backed
 
 ## Add disk flow (hot-insert)
 
-1. Kernel hotplug event → `novanas-disk-manager` DaemonSet (host access) detects
+1. Kernel hotplug event → `novanas-disk-agent` (host-mode container, one per node) detects
 2. Reads WWN, model, serial, geometry, SMART, existing signatures
-3. Creates `Disk` CR in IDENTIFIED state
-4. UI notification: *"New 8 TB disk detected in slot 4"*
-5. Admin chooses:
+3. Agent calls `POST /api/v1/disks` with the observed properties; the API server inserts a `disk` record in IDENTIFIED state
+4. UI notification (delivered via WebSocket from the API server): *"New 8 TB disk detected in slot 4"*
+5. Admin chooses (in UI, against the API):
    - **Role**: data or spare
    - **Pool**: one of existing pools (UI filters on class match; warns on mismatch), or create new
    - **Rebalance**: immediate, later, or manual-only
-6. On commit → transitions ASSIGNED → ACTIVE
+6. UI calls `PATCH /api/v1/disks/{name}`; API persists; disk controller transitions ASSIGNED → ACTIVE
 7. If `rebalanceOnAdd` triggered, chunks migrate onto new disk (rate-limited by pool `recoveryRate`)
 
 **No auto-assignment.** Even when only one pool matches.
@@ -65,7 +65,7 @@ There is **no** `metadata` or `cache` role — metadata is a chunk-engine-backed
 4. **Protection-violation guard**: if removing would drop below any volume's minimum for its protection policy, UI refuses and explains
 5. Drain completes → transitions to REMOVABLE
 6. UI prompts: "[Blink slot LED] [Wipe] [Done]"
-7. Physical pull → hotplug event → `Disk` CR kept (as "gone") for audit grace period, then deleted
+7. Physical pull → hotplug event → `disk` API record kept (as "gone") for audit grace period, then deleted
 
 ## Unplanned removal (failure)
 
@@ -78,7 +78,7 @@ There is **no** `metadata` or `cache` role — metadata is a chunk-engine-backed
    - **Immediate re-replication**: policy engine identifies chunks on failed disk; re-replicates/re-encodes to other healthy disks to restore target protection levels. Rate-limited by `recoveryRate`.
    - **Standby for replacement**: failed slot awaits physical replacement; new disk, when inserted, participates in rebalance and accepts its share of chunks.
 4. Hot spares in the same pool are auto-promoted: engine begins rebuilding onto spare immediately, without waiting for admin action
-5. Alert fired per `AlertPolicy`
+5. Alert fired per `alertPolicy` API resource
 6. Once protection restored (even without physical replacement), degraded state clears to normal with one-less-disk
 
 ## Emergency protection downgrade
@@ -92,7 +92,7 @@ When rebuild cannot complete due to capacity exhaustion or insufficient disks:
 
 ## Rebuild rate-limiting
 
-`StoragePool.spec.recoveryRate`:
+`pool.recoveryRate`:
 
 | Value | Behavior |
 |---|---|
@@ -120,29 +120,32 @@ When disks are incomplete or pool is below protection minimum:
 
 - Admin explicitly triggers "Salvage mode" (separate UI path from normal import)
 - Scan reports: *"Pool has 4 datasets totaling 3.2 TB. Based on disks present: 2.8 TB fully recoverable, 320 GB partially recoverable, 80 GB unrecoverable."*
-- Imports into a dedicated namespace `novanas-salvage/<poolname>-<timestamp>`
+- Imports as a salvage tenant `novanas-salvage/<poolname>-<timestamp>` (the API server tags the resources; the runtime adapter places any required containers in the corresponding runtime scope — namespace on K8s, network/label set on Docker)
 - All datasets/buckets mounted **read-only**
 - Unreadable files return `EIO` (or placeholder, admin choice)
-- To use salvaged data in normal operation, admin copies to a fresh Dataset (`novanasctl dataset copy`) — writes are re-encoded at current protection
+- To use salvaged data in normal operation, admin copies to a fresh `dataset` (`novanasctl dataset copy`) — writes are re-encoded at current protection
 - Status tags clearly visible: "SALVAGED — READ-ONLY — VERIFY INTEGRITY"
 
 ## SMART policy
 
-```yaml
-apiVersion: novanas.io/v1alpha1
-kind: SmartPolicy
-metadata: { name: default }
-spec:
-  appliesTo: { all: true }
-  shortTest: { cron: "0 3 * * *" }          # daily
-  longTest:  { cron: "0 4 * * SUN" }        # weekly
-  thresholds:
-    reallocatedSectors: { warning: 1, critical: 10 }
-    pendingSectors:     { warning: 1, critical: 1 }
-    temperature:        { warning: 50, critical: 60 }
-  actions:
-    onWarning: alert
-    onCritical: alertAndMarkDegraded
+`POST /api/v1/smartPolicies`:
+
+```json
+{
+  "name": "default",
+  "appliesTo": { "all": true },
+  "shortTest": { "cron": "0 3 * * *" },
+  "longTest":  { "cron": "0 4 * * SUN" },
+  "thresholds": {
+    "reallocatedSectors": { "warning": 1, "critical": 10 },
+    "pendingSectors":     { "warning": 1, "critical": 1 },
+    "temperature":        { "warning": 50, "critical": 60 }
+  },
+  "actions": {
+    "onWarning": "alert",
+    "onCritical": "alertAndMarkDegraded"
+  }
+}
 ```
 
 ## Wipe
@@ -162,22 +165,22 @@ spec:
 
 ## Event history
 
-- **Last 20 events inline** on `Disk.status.recentEvents[]` (ring buffer, for UI-quick-load)
-- **Full history** via Kubernetes Events (`involvedObject: Disk/<name>`)
-- **Long-term retention** via `AuditPolicy` sinks (Loki, S3, syslog)
+- **Last 20 events inline** on `disk.status.recentEvents[]` (ring buffer, for UI-quick-load)
+- **Full history** in the API server's event store (Postgres `disk_events` table), reachable via `GET /api/v1/disks/{name}/events`. The event bus is API-owned and runtime-agnostic — no Kubernetes Events involvement.
+- **Long-term retention** via `auditPolicy` sinks (Loki, S3, syslog)
 
 ### Event schema
 
-```go
-type LifecycleEvent struct {
-  Timestamp   metav1.Time
-  Type        string    // Assigned | Activated | Degraded | Failed | Drained | ...
-  Reason      string    // machine-readable
-  Message     string    // human-readable
-  FromState   DiskState
-  ToState     DiskState
-  Actor       string    // operator | admin:<user> | policy-engine
-}
+```ts
+type LifecycleEvent = {
+  timestamp: string;       // RFC3339
+  type: string;            // Assigned | Activated | Degraded | Failed | Drained | ...
+  reason: string;          // machine-readable
+  message: string;         // human-readable
+  fromState: DiskState;
+  toState: DiskState;
+  actor: string;           // controller | admin:<user> | policy-engine
+};
 ```
 
 ## Observability per disk

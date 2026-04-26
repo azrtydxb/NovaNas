@@ -21,28 +21,28 @@ Object storage does not follow this pattern — see the S3 section.
 
 ### iSCSI
 
-- `IscsiTarget` CRD binds a BlockVolume to an iSCSI portal
-- Target implementation: kernel LIO (tcm-loop) configured via targetcli from an operator
+- An `iscsiTarget` API resource binds a `blockVolume` to an iSCSI portal
+- Target implementation: kernel LIO (tcm-loop). The runtime adapter projects the resource onto a host-mode container running targetcli config; the iSCSI controller reconciles the live target state against the API resource.
 - CHAP auth support, mutual CHAP optional
 - Multiple initiators via `aclMode: any | whitelist`
 
 ### NVMe-oF
 
-- `NvmeofTarget` CRD binds a BlockVolume to an NVMe subsystem
-- Target: SPDK nvmf_tgt (already part of NovaStor dataplane)
+- An `nvmeofTarget` API resource binds a `blockVolume` to an NVMe subsystem
+- Target: SPDK nvmf_tgt (already part of NovaStor dataplane). Runtime adapter places the SPDK process; controller reconciles subsystem config against the API resource.
 - TCP transport (RDMA possible future)
 - Host NQN whitelist
 
-Both block protocols are exposed on HostInterfaces whose `usage` includes `storage`.
+Both block protocols are exposed on `hostInterface`s whose `usage` includes `storage`.
 
 ## File protocols
 
 ### NFS (knfsd via operator pod)
 
 - NFS runs as kernel NFS (knfsd) on the host — same approach as TrueNAS SCALE
-- `novanas-nfs-operator` pod (privileged, hostPath) writes `/etc/exports` and runs `exportfs -ra`
+- A privileged `novanas-nfs-controller` host-agent (hostPath access) writes `/etc/exports` and runs `exportfs -ra`. The controller reads `share` resources from the API server; the runtime adapter is responsible only for placing the controller container.
 - Supports NFSv3 and NFSv4.1+
-- Export configuration comes from `Share` CRDs with `protocols.nfs`
+- Export configuration is derived from `share` API resources whose `protocols.nfs` is set
 
 Why host knfsd instead of Ganesha:
 - Significantly faster, lower CPU
@@ -61,21 +61,24 @@ Why host knfsd instead of Ganesha:
 
 ### Multi-protocol Share
 
-A single `Share` CRD exposes one path over both SMB and NFS simultaneously. The Share operator writes Samba config + `/etc/exports` in sync.
+A single `share` API resource can expose one path over both SMB and NFS simultaneously. The share controller writes Samba config + `/etc/exports` in sync; both writes are derived from the same API record so they cannot drift.
 
-```yaml
-kind: Share
-spec:
-  dataset: family-media
-  path: /photos
-  protocols:
-    smb: { server: main-smb, shadowCopies: true }
-    nfs: { server: main-nfs, allowedNetworks: [192.168.1.0/24] }
-  access:
-    - principal: { user: pascal }
-      mode: rw
-    - principal: { group: family }
-      mode: rw
+`POST /api/v1/shares`:
+
+```json
+{
+  "name": "photos",
+  "dataset": "family-media",
+  "path": "/photos",
+  "protocols": {
+    "smb": { "server": "main-smb", "shadowCopies": true },
+    "nfs": { "server": "main-nfs", "allowedNetworks": ["192.168.1.0/24"] }
+  },
+  "access": [
+    { "principal": { "user": "pascal" }, "mode": "rw" },
+    { "principal": { "group": "family" }, "mode": "rw" }
+  ]
+}
 ```
 
 ### ACL model
@@ -147,7 +150,7 @@ Three variants translated to internal convergent encryption:
 | SSE variant | Internal mapping | Dedup |
 |---|---|---|
 | `AES256` (SSE-S3) | Bucket DK (automatic) | Yes, within bucket |
-| `aws:kms` (SSE-KMS) | `KmsKey` CRD → named DK | Yes, within KmsKey scope |
+| `aws:kms` (SSE-KMS) | `kmsKey` API resource → named DK | Yes, within kmsKey scope |
 | customer-provided (SSE-C) | Per-object client key, segregated chunk namespace | No (by design) |
 
 ### CI quality bar
@@ -159,7 +162,7 @@ Merges blocked unless all pass:
 
 ## Quality-of-service
 
-All protocol traffic can be shaped via `TrafficPolicy` CRD — interface-level, per-namespace, per-app, per-VM, per-replication-job, per-ObjectStore.
+All protocol traffic can be shaped via `trafficPolicy` API resources — interface-level, per-tenant, per-app, per-VM, per-replication-job, per-`objectStore`.
 
 ## Default ports
 
@@ -173,4 +176,4 @@ All protocol traffic can be shaped via `TrafficPolicy` CRD — interface-level, 
 | NVMe-oF TCP | 4420 |
 | S3 | 9000 (configurable) |
 
-No default host firewall. Ports are open per `ServicePolicy`.
+No default host firewall. Ports are open per `servicePolicy` API resource.

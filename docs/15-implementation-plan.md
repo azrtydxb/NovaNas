@@ -14,7 +14,7 @@ NovaNas is a full appliance stack. Realistic scope estimates:
 - Monorepo scaffolding + shared schemas: ~1–2 weeks
 - API server + UI skeletons (routable, stubbed endpoints): ~2–4 weeks
 - Storage fork + NovaNas-specific changes: ~4–8 weeks
-- Operators for every CRD: ~4–8 weeks
+- Runtime-neutral controllers + runtime adapter (k8s impl; docker impl as second adapter): ~4–8 weeks
 - OS image + RAUC + installer: ~2–4 weeks
 - Helm umbrella + subchart integration: ~1–2 weeks
 - App catalog (30 apps): ~2–4 weeks
@@ -28,7 +28,7 @@ This plan covers the **first several waves of scaffolding**, yielding a repo tha
 - Compiles / passes `pnpm build`, `go build ./...`, `cargo build`
 - Has a working CI green on "hello world" state
 - Has executable API server + UI responding to a basic auth+session flow
-- Has scaffolded operators and CRDs
+- Has scaffolded controllers and runtime adapter (no CRDs)
 - Can be iterated on by ongoing agent teams or humans
 
 ## Repository structure (target)
@@ -44,11 +44,12 @@ novanas/
 │   ├── api/                   # @novanas/api (Fastify)
 │   ├── ui/                    # @novanas/ui (React + Vite)
 │   ├── cli/                   # novanasctl (Go)
-│   ├── operators/             # Go controllers
-│   ├── csi/                   # Go CSI driver
+│   ├── controllers/           # Go runtime-neutral controllers
+│   ├── runtime/               # Go runtime adapter (k8s impl + docker impl)
+│   ├── csi/                   # Go CSI driver (used only by the k8s adapter)
 │   └── db/                    # @novanas/db (Drizzle schemas)
 ├── storage/                   # Forked from NovaStor
-│   ├── cmd/ internal/ api/v1alpha1/
+│   ├── cmd/ internal/
 │   └── dataplane/             # Rust SPDK
 ├── proto/                     # gRPC protobuf contracts
 ├── os/                        # Debian image + RAUC build
@@ -72,8 +73,9 @@ novanas/
 | **API** | `packages/api/` | Schemas, DB |
 | **UI** | `packages/ui/` | Schemas |
 | **CLI** | `packages/cli/` | Schemas (via generated Go types) |
-| **Operators** | `packages/operators/` | Schemas (Go types) |
-| **Storage Control Plane** | `storage/cmd/`, `storage/internal/`, `storage/api/v1alpha1/` | Schemas |
+| **Controllers** | `packages/controllers/` | Schemas (Go types), API |
+| **Runtime adapter** | `packages/runtime/` | Schemas (Go types) |
+| **Storage Control Plane** | `storage/cmd/`, `storage/internal/` | Schemas, API |
 | **Storage Dataplane** | `storage/dataplane/` | proto |
 | **Proto** | `proto/` | None (owned independently; consumers rebuild) |
 | **OS** | `os/` | Storage, Operators, API, UI (container images consumed) |
@@ -99,7 +101,7 @@ Agents spawned in parallel. Ownership non-overlapping.
 | Agent | Owns | Deliverables |
 |---|---|---|
 | **A1-Platform** | Root, `nx.json`, `.github/`, `hack/`, top-level configs | pnpm/go/cargo workspaces, Nx config, shared tsconfig/biome/eslint/golangci/rustfmt, `.editorconfig`, `.gitignore`, CI skeleton (lint + unit), README with build instructions |
-| **A1-Schemas** | `packages/schemas/` | `@novanas/schemas` package with Zod definitions for: Pool, Disk, BlockVolume, Dataset, Bucket, Share, Snapshot, User, Group, AppInstance, Vm, HostInterface, Certificate. Exported TS types + OpenAPI fragment generation setup. |
+| **A1-Schemas** | `packages/schemas/` | `@novanas/schemas` package with Zod definitions for: pool, disk, blockVolume, dataset, bucket, share, snapshot, user, group, appInstance, vm, hostInterface, certificate. Exported TS types + Go types + OpenAPI fragment generation setup. **No CRD generation.** |
 | **A1-Docs** | `docs/`, top-level `LICENSE`, `NOTICE` | Apache 2.0 license, NOTICE with NovaStor attribution, link `docs/README.md` from root `README.md` |
 
 Exit criteria:
@@ -115,7 +117,8 @@ Exit criteria:
 | **A2-DB** | `packages/db/` | Drizzle schema for: users (mirrored), sessions, audit_log, jobs, notifications, preferences, app_catalog_cache. Migration setup. |
 | **A2-API** | `packages/api/` | Fastify app skeleton. Route tree for `/api/v1/*` (stubs). Zod-validated request/response. Keycloak OIDC client stub. Drizzle integration. Redis client. WebSocket gateway skeleton. Structured pino logging. `/api/version` endpoint works. |
 | **A2-UI** | `packages/ui/` | Vite + React 19 + Shadcn/Tailwind + TanStack Router/Query setup. Route shells for all screens in docs. Auth flow wired to Keycloak OIDC. Login page. Dashboard skeleton. Design-files mockup styles adapted. |
-| **A2-Operators** | `packages/operators/` | controller-runtime scaffolding. One controller placeholder per CRD kind. Main entrypoint. RBAC manifests. |
+| **A2-Controllers** | `packages/controllers/` | Runtime-neutral controller scaffolding (read API state, reconcile via the runtime adapter interface). One controller per resource kind. Main entrypoint. **No kubebuilder, no controller-runtime CRD watch loops.** |
+| **A2-Runtime** | `packages/runtime/` | Runtime adapter interface (Go) + k8s impl (typed objects via `client-go`) + skeleton docker impl. Tests run against both backends from the same controller suite. |
 | **A2-CLI** | `packages/cli/` | Cobra skeleton for `novanasctl`. `login`, `version`, `whoami` commands that call the API. Static binary build. |
 | **A2-Proto** | `proto/` | .proto files for chunk engine, metadata service, replication service. Buf lint + generate. |
 
@@ -123,7 +126,7 @@ Exit criteria:
 - All packages build
 - API server starts and responds to `/api/version` and `/api/health`
 - UI dev server starts, login redirects to a mock OIDC endpoint
-- Operators binary compiles
+- Controllers + runtime adapter binaries compile; integration test runs against both kind (k8s) and dockerd
 - CLI binary compiles and prints version
 
 ### Wave 3 — Storage fork (single agent, sequential)
@@ -188,7 +191,8 @@ Parallel specialists added as needed: security audit, performance tuning, compat
 | Reproducible build check | Wave 3+ |
 | Security scan clean (grype, gitleaks, semgrep, govulncheck) | Wave 2+ |
 | OpenAPI spec drift check | Wave 2+ |
-| CRD schema validation (kubeconform) | Wave 2+ |
+| API schema validation (Zod ↔ Go struct ↔ OpenAPI round-trip) | Wave 2+ |
+| Runtime-adapter parity test (k8s + docker pass the same controller suite) | Wave 2+ |
 
 ## Out of scope for initial waves
 

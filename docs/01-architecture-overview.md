@@ -3,11 +3,12 @@
 ## Guiding principles
 
 1. **Everything is chunks.** Block volumes, filesystems, and objects all decompose into immutable 4 MB content-addressed chunks. One storage engine, three access surfaces.
-2. **Kubernetes is an implementation detail.** Users and admins never see `kubectl` or YAML in normal operation. The API server hides Kubernetes behind a domain-shaped REST+WS API.
-3. **Strict layer separation.** Presentation → Chunk Engine → Backend. No layer may reach past the next; no policy engine runs in the data path.
-4. **Single-node, not clustered.** v1 targets one physical appliance. Clustering is explicitly out of scope.
-5. **Upstream-free.** NovaNas forks NovaStor once and owns its storage code from then on. No ongoing upstream sync.
-6. **Appliance, not distro.** The hardware/OS/stack/UI are shipped together as one product with one version number.
+2. **The API server is the single source of truth.** Postgres-backed, Fastify+Zod, every UI/CLI/SDK call goes through it. There is no second control plane.
+3. **The container runtime is swappable.** Kubernetes is one implementation; a Docker (or other OCI runtime) backend must be reachable through the same controller surface. This means **no CRDs anywhere in NovaNas's own code** — neither user-facing nor "internal". Runtime-specific objects (Pods, Deployments, etc.) live behind a runtime adapter and are emitted *from* API state, never authored against.
+4. **Strict layer separation.** Presentation → Chunk Engine → Backend. No layer may reach past the next; no policy engine runs in the data path.
+5. **Single-node, not clustered.** v1 targets one physical appliance. Clustering is explicitly out of scope.
+6. **Upstream-free.** NovaNas forks NovaStor once and owns its storage code from then on. No ongoing upstream sync.
+7. **Appliance, not distro.** The hardware/OS/stack/UI are shipped together as one product with one version number.
 
 ## Layered architecture
 
@@ -21,10 +22,12 @@
 │   - Keycloak OIDC (auth), OpenBao (secrets)                      │
 │   - Postgres (state), Redis (sessions, pub/sub)                  │
 ├──────────────────────────────────────────────────────────────────┤
-│ Kubernetes (k3s) — CRDs, controllers, RBAC                       │
+│ NovaNas Controllers (Go) — runtime-neutral reconcilers            │
+│   Read desired state from API server; converge runtime objects   │
+│   for pools, volumes, shares, apps, VMs, networking, ...          │
 │   ↕                                                              │
-│ NovaNas Operators (Go, controller-runtime)                       │
-│   Dataset, Share, Disk, Snapshot, Replication, App, VM, ...       │
+│ Runtime Adapter — Kubernetes (k3s) today / Docker / other OCI    │
+│   Pods, Deployments, Services, ConfigMaps — emitted, not authored │
 ├──────────────────────────────────────────────────────────────────┤
 │ Presentation Layer                                               │
 │   iSCSI / NVMe-oF targets │ SMB (Samba pod) │ NFS (host knfsd)   │
@@ -45,13 +48,14 @@
 
 ## Component inventory
 
-### System services (namespace `novanas-system`)
+### System services (runtime namespace / docker network: `novanas-system`)
 
 | Component | Role | Binary / image |
 |---|---|---|
-| novanas-api | Domain API server | Node/Fastify (TS) |
+| novanas-api | Domain API server (sole SoT) | Node/Fastify (TS) |
 | novanas-ui | Static React SPA | Served by novaedge |
-| novanas-operators | CRD controllers | Go (controller-runtime) |
+| novanas-controllers | Runtime-neutral reconcilers; read API state, emit runtime objects via the runtime adapter | Go |
+| novanas-runtime-adapter | Pluggable backend: k8s (default) / docker | Go |
 | novanas-csi | CSI driver | Go |
 | novanas-scheduler | Data-locality scheduler | Go |
 | novanas-webhook | Mutating admission webhook | Go |
@@ -97,16 +101,18 @@ Installed apps (Helm-rendered) and KubeVirt VMs live here. Isolated from system 
 
 1. User clicks in UI → React app calls API (REST or WS)
 2. API validates via Zod, checks authZ via Keycloak claims
-3. API writes CRD(s) through kube-apiserver (as the API service account)
-4. NovaNas operators reconcile CRD → create/update k8s resources, call gRPC into storage engine, configure novaedge, etc.
-5. Status propagates back via WebSocket (K8s watcher → Redis pub/sub → all connected clients)
+3. API persists desired state in Postgres (sole source of truth) and emits a change event on Redis pub/sub
+4. NovaNas controllers observe the change, compute runtime intent, and call the runtime adapter to converge it; the adapter emits Pods/Deployments/Services on Kubernetes today, container/network primitives on Docker tomorrow
+5. Controllers report observed status back into the API server (Postgres); the API streams it to all connected clients via WebSocket
+
+No CRDs are involved at any step: every business object lives in Postgres, every runtime object is emitted from controller code, and the runtime is interchangeable.
 
 ## External dependencies
 
 | Project | Consumption |
 |---|---|
-| novanet | OCI + Helm subchart + CRDs (external repo) |
-| novaedge | OCI + Helm subchart + CRDs (external repo) |
+| novanet | OCI image + runtime manifests (external repo); configured via novanas-api, never authored as CRDs by users |
+| novaedge | OCI image + runtime manifests (external repo); configured via novanas-api, never authored as CRDs by users |
 | Keycloak | Upstream Helm subchart |
 | OpenBao | Upstream Helm subchart |
 | Postgres | Upstream Helm subchart |

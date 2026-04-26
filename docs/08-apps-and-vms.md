@@ -4,7 +4,7 @@ NovaNas is both a storage appliance and a home-server / small-business host. Use
 
 ## Apps
 
-An App is a user-facing wrapper around a Helm chart rendered into the user's namespace.
+An App is a user-facing wrapper around a packaged container workload. NovaNas uses Helm charts as a *packaging format* for the app catalog (versioning, templating, signing), but the rendered output is consumed by the app controller, which then asks the runtime adapter to materialize the workload (Pods/Deployments/Services on K8s today, containers/networks/volumes on Docker tomorrow). Helm is **not** the runtime authority — the API server is.
 
 ### Three tiers
 
@@ -14,79 +14,93 @@ An App is a user-facing wrapper around a Helm chart rendered into the user's nam
 | **Community** | Third-party catalogs (TrueCharts-style) | Registered with NovaNas, not signed by NovaNas |
 | **Custom** | User-uploaded Helm chart | User's own responsibility |
 
-`AppCatalog` CRDs register sources. Catalog entries synthesize `App` CRs (read-only catalog reflections). Users instantiate `AppInstance` from an `App` in their own namespace.
+`appCatalog` API resources register sources. Catalog entries are synthesized into read-only `app` API resources (catalog reflections). Users create an `appInstance` from an `app` in their own tenant.
 
-### AppCatalog
+### appCatalog
 
-```yaml
-apiVersion: novanas.io/v1alpha1
-kind: AppCatalog
-metadata: { name: official }
-spec:
-  source:
-    type: git
-    url: https://github.com/azrtydxb/novanas-apps
-    branch: main
-    refreshInterval: 1h
-  trust:
-    signedBy: novanas-official-keyring
-    required: true
+`POST /api/v1/appCatalogs`:
+
+```json
+{
+  "name": "official",
+  "source": {
+    "type": "git",
+    "url": "https://github.com/azrtydxb/novanas-apps",
+    "branch": "main",
+    "refreshInterval": "1h"
+  },
+  "trust": {
+    "signedBy": "novanas-official-keyring",
+    "required": true
+  }
+}
 ```
 
-### App (synthesized)
+### app (synthesized, read-only)
 
-```yaml
-kind: App
-metadata: { name: plex, labels: { catalog: official, category: media } }
-spec:
-  displayName: Plex Media Server
-  version: 1.40.3.8555
-  icon: https://.../plex.png
-  description: "..."
-  schema: {...}                # JSON schema for user-tunable values
-  chart: { ociRef: ghcr.io/azrtydxb/charts/plex:1.40.3.8555, digest: sha256:... }
-  requirements:
-    minRamMB: 2048
-    requiresGpu: false
-    ports: [32400]
+```json
+{
+  "name": "plex",
+  "labels": { "catalog": "official", "category": "media" },
+  "displayName": "Plex Media Server",
+  "version": "1.40.3.8555",
+  "icon": "https://.../plex.png",
+  "description": "...",
+  "schema": { "...": "JSON schema for user-tunable values" },
+  "chart": {
+    "ociRef": "ghcr.io/azrtydxb/charts/plex:1.40.3.8555",
+    "digest": "sha256:..."
+  },
+  "requirements": { "minRamMB": 2048, "requiresGpu": false, "ports": [32400] }
+}
 ```
 
-### AppInstance
+### appInstance
 
-```yaml
-kind: AppInstance
-metadata: { name: family-plex, namespace: novanas-users/pascal }
-spec:
-  app: plex
-  version: 1.40.3.8555
-  values:
-    mediaLibrary: /data/media
-    adminEmail: pascal@watteel.com
-  storage:
-    - name: config
-      dataset: pascal/plex-config
-      size: 5Gi
-    - name: media
-      dataset: family-media
-      mode: ReadOnly
-  network:
-    expose:
-      - port: 32400
-        protocol: TCP
-        advertise: mdns            # mdns | lan | reverseProxy | internet
-        tls: { certificate: plex-cert }
-  updates:
-    autoUpdate: false
-status:
-  phase: Running
-  healthy: true
-  revision: 3
-  exposedAt: https://plex.nas.local
+`POST /api/v1/appInstances`:
+
+```json
+{
+  "name": "family-plex",
+  "owner": "pascal",
+  "app": "plex",
+  "version": "1.40.3.8555",
+  "values": {
+    "mediaLibrary": "/data/media",
+    "adminEmail": "pascal@watteel.com"
+  },
+  "storage": [
+    { "name": "config", "dataset": "pascal/plex-config", "size": "5Gi" },
+    { "name": "media",  "dataset": "family-media", "mode": "ReadOnly" }
+  ],
+  "network": {
+    "expose": [
+      {
+        "port": 32400,
+        "protocol": "TCP",
+        "advertise": "mdns",
+        "tls": { "certificate": "plex-cert" }
+      }
+    ]
+  },
+  "updates": { "autoUpdate": false }
+}
+```
+
+Status (read via `GET` or `_stream`):
+
+```json
+{
+  "phase": "Running",
+  "healthy": true,
+  "revision": 3,
+  "exposedAt": "https://plex.nas.local"
+}
 ```
 
 ### Custom Helm charts
 
-Advanced users can upload arbitrary Helm charts as `AppCatalog` of type `custom`. Charts are rendered into the user's namespace with PSA `restricted`. If the chart requires privileges beyond `restricted`, installation fails — user must work with an admin to install into `novanas-apps-system`.
+Advanced users can upload arbitrary Helm charts as a `custom` `appCatalog`. The app controller renders the chart and asks the runtime adapter to install it under restricted policy (PSA `restricted` on K8s; equivalent rootless/dropped-capabilities profile on Docker). If the chart requires privileges beyond the restricted profile, installation fails — user must work with an admin to install into the system tenant.
 
 ### Network exposure modes
 
@@ -130,91 +144,104 @@ All flow through novanet + novaedge:
 
 ### Backup / replication integration
 
-Apps are first-class sources for existing CRDs:
+Apps are first-class sources for the data-protection API resources:
 
-- `SnapshotSchedule` source: `kind: AppInstance` → snapshots all datasets/volumes the app uses + the AppInstance spec itself
-- `ReplicationJob` source: `kind: AppInstance` → replicates storage + config bundle
-- `CloudBackupJob` source: `kind: AppInstance` → offsite backup
+- `snapshotSchedule` with `source: { kind: appInstance, ... }` → snapshots all datasets/volumes the app uses plus the `appInstance` record itself
+- `replicationJob` with `source: { kind: appInstance, ... }` → replicates storage + config bundle
+- `cloudBackupJob` with `source: { kind: appInstance, ... }` → offsite backup
 
-## Virtual Machines (KubeVirt)
+## Virtual Machines
 
-KubeVirt runs in `novanas-system`. VMs live in `novanas-vms` namespace with owner labels.
+The VM controller targets a runtime-supplied virtualization facility. On the Kubernetes adapter that's KubeVirt running in the system tenant; on a Docker adapter it would be libvirt/qemu invoked directly on the host. Either way the user-visible model is the same `vm` API resource.
 
-### Vm CRD
+### vm
 
-```yaml
-kind: Vm
-metadata: { name: windows-11, namespace: novanas-vms }
-spec:
-  owner: pascal
-  os: { type: windows, variant: win11 }
-  resources: { cpu: 4, memoryMiB: 8192 }
-  disks:
-    - name: system
-      source: { type: dataset, dataset: pascal/win11-system, size: 80Gi }
-      bus: virtio
-      boot: 1
-    - name: data
-      source: { type: blockVolume, blockVolume: pascal/win11-data }
-      bus: virtio
-  cdrom:
-    - name: installer
-      source: { type: iso, isoLibrary: family/win11.iso }
-  network:
-    - type: bridge
-      bridge: br0
-      mac: auto
-  gpu:
-    passthrough:
-      - vendor: nvidia
-        device: "10de:2684"
-  graphics: { enabled: true, type: spice }
-  autostart: onBoot
-  powerState: Running
-status:
-  phase: Running
-  consoleUrl: wss://nas.local/vms/windows-11/console
-  ip: 192.168.1.101
+`POST /api/v1/vms`:
+
+```json
+{
+  "name": "windows-11",
+  "owner": "pascal",
+  "os": { "type": "windows", "variant": "win11" },
+  "resources": { "cpu": 4, "memoryMiB": 8192 },
+  "disks": [
+    {
+      "name": "system",
+      "source": { "type": "dataset", "dataset": "pascal/win11-system", "size": "80Gi" },
+      "bus": "virtio",
+      "boot": 1
+    },
+    {
+      "name": "data",
+      "source": { "type": "blockVolume", "blockVolume": "pascal/win11-data" },
+      "bus": "virtio"
+    }
+  ],
+  "cdrom": [
+    { "name": "installer", "source": { "type": "iso", "isoLibrary": "family/win11.iso" } }
+  ],
+  "network": [
+    { "type": "bridge", "bridge": "br0", "mac": "auto" }
+  ],
+  "gpu": { "passthrough": [{ "vendor": "nvidia", "device": "10de:2684" }] },
+  "graphics": { "enabled": true, "type": "spice" },
+  "autostart": "onBoot",
+  "powerState": "Running"
+}
+```
+
+Status:
+
+```json
+{
+  "phase": "Running",
+  "consoleUrl": "wss://nas.local/vms/windows-11/console",
+  "ip": "192.168.1.101"
+}
 ```
 
 ### Disk sources
 
-- `dataset` — Dataset with xfs/ext4 containing a qcow2 (easy snapshots, growable)
-- `blockVolume` — raw BlockVolume (best performance, no FS overhead)
-- `iso` — read-only ISO from `IsoLibrary`
+- `dataset` — `dataset` with xfs/ext4 containing a qcow2 (easy snapshots, growable)
+- `blockVolume` — raw `blockVolume` (best performance, no FS overhead)
+- `iso` — read-only ISO from an `isoLibrary`
 - `clone` — instantaneous clone of another VM's disk (chunk-dedup makes this free)
 
 ### ISO library
 
-```yaml
-kind: IsoLibrary
-spec:
-  dataset: isos                    # Dataset holding all ISO files
-  sources:
-    - url: https://.../ubuntu-24.04.iso
-      sha256: "..."
+`POST /api/v1/isoLibraries`:
+
+```json
+{
+  "name": "family",
+  "dataset": "isos",
+  "sources": [
+    { "url": "https://.../ubuntu-24.04.iso", "sha256": "..." }
+  ]
+}
 ```
 
-Operator downloads, verifies, and makes available as VM-attachable ISOs.
+The ISO library controller downloads, verifies, and makes the file available as a VM-attachable ISO.
 
 ### GPU passthrough
 
-- `novanas-gpu-manager` DaemonSet enumerates GPUs, surfaces `GpuDevice` CRs
+- A `novanas-gpu-agent` (host-mode container, one per node) enumerates GPUs and reports them via `POST/PATCH /api/v1/gpuDevices`
 - Requires IOMMU enabled in BIOS/UEFI
 - `vfio-pci` kernel binding configured at boot via kernel command-line and systemd
-- Admin assigns specific `GpuDevice` to VMs; cannot be shared
+- Admin assigns a specific `gpuDevice` to a VM via the API; cannot be shared
 - Once assigned to VFIO, the GPU is unavailable for host (no desktop on that GPU)
 
-```yaml
-kind: GpuDevice
-metadata: { name: gpu-0 }
-spec:
-  passthrough: true
-status:
-  vendor: NVIDIA
-  model: RTX 4080
-  pciAddress: "0000:03:00.0"
-  assignedTo: { kind: Vm, name: windows-11 }
+```json
+{
+  "name": "gpu-0",
+  "spec": { "passthrough": true },
+  "status": {
+    "vendor": "NVIDIA",
+    "model": "RTX 4080",
+    "pciAddress": "0000:03:00.0",
+    "assignedTo": { "kind": "vm", "name": "windows-11" }
+  }
+}
 ```
 
 ### Console
@@ -231,38 +258,38 @@ status:
 - Offline snapshot (disk only) — fast, chunk-level
 - Clone (full instantaneous, backed by chunk dedup)
 - Migrate (live migration) — N/A on single-node; schema ready for multi-node later
-- Backup/replication using same CRDs as apps and datasets
+- Backup/replication using the same API resources as apps and datasets
 
 ## Storage unification
 
 This is where NovaNas shines: apps, VMs, datasets, buckets all share the chunk engine:
 
 - Deduplication across all of it (VM disk image + file share + S3 object with same bytes = one copy)
-- One `ReplicationJob` can replicate a whole "solution" (app + data + VM) as a coordinated snapshot bundle
-- One `CloudBackupJob` can back up anything off-box
+- One `replicationJob` can replicate a whole "solution" (app + data + VM) as a coordinated snapshot bundle
+- One `cloudBackupJob` can back up anything off-box
 - Snapshot-before-upgrade works uniformly for apps and VMs
 
 ## Quotas and resource limits
 
-Per-user `ResourceQuota` enforces:
-- CPU/memory across all apps and VMs in the user's namespace
-- Storage requests (PVC) against user's storage quota
-- Object count limits (pod, PVC)
+Quotas live on the user/tenant API resource and are enforced at two layers:
 
-`LimitRange` enforces sensible per-pod defaults and caps.
+1. **API server admission**: storage byte/object quotas, app/VM count limits, and CPU/memory budgets are checked when an `appInstance` or `vm` is created or scaled.
+2. **Runtime adapter enforcement**: the adapter applies runtime-native limits — `ResourceQuota` / `LimitRange` on Kubernetes, cgroup limits on Docker — so containers cannot exceed the budget the API approved.
+
+The user-visible quota model is identical regardless of runtime; only the projection differs.
 
 ## Apps that need system-level privilege
 
-Some apps (e.g., Pi-hole wanting to bind port 53, AdGuard Home as DNS) need more than `restricted`:
+Some apps (e.g., Pi-hole wanting to bind port 53, AdGuard Home as DNS) need more than the restricted profile:
 
 - Must be Official-catalog
-- Install target: `novanas-apps-system` (PSA `baseline`)
+- Install target: the `novanas-apps-system` tenant (baseline profile — PSA `baseline` on K8s, equivalent host-port/cap allowances on Docker)
 - Chart manifests reviewed in official catalog PR process
 - User visibility: optional — can be exposed to users as "System Services" view
 
 ## App/VM observability
 
-- Per-app pod metrics (CPU, memory, IO, restart count) auto-scraped
-- Per-VM metrics via KubeVirt exporter
+- Per-container metrics (CPU, memory, IO, restart count) auto-scraped — source depends on runtime adapter (cAdvisor on K8s, container metrics socket on Docker)
+- Per-VM metrics via the runtime's VM exporter (KubeVirt exporter on K8s; libvirt-exporter on Docker)
 - User sees their own apps/VMs in their dashboard; admin sees all
 - Logs via Loki, searchable in UI

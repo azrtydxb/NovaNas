@@ -95,20 +95,18 @@ Atomic A/B via RAUC.
 8. Fail → GRUB's `countboot` counter expires → auto-rollback to previous slot
 9. Operator applies Helm chart version shipped in bundle (schema migrations run here)
 
-### UpdatePolicy
+### updatePolicy
 
-```yaml
-apiVersion: novanas.io/v1alpha1
-kind: UpdatePolicy
-metadata: { name: default }
-spec:
-  channel: stable
-  automatic: true
-  maintenanceWindow:
-    cron: "0 3 * * SUN"
-    durationMinutes: 60
-  requireQuorumOfDisksHealthy: true      # abort if degraded
-  snapshotBeforeUpdate: true             # snapshot all datasets pre-update
+`PUT /api/v1/updatePolicy`:
+
+```json
+{
+  "channel": "stable",
+  "automatic": true,
+  "maintenanceWindow": { "cron": "0 3 * * SUN", "durationMinutes": 60 },
+  "requireQuorumOfDisksHealthy": true,
+  "snapshotBeforeUpdate": true
+}
 ```
 
 ## Factory reset
@@ -118,7 +116,7 @@ Three tiers accessible from the UI:
 | Tier | Wipes | Use case |
 |---|---|---|
 | **Soft** | Admin password, network config, identity providers | Forgotten password, misconfig |
-| **Config** | All CRDs (back to post-install-wizard state). Data pools preserved. | Start config over, keep data |
+| **Config** | All API resources (back to post-install-wizard state). Data pools preserved. | Start config over, keep data |
 | **Full** | OS + persistent + data disks (secure erase) | Sell, recycle, retire |
 
 ### Secure erase priority
@@ -132,40 +130,40 @@ Three tiers accessible from the UI:
 
 Daily by default, multi-destination.
 
-### ConfigBackupPolicy
+### configBackupPolicy
 
-```yaml
-apiVersion: novanas.io/v1alpha1
-kind: ConfigBackupPolicy
-metadata: { name: default }
-spec:
-  cron: "0 1 * * *"
-  retention: { keepDaily: 30 }
-  passphraseSecret: config-backup-passphrase
-  destinations:
-    - type: dataset
-      dataset: backups
-    - type: cloud
-      target: offsite-s3
-    - type: email
-      channel: admin-email
+`PUT /api/v1/configBackupPolicy`:
+
+```json
+{
+  "cron": "0 1 * * *",
+  "retention": { "keepDaily": 30 },
+  "passphraseSecret": "config-backup-passphrase",
+  "destinations": [
+    { "type": "dataset", "dataset": "backups" },
+    { "type": "cloud",   "target": "offsite-s3" },
+    { "type": "email",   "channel": "admin-email" }
+  ]
+}
 ```
 
 ### What a backup contains
 
-- All NovaNas CRDs (YAML export, as of `kubectl get`)
-- k3s etcd snapshot
-- Postgres dump (covers Keycloak realm, NovaNas app state, audit log history, user DB)
+- Full Postgres dump — the API server's source of truth for every NovaNas resource (pools, datasets, shares, apps, VMs, networking, identity, alerting, settings)
+- Postgres dump also covers Keycloak realm, audit log history, user DB
 - OpenBao snapshot
 - Sealed unseal keys (encrypted with user passphrase — the only way to recover an OpenBao instance on new hardware)
 - Disk pool GUIDs and CRUSH map reference (for restore to find pools on re-imported disks)
+- Runtime adapter state hint: which runtime backend (k3s / docker) the appliance was running, so restore can re-provision it identically
+
+There is no CRD export and no `kubectl get` step — the runtime holds no source-of-truth state.
 
 ### Restore flow
 
 1. Fresh install on new hardware
 2. First-boot wizard offers "Restore from config backup"
 3. Admin uploads backup archive + passphrase
-4. Wizard restores in order: k3s etcd → Postgres → OpenBao (unseals with passphrase) → Keycloak → NovaNas operators rehydrate from CRDs
+4. Wizard restores in order: Postgres → OpenBao (unseals with passphrase) → Keycloak realm → NovaNas API server starts and rehydrates controllers from API state → runtime adapter brings up workloads
 5. Pool import: wizard detects NovaNas superblocks on data disks, matches GUIDs from backup, auto-imports
 6. Encryption keys unseal automatically once OpenBao is restored
 7. System resumes with shares, users, schedules, apps all active

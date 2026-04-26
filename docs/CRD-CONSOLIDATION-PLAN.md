@@ -1,4 +1,29 @@
-# CRD consolidation plan
+# CRD consolidation plan — SUPERSEDED
+
+> **Status: Superseded** (2026-04-26).
+>
+> This document is retained for historical context only.
+>
+> The architectural direction has changed: NovaNas now defines **zero
+> CRDs** in its own code. All resources are API-server-owned objects
+> backed by Postgres; the container runtime is a swappable adapter
+> (Kubernetes today, Docker planned). See
+> [ADR 0005](adr/0005-hide-kubernetes-behind-api.md) and
+> [05-resource-reference.md](05-resource-reference.md).
+>
+> Commit `80a1eef` (#52) deleted 28 CRD types that had migrated to
+> Postgres. The remaining 24 (app, appinstance, blockvolume, bond,
+> clusternetwork, customdomain, firewallrule, gpudevice, hostinterface,
+> ingress, iscsitarget, nfsserver, nvmeoftarget, objectstore,
+> physicalinterface, remoteaccesstunnel, servicepolicy, share,
+> smbserver, sshkey, trafficpolicy, vippool, vlan, vm) are also slated
+> for removal — see the code-removal task list referenced from
+> [01-architecture-overview.md](01-architecture-overview.md). The
+> "consolidate two CRD packages" framing below no longer applies; the
+> work is now "delete both packages and replace with API + controller
+> code".
+
+---
 
 Tracking document for closing issue #35. This is an *audit + plan*; the
 actual refactor is deliberately left for a follow-up change because it
