@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -15,6 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
+	utilexec "k8s.io/client-go/util/exec"
 )
 
 // Adapter implements runtime.Adapter against a Kubernetes cluster.
@@ -24,17 +28,24 @@ import (
 type Adapter struct {
 	cs              kubernetes.Interface
 	dyn             dynamic.Interface
+	cfg             *rest.Config
+	executor        execFactory
 	NamespacePrefix string
 
 	mu       sync.Mutex
 	watchers map[rt.Tenant][]chan rt.Event
 }
 
+// execFactory wraps remotecommand.NewSPDYExecutor so tests can swap
+// in a fake. Production wiring goes through realExecFactory below.
+type execFactory func(cfg *rest.Config, method string, url *url.URL) (remotecommand.Executor, error)
+
 func New(cs kubernetes.Interface) *Adapter {
 	return &Adapter{
 		cs:              cs,
 		NamespacePrefix: "novanas-",
 		watchers:        make(map[rt.Tenant][]chan rt.Event),
+		executor:        realExecFactory,
 	}
 }
 
@@ -46,6 +57,24 @@ func New(cs kubernetes.Interface) *Adapter {
 func (a *Adapter) WithDynamicClient(dyn dynamic.Interface) *Adapter {
 	a.dyn = dyn
 	return a
+}
+
+// WithRestConfig wires the *rest.Config required for streaming
+// endpoints (Logs, Exec). The conformance suite uses a fake clientset
+// and skips Logs/Exec, so this is opt-in.
+func (a *Adapter) WithRestConfig(cfg *rest.Config) *Adapter {
+	a.cfg = cfg
+	return a
+}
+
+// WithExecutor lets tests substitute the SPDY executor factory.
+func (a *Adapter) WithExecutor(f execFactory) *Adapter {
+	a.executor = f
+	return a
+}
+
+func realExecFactory(cfg *rest.Config, method string, u *url.URL) (remotecommand.Executor, error) {
+	return remotecommand.NewSPDYExecutor(cfg, method, u)
 }
 
 func (a *Adapter) Name() string { return "k8s" }
@@ -212,12 +241,101 @@ func (a *Adapter) ObserveWorkload(ctx context.Context, ref rt.WorkloadRef) (rt.W
 	return rt.WorkloadStatus{}, rt.ErrNotFound
 }
 
-func (a *Adapter) Logs(_ context.Context, _ rt.LogOptions, _ io.Writer) error {
-	return rt.ErrNotImplemented
+// Logs streams a workload's container log into out. We resolve the
+// workload to its Pod by label-selector (the same labels EnsureWorkload
+// stamps), then call CoreV1().Pods.GetLogs on the first match. Picking
+// the first replica is a deliberate simplification — multi-pod log
+// fanout belongs to a higher layer.
+func (a *Adapter) Logs(ctx context.Context, opts rt.LogOptions, out io.Writer) error {
+	nsName := a.namespace(opts.Ref.Tenant)
+	pods, err := a.cs.CoreV1().Pods(nsName).List(ctx, metav1.ListOptions{
+		LabelSelector: labelWorkload + "=" + opts.Ref.Name,
+		Limit:         1,
+	})
+	if err != nil {
+		return err
+	}
+	if len(pods.Items) == 0 {
+		return rt.ErrNotFound
+	}
+	pod := pods.Items[0]
+	logOpts := &corev1.PodLogOptions{Follow: opts.Follow, Container: opts.Container}
+	if opts.TailLines > 0 {
+		logOpts.TailLines = &opts.TailLines
+	}
+	req := a.cs.CoreV1().Pods(nsName).GetLogs(pod.Name, logOpts)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+	_, err = io.Copy(out, stream)
+	return err
 }
 
-func (a *Adapter) Exec(_ context.Context, _ rt.ExecRequest, _, _ io.Writer) (int, error) {
-	return -1, rt.ErrNotImplemented
+// Exec runs a one-shot command in the named workload's first matching
+// pod. Streams stdout / stderr through the writers. Requires a
+// *rest.Config (WithRestConfig) since SPDY streaming bypasses the
+// typed clientset.
+func (a *Adapter) Exec(ctx context.Context, req rt.ExecRequest, stdout, stderr io.Writer) (int, error) {
+	if a.cfg == nil {
+		return -1, fmt.Errorf("k8s adapter: rest.Config required for Exec (call WithRestConfig)")
+	}
+	nsName := a.namespace(req.Ref.Tenant)
+	pods, err := a.cs.CoreV1().Pods(nsName).List(ctx, metav1.ListOptions{
+		LabelSelector: labelWorkload + "=" + req.Ref.Name,
+		Limit:         1,
+	})
+	if err != nil {
+		return -1, err
+	}
+	if len(pods.Items) == 0 {
+		return -1, rt.ErrNotFound
+	}
+	pod := pods.Items[0]
+	container := req.Container
+	if container == "" && len(pod.Spec.Containers) > 0 {
+		container = pod.Spec.Containers[0].Name
+	}
+	host := strings.TrimRight(a.cfg.Host, "/")
+	u, err := url.Parse(fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s/exec", host, nsName, pod.Name))
+	if err != nil {
+		return -1, err
+	}
+	q := u.Query()
+	if container != "" {
+		q.Set("container", container)
+	}
+	for _, c := range req.Command {
+		q.Add("command", c)
+	}
+	if stdout != nil {
+		q.Set("stdout", "true")
+	}
+	if stderr != nil {
+		q.Set("stderr", "true")
+	}
+	if req.TTY {
+		q.Set("tty", "true")
+	}
+	u.RawQuery = q.Encode()
+	executor, err := a.executor(a.cfg, "POST", u)
+	if err != nil {
+		return -1, err
+	}
+	streamErr := executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: stdout,
+		Stderr: stderr,
+		Tty:    req.TTY,
+	})
+	if streamErr != nil {
+		var codeErr utilexec.CodeExitError
+		if errors.As(streamErr, &codeErr) {
+			return codeErr.Code, nil
+		}
+		return -1, streamErr
+	}
+	return 0, nil
 }
 
 func (a *Adapter) WatchEvents(ctx context.Context, t rt.Tenant) (<-chan rt.Event, error) {
