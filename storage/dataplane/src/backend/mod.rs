@@ -1,16 +1,16 @@
-//! Unified storage backend interface.
+//! Storage backend interface.
 //!
-//! Three backend types (Raw, LVM, File) implement the `StorageBackend` trait.
-//! All produce SPDK bdevs. The ChunkEngine sits above backends and stores
-//! content-addressed 4MB chunks on them via the async `ChunkStore` trait.
+//! Single backend type: `RawDisk` (NVMe via vfio-pci, SATA via SPDK AIO).
+//! `lvm` and `file` backends were deleted with the architecture-v2 strip;
+//! see docs/16-data-meta-frontend.md for the rationale (single-host,
+//! no-multibackend design).
+//!
+//! The ChunkEngine sits above the backend and stores content-addressed
+//! 4MB chunks via the async `ChunkStore` trait.
 
 #[cfg(feature = "spdk-sys")]
 pub mod bdev_store;
 pub mod chunk_store;
-#[cfg(feature = "spdk-sys")]
-pub mod file_store;
-#[cfg(feature = "spdk-sys")]
-pub mod lvm;
 #[cfg(feature = "spdk-sys")]
 pub mod raw_disk;
 pub mod superblock;

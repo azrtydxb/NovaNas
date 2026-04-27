@@ -1,9 +1,0 @@
-apiVersion: novanas.io/v1alpha1
-kind: StoragePool
-metadata:
-  name: test-pool
-spec:
-  backendType: raw
-  nodeSelector:
-    matchLabels:
-      novanas.io/storage-tier: nvme

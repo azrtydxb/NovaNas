@@ -3,8 +3,5 @@ go 1.24.0
 use (
 	./packages/cli
 	./packages/host-agent
-	./packages/operators
-	./packages/runtime
 	./packages/sdk/go-client
-	./storage
 )
