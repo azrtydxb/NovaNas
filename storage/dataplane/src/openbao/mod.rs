@@ -149,7 +149,7 @@ impl TransitClient for FakeTransit {
     }
 
     fn rotate_master_key(&self, name: &str) -> Result<(), TransitError> {
-        self.with_key(name, |k| rotate_inner(k))
+        self.with_key(name, rotate_inner)
     }
 
     fn latest_version(&self, name: &str) -> Result<u64, TransitError> {

@@ -1,364 +1,209 @@
-//! NDP server — accepts connections from frontend controllers and serves
-//! sub-block I/O via the NovaStor Data Protocol.
+//! NDP UDS server — the data daemon's chunk-service surface for the
+//! frontend.
 //!
-//! Runs on tokio (not the SPDK reactor). Receives NDP messages, dispatches
-//! reads/writes to the sub-block I/O functions, and sends responses.
+//! In architecture-v2 the frontend daemon connects to data over a Unix
+//! domain socket (default `/var/run/novanas/ndp.sock`) and exchanges chunk
+//! payloads. Until the cross-process volume-bdev / chunk-engine handshake
+//! lands in the frontend rebuild, this module exposes the existing
+//! `ChunkService` gRPC surface (`chunk_service.proto`) over the UDS so
+//! tooling and tests can put/get/delete chunks against a registered
+//! [`ChunkStore`].
+//!
+//! The previous tokio-based sub-block NDP listener (which translated NDP
+//! header ops into volume-bdev I/O on the local backend) is dead with the
+//! volume bdev's move to `storage/frontend`; reintroducing a native NDP
+//! protocol on top of `ChunkStore` is tracked as a follow-up.
+//!
+//! All work happens on the global tokio runtime; no SPDK reactor
+//! interaction is performed here.
 
-use log::{error, info, warn};
-use ndp::{NdpHeader, NdpMessage, NdpOp};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
 
-use crate::bdev::novanas_bdev;
-use crate::bdev::sub_block;
-use crate::error::Result;
+use tokio::net::UnixListener;
+use tokio_stream::wrappers::UnixListenerStream;
+
+use crate::backend::chunk_store::ChunkStore;
+use crate::error::{DataPlaneError, Result};
+use crate::transport::chunk_proto::chunk_service_server::ChunkServiceServer;
+use crate::transport::chunk_service::ChunkServiceImpl;
 
 /// Default Unix socket path for local NDP connections.
 pub const NDP_UNIX_SOCKET: &str = "/var/run/novanas/ndp.sock";
 
-/// Configuration for the NDP server.
+/// Configuration for the data-daemon NDP UDS server.
 pub struct NdpServerConfig {
-    pub listen_address: String,
-    pub port: u16,
-    pub unix_socket: Option<String>,
+    pub unix_socket: PathBuf,
 }
 
 impl Default for NdpServerConfig {
     fn default() -> Self {
         Self {
-            listen_address: "::".to_string(),
-            port: 4500,
-            unix_socket: Some(NDP_UNIX_SOCKET.to_string()),
+            unix_socket: PathBuf::from(NDP_UNIX_SOCKET),
         }
     }
 }
 
-/// Start the NDP server. Listens on both TCP (for remote) and Unix socket (for local).
-pub async fn start(config: NdpServerConfig) -> Result<()> {
-    let handle = crate::tokio_handle().clone();
+/// Handle returned by [`start_ndp_server`] for shutting the listener down.
+pub struct NdpServerHandle {
+    pub socket_path: PathBuf,
+    task: tokio::task::JoinHandle<()>,
+}
 
-    // Start TCP listener
-    let addr = format!("{}:{}", config.listen_address, config.port);
-    let tcp_listener = TcpListener::bind(&addr).await.map_err(|e| {
-        crate::error::DataPlaneError::TransportError(format!("NDP bind {}: {}", addr, e))
+impl NdpServerHandle {
+    /// Abort the listener task and unlink the UDS file.
+    pub fn shutdown(self) {
+        self.task.abort();
+        let _ = std::fs::remove_file(&self.socket_path);
+    }
+}
+
+/// Bind the NDP UDS at `config.unix_socket` and serve `ChunkService` gRPC
+/// requests against `store`.
+///
+/// Creates the parent directory if missing and unlinks any stale socket
+/// file. Returns once the listener is bound; the actual serving loop runs
+/// on the supplied tokio handle.
+pub async fn start_ndp_server(
+    config: NdpServerConfig,
+    store: Arc<dyn ChunkStore>,
+) -> Result<NdpServerHandle> {
+    if let Some(parent) = config.unix_socket.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                DataPlaneError::TransportError(format!(
+                    "create NDP socket parent {}: {e}",
+                    parent.display()
+                ))
+            })?;
+        }
+    }
+    remove_if_exists(&config.unix_socket)?;
+
+    let listener = UnixListener::bind(&config.unix_socket).map_err(|e| {
+        DataPlaneError::TransportError(format!(
+            "bind NDP UDS at {}: {e}",
+            config.unix_socket.display()
+        ))
     })?;
-    info!("NDP server listening on {} (TCP)", addr);
+    log::info!(
+        "NDP UDS server listening on {}",
+        config.unix_socket.display()
+    );
 
-    handle.spawn(async move {
-        loop {
-            match tcp_listener.accept().await {
-                Ok((stream, peer)) => {
-                    info!("NDP: TCP connection from {}", peer);
-                    stream.set_nodelay(true).ok();
-                    crate::tokio_handle().spawn(handle_connection_generic(stream));
-                }
-                Err(e) => {
-                    error!("NDP TCP accept error: {}", e);
-                }
-            }
+    let socket_path = config.unix_socket.clone();
+    let task = tokio::spawn(async move {
+        let incoming = UnixListenerStream::new(listener);
+        let service = ChunkServiceServer::new(ChunkServiceImpl::new(store));
+        if let Err(e) = tonic::transport::Server::builder()
+            .add_service(service)
+            .serve_with_incoming(incoming)
+            .await
+        {
+            log::error!("NDP UDS server stopped: {e}");
         }
     });
 
-    // Start Unix socket listener (for low-latency local connections)
-    if let Some(socket_path) = config.unix_socket {
-        let _ = std::fs::create_dir_all("/var/run/novanas");
-        let _ = std::fs::remove_file(&socket_path);
-        let unix_listener = tokio::net::UnixListener::bind(&socket_path).map_err(|e| {
-            crate::error::DataPlaneError::TransportError(format!(
-                "NDP unix bind {}: {}",
-                socket_path, e
-            ))
-        })?;
-        info!("NDP server listening on {} (Unix)", socket_path);
-
-        crate::tokio_handle().spawn(async move {
-            loop {
-                match unix_listener.accept().await {
-                    Ok((stream, _)) => {
-                        info!("NDP: Unix connection");
-                        crate::tokio_handle().spawn(handle_connection_generic(stream));
-                    }
-                    Err(e) => {
-                        error!("NDP Unix accept error: {}", e);
-                    }
-                }
-            }
-        });
-    }
-
-    Ok(())
+    Ok(NdpServerHandle { socket_path, task })
 }
 
-async fn handle_connection_generic<
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + 'static,
->(
-    stream: S,
-) {
-    let (mut reader, writer) = tokio::io::split(stream);
-    let writer = Arc::new(tokio::sync::Mutex::new(writer));
+fn remove_if_exists(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(DataPlaneError::TransportError(format!(
+            "remove stale UDS {}: {e}",
+            path.display()
+        ))),
+    }
+}
 
-    loop {
-        let msg = match NdpMessage::read_from(&mut reader).await {
-            Ok(m) => m,
-            Err(ndp::NdpError::ConnectionClosed) => break,
-            Err(e) => {
-                warn!("NDP read error: {}", e);
-                break;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::chunk_store::{ChunkStore, ChunkStoreStats};
+    use async_trait::async_trait;
+    use std::sync::Mutex;
+
+    /// Trivial in-memory ChunkStore for binding tests.
+    struct MemStore {
+        inner: Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    }
+    impl MemStore {
+        fn new() -> Self {
+            Self {
+                inner: Mutex::new(Default::default()),
             }
+        }
+    }
+    #[async_trait]
+    impl ChunkStore for MemStore {
+        async fn put(&self, chunk_id: &str, data: &[u8]) -> Result<()> {
+            self.inner
+                .lock()
+                .unwrap()
+                .insert(chunk_id.to_string(), data.to_vec());
+            Ok(())
+        }
+        async fn get(&self, chunk_id: &str) -> Result<Vec<u8>> {
+            self.inner
+                .lock()
+                .unwrap()
+                .get(chunk_id)
+                .cloned()
+                .ok_or_else(|| {
+                    DataPlaneError::ChunkEngineError(format!("chunk {chunk_id} not found"))
+                })
+        }
+        async fn delete(&self, chunk_id: &str) -> Result<()> {
+            self.inner.lock().unwrap().remove(chunk_id);
+            Ok(())
+        }
+        async fn exists(&self, chunk_id: &str) -> Result<bool> {
+            Ok(self.inner.lock().unwrap().contains_key(chunk_id))
+        }
+        async fn stats(&self) -> Result<ChunkStoreStats> {
+            Ok(ChunkStoreStats {
+                backend_name: "mem".into(),
+                total_bytes: 0,
+                used_bytes: 0,
+                data_bytes: 0,
+                chunk_count: self.inner.lock().unwrap().len() as u64,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn ndp_server_binds_and_unlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("ndp.sock");
+        let cfg = NdpServerConfig {
+            unix_socket: sock.clone(),
         };
-
-        // Process each request concurrently — don't block the reader.
-        let w = writer.clone();
-        crate::tokio_handle().spawn(async move {
-            let response = handle_request(msg).await;
-            let mut writer = w.lock().await;
-            if let Err(e) = response.write_to(&mut *writer).await {
-                warn!("NDP write error: {}", e);
-            }
-            if let Err(e) = writer.flush().await {
-                warn!("NDP flush error: {}", e);
-            }
-        });
-    }
-}
-
-async fn handle_request(msg: NdpMessage) -> NdpMessage {
-    match msg.header.op {
-        NdpOp::Ping => NdpMessage::new(NdpHeader::response(&msg.header, NdpOp::Pong, 0, 0), None),
-
-        NdpOp::Read => handle_read(&msg.header).await,
-
-        NdpOp::Write => handle_write(&msg.header, msg.data).await,
-
-        NdpOp::WriteZeroes | NdpOp::Unmap => {
-            // Thin provisioning — no-op, same as bdev handler.
-            NdpMessage::new(
-                NdpHeader::response(&msg.header, NdpOp::WriteResp, 0, 0),
-                None,
-            )
-        }
-
-        NdpOp::Replicate => handle_write(&msg.header, msg.data).await,
-
-        NdpOp::ChunkMapSync => handle_chunk_map_sync(&msg.header, msg.data).await,
-
-        NdpOp::RegisterVolume => {
-            let volume_name = msg
-                .data
-                .as_deref()
-                .and_then(|d| std::str::from_utf8(d).ok())
-                .unwrap_or("");
-            if !volume_name.is_empty() {
-                register_volume_hash(volume_name);
-                // Also lazy-allocate volume offset so sub_block_write_local works
-                // immediately when CRUSH routes I/O here.
-                let _ = crate::bdev::novanas_bdev::get_volume_base_offset(volume_name);
-            }
-            NdpMessage::new(
-                NdpHeader::response(&msg.header, NdpOp::RegisterVolumeResp, 0, 0),
-                None,
-            )
-        }
-
-        _ => {
-            // Unknown or response op received as request.
-            NdpMessage::new(
-                NdpHeader::response(&msg.header, NdpOp::WriteResp, 1, 0),
-                None,
-            )
-        }
-    }
-}
-
-async fn handle_read(header: &NdpHeader) -> NdpMessage {
-    let volume_name = match lookup_volume(header.volume_hash) {
-        Some(name) => name,
-        None => {
-            // Volume not registered yet — return zeros (unallocated region).
-            // This can happen when CRUSH routes a read before fire-and-forget
-            // registration completes. Returning zeros is correct because no
-            // data has been written to this volume on this backend yet.
-            let zeros = vec![0u8; header.data_length as usize];
-            return NdpMessage::new(
-                NdpHeader::response(header, NdpOp::ReadResp, 0, zeros.len() as u32),
-                Some(zeros),
-            );
-        }
-    };
-
-    // Use the existing sub_block_read path.
-    let base_off =
-        crate::bdev::novanas_bdev::get_volume_base_offset(&volume_name).unwrap_or(u64::MAX);
-    info!(
-        "NDP read: vol={} offset={} len={} base_off={}",
-        volume_name, header.offset, header.data_length, base_off
-    );
-    match crate::bdev::novanas_bdev::sub_block_read_local(
-        &volume_name,
-        header.offset,
-        header.data_length as u64,
-    )
-    .await
-    {
-        Ok(data) => {
-            let resp = NdpHeader::response(header, NdpOp::ReadResp, 0, data.len() as u32);
-            NdpMessage::new(resp, Some(data))
-        }
-        Err(e) => {
-            warn!("NDP read error for volume {}: {}", volume_name, e);
-            NdpMessage::new(
-                NdpHeader::response(header, NdpOp::ReadResp, 3, 0), // status 3 = I/O error
-                None,
-            )
-        }
-    }
-}
-
-async fn handle_write(header: &NdpHeader, data: Option<Vec<u8>>) -> NdpMessage {
-    let volume_name = match lookup_volume(header.volume_hash) {
-        Some(name) => name,
-        None => {
-            // Volume not registered — can't write without knowing the volume name.
-            // Unlike reads (which return zeros for unregistered volumes), writes need
-            // the volume name for backend allocation. Return error; the topology push
-            // will register the volume within 30s and the write will be retried.
-            warn!(
-                "NDP write for unknown volume hash 0x{:016X} — not registered yet",
-                header.volume_hash
-            );
-            return NdpMessage::new(NdpHeader::response(header, NdpOp::WriteResp, 2, 0), None);
-        }
-    };
-
-    // Check migration flag — reject if local data is newer
-    if header.flags & ndp::header::FLAG_MIGRATION != 0 {
-        if let Some(store) = novanas_bdev::get_metadata_store() {
-            let chunk_size: u64 = 4 * 1024 * 1024; // CHUNK_SIZE
-            let chunk_idx = header.offset / chunk_size;
-            if let Ok(Some(local_cm)) = store.get_chunk_map(&volume_name, chunk_idx) {
-                if local_cm.generation > 0 {
-                    info!(
-                        "NDP: rejecting migration write for {}:{} — local gen {} > 0",
-                        volume_name, chunk_idx, local_cm.generation
-                    );
-                    return NdpMessage::new(
-                        NdpHeader::response(header, NdpOp::WriteResp, 5, 0),
-                        None,
-                    );
-                }
-            }
-        }
+        let handle = start_ndp_server(cfg, Arc::new(MemStore::new()))
+            .await
+            .unwrap();
+        assert!(sock.exists());
+        handle.shutdown();
+        // shutdown unlinks the socket file
+        // Give the abort a moment to settle on slower runners.
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert!(!sock.exists());
     }
 
-    let write_data = match data {
-        Some(d) => d,
-        None => {
-            return NdpMessage::new(
-                NdpHeader::response(header, NdpOp::WriteResp, 4, 0), // status 4 = missing data
-                None,
-            );
-        }
-    };
-
-    let base_off =
-        crate::bdev::novanas_bdev::get_volume_base_offset(&volume_name).unwrap_or(u64::MAX);
-    info!(
-        "NDP write: vol={} offset={} len={} base_off={}",
-        volume_name,
-        header.offset,
-        write_data.len(),
-        base_off
-    );
-    match crate::bdev::novanas_bdev::sub_block_write_local(&volume_name, header.offset, &write_data)
-        .await
-    {
-        Ok(()) => NdpMessage::new(NdpHeader::response(header, NdpOp::WriteResp, 0, 0), None),
-        Err(e) => {
-            warn!("NDP write error for volume {}: {}", volume_name, e);
-            NdpMessage::new(NdpHeader::response(header, NdpOp::WriteResp, 3, 0), None)
-        }
-    }
-}
-
-/// Reverse-lookup volume name from volume_hash.
-/// Scans the bdev registry for a matching hash.
-fn lookup_volume(hash: u64) -> Option<String> {
-    // Check the volume hash cache first.
-    if let Some(name) = VOLUME_HASH_CACHE
-        .get()
-        .and_then(|c| c.read().ok().and_then(|map| map.get(&hash).cloned()))
-    {
-        return Some(name);
-    }
-    None
-}
-
-use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
-
-static VOLUME_HASH_CACHE: OnceLock<RwLock<HashMap<u64, String>>> = OnceLock::new();
-
-/// Register a volume name → hash mapping for NDP lookups.
-pub fn register_volume_hash(volume_name: &str) {
-    let hash = ndp::header::volume_hash(volume_name);
-    let cache = VOLUME_HASH_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
-    cache.write().unwrap().insert(hash, volume_name.to_string());
-    info!(
-        "NDP: registered volume '{}' with hash 0x{:016X}",
-        volume_name, hash
-    );
-}
-
-/// Unregister a volume hash.
-pub fn unregister_volume_hash(volume_name: &str) {
-    let hash = ndp::header::volume_hash(volume_name);
-    if let Some(cache) = VOLUME_HASH_CACHE.get() {
-        cache.write().unwrap().remove(&hash);
-    }
-}
-
-/// Handle a ChunkMapSync request: deserialize updates and merge into local
-/// metadata store using highest-generation-wins semantics.
-async fn handle_chunk_map_sync(req_header: &NdpHeader, data: Option<Vec<u8>>) -> NdpMessage {
-    let entries: Vec<crate::chunk::ndp_pool::ChunkMapSyncEntry> =
-        match data.as_deref().and_then(|d| serde_json::from_slice(d).ok()) {
-            Some(e) => e,
-            None => {
-                return NdpMessage::new(
-                    NdpHeader::response(req_header, NdpOp::ChunkMapSyncResp, 0, 0),
-                    None,
-                );
-            }
+    #[tokio::test]
+    async fn ndp_server_replaces_stale_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("ndp.sock");
+        // Create a stale socket file.
+        std::fs::write(&sock, b"stale").unwrap();
+        let cfg = NdpServerConfig {
+            unix_socket: sock.clone(),
         };
-
-    // Merge into local metadata store (highest generation wins).
-    if let Some(store) = novanas_bdev::get_metadata_store() {
-        for entry in &entries {
-            let existing: Option<crate::metadata::types::ChunkMapEntry> = store
-                .get_chunk_map(&entry.volume_id, entry.chunk_index)
-                .ok()
-                .flatten();
-            let should_update = match &existing {
-                Some(e) => entry.generation > e.generation,
-                None => true,
-            };
-            if should_update {
-                let cm = crate::metadata::types::ChunkMapEntry {
-                    chunk_index: entry.chunk_index,
-                    chunk_id: format!("{}:{}", entry.volume_id, entry.chunk_index),
-                    ec_params: None,
-                    dirty_bitmap: entry.dirty_bitmap,
-                    placements: entry.placements.clone(),
-                    generation: entry.generation,
-                };
-                let _ = store.put_chunk_map(&entry.volume_id, &cm);
-            }
-        }
+        let handle = start_ndp_server(cfg, Arc::new(MemStore::new()))
+            .await
+            .unwrap();
+        assert!(sock.exists());
+        handle.shutdown();
     }
-
-    NdpMessage::new(
-        NdpHeader::response(req_header, NdpOp::ChunkMapSyncResp, 0, 0),
-        None,
-    )
 }

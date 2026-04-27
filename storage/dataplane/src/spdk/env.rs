@@ -2,7 +2,7 @@
 
 use crate::config::DataPlaneConfig;
 use crate::error::{DataPlaneError, Result};
-use log::{info, warn};
+use log::info;
 
 #[allow(
     non_camel_case_types,
@@ -16,13 +16,13 @@ mod ffi {
 }
 
 /// Data passed to the SPDK startup callback via the arg pointer.
-struct SpdkStartupData {
-    grpc_port: u16,
-    listen_port: u16,
-    tls_ca_cert: String,
-    tls_server_cert: String,
-    tls_server_key: String,
-}
+///
+/// Architecture-v2: NVMe-oF target spin-up moved to the frontend daemon and
+/// the management gRPC server is now started from `main.rs` outside the
+/// SPDK reactor; nothing the startup callback needs is variable today, but
+/// the indirection is preserved so future poller initialisation remains a
+/// drop-in.
+struct SpdkStartupData {}
 
 pub fn init_spdk_env(config: &DataPlaneConfig) -> Result<()> {
     info!(
@@ -75,16 +75,12 @@ pub fn init_spdk_env(config: &DataPlaneConfig) -> Result<()> {
         );
 
         // Package config for the startup callback. The callback runs
-        // inside spdk_app_start *before* the reactor loop blocks, so the
-        // SPDK subsystems (bdev, nvmf) are guaranteed to be ready before
-        // the gRPC server accepts connections.
-        let startup_data = Box::new(SpdkStartupData {
-            grpc_port: config.grpc_port,
-            listen_port: config.listen_port,
-            tls_ca_cert: config.tls_ca_cert.clone(),
-            tls_server_cert: config.tls_server_cert.clone(),
-            tls_server_key: config.tls_server_key.clone(),
-        });
+        // inside spdk_app_start *before* the reactor loop blocks, so SPDK
+        // subsystems (bdev, etc.) are ready before higher-level services
+        // touch the bdev layer. NVMe-oF target wiring used to live in
+        // this callback; it has moved to the frontend daemon.
+        let _ = config;
+        let startup_data = Box::new(SpdkStartupData {});
         let arg = Box::into_raw(startup_data) as *mut std::os::raw::c_void;
 
         let rc = ffi::spdk_app_start(&mut opts, Some(spdk_startup_cb), arg);
@@ -109,60 +105,11 @@ unsafe extern "C" fn spdk_startup_cb(arg: *mut std::os::raw::c_void) {
     #[cfg(feature = "spdk-sys")]
     crate::chunk::reactor_ndp::init();
 
-    // Recover the startup data passed through the arg pointer.
-    let data = Box::from_raw(arg as *mut SpdkStartupData);
+    // Recover the startup data passed through the arg pointer (currently
+    // empty — preserved as a drop-in for future poller wiring).
+    let _data = Box::from_raw(arg as *mut SpdkStartupData);
 
-    // Create SPDK managers for bdev and NVMe-oF target operations.
-    let bdev_manager = std::sync::Arc::new(crate::spdk::bdev_manager::BdevManager::new());
-    let nvmf_manager = std::sync::Arc::new(crate::spdk::nvmf_manager::NvmfManager::new(
-        data.listen_port,
-    ));
-
-    let grpc_port = data.grpc_port;
-    let bdev_mgr = bdev_manager.clone();
-    let nvmf_mgr = nvmf_manager.clone();
-
-    // Spawn the gRPC server on the tokio runtime. The server runs on
-    // background threads (not the SPDK reactor thread).
-    //
-    // The dataplane does NOT create a chunk store on its own. The Go agent
-    // calls InitChunkStore via gRPC with the real NVMe bdev name (e.g.
-    // "NVMe0n1") after SPDK auto-probes the local NVMe devices. This ensures
-    // the chunk engine uses the actual NVMe drives, not file-backed stores.
-    let handle = crate::tokio_handle();
-    handle.spawn(async move {
-        let config = crate::transport::server::GrpcServerConfig {
-            listen_address: "0.0.0.0".to_string(),
-            port: grpc_port,
-            tls_ca_cert: data.tls_ca_cert.clone(),
-            tls_server_cert: data.tls_server_cert.clone(),
-            tls_server_key: data.tls_server_key.clone(),
-        };
-
-        let server = crate::transport::server::GrpcServer::new_management_only(config)
-            .with_dataplane(bdev_mgr, nvmf_mgr);
-
-        match server.start().await {
-            Ok(_handle) => {
-                info!("gRPC DataplaneService listening on 0.0.0.0:{}", grpc_port);
-                std::mem::forget(_handle);
-            }
-            Err(e) => {
-                log::error!("failed to start gRPC server: {}", e);
-            }
-        }
-
-        // Start NDP server for frontend controller communication.
-        let ndp_config = crate::transport::ndp_server::NdpServerConfig::default();
-        if let Err(e) = crate::transport::ndp_server::start(ndp_config).await {
-            log::error!("failed to start NDP server: {}", e);
-        }
-    });
-
-    info!(
-        "SPDK subsystems ready, gRPC server launching on port {}",
-        grpc_port
-    );
+    info!("SPDK subsystems ready");
 }
 
 pub fn shutdown_spdk_env() {

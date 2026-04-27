@@ -22,7 +22,7 @@ thiserror = "2"
 clap = { version = "4", features = ["derive"] }
 dashmap = "6"
 ndp = { package = "novanas-ndp", path = "ndp" }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs", "macros", "net", "signal", "time", "io-util"] }
 async-trait = "0.1"
 ctrlc = "3"
 hex = "0.4"
@@ -35,8 +35,10 @@ base64 = "0.22"
 tonic = { version = "0.13", features = ["tls-ring", "transport"] }
 prost = "0.13"
 prost-types = "0.13"
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["net"] }
 async-stream = "0.3"
+tower = { version = "0.5", features = ["util"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 threadpool = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
