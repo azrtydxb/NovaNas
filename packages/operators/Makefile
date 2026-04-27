@@ -2,15 +2,19 @@
 #
 # Primary targets:
 #   make generate    -- regenerate zz_generated.deepcopy.go via controller-gen
-#   make manifests   -- regenerate CRD YAML under config/crd/bases
 #   make build       -- build the operator manager binary
 #   make test        -- run unit tests
+#
+# NovaNas defines no CRDs (see ADR 0005); there is intentionally no
+# `manifests` target. The remaining api/v1alpha1 type (BlockVolume) is
+# carried for an in-progress runtime refactor and never emitted as a
+# CRD manifest.
 
 GOBIN ?= $(shell go env GOPATH)/bin
 CONTROLLER_GEN ?= $(GOBIN)/controller-gen
 
 .PHONY: all
-all: generate manifests build
+all: generate build
 
 ##@ Codegen
 
@@ -22,12 +26,8 @@ controller-gen: ## Install controller-gen into $GOBIN if missing.
 	fi
 
 .PHONY: generate
-generate: controller-gen ## Regenerate DeepCopy methods for all CRD types.
+generate: controller-gen ## Regenerate DeepCopy methods for the BlockVolume type.
 	$(CONTROLLER_GEN) object paths="./api/v1alpha1/..."
-
-.PHONY: manifests
-manifests: controller-gen ## Regenerate CRD YAML into config/crd/bases.
-	$(CONTROLLER_GEN) crd paths="./api/v1alpha1/..." output:crd:dir=./config/crd/bases
 
 ##@ Build
 

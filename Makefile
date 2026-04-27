@@ -27,11 +27,8 @@ dev-ps: ## Show dev stack status
 
 # ---- Full stack with a real kube-apiserver (kind) ---------------------------
 
-dev-cluster-up: ## kind + compose + seed samples
+dev-cluster-up: ## kind + compose
 	./dev/kind/create-cluster.sh
-	./dev/kind/install-crds.sh
-	./dev/kind/install-operators.sh
-	./dev/kind/install-sample-resources.sh
 	$(MAKE) dev-up
 
 dev-cluster-down: ## Stop compose + delete kind cluster
