@@ -114,7 +114,7 @@ func TestPoolPoller_CreatesBackendAssignmentsPerNode(t *testing.T) {
 			NodeSelector: &novanas.LabelSelector{
 				MatchLabels: map[string]string{"storage": "fast"},
 			},
-			DeviceFilter: &novanas.DeviceFilter{Type: "nvme"},
+			DeviceFilter: &novanas.DeviceFilter{PreferredClass: "nvme"},
 		},
 	}
 	api := newFakeAPI([]novanas.Pool{pool})

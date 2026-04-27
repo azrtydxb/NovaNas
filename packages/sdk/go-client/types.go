@@ -33,14 +33,22 @@ type LabelSelectorRequirement struct {
 	Values   []string `json:"values,omitempty"`
 }
 
+// DeviceFilter mirrors the API wire shape (preferredClass / minSize /
+// maxSize). The legacy storage CRD's `Type` / `MinSize` fields are not
+// supported by the API server — they were dropped when the resource
+// moved to Postgres.
 type DeviceFilter struct {
-	Type    string `json:"type,omitempty"`
-	MinSize string `json:"minSize,omitempty"`
+	PreferredClass string `json:"preferredClass,omitempty"` // nvme | ssd | hdd
+	MinSize        string `json:"minSize,omitempty"`
+	MaxSize        string `json:"maxSize,omitempty"`
 }
 
+// FileBackendSpec is the Pool-level file-backend config (loop-mounted
+// file). Wire shape mirrors PoolFileBackendSchema in
+// packages/schemas/src/storage/storage-pool.ts.
 type FileBackendSpec struct {
-	Path             string `json:"path,omitempty"`
-	MaxCapacityBytes *int64 `json:"maxCapacityBytes,omitempty"`
+	Path      string `json:"path,omitempty"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
 }
 
 type PoolSpec struct {
@@ -48,6 +56,7 @@ type PoolSpec struct {
 	BackendType  string           `json:"backendType,omitempty"`
 	DeviceFilter *DeviceFilter    `json:"deviceFilter,omitempty"`
 	FileBackend  *FileBackendSpec `json:"fileBackend,omitempty"`
+	Tier         string           `json:"tier,omitempty"`
 }
 
 type PoolStatus struct {

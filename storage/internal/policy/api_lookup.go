@@ -73,15 +73,15 @@ func toV1Alpha1(p *novanas.Pool) *v1alpha1.StoragePool {
 	}
 	if p.Spec.DeviceFilter != nil {
 		out.Spec.DeviceFilter = &v1alpha1.DeviceFilter{
-			Type:    p.Spec.DeviceFilter.Type,
+			Type:    p.Spec.DeviceFilter.PreferredClass,
 			MinSize: p.Spec.DeviceFilter.MinSize,
 		}
 	}
 	if p.Spec.FileBackend != nil {
 		fb := &v1alpha1.FileBackendSpec{Path: p.Spec.FileBackend.Path}
-		if p.Spec.FileBackend.MaxCapacityBytes != nil {
-			v := *p.Spec.FileBackend.MaxCapacityBytes
-			fb.MaxCapacityBytes = &v
+		if p.Spec.FileBackend.SizeBytes > 0 {
+			size := p.Spec.FileBackend.SizeBytes
+			fb.MaxCapacityBytes = &size
 		}
 		out.Spec.FileBackend = fb
 	}

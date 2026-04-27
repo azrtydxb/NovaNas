@@ -263,31 +263,35 @@ func toLabelSelector(in *novanas.LabelSelector) *metav1.LabelSelector {
 }
 
 // buildAssignmentSpecFromAPI translates a Pool's spec into the
-// BackendAssignment.Spec a node should provision. The SDK and API both
-// use the preferredClass / minSize wire shape (DeviceFilter on a Pool
-// from the api carries operators-style names; we map across here).
+// BackendAssignment.Spec a node should provision. Pool.Spec and the
+// BackendAssignment wire shape now use identical field names
+// (preferredClass / minSize / sizeBytes), so this is a pure copy with
+// a single default: empty BackendType falls back to "raw" — the only
+// dev-friendly option that doesn't need cluster-side prep.
 func buildAssignmentSpecFromAPI(
 	pool *novanas.Pool, nodeName string,
 ) novanas.BackendAssignmentSpec {
+	backendType := pool.Spec.BackendType
+	if backendType == "" {
+		backendType = "raw"
+	}
 	spec := novanas.BackendAssignmentSpec{
 		PoolRef:     pool.Metadata.Name,
 		NodeName:    nodeName,
-		BackendType: pool.Spec.BackendType,
+		BackendType: backendType,
 	}
 	if pool.Spec.DeviceFilter != nil {
-		// pool.Spec.DeviceFilter still uses the legacy Type / MinSize
-		// shape from the operators schema. Translate to the API shape.
 		spec.DeviceFilter = &novanas.APIDeviceFilter{
-			PreferredClass: pool.Spec.DeviceFilter.Type,
+			PreferredClass: pool.Spec.DeviceFilter.PreferredClass,
 			MinSize:        pool.Spec.DeviceFilter.MinSize,
+			MaxSize:        pool.Spec.DeviceFilter.MaxSize,
 		}
 	}
 	if pool.Spec.FileBackend != nil {
-		fb := &novanas.APIFileBackendSpec{Path: pool.Spec.FileBackend.Path}
-		if pool.Spec.FileBackend.MaxCapacityBytes != nil {
-			fb.SizeBytes = *pool.Spec.FileBackend.MaxCapacityBytes
+		spec.FileBackend = &novanas.APIFileBackendSpec{
+			Path:      pool.Spec.FileBackend.Path,
+			SizeBytes: pool.Spec.FileBackend.SizeBytes,
 		}
-		spec.FileBackend = fb
 	}
 	return spec
 }
