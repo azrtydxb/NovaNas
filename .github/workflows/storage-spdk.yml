@@ -9,7 +9,6 @@ on:
   pull_request:
     paths:
       - "storage/dataplane/**"
-      - "storage/internal/chunk/**"
       - ".github/workflows/storage-spdk.yml"
   push:
     branches: [main]

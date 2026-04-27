@@ -1,5 +1,13 @@
 # 01 — Architecture Overview
 
+> **⚠️ Storage-subsystem sections of this doc are out-of-date.**
+> The Go agent / Go controller / multi-backend-type architecture described
+> below has been replaced by an all-Rust three-daemon design
+> (data / meta / frontend). For the current storage architecture see
+> [`16-data-meta-frontend.md`](16-data-meta-frontend.md). The general
+> principles, API server, UI, and non-storage components in this doc are
+> still accurate.
+
 ## Guiding principles
 
 1. **Everything is chunks.** Block volumes, filesystems, and objects all decompose into immutable 4 MB content-addressed chunks. One storage engine, three access surfaces.

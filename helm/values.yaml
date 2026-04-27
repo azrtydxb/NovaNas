@@ -86,130 +86,16 @@ ui:
     className: novaedge
     hostOverride: ""
 
-operators:
-  enabled: true
-  image:
-    repository: novanas/operators
-    tag: ""
-    pullPolicy: ""
-  replicas: 1
-  leaderElect: true
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-    limits:
-      cpu: "500m"
-      memory: "512Mi"
-  metricsPort: 8080
-  healthPort: 8081
-  serviceMonitor:
-    enabled: true
-    interval: 30s
-
 # -----------------------------------------------------------------------------
-# Storage control plane + data plane
+# Storage data plane
+#
+# The Go control plane (storage-agent, storage-controller, storage-meta,
+# storage-csi, storage-scheduler, storage-webhook, storage-s3gw) and the
+# disk-agent + Go operators were deleted in the architecture-v2 strip.
+# See docs/16-data-meta-frontend.md for the new data/meta/frontend split;
+# the new Rust daemons will get their own values blocks once they ship.
 # -----------------------------------------------------------------------------
 storage:
-  meta:
-    enabled: true
-    image:
-      repository: novanas/storage-meta
-      tag: ""
-    replicas: 1
-    resources:
-      requests: { cpu: "200m", memory: "512Mi" }
-      limits:   { cpu: "2",    memory: "4Gi" }
-    persistence:
-      enabled: true
-      size: 20Gi
-      # storage-meta's PVC must NOT use the NovaNas CSI (the chunk
-      # engine doesn't exist yet on first install — chicken-and-egg
-      # if meta's bootstrap depends on it). #46. Default to whatever
-      # node-local provisioner the underlying cluster ships:
-      #   - k3s: `local-path` (built-in)
-      #   - kubeadm + local-static-provisioner: `local-storage`
-      #   - cloud: any non-NovaNas StorageClass (gp3/standard/etc.)
-      # Empty string falls back to the cluster default StorageClass.
-      storageClass: "local-path"
-    # Metadata-as-chunks mode is a forward-looking scheme (see A4). Default off.
-    chunkBacked:
-      enabled: false
-      minMetadataDisks: 1
-      bootstrapTimeout: 120s
-    encryption:
-      mode: "off"  # off | mandatory
-    service:
-      grpcPort: 9100
-  agent:
-    enabled: true
-    image:
-      repository: novanas/storage-agent
-      tag: ""
-    resources:
-      requests: { cpu: "100m", memory: "256Mi" }
-      limits:   { cpu: "2",    memory: "2Gi" }
-    # Host path where chunk files are persisted on each node.
-    dataDir: /var/lib/novanas/chunks
-    service:
-      grpcPort: 9200
-  csi:
-    enabled: true
-    controller:
-      image:
-        repository: novanas/storage-csi
-        tag: ""
-      replicas: 1
-      resources:
-        requests: { cpu: "50m",  memory: "128Mi" }
-        limits:   { cpu: "500m", memory: "512Mi" }
-    node:
-      image:
-        repository: novanas/storage-csi
-        tag: ""
-      resources:
-        requests: { cpu: "50m",  memory: "64Mi" }
-        limits:   { cpu: "500m", memory: "256Mi" }
-  controller:
-    enabled: true
-    image:
-      repository: novanas/storage-controller
-      tag: ""
-    replicas: 1
-    # Switch StoragePool reconciliation off the legacy CRD watch and
-    # onto API polling (#50). Off by default until validated on the
-    # dev box; flip to true once the new path is exercised.
-    poolPoller: false
-    resources:
-      requests: { cpu: "100m", memory: "128Mi" }
-      limits:   { cpu: "500m", memory: "512Mi" }
-  scheduler:
-    enabled: true
-    image:
-      repository: novanas/storage-scheduler
-      tag: ""
-    replicas: 1
-  webhook:
-    enabled: true
-    image:
-      repository: novanas/storage-webhook
-      tag: ""
-    replicas: 1
-    # cert-manager mints the TLS material into this Secret; the
-    # deployment mounts it at /etc/webhook-cert.
-    tlsSecretName: novanas-storage-webhook-tls
-    resources: {}
-  s3gw:
-    enabled: true
-    image:
-      repository: novanas/storage-s3gw
-      tag: ""
-    replicas: 1
-    service:
-      port: 8333
-    resources:
-      requests: { cpu: "100m", memory: "256Mi" }
-      limits:   { cpu: "2",    memory: "2Gi" }
   dataplane:
     # SPDK dataplane pod. Requires hugepages + SYS_ADMIN on the host.
     # Default disabled until the host is prepared (see os/ chart from A5-OS).
@@ -283,18 +169,9 @@ nfs:
 # disk-agent — node-local DaemonSet that scans /sys/block and creates/updates
 # Disk CRs. Required for any storage to show up in the UI.
 # -----------------------------------------------------------------------------
-diskAgent:
-  enabled: true
-  image:
-    repository: novanas/disk-agent
-    tag: ""  # defaults to .Chart.AppVersion
-    pullPolicy: ""
-  # Poll interval. Hot-plug is picked up on the next tick.
-  interval: 30s
-  logLevel: info
-  resources:
-    requests: { cpu: "10m",  memory: "32Mi" }
-    limits:   { cpu: "100m", memory: "128Mi" }
+# diskAgent and operators blocks removed — both binaries deleted in the
+# architecture-v2 strip. Disk discovery moves into the Rust data daemon
+# in PR-DiskClaim. See docs/16-data-meta-frontend.md.
 
 discovery:
   enabled: true

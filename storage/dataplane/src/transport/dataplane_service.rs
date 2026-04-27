@@ -1218,87 +1218,9 @@ impl DataplaneService for DataplaneServiceImpl {
                 );
                 Ok(Response::new(InitBackendResponse {}))
             }
-            "lvm" => {
-                // LVM backend: create an SPDK lvol store on an existing bdev.
-                // Config: {"bdev_name": "NVMe0n1", "lvs_name": "novanas_lvs", "cluster_size": 1048576}
-                let bdev_name = config["bdev_name"]
-                    .as_str()
-                    .ok_or_else(|| Status::invalid_argument("bdev_name required in config"))?;
-                let lvs_name = config["lvs_name"]
-                    .as_str()
-                    .ok_or_else(|| Status::invalid_argument("lvs_name required in config"))?;
-                let cluster_size = config["cluster_size"].as_u64().unwrap_or(1024 * 1024) as u32;
-
-                let bs_config = BlobstoreConfig {
-                    base_bdev: bdev_name.to_string(),
-                    cluster_size,
-                };
-                self.bdev_manager
-                    .create_lvol_store(&bs_config)
-                    .map_err(|e| Status::internal(format!("create lvol store: {e}")))?;
-
-                let backend = Arc::new(crate::backend::lvm::LvmBackend::new(lvs_name));
-                grpc_backends()
-                    .lock()
-                    .unwrap()
-                    .insert(lvs_name.to_string(), backend);
-
-                log::info!(
-                    "init_backend: lvm backend '{}' on bdev '{}'",
-                    lvs_name,
-                    bdev_name
-                );
-                Ok(Response::new(InitBackendResponse {}))
-            }
-            "file" => {
-                // File backend: create an SPDK AIO bdev backed by a file on a mounted filesystem.
-                // Config: {"path": "/var/lib/novanas/pool1", "capacity_bytes": 1099511627776, "name": "file_pool1"}
-                let path = config["path"]
-                    .as_str()
-                    .ok_or_else(|| Status::invalid_argument("path required in config"))?;
-                let capacity_bytes = config["capacity_bytes"]
-                    .as_u64()
-                    .ok_or_else(|| Status::invalid_argument("capacity_bytes required in config"))?;
-                let name = config["name"].as_str().unwrap_or("file_backend");
-
-                // Create the backing file and AIO bdev.
-                std::fs::create_dir_all(path)
-                    .map_err(|e| Status::internal(format!("create directory {}: {}", path, e)))?;
-                let backing_file = format!("{}/novanas-chunks.dat", path);
-                {
-                    let f = std::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(false)
-                        .open(&backing_file)
-                        .map_err(|e| Status::internal(format!("create backing file: {e}")))?;
-                    let current_size = f.metadata().map(|m| m.len()).unwrap_or(0);
-                    if current_size < capacity_bytes {
-                        f.set_len(capacity_bytes)
-                            .map_err(|e| Status::internal(format!("set backing file size: {e}")))?;
-                    }
-                }
-
-                let aio_config = LocalBdevConfig {
-                    name: name.to_string(),
-                    device_path: backing_file.clone(),
-                    block_size: 4096,
-                };
-                self.bdev_manager
-                    .create_aio_bdev(&aio_config)
-                    .map_err(|e| Status::internal(format!("create AIO bdev: {e}")))?;
-
-                log::info!(
-                    "init_backend: file backend '{}' at '{}' ({}B)",
-                    name,
-                    backing_file,
-                    capacity_bytes
-                );
-                Ok(Response::new(InitBackendResponse {}))
-            }
             other => Err(Status::invalid_argument(format!(
-                "unknown backend type '{}' — expected raw, lvm, or file",
-                other
+                "unknown backend type '{other}' — only 'raw' is supported \
+                 (lvm/file backends were removed; see docs/16-data-meta-frontend.md)",
             ))),
         }
     }
