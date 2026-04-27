@@ -4,6 +4,7 @@ members = [
     "storage/dataplane/ndp",
     "storage/dataplane/nvmeof-tcp",
     "storage/dataplane/nbd",
+    "storage/frontend",
 ]
 resolver = "2"
 
