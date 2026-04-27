@@ -1,12 +1,7 @@
-# Binaries
-bin/
-/controller
-/csi
-/filer
-/s3gw
-/agent
-/meta
-/novanasctl
+# Stray Go-era build outputs (binaries that the deleted Go cmd/ tree
+# used to produce). The Rust storage/meta crate lives at the same
+# path, so be careful not to ignore the directory; only ignore the
+# bare-name binaries we know about by name.
 *.exe
 *.exe~
 *.dll
