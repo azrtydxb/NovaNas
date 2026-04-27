@@ -66,6 +66,49 @@ type Condition struct {
 	LastTransitionTime string `json:"lastTransitionTime,omitempty"`
 }
 
+// BackendAssignment binds a StoragePool to a node and tracks the
+// backing SPDK bdev provisioned by the agent. The wire shape mirrors
+// packages/schemas/src/storage/backend-assignment.ts.
+type BackendAssignment struct {
+	APIVersion string                  `json:"apiVersion"`
+	Kind       string                  `json:"kind"`
+	Metadata   ObjectMeta              `json:"metadata"`
+	Spec       BackendAssignmentSpec   `json:"spec"`
+	Status     BackendAssignmentStatus `json:"status,omitempty"`
+}
+
+type BackendAssignmentSpec struct {
+	PoolRef      string                  `json:"poolRef"`
+	NodeName     string                  `json:"nodeName"`
+	BackendType  string                  `json:"backendType"`
+	DeviceFilter *APIDeviceFilter        `json:"deviceFilter,omitempty"`
+	FileBackend  *APIFileBackendSpec     `json:"fileBackend,omitempty"`
+}
+
+// APIDeviceFilter mirrors the API wire shape (preferredClass/minSize/
+// maxSize). Distinct from the legacy DeviceFilter type that uses
+// Type/MinSize on the storage CRD side.
+type APIDeviceFilter struct {
+	PreferredClass string `json:"preferredClass,omitempty"` // nvme | ssd | hdd
+	MinSize        string `json:"minSize,omitempty"`
+	MaxSize        string `json:"maxSize,omitempty"`
+}
+
+type APIFileBackendSpec struct {
+	Path      string `json:"path,omitempty"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+type BackendAssignmentStatus struct {
+	Phase      string      `json:"phase,omitempty"`
+	Device     string      `json:"device,omitempty"`
+	PCIeAddr   string      `json:"pcieAddr,omitempty"`
+	BdevName   string      `json:"bdevName,omitempty"`
+	Capacity   int64       `json:"capacity,omitempty"`
+	Message    string      `json:"message,omitempty"`
+	Conditions []Condition `json:"conditions,omitempty"`
+}
+
 type Disk struct {
 	APIVersion string     `json:"apiVersion"`
 	Kind       string     `json:"kind"`

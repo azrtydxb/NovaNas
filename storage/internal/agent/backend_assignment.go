@@ -1,5 +1,14 @@
-// Package agent provides the NovaStor node agent that watches BackendAssignment
-// CRDs and provisions storage backends on the local node via the Rust dataplane.
+// Package agent: BackendAssignment reconciler driven by the NovaNas API
+// (Postgres-backed) instead of a Kubernetes CRD.
+//
+// Flow:
+//  1. Poll /api/v1/backend-assignments on a fixed interval.
+//  2. For each assignment whose spec.nodeName matches this node, run the
+//     reconciliation logic that programs SPDK via the dataplane gRPC.
+//  3. PATCH /api/v1/backend-assignments/<name> with the resulting status.
+//
+// Replaces the previous controller-runtime CRD watch (#70 deleted all
+// CRDs; this is the storage half of completing that migration).
 package agent
 
 import (
@@ -10,191 +19,191 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 	"github.com/azrtydxb/novanas/storage/internal/dataplane"
 	"github.com/azrtydxb/novanas/storage/internal/disk"
 )
 
-// BackendAssignmentReconciler watches BackendAssignment CRDs for the local node
-// and provisions the storage backend via the Rust dataplane gRPC.
+// BackendAssignmentReconciler drives BackendAssignment objects through the
+// API. One instance runs per agent process.
 type BackendAssignmentReconciler struct {
-	client.Client
+	API      *BAClient
 	NodeName string
-	NodeUUID string // Persistent storage node UUID for CRUSH placement
+	NodeUUID string // Persistent storage node UUID for CRUSH placement.
 	DPClient *dataplane.Client
 	Logger   *zap.Logger
-	BaseBdev string // SPDK bdev name to use (must match --spdk-base-bdev)
+	BaseBdev string // SPDK bdev name to use (must match --spdk-base-bdev).
+	// Interval controls the poll loop in Run. Defaults to 10s.
+	Interval time.Duration
 }
 
-// +kubebuilder:rbac:groups=novanas.io,resources=backendassignments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=novanas.io,resources=backendassignments/status,verbs=get;update;patch
-
-// Reconcile handles a BackendAssignment event. It only processes assignments
-// targeting this node. The flow is:
-//  1. Discover local devices matching the assignment's device filter.
-//  2. Pick an available device (not already assigned to another pool).
-//  3. Call InitBackend on the dataplane to create the SPDK bdev.
-//  4. Call InitChunkStore to set up the chunk engine on the bdev.
-//  5. Update the BackendAssignment status to Ready.
-func (r *BackendAssignmentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	ctx, span := otel.Tracer("novanas-storage-agent").Start(ctx, "BackendAssignment.Reconcile")
-	defer span.End()
-
-	logger := log.FromContext(ctx)
-
-	var ba novastorev1alpha1.BackendAssignment
-	if err := r.Get(ctx, req.NamespacedName, &ba); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+// Run blocks polling the API until ctx is cancelled. Each tick lists all
+// BackendAssignments, filters by node, and reconciles each one. List
+// failures are logged and retried — they don't kill the loop.
+func (r *BackendAssignmentReconciler) Run(ctx context.Context) {
+	interval := r.Interval
+	if interval <= 0 {
+		interval = 10 * time.Second
 	}
+	r.Logger.Info("BackendAssignment reconciler running",
+		zap.String("node", r.NodeName),
+		zap.Duration("interval", interval),
+	)
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	// Tick once immediately so the agent reconciles current state at startup
+	// without waiting for the first interval.
+	r.tick(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.tick(ctx)
+		}
+	}
+}
+
+func (r *BackendAssignmentReconciler) tick(ctx context.Context) {
+	all, err := r.API.List(ctx)
+	if err != nil {
+		r.Logger.Warn("BackendAssignment list failed", zap.Error(err))
+		return
+	}
+	for i := range all {
+		ba := all[i]
+		if ba.Spec.NodeName != r.NodeName {
+			continue
+		}
+		if err := r.reconcile(ctx, &ba, all); err != nil {
+			r.Logger.Warn("reconcile BackendAssignment failed",
+				zap.String("name", ba.Metadata.Name), zap.Error(err))
+		}
+	}
+}
+
+// reconcile drives one BackendAssignment to its desired state. The full
+// `all` list is passed so device-exclusivity checks don't refetch.
+func (r *BackendAssignmentReconciler) reconcile(
+	ctx context.Context,
+	ba *BackendAssignment,
+	all []BackendAssignment,
+) error {
 	r.Logger.Info("reconcile BackendAssignment",
-		zap.String("name", ba.Name),
+		zap.String("name", ba.Metadata.Name),
 		zap.String("node", ba.Spec.NodeName),
 		zap.String("phase", ba.Status.Phase),
 	)
 
-	// Only process assignments for this node.
-	if ba.Spec.NodeName != r.NodeName {
-		return ctrl.Result{}, nil
-	}
-
-	// If already provisioned, verify the dataplane state is consistent.
-	// After a dataplane restart, the SPDK bdevs and chunk store are lost
-	// even though the CRD status still says "Ready". Re-initialize them.
+	// Already provisioned: re-verify dataplane state in case the dataplane
+	// pod restarted (bdev + chunk store are in-memory).
 	if ba.Status.Phase == "Ready" {
-		return r.ensureDataplaneState(ctx, &ba)
+		return r.ensureDataplaneState(ctx, ba)
 	}
 
-	// Retry failed assignments periodically — the failure may have been
-	// transient (e.g. dataplane not ready, bdev name collision after restart).
+	// Reset Failed → Pending so we retry on the next tick.
 	if ba.Status.Phase == "Failed" {
-		ba.Status.Phase = "Pending"
-		ba.Status.Message = "retrying after failure"
-		if err := r.Status().Update(ctx, &ba); err != nil {
-			return ctrl.Result{}, err
-		}
+		_, _ = r.API.PatchStatus(ctx, ba.Metadata.Name, BackendAssignmentStatus{
+			Phase:   "Pending",
+			Message: "retrying after failure",
+		})
 	}
 
-	logger.Info("provisioning BackendAssignment",
-		"name", ba.Name,
-		"backendType", ba.Spec.BackendType,
-		"pool", ba.Spec.PoolRef,
-	)
+	// Mark Provisioning before doing work so observers can see we picked it up.
+	_, _ = r.API.PatchStatus(ctx, ba.Metadata.Name, BackendAssignmentStatus{
+		Phase:   "Provisioning",
+		Message: "discovering devices",
+	})
 
-	// Mark as Provisioning.
-	ba.Status.Phase = "Provisioning"
-	ba.Status.Message = "discovering devices"
-	if err := r.Status().Update(ctx, &ba); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	var bdevName string
-	var devicePath string
-	var pcieAddr string
+	var bdevName, devicePath, pcieAddr string
 	var capacity int64
 
 	switch ba.Spec.BackendType {
 	case "file":
-		bdevName, capacity = r.provisionFileBackend(ctx, &ba)
+		bdevName, capacity = r.provisionFileBackend(ba)
 
 	case "raw", "lvm":
 		var err error
-		bdevName, devicePath, pcieAddr, capacity, err = r.provisionDeviceBackend(ctx, &ba)
+		bdevName, devicePath, pcieAddr, capacity, err = r.provisionDeviceBackend(ba, all)
 		if err != nil {
 			if isTransientGRPCError(err) {
-				// Transient error — requeue without marking as Failed.
 				r.Logger.Warn("transient error provisioning backend, will retry",
-					zap.String("name", ba.Name), zap.Error(err))
-				ba.Status.Message = fmt.Sprintf("retrying: %v", err)
-				_ = r.Status().Update(ctx, &ba)
-				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+					zap.String("name", ba.Metadata.Name), zap.Error(err))
+				_, _ = r.API.PatchStatus(ctx, ba.Metadata.Name, BackendAssignmentStatus{
+					Phase:   "Provisioning",
+					Message: fmt.Sprintf("retrying: %v", err),
+				})
+				return nil
 			}
-			r.setFailed(ctx, &ba, err.Error())
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			r.setFailed(ctx, ba, err.Error())
+			return nil
 		}
 
 	default:
-		r.setFailed(ctx, &ba, fmt.Sprintf("unknown backend type: %s", ba.Spec.BackendType))
-		return ctrl.Result{}, nil
+		r.setFailed(ctx, ba, fmt.Sprintf("unknown backend type: %s", ba.Spec.BackendType))
+		return nil
 	}
 
 	if bdevName == "" {
-		r.setFailed(ctx, &ba, "no suitable device found")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		r.setFailed(ctx, ba, "no suitable device found")
+		return nil
 	}
 
-	// Init chunk store on the resulting bdev.
 	if _, err := r.DPClient.InitChunkStore(bdevName, r.NodeName); err != nil {
 		if !strings.Contains(err.Error(), "already") {
 			if isTransientGRPCError(err) {
 				r.Logger.Warn("transient error init chunk store, will retry",
-					zap.String("name", ba.Name), zap.Error(err))
-				ba.Status.Message = fmt.Sprintf("retrying chunk store: %v", err)
-				_ = r.Status().Update(ctx, &ba)
-				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+					zap.String("name", ba.Metadata.Name), zap.Error(err))
+				_, _ = r.API.PatchStatus(ctx, ba.Metadata.Name, BackendAssignmentStatus{
+					Phase:   "Provisioning",
+					Message: fmt.Sprintf("retrying chunk store: %v", err),
+				})
+				return nil
 			}
-			r.setFailed(ctx, &ba, fmt.Sprintf("init chunk store on %s: %v", bdevName, err))
-			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+			r.setFailed(ctx, ba, fmt.Sprintf("init chunk store on %s: %v", bdevName, err))
+			return nil
 		}
 	}
 
-	// Update status to Ready.
-	ba.Status.Phase = "Ready"
-	ba.Status.Device = devicePath
-	ba.Status.PCIeAddr = pcieAddr
-	ba.Status.BdevName = bdevName
-	ba.Status.Capacity = capacity
-	ba.Status.Message = ""
-	meta.SetStatusCondition(&ba.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		Reason:             "Provisioned",
-		Message:            fmt.Sprintf("backend %s provisioned on bdev %s", ba.Spec.BackendType, bdevName),
-		ObservedGeneration: ba.Generation,
-	})
-	if err := r.Status().Update(ctx, &ba); err != nil {
-		return ctrl.Result{}, err
+	final := BackendAssignmentStatus{
+		Phase:    "Ready",
+		Device:   devicePath,
+		PCIeAddr: pcieAddr,
+		BdevName: bdevName,
+		Capacity: capacity,
+	}
+	if _, err := r.API.PatchStatus(ctx, ba.Metadata.Name, final); err != nil {
+		return fmt.Errorf("patch status Ready: %w", err)
 	}
 
 	r.Logger.Info("BackendAssignment provisioned",
-		zap.String("name", ba.Name),
+		zap.String("name", ba.Metadata.Name),
 		zap.String("bdevName", bdevName),
 		zap.String("device", devicePath),
 		zap.Int64("capacity", capacity),
 	)
-
-	return ctrl.Result{}, nil
+	return nil
 }
 
-// ensureDataplaneState re-initializes the backend and chunk store on the
-// dataplane if they have been lost (e.g. after a dataplane pod restart).
-// Both InitBackend and InitChunkStore are idempotent — calling them when the
-// state already exists is a no-op.
-func (r *BackendAssignmentReconciler) ensureDataplaneState(ctx context.Context, ba *novastorev1alpha1.BackendAssignment) (ctrl.Result, error) {
+// ensureDataplaneState re-runs InitBackend + InitChunkStore for an already
+// Ready assignment. Both calls are idempotent on the dataplane side; this
+// catches the case where the dataplane pod restarted.
+func (r *BackendAssignmentReconciler) ensureDataplaneState(_ context.Context, ba *BackendAssignment) error {
 	bdevName := ba.Status.BdevName
 	if bdevName == "" {
 		bdevName = r.BaseBdev
 	}
 
-	r.Logger.Info("ensureDataplaneState: verifying backend and chunk store",
-		zap.String("name", ba.Name),
+	r.Logger.Debug("ensureDataplaneState: verifying backend and chunk store",
+		zap.String("name", ba.Metadata.Name),
 		zap.String("backendType", ba.Spec.BackendType),
 		zap.String("bdevName", bdevName),
 		zap.String("device", ba.Status.Device),
 	)
 
-	// Re-initialize the backend. InitBackend is idempotent; if the bdev
-	// already exists, the dataplane returns success or "already exists".
 	switch ba.Spec.BackendType {
 	case "file":
 		path := "/var/lib/novanas/file"
@@ -202,146 +211,107 @@ func (r *BackendAssignmentReconciler) ensureDataplaneState(ctx context.Context, 
 			path = ba.Spec.FileBackend.Path
 		}
 		var capacityBytes int64 = 100 * 1024 * 1024 * 1024
-		if ba.Spec.FileBackend != nil && ba.Spec.FileBackend.MaxCapacityBytes != nil {
-			capacityBytes = *ba.Spec.FileBackend.MaxCapacityBytes
+		if ba.Spec.FileBackend != nil && ba.Spec.FileBackend.SizeBytes > 0 {
+			capacityBytes = ba.Spec.FileBackend.SizeBytes
 		}
-		config := map[string]interface{}{
+		cfg := map[string]interface{}{
 			"path":           path,
 			"capacity_bytes": capacityBytes,
 			"name":           bdevName,
 		}
-		configJSON, _ := json.Marshal(config)
-		if err := r.DPClient.InitBackend("file", string(configJSON)); err != nil {
+		j, _ := json.Marshal(cfg)
+		if err := r.DPClient.InitBackend("file", string(j)); err != nil {
 			if !strings.Contains(err.Error(), "already") {
-				if isTransientGRPCError(err) {
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-				}
-				r.Logger.Warn("ensureDataplaneState: file backend init failed", zap.Error(err))
+				r.Logger.Debug("ensureDataplaneState: file init", zap.Error(err))
 			}
 		}
 
 	case "raw":
-		devicePath := ba.Status.Device
-		if devicePath == "" {
-			return ctrl.Result{}, nil // no device recorded, nothing to re-init
+		if ba.Status.Device == "" {
+			return nil
 		}
-		config := map[string]interface{}{
-			"device_path": devicePath,
+		cfg := map[string]interface{}{
+			"device_path": ba.Status.Device,
 			"name":        bdevName,
 		}
-		configJSON, _ := json.Marshal(config)
-		if err := r.DPClient.InitBackend("raw", string(configJSON)); err != nil {
+		j, _ := json.Marshal(cfg)
+		if err := r.DPClient.InitBackend("raw", string(j)); err != nil {
 			if !strings.Contains(err.Error(), "already") && !strings.Contains(err.Error(), "returned null") {
-				if isTransientGRPCError(err) {
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-				}
-				r.Logger.Warn("ensureDataplaneState: raw backend init failed", zap.Error(err))
+				r.Logger.Debug("ensureDataplaneState: raw init", zap.Error(err))
 			}
 		}
 
 	case "lvm":
-		devicePath := ba.Status.Device
-		if devicePath == "" {
-			return ctrl.Result{}, nil
+		if ba.Status.Device == "" {
+			return nil
 		}
-		rawConfig := map[string]interface{}{
-			"device_path": devicePath,
+		raw := map[string]interface{}{
+			"device_path": ba.Status.Device,
 			"name":        bdevName,
 		}
-		rawJSON, _ := json.Marshal(rawConfig)
-		if err := r.DPClient.InitBackend("raw", string(rawJSON)); err != nil {
+		rj, _ := json.Marshal(raw)
+		if err := r.DPClient.InitBackend("raw", string(rj)); err != nil {
 			if !strings.Contains(err.Error(), "already") {
-				if isTransientGRPCError(err) {
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-				}
+				r.Logger.Debug("ensureDataplaneState: lvm raw init", zap.Error(err))
 			}
 		}
-		lvsName := fmt.Sprintf("lvs_%s", ba.Spec.PoolRef)
-		lvmConfig := map[string]interface{}{
+		lvs := fmt.Sprintf("lvs_%s", ba.Spec.PoolRef)
+		lvm := map[string]interface{}{
 			"bdev_name":    bdevName,
-			"lvs_name":     lvsName,
+			"lvs_name":     lvs,
 			"cluster_size": 1048576,
 		}
-		lvmJSON, _ := json.Marshal(lvmConfig)
-		if err := r.DPClient.InitBackend("lvm", string(lvmJSON)); err != nil {
+		lj, _ := json.Marshal(lvm)
+		if err := r.DPClient.InitBackend("lvm", string(lj)); err != nil {
 			if !strings.Contains(err.Error(), "already") {
-				if isTransientGRPCError(err) {
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-				}
-				r.Logger.Warn("ensureDataplaneState: lvm backend init failed", zap.Error(err))
+				r.Logger.Debug("ensureDataplaneState: lvm init", zap.Error(err))
 			}
 		}
 	}
 
-	// Re-initialize the chunk store.
 	if _, err := r.DPClient.InitChunkStore(bdevName, r.NodeName); err != nil {
 		if !strings.Contains(err.Error(), "already") {
-			if isTransientGRPCError(err) {
-				r.Logger.Warn("ensureDataplaneState: chunk store init transient error, will retry",
-					zap.String("bdev", bdevName), zap.Error(err))
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
-			r.Logger.Warn("ensureDataplaneState: chunk store init failed",
-				zap.String("bdev", bdevName), zap.Error(err))
-		} else {
-			r.Logger.Info("ensureDataplaneState: chunk store already initialized",
-				zap.String("bdev", bdevName))
+			r.Logger.Debug("ensureDataplaneState: chunk store init", zap.Error(err))
 		}
-	} else {
-		r.Logger.Info("ensureDataplaneState: chunk store initialized successfully",
-			zap.String("bdev", bdevName))
 	}
-
-	return ctrl.Result{}, nil
+	return nil
 }
 
-// provisionFileBackend creates an SPDK AIO bdev backed by a file.
-func (r *BackendAssignmentReconciler) provisionFileBackend(
-	_ context.Context,
-	ba *novastorev1alpha1.BackendAssignment,
-) (string, int64) {
+func (r *BackendAssignmentReconciler) provisionFileBackend(ba *BackendAssignment) (string, int64) {
 	path := "/var/lib/novanas/file"
 	if ba.Spec.FileBackend != nil && ba.Spec.FileBackend.Path != "" {
 		path = ba.Spec.FileBackend.Path
 	}
-
-	var capacityBytes int64 = 100 * 1024 * 1024 * 1024 // 100GB default
-	if ba.Spec.FileBackend != nil && ba.Spec.FileBackend.MaxCapacityBytes != nil {
-		capacityBytes = *ba.Spec.FileBackend.MaxCapacityBytes
+	var capacityBytes int64 = 100 * 1024 * 1024 * 1024
+	if ba.Spec.FileBackend != nil && ba.Spec.FileBackend.SizeBytes > 0 {
+		capacityBytes = ba.Spec.FileBackend.SizeBytes
 	}
-
 	bdevName := r.BaseBdev
-	config := map[string]interface{}{
+	cfg := map[string]interface{}{
 		"path":           path,
 		"capacity_bytes": capacityBytes,
 		"name":           bdevName,
 	}
-	configJSON, _ := json.Marshal(config)
-
-	if err := r.DPClient.InitBackend("file", string(configJSON)); err != nil {
+	j, _ := json.Marshal(cfg)
+	if err := r.DPClient.InitBackend("file", string(j)); err != nil {
 		r.Logger.Error("failed to init file backend", zap.Error(err))
 		return "", 0
 	}
-
 	return bdevName, capacityBytes
 }
 
-// provisionDeviceBackend discovers a local device, checks exclusivity, and
-// initializes the backend via the dataplane.
 func (r *BackendAssignmentReconciler) provisionDeviceBackend(
-	ctx context.Context,
-	ba *novastorev1alpha1.BackendAssignment,
+	ba *BackendAssignment,
+	all []BackendAssignment,
 ) (bdevName, devicePath, pcieAddr string, capacity int64, err error) {
-	// Discover local devices.
 	devices, discErr := disk.DiscoverDevices()
 	if discErr != nil {
 		return "", "", "", 0, fmt.Errorf("device discovery: %w", discErr)
 	}
 
-	// Apply device filter.
 	filterOpts := disk.FilterOptions{}
 	if ba.Spec.DeviceFilter != nil {
-		switch ba.Spec.DeviceFilter.Type {
+		switch ba.Spec.DeviceFilter.PreferredClass {
 		case "nvme":
 			filterOpts.DeviceType = disk.TypeNVMe
 		case "ssd":
@@ -350,39 +320,38 @@ func (r *BackendAssignmentReconciler) provisionDeviceBackend(
 			filterOpts.DeviceType = disk.TypeHDD
 		}
 		if ba.Spec.DeviceFilter.MinSize != "" {
-			minSize, parseErr := resource.ParseQuantity(ba.Spec.DeviceFilter.MinSize)
-			if parseErr == nil {
-				if minBytes, ok := minSize.AsInt64(); ok {
-					filterOpts.MinSizeBytes = uint64(minBytes)
-				}
+			if minBytes, ok := parseBytes(ba.Spec.DeviceFilter.MinSize); ok {
+				filterOpts.MinSizeBytes = uint64(minBytes)
 			}
 		}
 	}
 	filtered := disk.FilterDevices(devices, filterOpts)
-
 	if len(filtered) == 0 {
-		return "", "", "", 0, fmt.Errorf("no devices match filter (type=%s)", ba.Spec.DeviceFilter.Type)
+		preferred := ""
+		if ba.Spec.DeviceFilter != nil {
+			preferred = ba.Spec.DeviceFilter.PreferredClass
+		}
+		return "", "", "", 0, fmt.Errorf("no devices match filter (preferredClass=%s)", preferred)
 	}
 
-	// Check device exclusivity: don't use a device already assigned to another pool.
-	var existingAssignments novastorev1alpha1.BackendAssignmentList
-	if err := r.List(ctx, &existingAssignments, client.MatchingLabels{
-		"novanas.io/node": r.NodeName,
-	}); err != nil {
-		return "", "", "", 0, fmt.Errorf("listing existing assignments: %w", err)
-	}
-
-	usedDevices := make(map[string]bool)
-	for _, existing := range existingAssignments.Items {
-		if existing.Name != ba.Name && existing.Status.Device != "" {
-			usedDevices[existing.Status.Device] = true
+	// Device exclusivity: skip devices already taken by another BA on this node.
+	used := make(map[string]bool)
+	for i := range all {
+		other := all[i]
+		if other.Spec.NodeName != r.NodeName {
+			continue
+		}
+		if other.Metadata.Name == ba.Metadata.Name {
+			continue
+		}
+		if other.Status.Device != "" {
+			used[other.Status.Device] = true
 		}
 	}
 
-	// Pick the first available device.
 	var chosen *disk.DeviceInfo
 	for i := range filtered {
-		if !usedDevices[filtered[i].Path] {
+		if !used[filtered[i].Path] {
 			chosen = &filtered[i]
 			break
 		}
@@ -393,30 +362,22 @@ func (r *BackendAssignmentReconciler) provisionDeviceBackend(
 
 	devicePath = chosen.Path
 	capacity = int64(chosen.SizeBytes)
-
-	// For NVMe devices, extract PCIe address from sysfs.
 	if chosen.DeviceType == disk.TypeNVMe {
 		pcieAddr = readNVMePCIeAddr(chosen.Path)
 	}
 
-	// Initialize the backend via dataplane gRPC.
-	// Use the configured base bdev name so it matches --spdk-base-bdev
-	// used by the chunk service, target server, and GC.
 	backendName := r.BaseBdev
 
 	switch ba.Spec.BackendType {
 	case "raw":
-		config := map[string]interface{}{
+		cfg := map[string]interface{}{
 			"device_path": devicePath,
 			"name":        backendName,
 		}
-		configJSON, _ := json.Marshal(config)
-		if initErr := r.DPClient.InitBackend("raw", string(configJSON)); initErr != nil {
-			// If the bdev already exists (e.g. dataplane not restarted), reuse it.
-			// SPDK returns "returned null" when the bdev name is already taken.
-			errMsg := initErr.Error()
-			if !strings.Contains(errMsg, "already") &&
-				!strings.Contains(errMsg, "returned null") {
+		j, _ := json.Marshal(cfg)
+		if initErr := r.DPClient.InitBackend("raw", string(j)); initErr != nil {
+			msg := initErr.Error()
+			if !strings.Contains(msg, "already") && !strings.Contains(msg, "returned null") {
 				return "", "", "", 0, fmt.Errorf("init raw backend: %w", initErr)
 			}
 			r.Logger.Info("raw backend already exists, reusing",
@@ -425,28 +386,24 @@ func (r *BackendAssignmentReconciler) provisionDeviceBackend(
 		bdevName = backendName
 
 	case "lvm":
-		// For LVM, we need to first ensure the NVMe bdev exists, then create an lvol store.
-		lvsName := fmt.Sprintf("lvs_%s", ba.Spec.PoolRef)
-		config := map[string]interface{}{
-			"bdev_name":    backendName,
-			"lvs_name":     lvsName,
-			"cluster_size": 1048576,
-		}
-		// First attach the block device as a uring bdev.
-		rawConfig := map[string]interface{}{
+		raw := map[string]interface{}{
 			"device_path": devicePath,
 			"name":        backendName,
 		}
-		rawJSON, _ := json.Marshal(rawConfig)
-		if initErr := r.DPClient.InitBackend("raw", string(rawJSON)); initErr != nil {
-			// If it already exists, continue with lvol store creation.
+		rj, _ := json.Marshal(raw)
+		if initErr := r.DPClient.InitBackend("raw", string(rj)); initErr != nil {
 			if !strings.Contains(initErr.Error(), "already") {
 				return "", "", "", 0, fmt.Errorf("attach NVMe for lvm: %w", initErr)
 			}
 		}
-
-		configJSON, _ := json.Marshal(config)
-		if initErr := r.DPClient.InitBackend("lvm", string(configJSON)); initErr != nil {
+		lvsName := fmt.Sprintf("lvs_%s", ba.Spec.PoolRef)
+		lvm := map[string]interface{}{
+			"bdev_name":    backendName,
+			"lvs_name":     lvsName,
+			"cluster_size": 1048576,
+		}
+		lj, _ := json.Marshal(lvm)
+		if initErr := r.DPClient.InitBackend("lvm", string(lj)); initErr != nil {
 			return "", "", "", 0, fmt.Errorf("init lvm backend: %w", initErr)
 		}
 		bdevName = lvsName
@@ -455,27 +412,17 @@ func (r *BackendAssignmentReconciler) provisionDeviceBackend(
 	return bdevName, devicePath, pcieAddr, capacity, nil
 }
 
-// setFailed updates the BackendAssignment status to Failed.
-func (r *BackendAssignmentReconciler) setFailed(ctx context.Context, ba *novastorev1alpha1.BackendAssignment, msg string) {
+func (r *BackendAssignmentReconciler) setFailed(ctx context.Context, ba *BackendAssignment, msg string) {
 	r.Logger.Error("BackendAssignment failed",
-		zap.String("name", ba.Name),
+		zap.String("name", ba.Metadata.Name),
 		zap.String("reason", msg),
 	)
-	ba.Status.Phase = "Failed"
-	ba.Status.Message = msg
-	meta.SetStatusCondition(&ba.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionFalse,
-		Reason:             "ProvisioningFailed",
-		Message:            msg,
-		ObservedGeneration: ba.Generation,
+	_, _ = r.API.PatchStatus(ctx, ba.Metadata.Name, BackendAssignmentStatus{
+		Phase:   "Failed",
+		Message: msg,
 	})
-	_ = r.Status().Update(ctx, ba)
 }
 
-// readNVMePCIeAddr reads the PCIe BDF address for an NVMe device from sysfs.
-// It reads /sys/block/<dev>/device/address which contains the PCIe BDF address
-// (e.g., "0000:01:00.0").
 func readNVMePCIeAddr(devPath string) string {
 	devName := strings.TrimPrefix(devPath, "/dev/")
 	addrPath := fmt.Sprintf("/sys/block/%s/device/address", devName)
@@ -486,8 +433,6 @@ func readNVMePCIeAddr(devPath string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// isTransientGRPCError returns true if the error is a transient gRPC error
-// that should be retried rather than permanently failing.
 func isTransientGRPCError(err error) bool {
 	if err == nil {
 		return false
@@ -499,7 +444,6 @@ func isTransientGRPCError(err error) bool {
 			return true
 		}
 	}
-	// Also catch common connection errors in error messages.
 	msg := err.Error()
 	return strings.Contains(msg, "connection refused") ||
 		strings.Contains(msg, "EOF") ||
@@ -507,10 +451,43 @@ func isTransientGRPCError(err error) bool {
 		strings.Contains(msg, "transport is closing")
 }
 
-// SetupWithManager registers the BackendAssignment reconciler.
-func (r *BackendAssignmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&novastorev1alpha1.BackendAssignment{}).
-		Named("backendassignment").
-		Complete(r)
+// parseBytes accepts plain decimal byte counts, plus the same SI/binary
+// suffixes (Ki, Mi, Gi, Ti, K, M, G, T) that resource.ParseQuantity
+// supported. Returns (n, true) on success. Kept inline so this package
+// no longer depends on k8s.io/apimachinery.
+func parseBytes(s string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	type unit struct {
+		suf string
+		mul int64
+	}
+	units := []unit{
+		{"Ki", 1 << 10}, {"Mi", 1 << 20}, {"Gi", 1 << 30}, {"Ti", 1 << 40}, {"Pi", 1 << 50},
+		{"K", 1000}, {"M", 1000 * 1000}, {"G", 1000 * 1000 * 1000},
+		{"T", 1000 * 1000 * 1000 * 1000}, {"P", 1000 * 1000 * 1000 * 1000 * 1000},
+	}
+	for _, u := range units {
+		if strings.HasSuffix(s, u.suf) {
+			head := strings.TrimSpace(strings.TrimSuffix(s, u.suf))
+			n, err := parseInt64(head)
+			if err != nil {
+				return 0, false
+			}
+			return n * u.mul, true
+		}
+	}
+	n, err := parseInt64(s)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func parseInt64(s string) (int64, error) {
+	var n int64
+	_, err := fmt.Sscanf(s, "%d", &n)
+	return n, err
 }

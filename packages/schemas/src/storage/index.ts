@@ -1,3 +1,4 @@
+export * from './backend-assignment.js';
 export * from './block-volume.js';
 export * from './bucket.js';
 export * from './dataset.js';

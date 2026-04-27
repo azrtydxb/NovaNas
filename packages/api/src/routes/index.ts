@@ -21,6 +21,7 @@ import { appRoutes } from './apps.js';
 import { auditPolicyRoutes } from './audit-policy.js';
 import { auditRoutes } from './audit.js';
 import { authRoutes } from './auth.js';
+import { backendAssignmentsRoutes } from './backend-assignments.js';
 import { bondsRoutes } from './bonds.js';
 import { bucketUserRoutes } from './bucket-users.js';
 import { bucketRoutes } from './buckets.js';
@@ -127,6 +128,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   // -----------------------------------------------------------------
   const db = deps.db ?? null;
   await app.register(async (s) => poolRoutes(s, db));
+  await app.register(async (s) => backendAssignmentsRoutes(s, db));
   await app.register(async (s) => datasetRoutes(s, db, deps.openbao ?? null));
   await app.register(async (s) => bucketRoutes(s, db));
   await app.register(async (s) => diskRoutes(s, db));

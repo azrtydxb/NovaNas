@@ -89,7 +89,9 @@ export type Kind =
   | 'ApiToken'
   | 'SshKey'
   // B2: devices
-  | 'GpuDevice';
+  | 'GpuDevice'
+  // Storage internals (system-managed; agent + controller mediate)
+  | 'BackendAssignment';
 
 /** Kinds that are cluster-scoped per our design. */
 const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
@@ -144,6 +146,7 @@ const CLUSTER_SCOPED: ReadonlySet<Kind> = new Set([
   'ApiToken',
   'SshKey',
   'GpuDevice',
+  'BackendAssignment',
 ]);
 
 /** Kinds that only admins may mutate. */
@@ -186,6 +189,7 @@ const ADMIN_ONLY_WRITE: ReadonlySet<Kind> = new Set([
   'ServicePolicy',
   'KeycloakRealm',
   'GpuDevice',
+  'BackendAssignment',
 ]);
 
 export function ownNamespace(user: AuthenticatedUser): string {

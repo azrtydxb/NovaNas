@@ -28,15 +28,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	pb "github.com/azrtydxb/novanas/storage/api/proto/dataplane"
-	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 	"github.com/azrtydxb/novanas/storage/internal/agent"
 	"github.com/azrtydxb/novanas/storage/internal/agent/device"
 	"github.com/azrtydxb/novanas/storage/internal/agent/failover"
@@ -49,9 +42,6 @@ import (
 	"github.com/azrtydxb/novanas/storage/internal/observability"
 	"github.com/azrtydxb/novanas/storage/internal/openbao"
 	"github.com/azrtydxb/novanas/storage/internal/transport"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
 var (
@@ -740,51 +730,27 @@ func main() {
 		}
 	}()
 
-	// Start controller-runtime manager for BackendAssignment reconciler.
-	ctrllog.SetLogger(ctrlzap.New(ctrlzap.UseDevMode(false)))
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(novastorev1alpha1.AddToScheme(scheme))
-
-	restCfg, cfgErr := config.GetConfig()
-	if cfgErr != nil {
-		logging.L.Fatal("failed to get kubeconfig for controller-runtime", zap.Error(cfgErr))
+	// BackendAssignment reconciler — driven by the NovaNas API, not by
+	// a Kubernetes CRD watch. The 10s poll catches both new assignments
+	// and dataplane-pod restarts (idempotent re-init on Ready entries).
+	apiURL := os.Getenv("NOVANAS_API_URL")
+	if apiURL == "" {
+		apiURL = "http://novanas-api.novanas-system.svc:8080"
 	}
-
-	mgr, mgrErr := ctrl.NewManager(restCfg, ctrl.Options{
-		Scheme: scheme,
-		// Disable metrics/health servers — we already run our own.
-		Metrics:                metricsserver.Options{BindAddress: "0"},
-		HealthProbeBindAddress: "",
-		// Resync every 30s to detect dataplane restarts quickly.
-		// The BackendAssignment reconciler re-creates bdevs + chunk stores
-		// when it runs on a "Ready" CR after a dataplane restart.
-		Cache: cache.Options{
-			SyncPeriod: &[]time.Duration{30 * time.Second}[0],
-		},
-	})
-	if mgrErr != nil {
-		logging.L.Fatal("failed to create controller-runtime manager", zap.Error(mgrErr))
-	}
-
 	baReconciler := &agent.BackendAssignmentReconciler{
-		Client:   mgr.GetClient(),
+		API:      agent.NewBAClient(apiURL),
 		NodeName: *nodeID,
 		NodeUUID: nodeUUID,
 		DPClient: dpClient,
 		Logger:   logging.L,
 		BaseBdev: *spdkBaseBdev,
+		Interval: 10 * time.Second,
 	}
-	if err := baReconciler.SetupWithManager(mgr); err != nil {
-		logging.L.Fatal("failed to setup BackendAssignment reconciler", zap.Error(err))
-	}
-	logging.L.Info("BackendAssignment reconciler registered", zap.String("nodeName", *nodeID))
-
-	go func() {
-		if err := mgr.Start(ctx); err != nil {
-			logging.L.Error("controller-runtime manager error", zap.Error(err))
-		}
-	}()
+	logging.L.Info("BackendAssignment reconciler registered (API-polled)",
+		zap.String("nodeName", *nodeID),
+		zap.String("apiURL", apiURL),
+	)
+	go baReconciler.Run(ctx)
 
 	// Start Prometheus metrics HTTP server.
 	metricsMux := http.NewServeMux()

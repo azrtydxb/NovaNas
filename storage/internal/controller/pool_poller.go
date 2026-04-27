@@ -3,35 +3,32 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	novanas "github.com/azrtydxb/novanas/packages/sdk/go-client"
-	novastorev1alpha1 "github.com/azrtydxb/novanas/storage/api/v1alpha1"
 )
 
 // PoolPoller is the API-driven replacement for the controller-runtime
 // StoragePoolReconciler watch (#50). It periodically fetches the
-// authoritative Pool list from the NovaNas API server, then runs the
-// same node-matching + BackendAssignment reconcile logic against the
-// local Kubernetes cluster.
+// authoritative Pool list from the NovaNas API server, computes the
+// desired BackendAssignment set, and reconciles it against the API.
 //
-// BackendAssignment + Node reads/writes still go through the
-// controller-runtime client because those resources stay in
-// Kubernetes — only the Pool itself moved to Postgres.
+// All NovaNas resources (Pool, BackendAssignment) live in Postgres now
+// and are accessed via the API SDK. The Kubernetes client is still used
+// solely for reading Node objects for label-selector matching.
 //
 // Run(ctx) blocks; cancel ctx to stop the poller.
 type PoolPoller struct {
-	// Client for k8s reads/writes (nodes, BackendAssignments).
+	// K8s client — used only to list Nodes. BackendAssignments and
+	// Pools both flow through the API SDK now.
 	K8s client.Client
-	// API client for Pool reads/writes.
+	// API client for Pool and BackendAssignment reads/writes.
 	API *novanas.Client
 	// Poll interval. Defaults to 30s when zero.
 	Interval time.Duration
@@ -73,11 +70,6 @@ func (p *PoolPoller) tick(ctx context.Context) {
 	}
 }
 
-// reconcileOne runs the same reconcile logic as the legacy controller's
-// Reconcile(), but with the Pool sourced from the api instead of from
-// the kube apiserver. The shape of writes (BackendAssignment create /
-// update / delete on k8s; PatchPoolStatus on the api) mirrors the
-// original — only the data source for Pool itself changed.
 func (p *PoolPoller) reconcileOne(ctx context.Context, pool *novanas.Pool) error {
 	selector := toLabelSelector(pool.Spec.NodeSelector)
 
@@ -121,15 +113,19 @@ func (p *PoolPoller) reconcileAssignments(
 ) error {
 	logger := log.FromContext(ctx)
 
-	var existing novastorev1alpha1.BackendAssignmentList
-	if err := p.K8s.List(ctx, &existing, client.MatchingLabels{
-		"novanas.io/pool": pool.Metadata.Name,
-	}); err != nil {
+	// All BAs in the system; filter by the pool label locally — the
+	// API doesn't expose label selectors yet.
+	all, err := p.API.ListBackendAssignments(ctx)
+	if err != nil {
 		return fmt.Errorf("list BackendAssignments: %w", err)
 	}
-	byNode := make(map[string]*novastorev1alpha1.BackendAssignment, len(existing.Items))
-	for i := range existing.Items {
-		byNode[existing.Items[i].Spec.NodeName] = &existing.Items[i]
+	byNode := make(map[string]*novanas.BackendAssignment)
+	for i := range all {
+		ba := &all[i]
+		if ba.Metadata.Labels["novanas.io/pool"] != pool.Metadata.Name {
+			continue
+		}
+		byNode[ba.Spec.NodeName] = ba
 	}
 	desired := make(map[string]bool, len(matchingNodes))
 	for _, n := range matchingNodes {
@@ -137,48 +133,47 @@ func (p *PoolPoller) reconcileAssignments(
 	}
 
 	for _, n := range matchingNodes {
+		want := buildAssignmentSpecFromAPI(pool, n.Name)
 		if cur, ok := byNode[n.Name]; ok {
-			want := buildAssignmentSpecFromAPI(pool, n.Name)
-			if !equality.Semantic.DeepEqual(cur.Spec, want) {
-				cur.Spec = want
-				if err := p.K8s.Update(ctx, cur); err != nil {
-					return fmt.Errorf("update BackendAssignment %s: %w", cur.Name, err)
+			if !reflect.DeepEqual(cur.Spec, want) {
+				if err := p.API.PatchBackendAssignmentSpec(ctx, cur.Metadata.Name, want); err != nil {
+					return fmt.Errorf("update BackendAssignment %s: %w", cur.Metadata.Name, err)
 				}
-				logger.Info("updated BackendAssignment", "name", cur.Name)
+				logger.Info("updated BackendAssignment", "name", cur.Metadata.Name)
 			}
 			continue
 		}
-		ba := &novastorev1alpha1.BackendAssignment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", pool.Metadata.Name, n.Name),
-				Namespace: pool.Metadata.Namespace,
+		ba := &novanas.BackendAssignment{
+			APIVersion: "novanas.io/v1alpha1",
+			Kind:       "BackendAssignment",
+			Metadata: novanas.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s", pool.Metadata.Name, n.Name),
 				Labels: map[string]string{
 					"novanas.io/pool": pool.Metadata.Name,
 					"novanas.io/node": n.Name,
 				},
-				// No OwnerReference: Pool no longer lives in k8s
-				// (#50), so cascade-delete via owner refs isn't an
-				// option. Orphan cleanup happens the next time the
-				// poller observes the Pool gone — see the loop end.
+				// No OwnerReference: Pool no longer lives in k8s, and
+				// the BackendAssignment is now also a Postgres row.
+				// Orphan cleanup happens further down via DELETE.
 			},
-			Spec: buildAssignmentSpecFromAPI(pool, n.Name),
+			Spec: want,
 		}
-		ba.Status.Phase = "Pending"
-		if err := p.K8s.Create(ctx, ba); err != nil {
-			if errors.IsAlreadyExists(err) {
+		if _, err := p.API.CreateBackendAssignment(ctx, ba); err != nil {
+			// 409 (already exists) is fine — another tick beat us to it.
+			if apiErr, ok := err.(*novanas.APIError); ok && apiErr.Status == 409 {
 				continue
 			}
 			return fmt.Errorf("create BackendAssignment for %s: %w", n.Name, err)
 		}
-		logger.Info("created BackendAssignment", "name", ba.Name, "node", n.Name)
+		logger.Info("created BackendAssignment", "name", ba.Metadata.Name, "node", n.Name)
 	}
 
 	for nodeName, ba := range byNode {
 		if !desired[nodeName] {
-			if err := p.K8s.Delete(ctx, ba); err != nil && !errors.IsNotFound(err) {
-				return fmt.Errorf("delete orphaned BackendAssignment %s: %w", ba.Name, err)
+			if err := p.API.DeleteBackendAssignment(ctx, ba.Metadata.Name); err != nil {
+				return fmt.Errorf("delete orphaned BackendAssignment %s: %w", ba.Metadata.Name, err)
 			}
-			logger.Info("deleted orphaned BackendAssignment", "name", ba.Name)
+			logger.Info("deleted orphaned BackendAssignment", "name", ba.Metadata.Name)
 		}
 	}
 	return nil
@@ -206,7 +201,7 @@ func (p *PoolPoller) markReady(ctx context.Context, pool *novanas.Pool, nodeCoun
 	st := pool.Status
 	st.Phase = "Ready"
 	st.NodeCount = nodeCount
-	st.TotalCapacity = aggregateBackendCapacityForPool(ctx, p.K8s, pool.Metadata.Name)
+	st.TotalCapacity = aggregateBackendCapacityForPool(ctx, p.API, pool.Metadata.Name)
 	setCondition(&st.Conditions, "Ready", "True", "PoolReady",
 		fmt.Sprintf("pool is ready with %d node(s)", nodeCount))
 	return p.API.PatchPoolStatus(ctx, pool.Metadata.Name, st)
@@ -231,18 +226,20 @@ func setCondition(conds *[]novanas.Condition, ctype, status, reason, msg string)
 }
 
 func aggregateBackendCapacityForPool(
-	ctx context.Context, k client.Client, poolName string,
+	ctx context.Context, api *novanas.Client, poolName string,
 ) string {
-	var bal novastorev1alpha1.BackendAssignmentList
-	if err := k.List(ctx, &bal, client.MatchingLabels{
-		"novanas.io/pool": poolName,
-	}); err != nil {
+	all, err := api.ListBackendAssignments(ctx)
+	if err != nil {
 		return "0"
 	}
 	var total int64
-	for i := range bal.Items {
-		if bal.Items[i].Status.Phase == "Ready" {
-			total += bal.Items[i].Status.Capacity
+	for i := range all {
+		ba := &all[i]
+		if ba.Metadata.Labels["novanas.io/pool"] != poolName {
+			continue
+		}
+		if ba.Status.Phase == "Ready" {
+			total += ba.Status.Capacity
 		}
 	}
 	return formatCapacity(total)
@@ -265,31 +262,32 @@ func toLabelSelector(in *novanas.LabelSelector) *metav1.LabelSelector {
 	return out
 }
 
+// buildAssignmentSpecFromAPI translates a Pool's spec into the
+// BackendAssignment.Spec a node should provision. The SDK and API both
+// use the preferredClass / minSize wire shape (DeviceFilter on a Pool
+// from the api carries operators-style names; we map across here).
 func buildAssignmentSpecFromAPI(
 	pool *novanas.Pool, nodeName string,
-) novastorev1alpha1.BackendAssignmentSpec {
-	spec := novastorev1alpha1.BackendAssignmentSpec{
+) novanas.BackendAssignmentSpec {
+	spec := novanas.BackendAssignmentSpec{
 		PoolRef:     pool.Metadata.Name,
 		NodeName:    nodeName,
 		BackendType: pool.Spec.BackendType,
 	}
 	if pool.Spec.DeviceFilter != nil {
-		spec.DeviceFilter = &novastorev1alpha1.DeviceFilter{
-			Type:    pool.Spec.DeviceFilter.Type,
-			MinSize: pool.Spec.DeviceFilter.MinSize,
+		// pool.Spec.DeviceFilter still uses the legacy Type / MinSize
+		// shape from the operators schema. Translate to the API shape.
+		spec.DeviceFilter = &novanas.APIDeviceFilter{
+			PreferredClass: pool.Spec.DeviceFilter.Type,
+			MinSize:        pool.Spec.DeviceFilter.MinSize,
 		}
 	}
 	if pool.Spec.FileBackend != nil {
-		fb := &novastorev1alpha1.FileBackendSpec{Path: pool.Spec.FileBackend.Path}
+		fb := &novanas.APIFileBackendSpec{Path: pool.Spec.FileBackend.Path}
 		if pool.Spec.FileBackend.MaxCapacityBytes != nil {
-			v := *pool.Spec.FileBackend.MaxCapacityBytes
-			fb.MaxCapacityBytes = &v
+			fb.SizeBytes = *pool.Spec.FileBackend.MaxCapacityBytes
 		}
 		spec.FileBackend = fb
 	}
 	return spec
 }
-
-// silence unused-import warnings if meta becomes unreferenced later;
-// kept for future condition helpers from k8s api machinery.
-var _ = meta.SetStatusCondition
