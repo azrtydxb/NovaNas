@@ -168,7 +168,7 @@ mod tests {
         }
 
         // With 4 equal-weight nodes each should receive roughly 250 ± 100.
-        for (_node, count) in &counts {
+        for count in counts.values() {
             assert!(
                 (150..=350).contains(count),
                 "node got {count} placements, expected 150-350"

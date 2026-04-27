@@ -193,10 +193,71 @@ impl ChunkOperations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::chunk_store::ChunkHeader;
-    use crate::backend::file_store::FileChunkStore;
+    use crate::backend::chunk_store::{
+        ChunkHeader, ChunkStore as ChunkStoreTrait, ChunkStoreStats,
+    };
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
 
     const LOCAL_NODE: &str = "local-node-1";
+
+    /// In-memory ChunkStore used by these tests so the operations layer
+    /// can be exercised without SPDK or a filesystem-backed backend.
+    struct MemChunkStore {
+        inner: Mutex<HashMap<String, Vec<u8>>>,
+    }
+
+    impl MemChunkStore {
+        fn new() -> Self {
+            Self {
+                inner: Mutex::new(HashMap::new()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl ChunkStoreTrait for MemChunkStore {
+        async fn put(&self, chunk_id: &str, data: &[u8]) -> Result<()> {
+            self.inner
+                .lock()
+                .unwrap()
+                .insert(chunk_id.to_string(), data.to_vec());
+            Ok(())
+        }
+        async fn get(&self, chunk_id: &str) -> Result<Vec<u8>> {
+            self.inner
+                .lock()
+                .unwrap()
+                .get(chunk_id)
+                .cloned()
+                .ok_or_else(|| {
+                    crate::error::DataPlaneError::ChunkEngineError(format!(
+                        "chunk {chunk_id} not found"
+                    ))
+                })
+        }
+        async fn delete(&self, chunk_id: &str) -> Result<()> {
+            self.inner.lock().unwrap().remove(chunk_id).ok_or_else(|| {
+                crate::error::DataPlaneError::ChunkEngineError(format!(
+                    "chunk {chunk_id} not found"
+                ))
+            })?;
+            Ok(())
+        }
+        async fn exists(&self, chunk_id: &str) -> Result<bool> {
+            Ok(self.inner.lock().unwrap().contains_key(chunk_id))
+        }
+        async fn stats(&self) -> Result<ChunkStoreStats> {
+            Ok(ChunkStoreStats {
+                backend_name: "mem".into(),
+                total_bytes: 0,
+                used_bytes: 0,
+                data_bytes: 0,
+                chunk_count: self.inner.lock().unwrap().len() as u64,
+            })
+        }
+    }
 
     fn make_chunk_data(data: &[u8]) -> Vec<u8> {
         let header = ChunkHeader {
@@ -217,16 +278,14 @@ mod tests {
         "aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233".to_string()
     }
 
-    async fn make_ops() -> (tempfile::TempDir, ChunkOperations) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = FileChunkStore::new(dir.path().to_path_buf(), 64 * 1024 * 1024).unwrap();
-        let ops = ChunkOperations::new(LOCAL_NODE.to_string(), Arc::new(store));
-        (dir, ops)
+    async fn make_ops() -> ChunkOperations {
+        let store = MemChunkStore::new();
+        ChunkOperations::new(LOCAL_NODE.to_string(), Arc::new(store))
     }
 
     #[tokio::test]
     async fn replicate_local_to_local() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let data = make_chunk_data(b"hello replication");
 
@@ -241,7 +300,7 @@ mod tests {
 
     #[tokio::test]
     async fn replicate_preserves_data() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let payload = b"exact data must survive replication";
         let data = make_chunk_data(payload);
@@ -257,7 +316,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_local_replica() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let data = make_chunk_data(b"will be removed");
 
@@ -270,7 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_nonexistent_chunk_returns_error() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let result = ops.remove_replica(&chunk_id, LOCAL_NODE).await;
         assert!(result.is_err());
@@ -278,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn replicate_nonexistent_source_returns_error() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let result = ops.replicate_chunk(&chunk_id, LOCAL_NODE, LOCAL_NODE).await;
         assert!(result.is_err());
@@ -286,7 +345,7 @@ mod tests {
 
     #[tokio::test]
     async fn non_local_target_is_rejected() {
-        let (_dir, ops) = make_ops().await;
+        let ops = make_ops().await;
         let chunk_id = fake_chunk_id();
         let data = make_chunk_data(b"data");
         ops.local_store.put(&chunk_id, &data).await.unwrap();

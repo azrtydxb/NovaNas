@@ -1,9 +1,11 @@
-//! NovaStor SPDK Data Plane
+//! NovaNas data daemon (binary name `novanas-dataplane`, role
+//! `novanas-data`).
 //!
-//! High-performance storage data plane built on SPDK. Provides NVMe-oF/TCP
-//! targets with custom bdev modules for replication and erasure coding.
-//! Controlled by the Go agent via gRPC (invariant #5: gRPC is the only
-//! communication protocol).
+//! Owns disks and chunks on a single appliance host. Hosts the SPDK env
+//! that the bdev layer drives, runs a chunk-store on every claimed disk,
+//! and consumes work from `novanas-meta`'s task queue
+//! (`MetaService::PollTasks`). See `docs/16-data-meta-frontend.md` for
+//! the locked architecture.
 
 pub mod backend;
 #[cfg(feature = "spdk-sys")]
@@ -11,7 +13,10 @@ pub mod bdev;
 pub mod chunk;
 pub mod config;
 pub mod crypto;
+pub mod device;
+pub mod disk_discovery;
 pub mod error;
+pub mod meta_client;
 pub mod metadata;
 pub mod openbao;
 pub mod policy;
@@ -20,6 +25,8 @@ pub mod spdk;
 #[cfg(not(feature = "spdk-sys"))]
 #[path = "bdev/sub_block.rs"]
 pub mod sub_block;
+pub mod task_handlers;
+pub mod task_runner;
 pub mod tracing_init;
 pub mod transport;
 

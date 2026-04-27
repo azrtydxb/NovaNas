@@ -1,11 +1,14 @@
-//! Custom SPDK bdev modules for NovaStor.
-pub mod chunk_io;
-pub mod erasure;
-pub mod novanas_bdev;
-pub mod novanas_replica_bdev;
-pub mod replica;
+//! SPDK bdev modules retained on the data daemon.
+//!
+//! With architecture-v2, the volume bdev (`novanas_bdev`), client-side
+//! ChunkEngine plumbing (`chunk_io`), and cross-disk EC/replica fan-out
+//! (`replica`, `novanas_replica_bdev`, `erasure`) have moved out of this
+//! crate:
+//! - the volume bdev + chunk client live in `storage/frontend`,
+//! - cross-disk EC repair is being rebuilt on top of `policy::operations`
+//!   driven by `ChunkOpTask` and is not yet present in this crate.
+//!
+//! Only the sub-block helper survives — the chunk store still needs the
+//! 64 KiB sub-block partitioning math.
+
 pub mod sub_block;
-// write_buffer module removed — the full sub-block optimization is already in
-// sub_block_write() (skip read when write covers entire 64KB sub-block).
-// The WriteBuffer was dead code that added complexity without being wired
-// into the I/O path.

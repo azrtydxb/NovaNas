@@ -131,11 +131,63 @@ impl ChunkService for ChunkServiceImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::chunk_store::ChunkHeader;
-    use crate::backend::file_store::FileChunkStore;
-    use std::path::PathBuf;
-    use tempfile::TempDir;
+    use crate::backend::chunk_store::{ChunkHeader, ChunkStoreStats};
+    use crate::error::DataPlaneError;
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
     use tokio_stream::StreamExt;
+
+    /// In-memory ChunkStore used by these tests so the gRPC layer can be
+    /// exercised without a backing filesystem store.
+    struct MemStore {
+        inner: Mutex<HashMap<String, Vec<u8>>>,
+    }
+
+    impl MemStore {
+        fn new() -> Self {
+            Self {
+                inner: Mutex::new(HashMap::new()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl crate::backend::chunk_store::ChunkStore for MemStore {
+        async fn put(&self, chunk_id: &str, data: &[u8]) -> crate::error::Result<()> {
+            self.inner
+                .lock()
+                .unwrap()
+                .insert(chunk_id.to_string(), data.to_vec());
+            Ok(())
+        }
+        async fn get(&self, chunk_id: &str) -> crate::error::Result<Vec<u8>> {
+            self.inner
+                .lock()
+                .unwrap()
+                .get(chunk_id)
+                .cloned()
+                .ok_or_else(|| {
+                    DataPlaneError::ChunkEngineError(format!("chunk {chunk_id} not found"))
+                })
+        }
+        async fn delete(&self, chunk_id: &str) -> crate::error::Result<()> {
+            self.inner.lock().unwrap().remove(chunk_id);
+            Ok(())
+        }
+        async fn exists(&self, chunk_id: &str) -> crate::error::Result<bool> {
+            Ok(self.inner.lock().unwrap().contains_key(chunk_id))
+        }
+        async fn stats(&self) -> crate::error::Result<ChunkStoreStats> {
+            Ok(ChunkStoreStats {
+                backend_name: "mem".into(),
+                total_bytes: 0,
+                used_bytes: 0,
+                data_bytes: 0,
+                chunk_count: self.inner.lock().unwrap().len() as u64,
+            })
+        }
+    }
 
     fn make_chunk_data(data: &[u8]) -> Vec<u8> {
         let header = ChunkHeader {
@@ -152,19 +204,15 @@ mod tests {
         buf
     }
 
-    async fn setup() -> (ChunkServiceImpl, PathBuf) {
-        let dir = TempDir::new().unwrap();
-        let dir_path = dir.keep();
-        let store = FileChunkStore::new(dir_path.clone(), 64 * 1024 * 1024).unwrap();
-        let svc = ChunkServiceImpl::new(Arc::new(store));
-        (svc, dir_path)
+    async fn setup() -> ChunkServiceImpl {
+        ChunkServiceImpl::new(Arc::new(MemStore::new()))
     }
 
     /// Test get_chunk streaming response by putting data via the store directly,
     /// then reading it back through the gRPC get_chunk method.
     #[tokio::test]
     async fn get_chunk_streams_data() {
-        let (svc, _dir) = setup().await;
+        let svc = setup().await;
         let chunk_id = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
         let data = make_chunk_data(b"hello world");
 
@@ -192,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn has_chunk_returns_false_then_true() {
-        let (svc, _dir) = setup().await;
+        let svc = setup().await;
         let chunk_id = "1111111111111111111111111111111111111111111111111111111111111111";
 
         // Should not exist initially.
@@ -220,7 +268,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_chunk_removes_data() {
-        let (svc, _dir) = setup().await;
+        let svc = setup().await;
         let chunk_id = "2222222222222222222222222222222222222222222222222222222222222222";
         let data = make_chunk_data(b"delete me");
 
