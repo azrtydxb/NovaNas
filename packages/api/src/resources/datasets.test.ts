@@ -65,15 +65,6 @@ describe('datasets resource', () => {
     expect(del.statusCode).toBe(204);
   });
 
-  it('viewer cannot delete (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'DELETE',
-      url: '/api/v1/datasets/ds-a',
-      headers: { cookie: cookieFor(h.built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('returns 404 for missing', async () => {
     const r = await h.built.app.inject({
       method: 'GET',

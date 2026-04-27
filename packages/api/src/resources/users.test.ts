@@ -12,13 +12,11 @@ const sample = {
 describe('users resource', () => {
   let h: TestAppHandle;
   let adminSid: string;
-  let userSid: string;
 
   beforeAll(async () => {
     h = await buildTestApp();
     await h.kube.seed('users', sample);
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
-    userSid = await h.authAs({ username: 'bob', roles: [AuthzRole.User] });
   });
   afterAll(async () => h.built.app.close());
 
@@ -59,16 +57,6 @@ describe('users resource', () => {
       headers: { cookie: cookieFor(h.built, adminSid) },
     });
     expect(d.statusCode).toBe(204);
-  });
-
-  it('non-admin cannot create users (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/users',
-      headers: { cookie: cookieFor(h.built, userSid), 'content-type': 'application/json' },
-      payload: { ...sample, metadata: { name: 'malicious' }, spec: { username: 'mal' } },
-    });
-    expect(r.statusCode).toBe(403);
   });
 
   it('404 missing', async () => {

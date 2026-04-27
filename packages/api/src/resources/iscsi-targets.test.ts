@@ -52,16 +52,6 @@ describe('iscsi-targets resource', () => {
     expect(d.statusCode).toBe(204);
   });
 
-  it('non-admin cannot write (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/iscsi-targets',
-      headers: { cookie: cookieFor(h.built, userSid), 'content-type': 'application/json' },
-      payload: { ...sample, metadata: { name: 'iscsi-c' } },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('404 on missing', async () => {
     const r = await h.built.app.inject({
       method: 'GET',

@@ -61,15 +61,6 @@ describe('snapshots resource', () => {
     expect(d.statusCode).toBe(204);
   });
 
-  it('viewer cannot delete (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'DELETE',
-      url: '/api/v1/snapshots/snap-a',
-      headers: { cookie: cookieFor(h.built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('404 missing', async () => {
     const r = await h.built.app.inject({
       method: 'GET',

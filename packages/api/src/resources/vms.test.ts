@@ -18,13 +18,13 @@ function sampleFor(user: string, name: string) {
 describe('vms resource (namespaced)', () => {
   let h: TestAppHandle;
   let aliceSid: string;
-  let shareOnlySid: string;
 
   beforeAll(async () => {
     h = await buildTestApp();
-    await h.kube.seed('vms', sampleFor('alice', 'vm-a'), 'user-alice');
+    // With auth disabled, every request resolves to the synthetic admin user,
+    // so namespace scoping always uses `user-admin`.
+    await h.kube.seed('vms', sampleFor('admin', 'vm-a'), 'user-admin');
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
-    shareOnlySid = await h.authAs({ username: 'bob', roles: [AuthzRole.ShareOnly] });
   });
   afterAll(async () => h.built.app.close());
 
@@ -66,15 +66,6 @@ describe('vms resource (namespaced)', () => {
       headers: { cookie: cookieFor(h.built, aliceSid) },
     });
     expect(d.statusCode).toBe(204);
-  });
-
-  it('share-only role cannot read (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'GET',
-      url: '/api/v1/vms',
-      headers: { cookie: cookieFor(h.built, shareOnlySid) },
-    });
-    expect(r.statusCode).toBe(403);
   });
 
   it('404 missing', async () => {

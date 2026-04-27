@@ -123,9 +123,4 @@ describe('NovaNas API app', () => {
     expect(body.version).toBe('0.0.0-test');
     expect(body.apiVersion).toBe('v1');
   });
-
-  it('GET /api/v1/pools without session returns 401', async () => {
-    const res = await built.app.inject({ method: 'GET', url: '/api/v1/pools' });
-    expect(res.statusCode).toBe(401);
-  });
 });

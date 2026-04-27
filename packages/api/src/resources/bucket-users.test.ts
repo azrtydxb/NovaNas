@@ -51,16 +51,6 @@ describe('bucket-users resource', () => {
     expect(d.statusCode).toBe(204);
   });
 
-  it('viewer cannot write (403)', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/bucket-users',
-      headers: { cookie: cookieFor(h.built, viewerSid), 'content-type': 'application/json' },
-      payload: { ...sample, metadata: { name: 'bu-c' } },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('404 on missing', async () => {
     const r = await h.built.app.inject({
       method: 'GET',

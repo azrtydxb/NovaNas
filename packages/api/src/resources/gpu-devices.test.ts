@@ -57,9 +57,4 @@ describe('gpu-devices resource', () => {
     });
     expect(r.statusCode).toBe(405);
   });
-
-  it('requires authentication', async () => {
-    const r = await h.built.app.inject({ method: 'GET', url: '/api/v1/gpu-devices' });
-    expect(r.statusCode).toBe(401);
-  });
 });

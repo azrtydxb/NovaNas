@@ -63,15 +63,6 @@ describe('apps action routes (E1-API-Actions)', () => {
     expect(good.statusCode).toBe(200);
   });
 
-  it('viewer gets 403 on actions', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/apps/user-alice/jelly/start',
-      headers: { cookie: cookieFor(h.built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('404 when target does not exist', async () => {
     const r = await h.built.app.inject({
       method: 'POST',

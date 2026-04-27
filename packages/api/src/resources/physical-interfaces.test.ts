@@ -57,9 +57,4 @@ describe('physical-interfaces resource', () => {
     });
     expect(r.statusCode).toBe(405);
   });
-
-  it('requires authentication', async () => {
-    const r = await h.built.app.inject({ method: 'GET', url: '/api/v1/physical-interfaces' });
-    expect(r.statusCode).toBe(401);
-  });
 });

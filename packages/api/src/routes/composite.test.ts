@@ -92,15 +92,6 @@ describe('composite routes', () => {
       });
       expect(r.statusCode).toBe(400);
     });
-
-    it('requires auth', async () => {
-      const r = await h.built.app.inject({
-        method: 'POST',
-        url: '/api/v1/composite/dataset-with-share',
-        payload: { dataset, shares: [shareBody('x')] },
-      });
-      expect(r.statusCode).toBe(401);
-    });
   });
 
   // --------------------------------------------------------------------------

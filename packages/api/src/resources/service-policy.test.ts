@@ -34,16 +34,6 @@ describe('service-policy resource', () => {
     expect([400, 404]).toContain(r.statusCode);
   });
 
-  it('returns 403 for share-only on GET', async () => {
-    const shareSid = await h.authAs({ username: 'guest', roles: ['novanas:share-only'] });
-    const r = await h.built.app.inject({
-      method: 'GET',
-      url: '/api/v1/service-policy',
-      headers: { cookie: cookieFor(h.built, shareSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('does not expose DELETE', async () => {
     const r = await h.built.app.inject({
       method: 'DELETE',
@@ -51,10 +41,5 @@ describe('service-policy resource', () => {
       headers: { cookie: cookieFor(h.built, adminSid) },
     });
     expect(r.statusCode).toBe(404);
-  });
-
-  it('requires authentication', async () => {
-    const r = await h.built.app.inject({ method: 'GET', url: '/api/v1/service-policy' });
-    expect(r.statusCode).toBe(401);
   });
 });
