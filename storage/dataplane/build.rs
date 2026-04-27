@@ -6,11 +6,20 @@ fn main() {
     tonic_build::configure()
         .build_server(true)
         .build_client(true)
+        .compile_protos(&["proto/chunk_service.proto"], &["proto/"])
+        .expect("failed to compile chunk_service.proto");
+
+    // Compile the MetaService contract used by `meta_client` to talk to
+    // the novanas-meta daemon.
+    tonic_build::configure()
+        .build_server(true)
+        .build_client(true)
         .compile_protos(
-            &["proto/chunk_service.proto", "proto/dataplane_service.proto"],
-            &["proto/"],
+            &["../api/proto/meta/meta.proto"],
+            &["../api/proto/meta", "../api/proto"],
         )
-        .expect("failed to compile proto files");
+        .expect("failed to compile meta.proto");
+    println!("cargo:rerun-if-changed=../api/proto/meta/meta.proto");
 
     // Only compile SPDK/uring C code when the spdk-sys feature is enabled.
     // Without this gate, `cargo test` on a machine without SPDK headers fails.

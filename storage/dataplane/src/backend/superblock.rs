@@ -273,12 +273,14 @@ mod tests {
     use std::io::Write;
 
     fn sample() -> Superblock {
-        let mut sb = Superblock::default();
-        sb.pool_id = "pool-default".into();
-        sb.role = DiskRole::Both;
-        sb.meta_volume_name = "meta-vol".into();
-        sb.meta_volume_root_chunk = "abc123".into();
-        sb.meta_volume_version = 42;
+        let mut sb = Superblock {
+            pool_id: "pool-default".into(),
+            role: DiskRole::Both,
+            meta_volume_name: "meta-vol".into(),
+            meta_volume_root_chunk: "abc123".into(),
+            meta_volume_version: 42,
+            ..Superblock::default()
+        };
         for i in 0..16 {
             sb.disk_uuid[i] = (i + 1) as u8;
         }
