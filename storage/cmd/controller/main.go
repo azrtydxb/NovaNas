@@ -280,27 +280,35 @@ func main() {
 		}
 	}
 
-	if err := (&controller.BlockVolumeReconciler{
-		Client: mgr.GetClient(),
-		API:    apiClient,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "BlockVolume")
-		os.Exit(1)
-	}
+	// In api-driven mode there are NO storage CRDs on the cluster
+	// (StoragePool / BlockVolume / ObjectStore / StorageQuota all
+	// live in Postgres via the api server, per the no-CRDs design).
+	// The legacy controller-runtime reconcilers below would fail to
+	// start without those CRDs registered, so they are gated behind
+	// the same flag that drives the pool poller.
+	if apiClient == nil {
+		if err := (&controller.BlockVolumeReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "BlockVolume")
+			os.Exit(1)
+		}
 
-	if err := (&controller.ObjectStoreReconciler{
-		Client: mgr.GetClient(),
-		API:    apiClient,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ObjectStore")
-		os.Exit(1)
-	}
+		if err := (&controller.ObjectStoreReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ObjectStore")
+			os.Exit(1)
+		}
 
-	if err := (&controller.QuotaReconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "StorageQuota")
-		os.Exit(1)
+		if err := (&controller.QuotaReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "StorageQuota")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("api-driven mode: skipping legacy CRD-watch controllers (BlockVolume / ObjectStore / StorageQuota)")
 	}
 
 	// Set up the recovery subsystem if enabled.
