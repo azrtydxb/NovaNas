@@ -37,7 +37,7 @@ type Adapter interface {
 
 	// VM lifecycle. Implementations that don't support VMs return
 	// ErrNotImplemented from each method. The k8s adapter uses
-	// KubeVirt; a future docker adapter would use libvirt/qemu.
+	// KubeVirt.
 	EnsureVM(ctx context.Context, spec VMSpec) (VMStatus, error)
 	DeleteVM(ctx context.Context, ref VMRef) error
 	ObserveVM(ctx context.Context, ref VMRef) (VMStatus, error)

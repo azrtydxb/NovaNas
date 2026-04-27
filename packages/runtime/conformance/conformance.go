@@ -247,9 +247,9 @@ func testLogsRequiresWorkload(t *testing.T, factory Factory) {
 }
 
 // testVMLifecycle exercises EnsureVM / SetVMPowerState / RestartVM /
-// ObserveVM / DeleteVM. Adapters that don't support VMs (docker stub)
-// signal that by returning ErrNotImplemented from EnsureVM; the suite
-// then skips the rest of the subtests for that adapter.
+// ObserveVM / DeleteVM. Adapters that don't support VMs signal that
+// by returning ErrNotImplemented from EnsureVM; the suite then skips
+// the rest of the subtests for that adapter.
 func testVMLifecycle(t *testing.T, factory Factory) {
 	a, done := factory(t)
 	defer done()
