@@ -65,11 +65,6 @@ describe('system info/network/alerts/events routes', () => {
     expect(Array.isArray(body.loadAvg)).toBe(true);
   });
 
-  it('GET /system/info requires auth', async () => {
-    const r = await built.app.inject({ method: 'GET', url: '/api/v1/system/info' });
-    expect(r.statusCode).toBe(401);
-  });
-
   it('GET /system/network returns interface list', async () => {
     const r = await built.app.inject({
       method: 'GET',
@@ -145,10 +140,5 @@ describe('CRD routes fallback when kubeCustom is missing', () => {
     expect(typeof body.message).toBe('string');
     // Ensure the old stub envelope is gone.
     expect(body).not.toHaveProperty('wave');
-  });
-
-  it('GET /api/v1/pools still enforces auth', async () => {
-    const r = await built.app.inject({ method: 'GET', url: '/api/v1/pools' });
-    expect(r.statusCode).toBe(401);
   });
 });

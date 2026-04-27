@@ -83,7 +83,6 @@ function fakeDb(): { db: DbClient; rows: Job[] } {
 describe('system action routes (E1-API-Actions)', () => {
   let built: BuiltApp;
   let adminSid: string;
-  let viewerSid: string;
   const fake = fakeDb();
 
   beforeAll(async () => {
@@ -105,19 +104,6 @@ describe('system action routes (E1-API-Actions)', () => {
       idToken: 't',
       accessToken: 't',
       claims: { sub: 'a', preferred_username: 'admin', realm_access: { roles: [AuthzRole.Admin] } },
-    });
-    viewerSid = await built.sessions.create({
-      userId: 'v',
-      username: 'obs',
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 3600_000,
-      idToken: 't',
-      accessToken: 't',
-      claims: {
-        sub: 'v',
-        preferred_username: 'obs',
-        realm_access: { roles: [AuthzRole.Viewer] },
-      },
     });
   });
   afterAll(async () => built.app.close());
@@ -163,22 +149,5 @@ describe('system action routes (E1-API-Actions)', () => {
       headers: { cookie: cookieFor(built, adminSid) },
     });
     expect(r.statusCode).toBe(200);
-  });
-
-  it('viewer gets 403 on system/reset', async () => {
-    const r = await built.app.inject({
-      method: 'POST',
-      url: '/api/v1/system/reset',
-      headers: { cookie: cookieFor(built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
-  it('unauthenticated gets 401', async () => {
-    const r = await built.app.inject({
-      method: 'POST',
-      url: '/api/v1/system/reset',
-    });
-    expect(r.statusCode).toBe(401);
   });
 });

@@ -83,15 +83,6 @@ describe('pools resource', () => {
     expect(r.statusCode).toBe(204);
   });
 
-  it('returns 403 for non-admin writes', async () => {
-    const r = await h.built.app.inject({
-      method: 'DELETE',
-      url: '/api/v1/pools/pool-a',
-      headers: { cookie: cookieFor(h.built, userSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('returns 404 for missing resources', async () => {
     const r = await h.built.app.inject({
       method: 'GET',

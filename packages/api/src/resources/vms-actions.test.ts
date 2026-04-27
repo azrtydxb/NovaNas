@@ -14,13 +14,11 @@ function sampleVm(user: string, name: string) {
 describe('vms action routes (E1-API-Actions)', () => {
   let h: TestAppHandle;
   let aliceSid: string;
-  let viewerSid: string;
 
   beforeAll(async () => {
     h = await buildTestApp();
     await h.kube.seed('vms', sampleVm('alice', 'vm1'), 'user-alice');
     aliceSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
-    viewerSid = await h.authAs({ username: 'obs', roles: [AuthzRole.Viewer] });
   });
   afterAll(async () => h.built.app.close());
 
@@ -44,15 +42,6 @@ describe('vms action routes (E1-API-Actions)', () => {
       headers: { cookie: cookieFor(h.built, aliceSid) },
     });
     expect(r.statusCode).toBe(200);
-  });
-
-  it('viewer gets 403', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/vms/user-alice/vm1/start',
-      headers: { cookie: cookieFor(h.built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
   });
 
   it('404 for missing VM', async () => {

@@ -31,7 +31,7 @@ describe('auth device-code + token endpoints (CLI flow)', () => {
     expect([200, 502]).toContain(r.statusCode);
   });
 
-  it('GET /auth/me returns session user', async () => {
+  it('GET /auth/me returns synthetic admin (auth disabled)', async () => {
     const r = await h.built.app.inject({
       method: 'GET',
       url: '/api/v1/auth/me',
@@ -39,14 +39,6 @@ describe('auth device-code + token endpoints (CLI flow)', () => {
     });
     expect(r.statusCode).toBe(200);
     const body = r.json() as { username: string };
-    expect(body.username).toBe('alice');
-  });
-
-  it('GET /auth/me returns 401 without session', async () => {
-    const r = await h.built.app.inject({
-      method: 'GET',
-      url: '/api/v1/auth/me',
-    });
-    expect(r.statusCode).toBe(401);
+    expect(body.username).toBe('admin');
   });
 });

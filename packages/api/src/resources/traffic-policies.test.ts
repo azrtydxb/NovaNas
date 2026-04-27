@@ -23,16 +23,6 @@ describe('traffic-policies resource', () => {
     expect(Array.isArray(body.items)).toBe(true);
   });
 
-  it('returns 403 for share-only on list', async () => {
-    const shareSid = await h.authAs({ username: 'guest', roles: ['novanas:share-only'] });
-    const r = await h.built.app.inject({
-      method: 'GET',
-      url: '/api/v1/traffic-policies',
-      headers: { cookie: cookieFor(h.built, shareSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('returns 404 for missing TrafficPolicy', async () => {
     const r = await h.built.app.inject({
       method: 'GET',
@@ -40,10 +30,5 @@ describe('traffic-policies resource', () => {
       headers: { cookie: cookieFor(h.built, adminSid) },
     });
     expect(r.statusCode).toBe(404);
-  });
-
-  it('requires authentication', async () => {
-    const r = await h.built.app.inject({ method: 'GET', url: '/api/v1/traffic-policies' });
-    expect(r.statusCode).toBe(401);
   });
 });

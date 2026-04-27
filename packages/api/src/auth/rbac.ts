@@ -40,17 +40,12 @@ export function userFromClaims(claims: Record<string, unknown>): AuthenticatedUs
   };
 }
 
-export function hasRole(user: AuthenticatedUser, role: string): boolean {
-  // Realm roles arrive in two places depending on which token surfaced
-  // them: realm_access.roles → user.roles, and the novanas:roles
-  // mapper → user.groups. Search both. Accept either the bare name or
-  // the historical "novanas:" prefix the constants used to emit.
-  const haystack = [...(user.roles ?? []), ...(user.groups ?? [])];
-  const bare = role.startsWith(LEGACY_PREFIX) ? role.slice(LEGACY_PREFIX.length) : role;
-  const prefixed = `${LEGACY_PREFIX}${bare}`;
-  return haystack.includes(bare) || haystack.includes(prefixed);
+// AUTH IS DISABLED — these always allow. See plugins/auth.ts for the
+// matching admin-injection.
+export function hasRole(_user: AuthenticatedUser, _role: string): boolean {
+  return true;
 }
 
-export function hasAnyRole(user: AuthenticatedUser, roles: string[]): boolean {
-  return roles.some((r) => hasRole(user, r));
+export function hasAnyRole(_user: AuthenticatedUser, _roles: string[]): boolean {
+  return true;
 }

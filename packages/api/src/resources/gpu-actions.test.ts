@@ -14,13 +14,11 @@ function sampleGpu(name: string) {
 describe('gpu-devices action routes', () => {
   let h: TestAppHandle;
   let adminSid: string;
-  let userSid: string;
 
   beforeAll(async () => {
     h = await buildTestApp();
     await h.kube.seed('gpudevices', sampleGpu('gpu0'));
     adminSid = await h.authAs({ username: 'admin', roles: [AuthzRole.Admin] });
-    userSid = await h.authAs({ username: 'alice', roles: [AuthzRole.User] });
   });
   afterAll(async () => h.built.app.close());
 
@@ -41,15 +39,6 @@ describe('gpu-devices action routes', () => {
       headers: { cookie: cookieFor(h.built, adminSid) },
     });
     expect(r.statusCode).toBe(200);
-  });
-
-  it('non-admin gets 403 (GpuDevice is admin-only-write)', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/gpu-devices/gpu0/unassign',
-      headers: { cookie: cookieFor(h.built, userSid) },
-    });
-    expect(r.statusCode).toBe(403);
   });
 
   it('400 on missing body', async () => {

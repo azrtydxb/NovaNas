@@ -89,15 +89,6 @@ describe('data-protection action routes', () => {
     expect(r.statusCode).toBe(200);
   });
 
-  it('viewer gets 403 on renew', async () => {
-    const r = await h.built.app.inject({
-      method: 'POST',
-      url: '/api/v1/certificates/letsencrypt/renew',
-      headers: { cookie: cookieFor(h.built, viewerSid) },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
   it('404 on missing cert', async () => {
     const r = await h.built.app.inject({
       method: 'POST',
