@@ -87,6 +87,12 @@ message ChunkOpTask {
   uint32 chunk_index = 2;
   repeated string source_disk_uuids = 3;
   repeated string target_disk_uuids = 4;
+  // Content-addressed chunk identifier. Populated by meta when the chunk
+  // already exists; empty for tasks that target an unallocated chunk.
+  // Added during the proto reconciliation pass (PRs #76/#77/#78) so the
+  // dataplane can drive replicate / migrate without an extra GetChunkMap
+  // round-trip.
+  string chunk_id = 5;
 }
 
 message Task {

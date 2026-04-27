@@ -1,22 +1,19 @@
-//! Build script: compile the meta + chunk gRPC contracts so the frontend
-//! can call meta and (eventually) the data daemon's chunk control RPCs.
-//!
-//! The frontend only needs the *client* side — it never serves these
-//! services. Server stubs are still emitted because tonic-build defaults
-//! to both; suppressing them would just complicate the build.
+//! Build script: compile the canonical MetaService gRPC contract from
+//! `storage/api/proto/meta/meta.proto`. The frontend only needs the
+//! *client* side in production, but the integration tests at
+//! `tests/meta_client.rs` stand up an in-process tonic server, so we keep
+//! both client and server stubs available.
 
 fn main() {
-    // Build both client and server stubs. The frontend only ever
-    // *calls* meta and chunk in production, but the integration tests
-    // (`tests/meta_client.rs`) stand up an in-process tonic server, so
-    // we keep server stubs available too.
+    let proto = "../api/proto/meta/meta.proto";
+    let include_root = "../api/proto/";
+
     tonic_build::configure()
         .build_client(true)
         .build_server(true)
-        .compile_protos(&["proto/meta.proto", "proto/chunk.proto"], &["proto/"])
-        .expect("failed to compile proto files");
+        .compile_protos(&[proto], &[include_root])
+        .expect("failed to compile meta.proto");
 
-    println!("cargo:rerun-if-changed=proto/meta.proto");
-    println!("cargo:rerun-if-changed=proto/chunk.proto");
+    println!("cargo:rerun-if-changed={proto}");
     println!("cargo:rerun-if-changed=build.rs");
 }

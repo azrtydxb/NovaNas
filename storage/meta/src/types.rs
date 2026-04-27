@@ -227,6 +227,10 @@ impl Task {
                     chunk_index: *chunk_index,
                     source_disk_uuids: source_disk_uuids.clone(),
                     target_disk_uuids: target_disk_uuids.clone(),
+                    // chunk_id is filled by callers when meta has already
+                    // allocated a content-addressed identifier for this
+                    // chunk; left empty for unallocated chunks.
+                    chunk_id: String::new(),
                 })),
             ),
         };

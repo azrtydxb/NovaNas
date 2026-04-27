@@ -12,10 +12,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::disk_discovery::{discover_in, DeviceInfo};
+use crate::disk_discovery::{discover_in, DeviceClass, DeviceInfo};
 use crate::error::{DataPlaneError, Result};
 use crate::task_handlers::claim_disk::{SECTOR_SIZE, TAIL_RESERVED_SECTORS};
-use crate::transport::meta_proto::{DeviceClass, ReleaseDiskTask};
+use crate::transport::meta_proto::ReleaseDiskTask;
 
 use super::HandlerContext;
 use crate::backend::superblock::SUPERBLOCK_SIZE;

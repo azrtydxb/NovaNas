@@ -12,10 +12,35 @@
 use std::path::Path;
 
 use crate::error::{DataPlaneError, Result};
-use crate::transport::meta_proto::{DeviceClass, Disk};
+use crate::transport::meta_proto::Disk;
 
 /// Default sysfs root.
 pub const DEFAULT_SYSFS_ROOT: &str = "/sys/block";
+
+/// Internal classification of a discovered disk. The wrapper-style meta
+/// proto does not carry a device-class field; the dataplane keeps the
+/// distinction in-memory because handlers (NVMe driver swap, write cache
+/// sizing, etc.) need it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceClass {
+    Unknown,
+    Hdd,
+    Ssd,
+    Nvme,
+}
+
+impl DeviceClass {
+    /// Stable string label used in logs and as the `tier` hint pushed to
+    /// meta on `PutDisk`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeviceClass::Unknown => "",
+            DeviceClass::Hdd => "hdd",
+            DeviceClass::Ssd => "ssd",
+            DeviceClass::Nvme => "nvme",
+        }
+    }
+}
 
 /// Best-effort hardware/identification fields for a discovered disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,22 +62,21 @@ pub struct DeviceInfo {
 }
 
 impl DeviceInfo {
-    /// Encode this device as a `Disk` heartbeat record. The status fields
-    /// (`present`, `superblock_valid`, `last_seen`, `pool_name`, `role`)
-    /// are populated by the caller — discovery only knows hardware facts.
-    pub fn to_disk(&self) -> Disk {
+    /// Encode this device as a wrapper-style `Disk` record for `PutDisk`.
+    /// Lifecycle fields (`pool_uuid`, `state`, `generation`) are owned by
+    /// meta and are left at their zero values; the dataplane only reports
+    /// hardware facts and `present=true`.
+    pub fn to_disk(&self, node: &str) -> Disk {
         Disk {
-            wwn: self.wwn.clone(),
-            uuid: String::new(),
-            slot: self.slot.clone(),
-            model: self.model.clone(),
+            uuid: self.wwn.clone(),
+            node: node.to_string(),
+            device_path: format!("/dev/{}", self.slot),
             size_bytes: self.size_bytes,
-            class: self.class as i32,
-            pool_name: String::new(),
-            role: 0,
+            pool_uuid: String::new(),
+            state: String::new(),
+            tier: self.class.as_str().to_string(),
             present: true,
-            superblock_valid: false,
-            last_seen: None,
+            generation: 0,
         }
     }
 }
@@ -306,11 +330,12 @@ mod tests {
             size_bytes: 1024,
             class: DeviceClass::Hdd,
         };
-        let d = info.to_disk();
-        assert_eq!(d.slot, "sda");
+        let d = info.to_disk("node-A");
+        assert_eq!(d.uuid, "sda:abc");
+        assert_eq!(d.node, "node-A");
+        assert_eq!(d.device_path, "/dev/sda");
         assert!(d.present);
-        assert!(!d.superblock_valid);
         assert_eq!(d.size_bytes, 1024);
-        assert_eq!(d.class, DeviceClass::Hdd as i32);
+        assert_eq!(d.tier, "hdd");
     }
 }

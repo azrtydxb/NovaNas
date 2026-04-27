@@ -1,9 +1,9 @@
 //! End-to-end integration test for the data daemon's meta-side pipeline.
 //!
-//! Spins up an in-process `MetaService` over a Unix-domain socket, hands
-//! the daemon's [`MetaClient`] to a [`TaskRunner`], feeds a sequence of
-//! tasks (a CLAIM_DISK, a CHUNK_OP, then an unsupported one), and
-//! asserts:
+//! Spins up an in-process wrapper-style `MetaService` over a Unix-domain
+//! socket, hands the daemon's [`MetaClient`] to a [`TaskRunner`], feeds a
+//! sequence of tasks (a CHUNK_OP that succeeds and a payload-less task
+//! that must be NACKed), and asserts:
 //!   - the right handler fires for each task,
 //!   - acks propagate back to the fake meta with the expected
 //!     success / failure status,
@@ -26,12 +26,19 @@ use novanas_dataplane::meta_client::{MetaClient, MetaClientConfig};
 use novanas_dataplane::policy::operations::ChunkOperations;
 use novanas_dataplane::task_handlers::HandlerContext;
 use novanas_dataplane::task_runner::{ShutdownToken, TaskRunner, TaskRunnerConfig};
+use novanas_dataplane::transport::meta_proto::meta_service_server::{
+    MetaService, MetaServiceServer,
+};
 use novanas_dataplane::transport::meta_proto::{
-    meta_service_server::{MetaService, MetaServiceServer},
-    AckTaskRequest, ChunkMapSlice, ChunkOpTask, ClaimDiskRequest, ClaimDiskTask,
-    CreateVolumeRequest, Disk, DiskList, DiskRef, GetChunkMapRequest, HeartbeatRequest,
-    HeartbeatResponse, ListDisksRequest, PollTasksRequest, Pool, PoolList, PoolRef, Task,
-    TaskBatch, TaskKind, Volume, VolumeList, VolumeRef,
+    task::Payload as TaskPayload, AckTaskRequest, AckTaskResponse, ChunkOpTask, ClaimDiskRequest,
+    ClaimDiskResponse, ClaimDiskTask, CreateVolumeRequest, CreateVolumeResponse, DeleteDiskRequest,
+    DeleteDiskResponse, DeletePoolRequest, DeletePoolResponse, DeleteVolumeRequest,
+    DeleteVolumeResponse, GetChunkMapRequest, GetChunkMapResponse, GetDiskRequest, GetDiskResponse,
+    GetPoolRequest, GetPoolResponse, GetVolumeRequest, GetVolumeResponse, HeartbeatRequest,
+    HeartbeatResponse, ListDisksRequest, ListDisksResponse, ListPoolsRequest, ListPoolsResponse,
+    ListVolumesRequest, ListVolumesResponse, PollTasksRequest, PollTasksResponse, PutDiskRequest,
+    PutDiskResponse, PutPoolRequest, PutPoolResponse, ReleaseDiskRequest, ReleaseDiskResponse,
+    Task, TaskKind,
 };
 
 /// In-memory chunk store the test handler is wired against.
@@ -91,15 +98,13 @@ impl ChunkStore for MemStore {
 struct RecordedAck {
     task_id: String,
     success: bool,
-    error_message: String,
+    error: String,
 }
 
 /// Fake `MetaService` whose poll queue and ack log are inspectable.
 struct FakeMeta {
-    /// Pre-loaded queue of `TaskBatch`es to hand to PollTasks. The first
-    /// entry is consumed on each call. Once empty, we return an empty
-    /// batch (long-poll deadline simulation kept short).
-    queue: Mutex<Vec<TaskBatch>>,
+    /// Pre-loaded queue of `Vec<Task>` batches to hand to PollTasks.
+    queue: Mutex<Vec<Vec<Task>>>,
     /// Acks recorded in the order received.
     acks: Mutex<Vec<RecordedAck>>,
     /// Counter — first N PollTasks calls fail with `Unavailable`.
@@ -108,79 +113,104 @@ struct FakeMeta {
 
 #[async_trait]
 impl MetaService for FakeMeta {
-    async fn put_pool(&self, _r: Request<Pool>) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+    async fn put_pool(
+        &self,
+        r: Request<PutPoolRequest>,
+    ) -> Result<Response<PutPoolResponse>, Status> {
+        Ok(Response::new(PutPoolResponse {
+            pool: r.into_inner().pool,
+        }))
     }
-    async fn get_pool(&self, _r: Request<PoolRef>) -> std::result::Result<Response<Pool>, Status> {
+    async fn get_pool(
+        &self,
+        _r: Request<GetPoolRequest>,
+    ) -> Result<Response<GetPoolResponse>, Status> {
         Err(Status::unimplemented(""))
     }
-    async fn list_pools(&self, _r: Request<()>) -> std::result::Result<Response<PoolList>, Status> {
-        Ok(Response::new(PoolList { items: vec![] }))
+    async fn list_pools(
+        &self,
+        _r: Request<ListPoolsRequest>,
+    ) -> Result<Response<ListPoolsResponse>, Status> {
+        Ok(Response::new(ListPoolsResponse { pools: vec![] }))
     }
-    async fn delete_pool(&self, _r: Request<PoolRef>) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+    async fn delete_pool(
+        &self,
+        _r: Request<DeletePoolRequest>,
+    ) -> Result<Response<DeletePoolResponse>, Status> {
+        Ok(Response::new(DeletePoolResponse {}))
     }
-    async fn put_disk(&self, _r: Request<Disk>) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+    async fn put_disk(
+        &self,
+        r: Request<PutDiskRequest>,
+    ) -> Result<Response<PutDiskResponse>, Status> {
+        Ok(Response::new(PutDiskResponse {
+            disk: r.into_inner().disk,
+        }))
     }
-    async fn get_disk(&self, _r: Request<DiskRef>) -> std::result::Result<Response<Disk>, Status> {
+    async fn get_disk(
+        &self,
+        _r: Request<GetDiskRequest>,
+    ) -> Result<Response<GetDiskResponse>, Status> {
         Err(Status::unimplemented(""))
     }
     async fn list_disks(
         &self,
         _r: Request<ListDisksRequest>,
-    ) -> std::result::Result<Response<DiskList>, Status> {
-        Ok(Response::new(DiskList { items: vec![] }))
+    ) -> Result<Response<ListDisksResponse>, Status> {
+        Ok(Response::new(ListDisksResponse { disks: vec![] }))
     }
-    async fn delete_disk(&self, _r: Request<DiskRef>) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+    async fn delete_disk(
+        &self,
+        _r: Request<DeleteDiskRequest>,
+    ) -> Result<Response<DeleteDiskResponse>, Status> {
+        Ok(Response::new(DeleteDiskResponse {}))
     }
     async fn create_volume(
         &self,
         _r: Request<CreateVolumeRequest>,
-    ) -> std::result::Result<Response<Volume>, Status> {
+    ) -> Result<Response<CreateVolumeResponse>, Status> {
         Err(Status::unimplemented(""))
     }
     async fn get_volume(
         &self,
-        _r: Request<VolumeRef>,
-    ) -> std::result::Result<Response<Volume>, Status> {
+        _r: Request<GetVolumeRequest>,
+    ) -> Result<Response<GetVolumeResponse>, Status> {
         Err(Status::unimplemented(""))
     }
     async fn list_volumes(
         &self,
-        _r: Request<()>,
-    ) -> std::result::Result<Response<VolumeList>, Status> {
-        Ok(Response::new(VolumeList { items: vec![] }))
+        _r: Request<ListVolumesRequest>,
+    ) -> Result<Response<ListVolumesResponse>, Status> {
+        Ok(Response::new(ListVolumesResponse { volumes: vec![] }))
     }
     async fn delete_volume(
         &self,
-        _r: Request<VolumeRef>,
-    ) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+        _r: Request<DeleteVolumeRequest>,
+    ) -> Result<Response<DeleteVolumeResponse>, Status> {
+        Ok(Response::new(DeleteVolumeResponse {}))
     }
     async fn get_chunk_map(
         &self,
         _r: Request<GetChunkMapRequest>,
-    ) -> std::result::Result<Response<ChunkMapSlice>, Status> {
-        Ok(Response::new(ChunkMapSlice { entries: vec![] }))
+    ) -> Result<Response<GetChunkMapResponse>, Status> {
+        Ok(Response::new(GetChunkMapResponse { chunk_map: None }))
     }
     async fn claim_disk(
         &self,
         _r: Request<ClaimDiskRequest>,
-    ) -> std::result::Result<Response<Disk>, Status> {
-        Ok(Response::new(Disk::default()))
+    ) -> Result<Response<ClaimDiskResponse>, Status> {
+        Ok(Response::new(ClaimDiskResponse { disk: None }))
     }
     async fn release_disk(
         &self,
-        _r: Request<DiskRef>,
-    ) -> std::result::Result<Response<()>, Status> {
-        Ok(Response::new(()))
+        _r: Request<ReleaseDiskRequest>,
+    ) -> Result<Response<ReleaseDiskResponse>, Status> {
+        Ok(Response::new(ReleaseDiskResponse { disk: None }))
     }
     async fn poll_tasks(
         &self,
         _r: Request<PollTasksRequest>,
-    ) -> std::result::Result<Response<TaskBatch>, Status> {
+    ) -> Result<Response<PollTasksResponse>, Status> {
         // Maybe inject transient failure first.
         {
             let mut tf = self.transient_failures.lock().unwrap();
@@ -198,32 +228,31 @@ impl MetaService for FakeMeta {
             }
         };
         match next_batch {
-            Some(batch) => Ok(Response::new(batch)),
+            Some(tasks) => Ok(Response::new(PollTasksResponse { tasks })),
             None => {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                Ok(Response::new(TaskBatch { items: vec![] }))
+                Ok(Response::new(PollTasksResponse { tasks: vec![] }))
             }
         }
     }
     async fn ack_task(
         &self,
         r: Request<AckTaskRequest>,
-    ) -> std::result::Result<Response<()>, Status> {
+    ) -> Result<Response<AckTaskResponse>, Status> {
         let req = r.into_inner();
         self.acks.lock().unwrap().push(RecordedAck {
             task_id: req.task_id,
             success: req.success,
-            error_message: req.error_message,
+            error: req.error,
         });
-        Ok(Response::new(()))
+        Ok(Response::new(AckTaskResponse {}))
     }
     async fn heartbeat(
         &self,
         _r: Request<HeartbeatRequest>,
-    ) -> std::result::Result<Response<HeartbeatResponse>, Status> {
+    ) -> Result<Response<HeartbeatResponse>, Status> {
         Ok(Response::new(HeartbeatResponse {
-            desired_crush_digest: vec![],
-            pending_task_count: 0,
+            server_unix_secs: 1,
         }))
     }
 }
@@ -258,88 +287,112 @@ struct FakeMetaWrap(Arc<FakeMeta>);
 
 #[async_trait]
 impl MetaService for FakeMetaWrap {
-    async fn put_pool(&self, r: Request<Pool>) -> std::result::Result<Response<()>, Status> {
+    async fn put_pool(
+        &self,
+        r: Request<PutPoolRequest>,
+    ) -> Result<Response<PutPoolResponse>, Status> {
         self.0.put_pool(r).await
     }
-    async fn get_pool(&self, r: Request<PoolRef>) -> std::result::Result<Response<Pool>, Status> {
+    async fn get_pool(
+        &self,
+        r: Request<GetPoolRequest>,
+    ) -> Result<Response<GetPoolResponse>, Status> {
         self.0.get_pool(r).await
     }
-    async fn list_pools(&self, r: Request<()>) -> std::result::Result<Response<PoolList>, Status> {
+    async fn list_pools(
+        &self,
+        r: Request<ListPoolsRequest>,
+    ) -> Result<Response<ListPoolsResponse>, Status> {
         self.0.list_pools(r).await
     }
-    async fn delete_pool(&self, r: Request<PoolRef>) -> std::result::Result<Response<()>, Status> {
+    async fn delete_pool(
+        &self,
+        r: Request<DeletePoolRequest>,
+    ) -> Result<Response<DeletePoolResponse>, Status> {
         self.0.delete_pool(r).await
     }
-    async fn put_disk(&self, r: Request<Disk>) -> std::result::Result<Response<()>, Status> {
+    async fn put_disk(
+        &self,
+        r: Request<PutDiskRequest>,
+    ) -> Result<Response<PutDiskResponse>, Status> {
         self.0.put_disk(r).await
     }
-    async fn get_disk(&self, r: Request<DiskRef>) -> std::result::Result<Response<Disk>, Status> {
+    async fn get_disk(
+        &self,
+        r: Request<GetDiskRequest>,
+    ) -> Result<Response<GetDiskResponse>, Status> {
         self.0.get_disk(r).await
     }
     async fn list_disks(
         &self,
         r: Request<ListDisksRequest>,
-    ) -> std::result::Result<Response<DiskList>, Status> {
+    ) -> Result<Response<ListDisksResponse>, Status> {
         self.0.list_disks(r).await
     }
-    async fn delete_disk(&self, r: Request<DiskRef>) -> std::result::Result<Response<()>, Status> {
+    async fn delete_disk(
+        &self,
+        r: Request<DeleteDiskRequest>,
+    ) -> Result<Response<DeleteDiskResponse>, Status> {
         self.0.delete_disk(r).await
     }
     async fn create_volume(
         &self,
         r: Request<CreateVolumeRequest>,
-    ) -> std::result::Result<Response<Volume>, Status> {
+    ) -> Result<Response<CreateVolumeResponse>, Status> {
         self.0.create_volume(r).await
     }
     async fn get_volume(
         &self,
-        r: Request<VolumeRef>,
-    ) -> std::result::Result<Response<Volume>, Status> {
+        r: Request<GetVolumeRequest>,
+    ) -> Result<Response<GetVolumeResponse>, Status> {
         self.0.get_volume(r).await
     }
     async fn list_volumes(
         &self,
-        r: Request<()>,
-    ) -> std::result::Result<Response<VolumeList>, Status> {
+        r: Request<ListVolumesRequest>,
+    ) -> Result<Response<ListVolumesResponse>, Status> {
         self.0.list_volumes(r).await
     }
     async fn delete_volume(
         &self,
-        r: Request<VolumeRef>,
-    ) -> std::result::Result<Response<()>, Status> {
+        r: Request<DeleteVolumeRequest>,
+    ) -> Result<Response<DeleteVolumeResponse>, Status> {
         self.0.delete_volume(r).await
     }
     async fn get_chunk_map(
         &self,
         r: Request<GetChunkMapRequest>,
-    ) -> std::result::Result<Response<ChunkMapSlice>, Status> {
+    ) -> Result<Response<GetChunkMapResponse>, Status> {
         self.0.get_chunk_map(r).await
     }
     async fn claim_disk(
         &self,
         r: Request<ClaimDiskRequest>,
-    ) -> std::result::Result<Response<Disk>, Status> {
+    ) -> Result<Response<ClaimDiskResponse>, Status> {
         self.0.claim_disk(r).await
     }
-    async fn release_disk(&self, r: Request<DiskRef>) -> std::result::Result<Response<()>, Status> {
+    async fn release_disk(
+        &self,
+        r: Request<ReleaseDiskRequest>,
+    ) -> Result<Response<ReleaseDiskResponse>, Status> {
         self.0.release_disk(r).await
     }
     async fn poll_tasks(
         &self,
         r: Request<PollTasksRequest>,
-    ) -> std::result::Result<Response<TaskBatch>, Status> {
+    ) -> Result<Response<PollTasksResponse>, Status> {
         self.0.poll_tasks(r).await
     }
     async fn ack_task(
         &self,
         r: Request<AckTaskRequest>,
-    ) -> std::result::Result<Response<()>, Status> {
+    ) -> Result<Response<AckTaskResponse>, Status> {
         self.0.ack_task(r).await
     }
     async fn heartbeat(
         &self,
         r: Request<HeartbeatRequest>,
-    ) -> std::result::Result<Response<HeartbeatResponse>, Status> {
+    ) -> Result<Response<HeartbeatResponse>, Status> {
         self.0.heartbeat(r).await
     }
 }
@@ -359,6 +412,24 @@ fn chunk_payload(payload: &[u8]) -> Vec<u8> {
     out
 }
 
+fn chunk_op_task(id: &str, kind: TaskKind, op: ChunkOpTask) -> Task {
+    Task {
+        id: id.to_string(),
+        kind: kind as i32,
+        created_unix_secs: 0,
+        payload: Some(TaskPayload::ChunkOp(op)),
+    }
+}
+
+fn claim_disk_task(id: &str, claim: ClaimDiskTask) -> Task {
+    Task {
+        id: id.to_string(),
+        kind: TaskKind::TaskClaimDisk as i32,
+        created_unix_secs: 0,
+        payload: Some(TaskPayload::ClaimDisk(claim)),
+    }
+}
+
 #[tokio::test]
 async fn runner_dispatches_tasks_and_acks() {
     let dir = tempfile::tempdir().unwrap();
@@ -370,37 +441,29 @@ async fn runner_dispatches_tasks_and_acks() {
     let chunk_id = "abc".repeat(22) + "ab";
     store.put(&chunk_id, &chunk_payload(b"hi")).await.unwrap();
 
-    // Pre-load the queue: a CHUNK_OP that should succeed and an
-    // unspecified task that must be acked as failure.
-    let success_task = Task {
-        id: "task-1".into(),
-        kind: TaskKind::ReplicateChunk as i32,
-        node_id: "node-a".into(),
-        created_at: None,
-        attempt: 0,
-        claim_disk: None,
-        release_disk: None,
-        chunk_op: Some(ChunkOpTask {
-            chunk_id: chunk_id.clone(),
+    // Pre-load the queue: a CHUNK_OP that should succeed and a payload-
+    // less task that must be acked as failure.
+    let success_task = chunk_op_task(
+        "task-1",
+        TaskKind::TaskReplicateChunk,
+        ChunkOpTask {
             volume_uuid: "v".into(),
             chunk_index: 0,
-            src_disk_uuid: "node-a".into(),
-            dst_disk_uuids: vec!["node-a".into()],
-        }),
-    };
+            source_disk_uuids: vec!["node-a".into()],
+            target_disk_uuids: vec!["node-a".into()],
+            chunk_id: chunk_id.clone(),
+        },
+    );
     let bad_task = Task {
         id: "task-2".into(),
-        kind: TaskKind::Unspecified as i32,
-        node_id: "node-a".into(),
-        created_at: None,
-        attempt: 0,
-        claim_disk: None,
-        release_disk: None,
-        chunk_op: None,
+        kind: TaskKind::TaskUnknown as i32,
+        created_unix_secs: 0,
+        payload: None,
     };
-    meta.queue.lock().unwrap().push(TaskBatch {
-        items: vec![success_task, bad_task],
-    });
+    meta.queue
+        .lock()
+        .unwrap()
+        .push(vec![success_task, bad_task]);
     // Two transient PollTasks failures before the queue is consumed.
     *meta.transient_failures.lock().unwrap() = 2;
 
@@ -421,7 +484,7 @@ async fn runner_dispatches_tasks_and_acks() {
     let runner_cfg = TaskRunnerConfig {
         node_id: "node-a".into(),
         max_tasks: 8,
-        deadline_ms: 250,
+        idle_backoff: Duration::from_millis(20),
         concurrency: 4,
         error_backoff: Duration::from_millis(20),
     };
@@ -452,8 +515,8 @@ async fn runner_dispatches_tasks_and_acks() {
     let task1 = acks.iter().find(|a| a.task_id == "task-1").unwrap();
     assert!(task1.success, "REPLICATE_CHUNK should ack success");
     let task2 = acks.iter().find(|a| a.task_id == "task-2").unwrap();
-    assert!(!task2.success, "Unspecified task should ack failure");
-    assert!(task2.error_message.contains("unspecified"));
+    assert!(!task2.success, "Payload-less task should ack failure");
+    assert!(task2.error.contains("no recognised payload"));
 }
 
 #[tokio::test]
@@ -462,9 +525,12 @@ async fn runner_handles_claim_disk_task() {
     let socket = dir.path().join("meta.sock");
     let meta = fake_meta();
 
-    // Build a fake disk file that the claim-handler can write to. We
-    // arrange a sysfs root with one block device whose dev path resolves
-    // to a local file we control.
+    // Build a fake sysfs tree the claim-handler can probe. The handler
+    // resolves dev path at /dev/<slot> when it builds its
+    // SysfsClaimBackend; we can't redirect /dev in a unit test, so we
+    // here only verify that the runner routes the task to the handler —
+    // the failure case (no /dev/sda) produces a non-success ack we
+    // observe at meta.
     let sysfs_root = dir.path().join("sys");
     let block = sysfs_root.join("block").join("sda");
     std::fs::create_dir_all(block.join("queue")).unwrap();
@@ -473,34 +539,15 @@ async fn runner_handles_claim_disk_task() {
     std::fs::write(block.join("queue/rotational"), "1").unwrap();
     std::fs::write(block.join("device/model"), "FakeDisk").unwrap();
     std::fs::write(block.join("device/serial"), "FAKE-001").unwrap();
-    // The handler resolves dev path at /dev/<slot> when it builds its
-    // SysfsClaimBackend; we can't redirect /dev in a unit test, so we
-    // run the claim-disk path via the unit-test backend in the
-    // task_handlers module directly. Here we only verify that runner
-    // routes the task to the handler — the failure case (no /dev/sda)
-    // produces a non-success ack we observe at meta.
 
-    let task = Task {
-        id: "claim-1".into(),
-        kind: TaskKind::ClaimDisk as i32,
-        node_id: "node-a".into(),
-        created_at: None,
-        attempt: 0,
-        claim_disk: Some(ClaimDiskTask {
+    let task = claim_disk_task(
+        "claim-1",
+        ClaimDiskTask {
             pool_uuid: "pool-1".into(),
-            pool_name: "hdd".into(),
             disk_uuid: "sda:FAKE-001".into(),
-            role: 1,
-            crush_digest: vec![],
-            force: false,
-        }),
-        release_disk: None,
-        chunk_op: None,
-    };
-    meta.queue
-        .lock()
-        .unwrap()
-        .push(TaskBatch { items: vec![task] });
+        },
+    );
+    meta.queue.lock().unwrap().push(vec![task]);
 
     let _meta_handle = spawn_meta(socket.clone(), meta.clone()).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -517,7 +564,7 @@ async fn runner_handles_claim_disk_task() {
     let runner_cfg = TaskRunnerConfig {
         node_id: "node-a".into(),
         max_tasks: 4,
-        deadline_ms: 250,
+        idle_backoff: Duration::from_millis(20),
         concurrency: 2,
         error_backoff: Duration::from_millis(20),
     };
@@ -547,8 +594,5 @@ async fn runner_handles_claim_disk_task() {
     // The dev path /dev/sda does not exist in CI sandboxes, so we expect
     // a failure ack carrying a meaningful error message.
     assert!(!claim.success);
-    assert!(
-        !claim.error_message.is_empty(),
-        "expected error_message, got empty"
-    );
+    assert!(!claim.error.is_empty(), "expected error, got empty");
 }

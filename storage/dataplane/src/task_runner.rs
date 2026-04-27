@@ -23,12 +23,16 @@ use crate::task_handlers::{handle_task, HandlerContext};
 /// Configuration for the runner.
 #[derive(Debug, Clone)]
 pub struct TaskRunnerConfig {
-    /// Identifier sent on every PollTasks request.
+    /// Identifier the daemon registers itself with on the meta side.
+    /// Wrapper-style PollTasks no longer carries a node_id, but the
+    /// dataplane keeps the field for use as a `Heartbeat.client_id` and
+    /// for logging.
     pub node_id: String,
     /// Max tasks per poll batch.
     pub max_tasks: u32,
-    /// Long-poll deadline in milliseconds.
-    pub deadline_ms: u32,
+    /// Wrapper-style PollTasks does not long-poll; the runner sleeps
+    /// `idle_backoff` between empty batches to avoid busy-looping.
+    pub idle_backoff: Duration,
     /// Max concurrent task handlers.
     pub concurrency: usize,
     /// Backoff on transport errors.
@@ -40,7 +44,7 @@ impl Default for TaskRunnerConfig {
         Self {
             node_id: hostname_or_unknown(),
             max_tasks: 16,
-            deadline_ms: 25_000,
+            idle_backoff: Duration::from_millis(500),
             concurrency: 8,
             error_backoff: Duration::from_secs(2),
         }
@@ -107,10 +111,14 @@ impl TaskRunner {
                     log::info!("task_runner: cancellation token fired");
                     return Ok(());
                 }
-                poll = client.poll_tasks(&self.cfg.node_id, self.cfg.max_tasks, self.cfg.deadline_ms) => {
+                poll = client.poll_tasks(self.cfg.max_tasks) => {
                     match poll {
-                        Ok(batch) => {
-                            self.dispatch_batch(&mut client, &semaphore, batch).await;
+                        Ok(resp) => {
+                            let was_empty = resp.tasks.is_empty();
+                            self.dispatch_batch(&mut client, &semaphore, resp.tasks).await;
+                            if was_empty {
+                                tokio::time::sleep(self.cfg.idle_backoff).await;
+                            }
                         }
                         Err(e) => {
                             log::warn!("task_runner: poll_tasks failed: {e} (backing off)");
@@ -126,13 +134,13 @@ impl TaskRunner {
         &self,
         client: &mut MetaClient,
         semaphore: &Arc<Semaphore>,
-        batch: crate::transport::meta_proto::TaskBatch,
+        tasks: Vec<crate::transport::meta_proto::Task>,
     ) {
-        if batch.items.is_empty() {
+        if tasks.is_empty() {
             return;
         }
         let mut join_set = tokio::task::JoinSet::new();
-        for task in batch.items {
+        for task in tasks {
             let sem = semaphore.clone();
             let ctx = self.handler_ctx.clone();
             join_set.spawn(async move {
@@ -187,7 +195,7 @@ mod tests {
     fn config_defaults_are_sane() {
         let c = TaskRunnerConfig::default();
         assert!(c.max_tasks > 0);
-        assert!(c.deadline_ms > 0);
+        assert!(!c.idle_backoff.is_zero());
         assert!(c.concurrency > 0);
     }
 }
