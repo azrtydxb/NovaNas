@@ -33,12 +33,21 @@ spec:
           args:
             - exec /usr/local/bin/novanas-storage-agent
               -listen=:{{ .Values.storage.agent.service.grpcPort }}
+              -node-id=$NODE_NAME
               -host-ip=$HOST_IP
               -pod-ip=$POD_IP
               -meta-addr=novanas-storage-meta.{{ include "novanas.systemNamespace" . }}.svc:{{ .Values.storage.meta.service.grpcPort }}
               -dataplane-addr={{ .Values.storage.agent.dataplaneAddr | default "localhost:9500" }}
               -spdk-base-bdev={{ .Values.storage.agent.spdkBaseBdev | default "novanas_pool" }}
           env:
+            # NODE_NAME identifies this pod's host in BackendAssignment
+            # spec.nodeName, which the pool-poller sets from the K8s
+            # Node list. Without this the agent would default to its
+            # pod hostname and never match.
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: NOVANAS_API_URL
+              value: "http://novanas-api.{{ include "novanas.systemNamespace" . }}.svc:8080"
             - name: HOST_IP
               valueFrom: { fieldRef: { fieldPath: status.hostIP } }
             - name: POD_IP
