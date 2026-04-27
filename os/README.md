@@ -139,8 +139,10 @@ See `rootfs/etc/rauc/system.conf` and `rauc/manifest.raucm`. Flow:
 1. Ensures `/mnt/persistent/*` layout exists.
 2. Starts `k3s`, waits for the API.
 3. `helm install novanas /opt/novanas/helm/ --namespace novanas-system --create-namespace`.
-4. Applies seed CRDs from `/opt/novanas/seed/`.
-5. Touches the sentinel file.
+4. Touches the sentinel file.
+
+NovaNas defines no CRDs (see ADR 0005); k3s is just an execution
+runtime, all business state lives in the API server's Postgres.
 
 After the wizard concludes, the web UI drives user-facing first-run.
 

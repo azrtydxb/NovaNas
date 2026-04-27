@@ -28,10 +28,6 @@ help: ## Display this help.
 generate: controller-gen ## Generate deepcopy methods for CRD types.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-.PHONY: manifests
-manifests: controller-gen ## Generate CRD manifests.
-	$(CONTROLLER_GEN) rbac:roleName=novanas-storage-controller-role crd:allowDangerousTypes=true webhook paths="./..." output:crd:artifacts:config=config/crd
-
 .PHONY: generate-proto
 generate-proto: protoc-gen-go protoc-gen-go-grpc ## Generate Go code from protobuf definitions.
 	PATH=$(LOCALBIN):$$PATH protoc --go_out=. --go_opt=paths=source_relative \
@@ -41,10 +37,6 @@ generate-proto: protoc-gen-go protoc-gen-go-grpc ## Generate Go code from protob
 		api/proto/dataplane/dataplane.proto \
 		api/proto/metadata/metadata.proto \
 		api/proto/nvme/nvme.proto
-
-.PHONY: generate-crds
-generate-crds: manifests ## Generate CRD manifests from kubebuilder markers (runs controller-gen).
-	@echo "CRD manifests written to config/crd/."
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -197,16 +189,6 @@ docker-build-dataplane: ## Build the data-plane docker image (stub mode).
 .PHONY: docker-push
 docker-push: ## Push all docker images to the registry.
 	$(foreach comp,controller agent meta csi s3gw scheduler webhook,$(DOCKER) tag novanas-storage-$(comp):latest $(REGISTRY)/novanas-storage-$(comp):$(IMAGE_TAG) && $(DOCKER) push $(REGISTRY)/novanas-storage-$(comp):$(IMAGE_TAG);)
-
-##@ Deployment
-
-.PHONY: install-crds
-install-crds: manifests ## Install CRDs into the K8s cluster.
-	kubectl apply -f config/crd/
-
-.PHONY: uninstall-crds
-uninstall-crds: ## Uninstall CRDs from the K8s cluster.
-	kubectl delete -f config/crd/
 
 ##@ Helm
 

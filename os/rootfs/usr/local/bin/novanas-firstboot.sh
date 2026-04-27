@@ -6,15 +6,13 @@
 #   1. Prepare the persistent partition layout.
 #   2. Wait for k3s to be reachable.
 #   3. Install the NovaNas umbrella Helm chart.
-#   4. Apply seed CRDs.
-#   5. Drop the sentinel so we don't run again.
+#   4. Drop the sentinel so we don't run again.
 
 set -euo pipefail
 
 SENTINEL="/var/lib/novanas/.firstboot-done"
 PERSISTENT="/mnt/persistent"
 HELM_CHART_DIR="/opt/novanas/helm"
-SEED_DIR="/opt/novanas/seed"
 KUBECONFIG="/etc/rancher/k3s/k3s.yaml"
 NAMESPACE="novanas-system"
 
@@ -63,15 +61,6 @@ install_helm_chart() {
     --set global.channel="$(cat /etc/novanas/channel)"
 }
 
-apply_seed_crds() {
-  if [[ ! -d "$SEED_DIR" ]]; then
-    log "no seed CRDs at $SEED_DIR; skipping"
-    return 0
-  fi
-  log "applying seed CRDs from $SEED_DIR"
-  KUBECONFIG="$KUBECONFIG" kubectl apply -R -f "$SEED_DIR"
-}
-
 mark_done() {
   install -d -m 0755 "$(dirname "$SENTINEL")"
   date --iso-8601=seconds > "$SENTINEL"
@@ -86,7 +75,6 @@ main() {
   ensure_persistent_layout
   wait_for_k3s
   install_helm_chart
-  apply_seed_crds
   mark_done
 }
 

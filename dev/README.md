@@ -104,11 +104,10 @@ make dev-cluster-up
 ```
 
 This creates a single-node [kind](https://kind.sigs.k8s.io/) cluster named
-`novanas-dev`, installs every NovaNas CRD from
-`packages/operators/config/crd/bases/`, deploys the operators into the
-`novanas-system` namespace using a locally built `novanas/operators:dev`
-image, seeds a handful of sample resources, and finally brings up the
-compose stack wired to the cluster.
+`novanas-dev` and brings up the compose stack wired to it. NovaNas
+defines no CRDs (see [ADR 0005](../docs/adr/0005-hide-kubernetes-behind-api.md));
+business state lives in the API server's Postgres, the cluster is
+just a container runtime.
 
 Extra prerequisites:
 
@@ -146,17 +145,9 @@ make dev-cluster-reset  # down + up again
 
 ```
 dev/kind/
-├── kind-cluster.yaml             # 1-node cluster, ingress-ready, 8088/8443
-├── create-cluster.sh             # kind create + kubeconfig rewrite
-├── install-crds.sh               # apply + wait Established
-├── install-operators.sh          # build, kind-load, apply manager.yaml
-├── install-sample-resources.sh   # seed samples/*.yaml
-├── uninstall.sh                  # kind delete + kubeconfig cleanup
-└── samples/
-    ├── storagepool.yaml          # `main` pool, warm tier
-    ├── datasets.yaml             # `photos`, `documents`
-    ├── share.yaml                # `photos` via SMB + NFS
-    └── users.yaml                # `pascal` admin, `family` user
+├── kind-cluster.yaml   # 1-node cluster, ingress-ready, 8088/8443
+├── create-cluster.sh   # kind create + kubeconfig rewrite
+└── uninstall.sh        # kind delete + kubeconfig cleanup
 ```
 
 ### Networking gotcha
