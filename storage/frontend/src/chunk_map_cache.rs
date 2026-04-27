@@ -147,14 +147,15 @@ impl ChunkMapCache {
         let Some(meta) = meta_opt else {
             return Ok(None);
         };
-        let slice = meta
+        let placements = meta
             .get_chunk_map(volume, chunk_index, chunk_index + 1)
             .await?;
         let mut found = None;
-        for entry in slice.entries {
+        for entry in placements {
             if !entry.chunk_id.is_empty() {
-                self.record_chunk_id(volume, entry.chunk_index, &entry.chunk_id);
-                if entry.chunk_index == chunk_index {
+                let idx = entry.index as u64;
+                self.record_chunk_id(volume, idx, &entry.chunk_id);
+                if idx == chunk_index {
                     found = Some(entry.chunk_id);
                 }
             }
@@ -213,17 +214,17 @@ impl ChunkMapCache {
 mod tests {
     use super::*;
     use crate::proto::meta::{
-        ChunkMapEntry, ChunkMapSlice, HeartbeatRequest, HeartbeatResponse, Volume, VolumeList,
+        ChunkPlacement, HeartbeatRequest, HeartbeatResponse, ListVolumesResponse, Volume,
     };
     use async_trait::async_trait;
 
     struct StubMeta {
-        responses: std::sync::Mutex<Vec<ChunkMapSlice>>,
+        responses: std::sync::Mutex<Vec<Vec<ChunkPlacement>>>,
     }
     impl StubMeta {
-        fn with(slice: ChunkMapSlice) -> Self {
+        fn with(placements: Vec<ChunkPlacement>) -> Self {
             Self {
-                responses: std::sync::Mutex::new(vec![slice]),
+                responses: std::sync::Mutex::new(vec![placements]),
             }
         }
     }
@@ -232,17 +233,16 @@ mod tests {
         async fn get_volume(&self, _: &str) -> Result<Volume> {
             Err(FrontendError::Meta("stub: no GetVolume".into()))
         }
-        async fn list_volumes(&self) -> Result<VolumeList> {
-            Ok(VolumeList { items: vec![] })
+        async fn list_volumes(&self) -> Result<ListVolumesResponse> {
+            Ok(ListVolumesResponse { volumes: vec![] })
         }
-        async fn get_chunk_map(&self, _: &str, _: u64, _: u64) -> Result<ChunkMapSlice> {
+        async fn get_chunk_map(&self, _: &str, _: u64, _: u64) -> Result<Vec<ChunkPlacement>> {
             let mut g = self.responses.lock().unwrap();
-            Ok(g.pop().unwrap_or(ChunkMapSlice { entries: vec![] }))
+            Ok(g.pop().unwrap_or_default())
         }
         async fn heartbeat(&self, _: HeartbeatRequest) -> Result<HeartbeatResponse> {
             Ok(HeartbeatResponse {
-                desired_crush_digest: vec![],
-                pending_task_count: 0,
+                server_unix_secs: 0,
             })
         }
     }
@@ -273,13 +273,11 @@ mod tests {
     #[tokio::test]
     async fn miss_consults_meta_and_records() {
         let c = ChunkMapCache::in_memory();
-        c.set_meta(Arc::new(StubMeta::with(ChunkMapSlice {
-            entries: vec![ChunkMapEntry {
-                chunk_index: 9,
-                chunk_id: "deadbeef".into(),
-                disk_wwns: vec!["w".into()],
-            }],
-        })))
+        c.set_meta(Arc::new(StubMeta::with(vec![ChunkPlacement {
+            index: 9,
+            chunk_id: "deadbeef".into(),
+            disk_uuids: vec!["w".into()],
+        }])))
         .await;
         let got = c.lookup_or_fetch("vol", 9).await.unwrap();
         assert_eq!(got.unwrap(), "deadbeef");

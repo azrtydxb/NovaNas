@@ -161,16 +161,14 @@ async fn start_meta_pipeline(
     };
     let mut client = MetaClient::connect(cfg).await?;
 
-    // 3. First heartbeat.
-    let disks: Vec<_> = initial.iter().map(|d| d.to_disk()).collect();
-    match client
-        .heartbeat(node_id, env!("CARGO_PKG_VERSION"), disks)
-        .await
-    {
+    // 3. First heartbeat. Wrapper-style heartbeat is a no-op ping;
+    //    disk-presence is pushed via per-disk PutDisk before the ping.
+    let disks: Vec<_> = initial.iter().map(|d| d.to_disk(node_id)).collect();
+    match client.heartbeat_with_disks(node_id, disks).await {
         Ok(resp) => {
             info!(
-                "heartbeat: meta acked, pending tasks={}",
-                resp.pending_task_count
+                "heartbeat: meta acked at {}, disks reported={}",
+                resp.server_unix_secs, resp.disks_reported
             );
         }
         Err(e) => warn!("heartbeat failed at startup: {e}"),
@@ -196,9 +194,9 @@ async fn start_meta_pipeline(
                         }
                     }
                     let infos = disk_discovery::discover_in(&hb_root.join("block")).unwrap_or_default();
-                    let disks: Vec<_> = infos.iter().map(|d| d.to_disk()).collect();
+                    let disks: Vec<_> = infos.iter().map(|d| d.to_disk(&hb_node)).collect();
                     if let Some(c) = hb_client_opt.as_mut() {
-                        if let Err(e) = c.heartbeat(&hb_node, env!("CARGO_PKG_VERSION"), disks).await {
+                        if let Err(e) = c.heartbeat_with_disks(&hb_node, disks).await {
                             warn!("heartbeat: failed: {e} (will reconnect)");
                             hb_client_opt = None;
                         }

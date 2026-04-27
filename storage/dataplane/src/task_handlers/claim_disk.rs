@@ -20,9 +20,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::backend::superblock::{DiskRole, Superblock, SUPERBLOCK_SIZE, SUPERBLOCK_VERSION};
-use crate::disk_discovery::{discover_in, DeviceInfo};
+use crate::disk_discovery::{discover_in, DeviceClass, DeviceInfo};
 use crate::error::{DataPlaneError, Result};
-use crate::transport::meta_proto::{ClaimDiskTask, DeviceClass, DiskRole as ProtoDiskRole};
+use crate::transport::meta_proto::ClaimDiskTask;
 
 use super::HandlerContext;
 
@@ -105,12 +105,15 @@ pub async fn handle_with_backend<B: ClaimDiskBackend>(
     let dev_path = location.dev_path.clone();
     let info = location.info.clone();
 
-    if !task.force {
-        ensure_empty(&dev_path)?;
-    }
+    // Wrapper-style `ClaimDiskTask` carries only `(disk_uuid, pool_uuid)`.
+    // Single-host appliances claim every disk as data-role, refuse to
+    // overwrite a non-empty disk (no `force` flag), and leave the CRUSH
+    // digest zeroed — meta is the source of truth for digest rotation
+    // and writes the new value via a follow-up superblock-update path.
+    ensure_empty(&dev_path)?;
 
-    let crush_digest = decode_crush_digest(&task.crush_digest)?;
-    let role = role_from_proto(task.role);
+    let crush_digest = [0u8; 32];
+    let role = DiskRole::Data;
 
     let now_nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -152,28 +155,22 @@ pub async fn handle_with_backend<B: ClaimDiskBackend>(
 
 /// Production handler used by [`super::handle_task`].
 pub async fn handle(ctx: &HandlerContext, task: &ClaimDiskTask) -> Result<()> {
-    // NVMe driver swap is best-effort here: it only succeeds on a real
-    // Linux host with vfio-pci available. Errors are non-fatal for the
-    // claim itself (the AIO path also works); we log and continue.
-    if task.role == ProtoDiskRole::Data as i32 || task.role == ProtoDiskRole::Both as i32 {
-        // The slot is needed before we know the class — first peek at the
-        // sysfs backend.
-        let backend =
-            SysfsClaimBackend::new(ctx.sysfs_root.clone(), std::path::PathBuf::from("/dev"));
-        if let Some(loc) = backend.locate(&task.disk_uuid) {
-            if loc.info.class == DeviceClass::Nvme {
-                if let Err(e) = ctx.device_manager.nvme_to_vfio(&loc.info.slot) {
-                    log::warn!(
-                        "claim_disk: nvme→vfio bind failed for {} ({}): {e} — falling back to AIO",
-                        loc.info.slot,
-                        task.disk_uuid
-                    );
-                }
+    // NVMe driver swap is best-effort: it only succeeds on a real Linux
+    // host with vfio-pci available. Errors are non-fatal for the claim
+    // itself (the AIO path also works); we log and continue.
+    let backend = SysfsClaimBackend::new(ctx.sysfs_root.clone(), std::path::PathBuf::from("/dev"));
+    if let Some(loc) = backend.locate(&task.disk_uuid) {
+        if loc.info.class == DeviceClass::Nvme {
+            if let Err(e) = ctx.device_manager.nvme_to_vfio(&loc.info.slot) {
+                log::warn!(
+                    "claim_disk: nvme→vfio bind failed for {} ({}): {e} — falling back to AIO",
+                    loc.info.slot,
+                    task.disk_uuid
+                );
             }
         }
     }
 
-    let backend = SysfsClaimBackend::new(ctx.sysfs_root.clone(), std::path::PathBuf::from("/dev"));
     let outcome = handle_with_backend(&backend, task).await?;
     log::info!(
         "claim_disk: superblock written to {} (class {:?}, {} bytes)",
@@ -244,30 +241,6 @@ fn write_superblock_pair(
     Ok(())
 }
 
-fn decode_crush_digest(bytes: &[u8]) -> Result<[u8; 32]> {
-    if bytes.is_empty() {
-        return Ok([0u8; 32]);
-    }
-    if bytes.len() != 32 {
-        return Err(DataPlaneError::PolicyError(format!(
-            "claim_disk: crush_digest must be 32 bytes (got {})",
-            bytes.len()
-        )));
-    }
-    let mut out = [0u8; 32];
-    out.copy_from_slice(bytes);
-    Ok(out)
-}
-
-fn role_from_proto(proto_role: i32) -> DiskRole {
-    match ProtoDiskRole::try_from(proto_role).unwrap_or(ProtoDiskRole::Unset) {
-        ProtoDiskRole::Data => DiskRole::Data,
-        ProtoDiskRole::Metadata => DiskRole::Metadata,
-        ProtoDiskRole::Both => DiskRole::Both,
-        ProtoDiskRole::Unset => DiskRole::Unknown,
-    }
-}
-
 /// Pack a string (uuid or wwn) into the 16-byte superblock disk_uuid
 /// field. Accepts canonical `xxxxxxxx-xxxx-...` and arbitrary strings;
 /// non-hex input is hashed with FNV-1a so two distinct ids never collide
@@ -315,14 +288,10 @@ mod tests {
         path
     }
 
-    fn task(force: bool) -> ClaimDiskTask {
+    fn task() -> ClaimDiskTask {
         ClaimDiskTask {
             pool_uuid: "pool-1".into(),
-            pool_name: "hdd".into(),
             disk_uuid: "naa.5000abcd1234".into(),
-            role: ProtoDiskRole::Data as i32,
-            crush_digest: vec![],
-            force,
         }
     }
 
@@ -349,7 +318,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let size = 64 * 1024;
         let b = backend(dir.path(), "fake", size, DeviceClass::Hdd);
-        let outcome = handle_with_backend(&b, &task(false)).await.unwrap();
+        let outcome = handle_with_backend(&b, &task()).await.unwrap();
         assert_eq!(outcome.disk_uuid, "naa.5000abcd1234");
 
         // Validate primary copy.
@@ -367,21 +336,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refuses_non_empty_disk_unless_forced() {
+    async fn refuses_non_empty_disk() {
         let dir = tempfile::tempdir().unwrap();
         let size = 64 * 1024;
         let b = backend(dir.path(), "dirty", size, DeviceClass::Hdd);
         // Pre-populate with non-zero data.
         std::fs::write(&b.loc.dev_path, vec![0xffu8; size as usize]).unwrap();
 
-        let err = handle_with_backend(&b, &task(false)).await.unwrap_err();
+        let err = handle_with_backend(&b, &task()).await.unwrap_err();
         assert!(format!("{err}").contains("non-empty"));
-
-        // With force=true the claim succeeds.
-        let outcome = handle_with_backend(&b, &task(true)).await.unwrap();
-        let buf = std::fs::read(&outcome.dev_path).unwrap();
-        let sb = Superblock::unmarshal(&buf[..SUPERBLOCK_SIZE]).unwrap();
-        assert_eq!(sb.pool_id, "pool-1");
     }
 
     #[tokio::test]
@@ -389,19 +352,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let size = 1024; // smaller than 4 KiB superblock + 8-sector tail.
         let b = backend(dir.path(), "tiny", size, DeviceClass::Hdd);
-        let err = handle_with_backend(&b, &task(false)).await.unwrap_err();
+        let err = handle_with_backend(&b, &task()).await.unwrap_err();
         assert!(format!("{err}").contains("too small"));
-    }
-
-    #[tokio::test]
-    async fn rejects_invalid_crush_digest_length() {
-        let dir = tempfile::tempdir().unwrap();
-        let size = 64 * 1024;
-        let b = backend(dir.path(), "bad-digest", size, DeviceClass::Hdd);
-        let mut t = task(false);
-        t.crush_digest = vec![0u8; 16];
-        let err = handle_with_backend(&b, &t).await.unwrap_err();
-        assert!(format!("{err}").contains("32 bytes"));
     }
 
     #[test]

@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use crate::error::{DataPlaneError, Result};
 use crate::policy::operations::ChunkOperations;
-use crate::transport::meta_proto::{Task, TaskKind};
+use crate::transport::meta_proto::{task::Payload as TaskPayload, Task, TaskKind};
 
 /// Shared services every task handler can consume.
 pub struct HandlerContext {
@@ -60,32 +60,21 @@ impl HandlerContext {
 
 /// Dispatch `task` to the matching handler. Returns `Ok(())` on success,
 /// or an error the runner records on the AckTask call.
+///
+/// The wrapper-style proto routes tasks via `oneof payload`, so we match
+/// on the payload variant rather than `kind`. `kind` is still consulted
+/// to disambiguate replicate vs. tier-migrate inside chunk-op handling.
 pub async fn handle_task(ctx: &HandlerContext, task: &Task) -> Result<()> {
-    match TaskKind::try_from(task.kind).unwrap_or(TaskKind::Unspecified) {
-        TaskKind::ClaimDisk => {
-            let claim = task.claim_disk.as_ref().ok_or_else(|| {
-                DataPlaneError::PolicyError("CLAIM_DISK task missing claim_disk payload".into())
-            })?;
-            claim_disk::handle(ctx, claim).await
+    match task.payload.as_ref() {
+        Some(TaskPayload::ClaimDisk(claim)) => claim_disk::handle(ctx, claim).await,
+        Some(TaskPayload::ReleaseDisk(release)) => release_disk::handle(ctx, release).await,
+        Some(TaskPayload::ChunkOp(op)) => chunk_op::handle(ctx, task.kind, op).await,
+        None => {
+            let kind = TaskKind::try_from(task.kind).unwrap_or(TaskKind::TaskUnknown);
+            Err(DataPlaneError::PolicyError(format!(
+                "task {} carries no recognised payload (kind={:?})",
+                task.id, kind
+            )))
         }
-        TaskKind::ReleaseDisk => {
-            let release = task.release_disk.as_ref().ok_or_else(|| {
-                DataPlaneError::PolicyError("RELEASE_DISK task missing release_disk payload".into())
-            })?;
-            release_disk::handle(ctx, release).await
-        }
-        TaskKind::ReplicateChunk
-        | TaskKind::MigrateChunk
-        | TaskKind::ScrubChunk
-        | TaskKind::DeleteChunk => {
-            let op = task.chunk_op.as_ref().ok_or_else(|| {
-                DataPlaneError::PolicyError("chunk-op task missing chunk_op payload".into())
-            })?;
-            chunk_op::handle(ctx, task.kind, op).await
-        }
-        TaskKind::Unspecified => Err(DataPlaneError::PolicyError(format!(
-            "task {} has unspecified kind",
-            task.id
-        ))),
     }
 }

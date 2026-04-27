@@ -1,11 +1,14 @@
-//! Tonic client for the `MetaService` defined in
+//! Tonic client for the wrapper-style `MetaService` defined in
 //! `storage/api/proto/meta/meta.proto`.
 //!
 //! Connects to `novanas-meta` over a Unix-domain socket (default
 //! `/var/run/novanas/meta.sock`) and exposes thin wrappers around the
 //! RPCs the data daemon needs:
 //!
-//! - [`MetaClient::heartbeat`] — periodic 30s liveness + disk-status push.
+//! - [`MetaClient::heartbeat`] — periodic 30s liveness ping. Wrapper-style
+//!   `Heartbeat` carries no disk list, so disk presence is pushed
+//!   separately via per-disk [`MetaClient::put_disk`] calls (see
+//!   [`MetaClient::heartbeat_with_disks`] for the combined helper).
 //! - [`MetaClient::poll_tasks`] — long-poll for the work queue.
 //! - [`MetaClient::ack_task`] — final disposition for a task.
 //! - [`MetaClient::claim_disk`] — explicit ClaimDisk RPC (used during
@@ -26,12 +29,23 @@ use tower::service_fn;
 use crate::error::{DataPlaneError, Result};
 use crate::transport::meta_proto::meta_service_client::MetaServiceClient;
 use crate::transport::meta_proto::{
-    AckTaskRequest, ClaimDiskRequest, DaemonKind, Disk, DiskRef, HeartbeatRequest,
-    HeartbeatResponse, PollTasksRequest, TaskBatch,
+    AckTaskRequest, ClaimDiskRequest, DeleteDiskRequest, Disk, HeartbeatRequest, PollTasksRequest,
+    PollTasksResponse, PutDiskRequest,
 };
 
 /// Default UDS path the meta daemon listens on.
 pub const DEFAULT_META_SOCKET: &str = "/var/run/novanas/meta.sock";
+
+/// Result of a heartbeat round-trip. The wrapper-style proto returns just
+/// `server_unix_secs`; the dataplane keeps the same return type so call
+/// sites stay readable.
+#[derive(Debug, Clone)]
+pub struct HeartbeatOutcome {
+    /// Wall-clock the meta daemon stamped on the response.
+    pub server_unix_secs: u64,
+    /// Number of disks the daemon successfully pushed via PutDisk.
+    pub disks_reported: usize,
+}
 
 /// Configuration for the meta client.
 #[derive(Debug, Clone)]
@@ -62,9 +76,6 @@ pub struct MetaClient {
 
 impl MetaClient {
     /// Connect to the meta daemon at `config.socket_path`.
-    ///
-    /// The tonic `Endpoint` is configured with a fake URI (`http://meta`)
-    /// — the actual transport is the UDS connector below.
     pub async fn connect(config: MetaClientConfig) -> Result<Self> {
         let socket_path = config.socket_path.clone();
         let endpoint = Endpoint::try_from("http://meta")
@@ -100,41 +111,63 @@ impl MetaClient {
         &self.config.socket_path
     }
 
-    /// Send a heartbeat. The daemon pushes its disk-status records and
-    /// receives the desired CRUSH digest + a hint about the queue depth.
-    pub async fn heartbeat(
-        &mut self,
-        node_id: &str,
-        version: &str,
-        disks: Vec<Disk>,
-    ) -> Result<HeartbeatResponse> {
+    /// Send a heartbeat ping. The wrapper-style Heartbeat carries only a
+    /// client identifier; disk-presence is communicated separately via
+    /// `PutDisk`. Returns the meta daemon's wall-clock response.
+    pub async fn heartbeat(&mut self, client_id: &str) -> Result<u64> {
         let req = HeartbeatRequest {
-            node_id: node_id.to_string(),
-            kind: DaemonKind::Data as i32,
-            version: version.to_string(),
-            disks,
+            client_id: client_id.to_string(),
         };
         let resp = self
             .inner
             .heartbeat(req)
             .await
             .map_err(|s| DataPlaneError::TransportError(format!("heartbeat: {s}")))?;
-        Ok(resp.into_inner())
+        Ok(resp.into_inner().server_unix_secs)
+    }
+
+    /// Push or update a single disk record. The data daemon calls this
+    /// for every locally-discovered disk on each heartbeat tick.
+    pub async fn put_disk(&mut self, disk: Disk) -> Result<Disk> {
+        let req = PutDiskRequest { disk: Some(disk) };
+        let resp = self
+            .inner
+            .put_disk(req)
+            .await
+            .map_err(|s| DataPlaneError::TransportError(format!("put_disk: {s}")))?;
+        let inner = resp.into_inner();
+        Ok(inner.disk.unwrap_or_default())
+    }
+
+    /// Combined heartbeat + disk-presence push. Calls `PutDisk` for every
+    /// supplied disk record (errors on individual disks are logged and
+    /// counted but not fatal) and finishes with a `Heartbeat` ping.
+    pub async fn heartbeat_with_disks(
+        &mut self,
+        client_id: &str,
+        disks: Vec<Disk>,
+    ) -> Result<HeartbeatOutcome> {
+        let mut reported = 0usize;
+        for disk in disks {
+            let uuid = disk.uuid.clone();
+            match self.put_disk(disk).await {
+                Ok(_) => reported += 1,
+                Err(e) => {
+                    log::warn!("meta_client: PutDisk for {uuid} failed: {e} (will retry next tick)")
+                }
+            }
+        }
+        let server_unix_secs = self.heartbeat(client_id).await?;
+        Ok(HeartbeatOutcome {
+            server_unix_secs,
+            disks_reported: reported,
+        })
     }
 
     /// Long-poll the meta task queue. Returns whatever batch the meta side
-    /// has ready before `deadline_ms` expires (possibly empty).
-    pub async fn poll_tasks(
-        &mut self,
-        node_id: &str,
-        max_tasks: u32,
-        deadline_ms: u32,
-    ) -> Result<TaskBatch> {
-        let req = PollTasksRequest {
-            node_id: node_id.to_string(),
-            max_tasks,
-            deadline_ms,
-        };
+    /// has ready before the deadline expires (possibly empty).
+    pub async fn poll_tasks(&mut self, max_tasks: u32) -> Result<PollTasksResponse> {
+        let req = PollTasksRequest { max: max_tasks };
         let resp = self
             .inner
             .poll_tasks(req)
@@ -144,17 +177,12 @@ impl MetaClient {
     }
 
     /// Ack a task — `success=true` removes it, `success=false` requeues it
-    /// with `error_message` recorded for operators.
-    pub async fn ack_task(
-        &mut self,
-        task_id: &str,
-        success: bool,
-        error_message: &str,
-    ) -> Result<()> {
+    /// with `error` recorded for operators.
+    pub async fn ack_task(&mut self, task_id: &str, success: bool, error: &str) -> Result<()> {
         let req = AckTaskRequest {
             task_id: task_id.to_string(),
             success,
-            error_message: error_message.to_string(),
+            error: error.to_string(),
         };
         self.inner
             .ack_task(req)
@@ -163,34 +191,29 @@ impl MetaClient {
         Ok(())
     }
 
-    /// Issue an explicit `ClaimDisk` RPC. The data daemon mostly receives
-    /// claim work via [`Self::poll_tasks`] (`TASK_KIND_CLAIM_DISK`), but
-    /// the explicit form is useful for re-binding a disk after restart.
-    pub async fn claim_disk(
-        &mut self,
-        wwn: &str,
-        pool_name: &str,
-        role: i32,
-        force: bool,
-    ) -> Result<Disk> {
+    /// Issue an explicit `ClaimDisk` RPC. The wrapper-style request only
+    /// carries `(disk_uuid, pool_uuid)`; role / force are inferred by the
+    /// dataplane (single-host appliances claim every disk as Data and
+    /// reject non-empty disks unconditionally — see `task_handlers::
+    /// claim_disk`).
+    pub async fn claim_disk(&mut self, disk_uuid: &str, pool_uuid: &str) -> Result<Disk> {
         let req = ClaimDiskRequest {
-            wwn: wwn.to_string(),
-            pool_name: pool_name.to_string(),
-            role,
-            force,
+            disk_uuid: disk_uuid.to_string(),
+            pool_uuid: pool_uuid.to_string(),
         };
         let resp = self
             .inner
             .claim_disk(req)
             .await
             .map_err(|s| DataPlaneError::TransportError(format!("claim_disk: {s}")))?;
-        Ok(resp.into_inner())
+        let inner = resp.into_inner();
+        Ok(inner.disk.unwrap_or_default())
     }
 
     /// Mirror of `MetaService::DeleteDisk` for clean release.
-    pub async fn delete_disk(&mut self, wwn: &str) -> Result<()> {
-        let req = DiskRef {
-            wwn: wwn.to_string(),
+    pub async fn delete_disk(&mut self, disk_uuid: &str) -> Result<()> {
+        let req = DeleteDiskRequest {
+            uuid: disk_uuid.to_string(),
         };
         self.inner
             .delete_disk(req)

@@ -25,7 +25,7 @@ use novanas_frontend::meta_client::MetaClient;
 use novanas_frontend::ndp_client::NdpChunkClient;
 use novanas_frontend::nvmf::{NoopNvmfTarget, NvmfTarget};
 use novanas_frontend::proto::meta::{
-    ChunkMapSlice, HeartbeatRequest, HeartbeatResponse, Volume, VolumeList,
+    ChunkPlacement, HeartbeatRequest, HeartbeatResponse, ListVolumesResponse, Volume,
 };
 use novanas_frontend::reconciler::VolumeReconciler;
 use novanas_frontend::volume_bdev::{NoopVolumeBdevManager, VolumeBdevManager};
@@ -37,25 +37,23 @@ impl MetaClient for FixedSizeMeta {
         Ok(Volume {
             name: name.to_string(),
             uuid: "u".into(),
-            pool_name: "p".into(),
+            pool_uuid: "p".into(),
             size_bytes: 4 * 1024 * 1024 * 32,
             chunk_size_bytes: 4 * 1024 * 1024,
             chunk_count: 32,
             protection: None,
-            phase: "Ready".into(),
-            created_at: None,
+            generation: 0,
         })
     }
-    async fn list_volumes(&self) -> Result<VolumeList> {
-        Ok(VolumeList { items: vec![] })
+    async fn list_volumes(&self) -> Result<ListVolumesResponse> {
+        Ok(ListVolumesResponse { volumes: vec![] })
     }
-    async fn get_chunk_map(&self, _: &str, _: u64, _: u64) -> Result<ChunkMapSlice> {
-        Ok(ChunkMapSlice { entries: vec![] })
+    async fn get_chunk_map(&self, _: &str, _: u64, _: u64) -> Result<Vec<ChunkPlacement>> {
+        Ok(Vec::new())
     }
     async fn heartbeat(&self, _: HeartbeatRequest) -> Result<HeartbeatResponse> {
         Ok(HeartbeatResponse {
-            desired_crush_digest: vec![],
-            pending_task_count: 0,
+            server_unix_secs: 0,
         })
     }
 }
