@@ -50,106 +50,13 @@ func init() {
 	utilruntime.Must(novanasv1alpha1.AddToScheme(scheme))
 }
 
-// externalClients aggregates the production client implementations
-// injected into reconcilers. Each field is guaranteed non-nil — failed
-// constructions fall back to their NoopXxx counterparts so reconcilers
-// never panic on a nil dependency.
-type externalClients struct {
-	keycloak   reconciler.KeycloakClient
-	storage    reconciler.StorageClient
-	certIssuer reconciler.CertificateIssuer
-	network    reconciler.NetworkClient
-	updater    reconciler.UpdateClient
-	keyProv    reconciler.VolumeKeyProvisioner
-	openbao    reconciler.OpenBaoClient
-}
-
-func buildExternalClients(mgr ctrl.Manager) externalClients {
-	ec := externalClients{
-		keycloak:   reconciler.NoopKeycloakClient{},
-		storage:    reconciler.NoopStorageClient{},
-		certIssuer: reconciler.NoopCertificateIssuer{},
-		network:    reconciler.NoopNetworkClient{},
-		updater:    reconciler.NoopUpdateClient{},
-		// keyProv intentionally starts nil: populated only when a real
-		// provisioner is wired, or when NOVANAS_DEV=1 overrides.
-		keyProv: nil,
-		openbao:    reconciler.NoopOpenBaoClient{},
-	}
-
-	// --- Keycloak ---
-	if addr := os.Getenv("KEYCLOAK_URL"); addr != "" {
-		kc, err := reconciler.NewGocloakClient(reconciler.GocloakConfig{
-			BaseURL:      addr,
-			AdminRealm:   envDefault("KEYCLOAK_ADMIN_REALM", "master"),
-			ClientID:     os.Getenv("KEYCLOAK_ADMIN_CLIENT_ID"),
-			ClientSecret: os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET"),
-		})
-		if err != nil {
-			setupLog.Error(err, "keycloak client init failed; falling back to no-op")
-		} else {
-			setupLog.Info("keycloak client wired", "addr", addr)
-			ec.keycloak = kc
-		}
-	} else {
-		setupLog.Info("KEYCLOAK_URL not set; using no-op keycloak client (dev mode)")
-	}
-
-	// --- Storage gRPC client ---
-	{
-		addr := envDefault("STORAGE_META_ADDR", "novanas-storage-meta.novanas-system.svc:7001")
-		sc, err := reconciler.NewGRPCStorageClient(reconciler.GRPCStorageClientConfig{
-			Address:     addr,
-			CAFile:      os.Getenv("STORAGE_TLS_CA"),
-			CertFile:    os.Getenv("STORAGE_TLS_CERT"),
-			KeyFile:     os.Getenv("STORAGE_TLS_KEY"),
-			ServerName:  os.Getenv("STORAGE_TLS_SERVER_NAME"),
-			DialTimeout: 10 * time.Second,
-			CallTimeout: 15 * time.Second,
-		})
-		if err != nil {
-			setupLog.Error(err, "storage client init failed; falling back to no-op", "addr", addr)
-		} else {
-			setupLog.Info("storage gRPC client wired", "addr", addr)
-			ec.storage = sc
-		}
-	}
-
-	// --- Certificate issuer (OpenBao PKI) ---
-	if addr := os.Getenv("OPENBAO_ADDR"); addr != "" {
-		issuer, err := reconciler.NewOpenBaoPKIIssuer(reconciler.OpenBaoPKIConfig{
-			Addr:      addr,
-			Token:     os.Getenv("OPENBAO_TOKEN"),
-			TokenPath: envDefault("OPENBAO_TOKEN_PATH", "/var/run/secrets/openbao/token"),
-			Namespace: os.Getenv("OPENBAO_NAMESPACE"),
-			MountPath: envDefault("OPENBAO_PKI_PATH", "pki"),
-			Role:      envDefault("OPENBAO_PKI_ROLE", "novanas"),
-		})
-		if err != nil {
-			setupLog.Error(err, "openbao PKI issuer init failed; falling back to no-op")
-		} else {
-			setupLog.Info("openbao PKI issuer wired", "addr", addr)
-			ec.certIssuer = issuer
-		}
-	} else {
-		setupLog.Info("OPENBAO_ADDR not set; using no-op certificate issuer (dev mode)")
-	}
-
-	// --- Network client (ConfigMap projection) ---
-	ns := envDefault("OPERATOR_NAMESPACE", "novanas-system")
-	ec.network = reconciler.NewConfigMapNetworkClient(mgr.GetClient(), ns)
-	setupLog.Info("network client wired (ConfigMap projection)", "namespace", ns)
-
-	// --- Update client (ConfigMap-driven host updater) ---
-	ec.updater = reconciler.NewConfigMapUpdateClient(mgr.GetClient(), ns)
-	setupLog.Info("update client wired (ConfigMap host-updater bridge)", "namespace", ns)
-
-	// --- Volume-key provisioner ---
-	//
-	// Encryption is security-critical: refuse to start with a NoopKeyProvisioner
-	// unless NOVANAS_DEV=1 is explicitly set. A silent noop would write a
-	// placeholder wrapped-DK to CR status and permanently prevent later
-	// recovery of the data.
+// buildKeyProvisioner returns the OpenBao Transit-backed volume key
+// provisioner used by BlockVolumeReconciler. Encryption is
+// security-critical: refuse to start without a working provisioner
+// unless NOVANAS_DEV=1 is explicitly set. A silent no-op would write
+// a placeholder wrapped-DK to CR status and permanently prevent later
+// recovery of the data.
+func buildKeyProvisioner() reconciler.VolumeKeyProvisioner {
 	if os.Getenv("OPENBAO_ADDR") != "" {
 		tp, err := reconciler.NewTransitKeyProvisioner(reconciler.TransitKeyProvisionerConfig{
 			Addr:          os.Getenv("OPENBAO_ADDR"),
@@ -165,42 +72,19 @@ func buildExternalClients(mgr ctrl.Manager) externalClients {
 				setupLog.Error(err, "refusing to start without a working key provisioner (set NOVANAS_DEV=1 for dev override)")
 				os.Exit(1)
 			}
-			setupLog.Info("NOVANAS_DEV=1 set; using no-op key provisioner (dev only; encrypted resources will fail to reconcile)")
-			ec.keyProv = nil
-		} else {
-			setupLog.Info("transit key provisioner wired (OpenBao Transit)")
-			ec.keyProv = tp
+			setupLog.Info("NOVANAS_DEV=1 set; no key provisioner wired (encrypted resources will fail to reconcile)")
+			return nil
 		}
-	} else if os.Getenv("NOVANAS_DEV") == "1" {
+		setupLog.Info("transit key provisioner wired (OpenBao Transit)")
+		return tp
+	}
+	if os.Getenv("NOVANAS_DEV") == "1" {
 		setupLog.Info("OPENBAO_ADDR not set and NOVANAS_DEV=1; no key provisioner wired (encrypted resources will error)")
-		ec.keyProv = nil
-	} else {
-		setupLog.Error(nil, "OPENBAO_ADDR not set; refusing to start without a volume-key provisioner. Set OPENBAO_ADDR, or NOVANAS_DEV=1 for explicit dev override.")
-		os.Exit(1)
+		return nil
 	}
-
-	// --- OpenBao admin client (policies + kubernetes-auth roles) ---
-	if addr := os.Getenv("OPENBAO_ADDR"); addr != "" {
-		token := os.Getenv("OPENBAO_TOKEN")
-		if token == "" {
-			// Best-effort: let the client read OPENBAO_TOKEN_PATH on each call.
-			// If neither is set the constructor will return an error.
-			if tp := envDefault("OPENBAO_TOKEN_PATH", ""); tp == "" {
-				setupLog.Info("OPENBAO_TOKEN and OPENBAO_TOKEN_PATH not set; using no-op openbao admin client")
-			}
-		}
-		obc, err := reconciler.NewHTTPOpenBaoClient(addr, token)
-		if err != nil {
-			setupLog.Error(err, "openbao admin client init failed; falling back to no-op")
-		} else {
-			setupLog.Info("openbao admin client wired", "addr", addr)
-			ec.openbao = obc
-		}
-	} else {
-		setupLog.Info("OPENBAO_ADDR not set; using no-op openbao admin client (dev mode)")
-	}
-
-	return ec
+	setupLog.Error(nil, "OPENBAO_ADDR not set; refusing to start without a volume-key provisioner. Set OPENBAO_ADDR, or NOVANAS_DEV=1 for explicit dev override.")
+	os.Exit(1)
+	return nil
 }
 
 // jobConsumerRunnable adapts a *JobConsumer to controller-runtime's
@@ -314,9 +198,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	clients := buildExternalClients(mgr)
+	keyProv := buildKeyProvisioner()
 
-	if err := setupAllControllers(mgr, clients); err != nil {
+	if err := setupAllControllers(mgr, keyProv); err != nil {
 		setupLog.Error(err, "unable to set up controllers")
 		os.Exit(1)
 	}
@@ -369,24 +253,17 @@ func main() {
 	}
 }
 
-// setupAllControllers wires every NovaNas reconciler into the manager,
-// injecting the external clients into reconcilers that need them.
-func setupAllControllers(mgr ctrl.Manager, ec externalClients) error {
+// setupAllControllers wires every surviving NovaNas reconciler into
+// the manager. After PRs 1–11 only BlockVolumeReconciler remains; it
+// flips to a runtime.Adapter-driven worker when storage data plane #50
+// lands.
+func setupAllControllers(mgr ctrl.Manager, keyProv reconciler.VolumeKeyProvisioner) error {
 	type setup interface {
 		SetupWithManager(mgr ctrl.Manager) error
 	}
-
-	// CRD-to-Postgres migration: most business-object reconcilers
-	// have been removed. FirewallRule, TrafficPolicy and ServicePolicy
-	// All policy / network / appinstance / vm CRDs have flipped to
-	// PgResource. VM reconciliation moved to internal/vmworker which
-	// polls the API server and drives runtime.Adapter (k8s impl uses
-	// KubeVirt via dynamic client). Only BlockVolume remains here,
-	// scheduled to flip with #50.
 	reconcilers := []setup{
-		&controllers.BlockVolumeReconciler{KeyProvisioner: ec.keyProv},
+		&controllers.BlockVolumeReconciler{KeyProvisioner: keyProv},
 	}
-
 	for _, r := range reconcilers {
 		if err := r.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup controller %T: %w", r, err)
