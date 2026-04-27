@@ -1,0 +1,44 @@
+[package]
+name = "novanas-meta"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "novanas-meta: cold-path metadata daemon (architecture-v2)"
+
+[[bin]]
+name = "novanas-meta"
+path = "src/main.rs"
+
+[lib]
+name = "novanas_meta"
+path = "src/lib.rs"
+
+[dependencies]
+tonic = "0.13"
+prost = "0.13"
+prost-types = "0.13"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+redb = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ring = "0.17"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+thiserror = "1"
+postcard = { version = "1", features = ["alloc"] }
+uuid = { version = "1", features = ["v4"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = "0.5"
+async-trait = "0.1"
+futures = "0.3"
+
+[build-dependencies]
+tonic-build = "0.13"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util", "macros"] }
