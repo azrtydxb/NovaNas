@@ -1,0 +1,196 @@
+// Copyright NovaNas contributors. SPDX-License-Identifier: Apache-2.0
+//
+// Wire contract for the novanas-meta daemon (architecture-v2, single-host).
+//
+// The meta daemon is the cold-path source of placement and lifecycle truth
+// for the local data daemon. It subscribes to novanas-api as the SoT of
+// pools/disks/volumes, runs CRUSH, persists chunk maps, and emits tasks for
+// the data daemon to claim.
+
+syntax = "proto3";
+
+package novanas.meta.v1;
+
+// ---------------------------------------------------------------------------
+// Core resources
+// ---------------------------------------------------------------------------
+
+message Pool {
+  string uuid = 1;
+  string name = 2;
+  uint32 replication_factor = 3;  // default 2
+  string tier = 4;                // "fast" | "bulk" | "" (any)
+  uint64 generation = 5;
+}
+
+message Disk {
+  string uuid = 1;
+  string node = 2;          // single-host: always the local node
+  string device_path = 3;   // e.g. /dev/nvme0n1
+  uint64 size_bytes = 4;
+  string pool_uuid = 5;     // empty = unclaimed
+  string state = 6;         // "unclaimed" | "claiming" | "ready" | "failed"
+  string tier = 7;          // matches Pool.tier when claimed
+  bool present = 8;         // device currently visible
+  uint64 generation = 9;
+}
+
+message ProtectionSpec {
+  uint32 replication_factor = 1;
+}
+
+message Volume {
+  string uuid = 1;
+  string name = 2;
+  string pool_uuid = 3;
+  uint64 size_bytes = 4;
+  ProtectionSpec protection = 5;
+  uint64 chunk_size_bytes = 6;   // server-set, currently 4 MiB
+  uint64 chunk_count = 7;
+  uint64 generation = 8;
+}
+
+message ChunkPlacement {
+  uint32 index = 1;
+  string chunk_id = 2;          // empty until first write (content-addressed)
+  repeated string disk_uuids = 3;
+}
+
+message ChunkMap {
+  string volume_uuid = 1;
+  repeated ChunkPlacement chunks = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+enum TaskKind {
+  TASK_UNKNOWN = 0;
+  TASK_CLAIM_DISK = 1;
+  TASK_RELEASE_DISK = 2;
+  TASK_REPLICATE_CHUNK = 3;
+  TASK_TIER_MIGRATE_CHUNK = 4;  // future hook; never emitted in this PR
+}
+
+message ClaimDiskTask {
+  string disk_uuid = 1;
+  string pool_uuid = 2;
+}
+
+message ReleaseDiskTask {
+  string disk_uuid = 1;
+}
+
+message ChunkOpTask {
+  string volume_uuid = 1;
+  uint32 chunk_index = 2;
+  repeated string source_disk_uuids = 3;
+  repeated string target_disk_uuids = 4;
+}
+
+message Task {
+  string id = 1;
+  TaskKind kind = 2;
+  uint64 created_unix_secs = 3;
+  oneof payload {
+    ClaimDiskTask claim_disk = 10;
+    ReleaseDiskTask release_disk = 11;
+    ChunkOpTask chunk_op = 12;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RPC messages
+// ---------------------------------------------------------------------------
+
+message PutPoolRequest { Pool pool = 1; }
+message PutPoolResponse { Pool pool = 1; }
+
+message GetPoolRequest { string uuid = 1; }
+message GetPoolResponse { Pool pool = 1; }
+
+message ListPoolsRequest {}
+message ListPoolsResponse { repeated Pool pools = 1; }
+
+message DeletePoolRequest { string uuid = 1; }
+message DeletePoolResponse {}
+
+message PutDiskRequest { Disk disk = 1; }
+message PutDiskResponse { Disk disk = 1; }
+
+message GetDiskRequest { string uuid = 1; }
+message GetDiskResponse { Disk disk = 1; }
+
+message ListDisksRequest { string pool_uuid = 1; }  // empty = all
+message ListDisksResponse { repeated Disk disks = 1; }
+
+message DeleteDiskRequest { string uuid = 1; }
+message DeleteDiskResponse {}
+
+message CreateVolumeRequest {
+  string uuid = 1;
+  string name = 2;
+  string pool_uuid = 3;
+  uint64 size_bytes = 4;
+  ProtectionSpec protection = 5;
+}
+message CreateVolumeResponse { Volume volume = 1; ChunkMap chunk_map = 2; }
+
+message GetVolumeRequest { string uuid = 1; }
+message GetVolumeResponse { Volume volume = 1; }
+
+message ListVolumesRequest { string pool_uuid = 1; }  // empty = all
+message ListVolumesResponse { repeated Volume volumes = 1; }
+
+message DeleteVolumeRequest { string uuid = 1; }
+message DeleteVolumeResponse {}
+
+message GetChunkMapRequest { string volume_uuid = 1; }
+message GetChunkMapResponse { ChunkMap chunk_map = 1; }
+
+message ClaimDiskRequest { string disk_uuid = 1; string pool_uuid = 2; }
+message ClaimDiskResponse { Disk disk = 1; }
+
+message ReleaseDiskRequest { string disk_uuid = 1; }
+message ReleaseDiskResponse { Disk disk = 1; }
+
+message PollTasksRequest { uint32 max = 1; }
+message PollTasksResponse { repeated Task tasks = 1; }
+
+message AckTaskRequest { string task_id = 1; bool success = 2; string error = 3; }
+message AckTaskResponse {}
+
+message HeartbeatRequest { string client_id = 1; }
+message HeartbeatResponse { uint64 server_unix_secs = 1; }
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
+service MetaService {
+  rpc PutPool(PutPoolRequest) returns (PutPoolResponse);
+  rpc GetPool(GetPoolRequest) returns (GetPoolResponse);
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse);
+  rpc DeletePool(DeletePoolRequest) returns (DeletePoolResponse);
+
+  rpc PutDisk(PutDiskRequest) returns (PutDiskResponse);
+  rpc GetDisk(GetDiskRequest) returns (GetDiskResponse);
+  rpc ListDisks(ListDisksRequest) returns (ListDisksResponse);
+  rpc DeleteDisk(DeleteDiskRequest) returns (DeleteDiskResponse);
+
+  rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
+  rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse);
+  rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
+  rpc DeleteVolume(DeleteVolumeRequest) returns (DeleteVolumeResponse);
+
+  rpc GetChunkMap(GetChunkMapRequest) returns (GetChunkMapResponse);
+
+  rpc ClaimDisk(ClaimDiskRequest) returns (ClaimDiskResponse);
+  rpc ReleaseDisk(ReleaseDiskRequest) returns (ReleaseDiskResponse);
+
+  rpc PollTasks(PollTasksRequest) returns (PollTasksResponse);
+  rpc AckTask(AckTaskRequest) returns (AckTaskResponse);
+
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}

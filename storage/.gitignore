@@ -5,7 +5,6 @@ bin/
 /filer
 /s3gw
 /agent
-/meta
 /novanasctl
 *.exe
 *.exe~
