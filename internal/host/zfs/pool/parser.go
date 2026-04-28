@@ -103,24 +103,30 @@ func parseProps(data []byte) (map[string]string, error) {
 	return out, sc.Err()
 }
 
-// parseStatus parses `zpool status -P` output into a Status with a
-// 2-level vdev tree. ZFS output is irregular:
-//   - Pool root: 1 leading tab
-//   - Mirror/raidz/draid groups: 1 tab + 2 spaces (one indent step)
-//   - Group-leaf disks: 1 tab + 4 spaces (two indent steps)
-//   - logs/cache/spares group HEADERS: 1 tab (same as pool root)
-//   - logs/cache/spares LEAVES: 1 tab + 2 spaces (same indent as mirror)
+// parseStatus parses `zpool status -P` output. Real ZFS output uses one
+// leading TAB then SPACES for visual nesting. Indent levels (after the
+// tab):
+//   - depth 0: pool root, logs/cache/spares group headers
+//   - depth 1: top-level data vdevs (mirror-0, raidz-0), bare disks of a
+//     stripe pool, or NESTED mirror-N inside logs/cache (mirrored log)
+//   - depth 2: leaves under a mirror/raidz group (or under a nested
+//     mirror-N inside logs)
 //
-// Different visual indent for semantic siblings, so depth-stack tracking
-// is unreliable. Instead: classify each row by name pattern. Known
-// vdev-group types become top-level entries; everything else becomes
-// either a child of the most recent group or a top-level leaf (for
-// striped pools whose top level is bare disks).
+// Note: pool root and logs/cache/spares headers share depth 0, but their
+// roles differ — the first depth-0 row is the pool, anything after is a
+// "side group" at top level. Children of side groups can themselves be
+// mirrors with their own children, so we track parents by depth.
 func parseStatus(data []byte) (*Status, error) {
 	st := &Status{}
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	inConfig := false
 	rootSeen := false
+
+	// parents[d] = the most recently seen Vdev at depth d, used as parent
+	// for the next row at depth d+1. Stored as pointer into st.Vdevs[*]
+	// (or transitively into Children slices) so appends to .Children
+	// land in place. nil means "append to st.Vdevs" (i.e. top level).
+	var parents [4]*Vdev
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -153,25 +159,60 @@ func parseStatus(data []byte) (*Status, error) {
 		if len(fields) >= 2 {
 			state = fields[1]
 		}
-		if !rootSeen {
-			rootSeen = true
-			continue
+
+		depth := configDepth(line)
+		if depth < 0 {
+			continue // not a config row
 		}
 		v := classifyVdev(name, state)
 
-		// If this row is a top-level vdev group, append it.
-		// If it's a leaf and the most recent top-level is a group, nest it.
-		// Otherwise (no vdevs yet, or last top-level is itself a leaf — a
-		// stripe-of-disks layout), append as another top-level leaf.
-		if isVdevGroup(v.Type) {
+		// Pool root: first depth-0 row. Skip; subsequent depth-1 rows
+		// become top-level data vdevs.
+		if depth == 0 && !rootSeen {
+			rootSeen = true
+			parents[0] = nil // root parent is "st.Vdevs"
+			continue
+		}
+
+		// Append v to its parent's children list (or st.Vdevs if no parent
+		// at depth-1), then record v as the parent for depth+1 rows.
+		var inserted *Vdev
+		if depth == 0 || parents[depth-1] == nil {
 			st.Vdevs = append(st.Vdevs, v)
-		} else if n := len(st.Vdevs); n > 0 && isVdevGroup(st.Vdevs[n-1].Type) {
-			st.Vdevs[n-1].Children = append(st.Vdevs[n-1].Children, v)
+			inserted = &st.Vdevs[len(st.Vdevs)-1]
 		} else {
-			st.Vdevs = append(st.Vdevs, v)
+			p := parents[depth-1]
+			p.Children = append(p.Children, v)
+			inserted = &p.Children[len(p.Children)-1]
+		}
+		parents[depth] = inserted
+		// Invalidate deeper-level parents — they belong to a previous
+		// branch that's now closed.
+		for d := depth + 1; d < len(parents); d++ {
+			parents[d] = nil
 		}
 	}
 	return st, sc.Err()
+}
+
+// configDepth returns the indent depth of a config row, or -1 if line is
+// not a config-section row. Real ZFS format: 1 leading TAB then 2*depth
+// SPACES. Some rows have a trailing whitespace artifact (e.g. "logs\t")
+// that we ignore — depth is determined by the leading-whitespace prefix.
+func configDepth(line string) int {
+	if len(line) == 0 || line[0] != '\t' {
+		return -1
+	}
+	// Skip the leading tab, then count spaces.
+	spaces := 0
+	for i := 1; i < len(line); i++ {
+		if line[i] == ' ' {
+			spaces++
+			continue
+		}
+		break
+	}
+	return spaces / 2
 }
 
 func classifyVdev(name, state string) Vdev {
@@ -198,14 +239,6 @@ func classifyVdev(name, state string) Vdev {
 		v.Path = name
 	}
 	return v
-}
-
-func isVdevGroup(t string) bool {
-	switch t {
-	case "mirror", "raidz1", "raidz2", "raidz3", "draid", "log", "cache", "spare":
-		return true
-	}
-	return false
 }
 
 func parseUint(s string) (uint64, error) {

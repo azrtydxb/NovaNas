@@ -295,10 +295,14 @@ func main() {
 		if logVdev == nil {
 			return fmt.Errorf("expected log vdev; vdevs=%+v", d.Status.Vdevs)
 		}
-		if len(logVdev.Children) != 2 {
-			return fmt.Errorf("expected mirrored log (2 children), got %d", len(logVdev.Children))
+		// Mirrored log: zpool reports it as `log → mirror-N → 2 leaves`.
+		// Verify the nested mirror with 2 leaves under the log group.
+		if len(logVdev.Children) != 1 || logVdev.Children[0].Type != "mirror" ||
+			len(logVdev.Children[0].Children) != 2 {
+			return fmt.Errorf("expected mirrored-log (log→mirror→2 leaves), got %+v", logVdev)
 		}
-		fmt.Printf("  data mirror: %d children, log: %d children", len(dataMirror.Children), len(logVdev.Children))
+		fmt.Printf("  data mirror: %d children, log: nested mirror with %d leaves",
+			len(dataMirror.Children), len(logVdev.Children[0].Children))
 		if cacheVdev != nil {
 			fmt.Printf(", cache: %d child(ren)", len(cacheVdev.Children)+1) // cache leaf has no sub-children
 		}
@@ -868,6 +872,15 @@ func main() {
 			return fmt.Errorf("expected write past volsize to fail, got nil")
 		}
 		fmt.Printf("  write past volsize rejected: %v\n", err)
+		// Kernel may briefly hold a reference to the block device after
+		// the failed write. Retry destroy a few times.
+		ddl := time.Now().Add(10 * time.Second)
+		for time.Now().Before(ddl) {
+			if err := dm.Destroy(ctx, full, false); err == nil {
+				return nil
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 		return dm.Destroy(ctx, full, false)
 	})
 
@@ -1168,10 +1181,12 @@ func waitPoolOnline(ctx context.Context, pm *pool.Manager, name string, timeout 
 	return fmt.Errorf("pool %q did not reach ONLINE within %v", name, timeout)
 }
 
-// vdevTreeContainsDisk recursively checks if any Vdev in the tree has Path == disk.
+// vdevTreeContainsDisk recursively checks if any Vdev in the tree refers
+// to the given disk. ZFS reports vdev paths with a "-partN" suffix even
+// when the disk was added by whole-device path, so we match on prefix.
 func vdevTreeContainsDisk(vdevs []pool.Vdev, disk string) bool {
 	for _, v := range vdevs {
-		if v.Path == disk {
+		if v.Path == disk || strings.HasPrefix(v.Path, disk+"-part") {
 			return true
 		}
 		if vdevTreeContainsDisk(v.Children, disk) {

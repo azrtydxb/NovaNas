@@ -155,6 +155,52 @@ func TestParseScrubStatus_Resilver(t *testing.T) {
 	}
 }
 
+// Mirrored log (mirror-N nested under "logs") was historically flattened
+// to depth-1 sibling, leaving the log vdev with zero children. Real
+// `zpool status -P` from a mirror+log+cache pool, captured live.
+func TestParseStatus_MirroredLog(t *testing.T) {
+	in := []byte("  pool: validate\n state: ONLINE\nconfig:\n\n" +
+		"\tNAME             STATE     READ WRITE CKSUM\n" +
+		"\tvalidate         ONLINE       0     0     0\n" +
+		"\t  mirror-0       ONLINE       0     0     0\n" +
+		"\t    /dev/A       ONLINE       0     0     0\n" +
+		"\t    /dev/B       ONLINE       0     0     0\n" +
+		"\tlogs\t\n" +
+		"\t  mirror-1       ONLINE       0     0     0\n" +
+		"\t    /dev/L1      ONLINE       0     0     0\n" +
+		"\t    /dev/L2      ONLINE       0     0     0\n" +
+		"\tcache\n" +
+		"\t  /dev/C1        ONLINE       0     0     0\n" +
+		"\nerrors: No known data errors\n")
+	st, err := parseStatus(in)
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if len(st.Vdevs) != 3 {
+		t.Fatalf("want 3 top-level vdevs (mirror, log, cache), got %d: %+v",
+			len(st.Vdevs), st.Vdevs)
+	}
+	dataMirror, logVdev, cacheVdev := st.Vdevs[0], st.Vdevs[1], st.Vdevs[2]
+	if dataMirror.Type != "mirror" || len(dataMirror.Children) != 2 {
+		t.Errorf("data mirror: type=%q children=%d, want mirror/2",
+			dataMirror.Type, len(dataMirror.Children))
+	}
+	if logVdev.Type != "log" {
+		t.Fatalf("log vdev type=%q want log", logVdev.Type)
+	}
+	if len(logVdev.Children) != 1 || logVdev.Children[0].Type != "mirror" {
+		t.Fatalf("log should contain one nested mirror, got: %+v", logVdev.Children)
+	}
+	if len(logVdev.Children[0].Children) != 2 {
+		t.Errorf("nested mirror under log should have 2 leaves, got %d",
+			len(logVdev.Children[0].Children))
+	}
+	if cacheVdev.Type != "cache" || len(cacheVdev.Children) != 1 ||
+		cacheVdev.Children[0].Path != "/dev/C1" {
+		t.Errorf("cache vdev wrong: %+v", cacheVdev)
+	}
+}
+
 // Group headers (logs/cache/spares) appear in zpool status with only the
 // group name on a line — no STATE column. The parser must accept these.
 func TestParseStatus_LogsAndCacheGroups(t *testing.T) {
