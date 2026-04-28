@@ -18,6 +18,9 @@ import (
 	"github.com/novanas/nova-nas/internal/api"
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/host/disks"
+	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -50,6 +53,9 @@ func main() {
 	poolMgr := &pool.Manager{ZpoolBin: cfg.ZpoolBin}
 	datasetMgr := &dataset.Manager{ZFSBin: cfg.ZFSBin}
 	snapMgr := &snapshot.Manager{ZFSBin: cfg.ZFSBin}
+	iscsiMgr := &iscsi.Manager{}
+	nvmeofMgr := &nvmeof.Manager{}
+	rdmaLister := &rdma.Lister{}
 
 	// Asynq client (dispatcher uses this)
 	asynqRedisOpt, err := asynq.ParseRedisURI(cfg.RedisURL)
@@ -92,6 +98,8 @@ func main() {
 		Pools:     poolMgr,
 		Datasets:  datasetMgr,
 		Snapshots: snapMgr,
+		IscsiMgr:  iscsiMgr,
+		NvmeofMgr: nvmeofMgr,
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
@@ -116,6 +124,9 @@ func main() {
 		DatasetMgr:  datasetMgr,
 		PoolMgr:     poolMgr,
 		SnapshotMgr: snapMgr,
+		IscsiMgr:    iscsiMgr,
+		NvmeofMgr:   nvmeofMgr,
+		RdmaLister:  rdmaLister,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

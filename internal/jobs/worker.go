@@ -13,6 +13,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/host/exec"
+	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -26,6 +28,8 @@ type WorkerDeps struct {
 	Pools     *pool.Manager
 	Datasets  *dataset.Manager
 	Snapshots *snapshot.Manager
+	IscsiMgr  *iscsi.Manager
+	NvmeofMgr *nvmeof.Manager
 }
 
 func NewServeMux(d WorkerDeps) *asynq.ServeMux {
@@ -64,6 +68,25 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindPoolDiscardCheckpoint), d.handlePoolDiscardCheckpoint)
 	mux.HandleFunc(string(KindPoolUpgrade), d.handlePoolUpgrade)
 	mux.HandleFunc(string(KindPoolReguid), d.handlePoolReguid)
+	mux.HandleFunc(string(KindIscsiTargetCreate), d.handleIscsiTargetCreate)
+	mux.HandleFunc(string(KindIscsiTargetDestroy), d.handleIscsiTargetDestroy)
+	mux.HandleFunc(string(KindIscsiPortalCreate), d.handleIscsiPortalCreate)
+	mux.HandleFunc(string(KindIscsiPortalDelete), d.handleIscsiPortalDelete)
+	mux.HandleFunc(string(KindIscsiLUNCreate), d.handleIscsiLUNCreate)
+	mux.HandleFunc(string(KindIscsiLUNDelete), d.handleIscsiLUNDelete)
+	mux.HandleFunc(string(KindIscsiACLCreate), d.handleIscsiACLCreate)
+	mux.HandleFunc(string(KindIscsiACLDelete), d.handleIscsiACLDelete)
+	mux.HandleFunc(string(KindIscsiSaveConfig), d.handleIscsiSaveConfig)
+	mux.HandleFunc(string(KindNvmeofSubsystemCreate), d.handleNvmeofSubsystemCreate)
+	mux.HandleFunc(string(KindNvmeofSubsystemDestroy), d.handleNvmeofSubsystemDestroy)
+	mux.HandleFunc(string(KindNvmeofNamespaceAdd), d.handleNvmeofNamespaceAdd)
+	mux.HandleFunc(string(KindNvmeofNamespaceRemove), d.handleNvmeofNamespaceRemove)
+	mux.HandleFunc(string(KindNvmeofHostAllow), d.handleNvmeofHostAllow)
+	mux.HandleFunc(string(KindNvmeofHostDisallow), d.handleNvmeofHostDisallow)
+	mux.HandleFunc(string(KindNvmeofPortCreate), d.handleNvmeofPortCreate)
+	mux.HandleFunc(string(KindNvmeofPortDelete), d.handleNvmeofPortDelete)
+	mux.HandleFunc(string(KindNvmeofPortLink), d.handleNvmeofPortLink)
+	mux.HandleFunc(string(KindNvmeofPortUnlink), d.handleNvmeofPortUnlink)
 	return mux
 }
 
@@ -529,6 +552,238 @@ func (d WorkerDeps) handlePoolReguid(ctx context.Context, t *asynq.Task) error {
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.Pools.Reguid(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// ---------- iSCSI handlers ----------
+
+func (d WorkerDeps) handleIscsiTargetCreate(ctx context.Context, t *asynq.Task) error {
+	var p IscsiTargetCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.CreateTarget(ctx, p.IQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiTargetDestroy(ctx context.Context, t *asynq.Task) error {
+	var p IscsiTargetDestroyPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.DeleteTarget(ctx, p.IQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiPortalCreate(ctx context.Context, t *asynq.Task) error {
+	var p IscsiPortalCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.CreatePortal(ctx, p.IQN, p.Portal)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiPortalDelete(ctx context.Context, t *asynq.Task) error {
+	var p IscsiPortalDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.DeletePortal(ctx, p.IQN, p.Portal)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiLUNCreate(ctx context.Context, t *asynq.Task) error {
+	var p IscsiLUNCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.CreateLUN(ctx, p.IQN, p.LUN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiLUNDelete(ctx context.Context, t *asynq.Task) error {
+	var p IscsiLUNDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.DeleteLUN(ctx, p.IQN, p.ID)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiACLCreate(ctx context.Context, t *asynq.Task) error {
+	var p IscsiACLCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.CreateACL(ctx, p.IQN, p.ACL)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiACLDelete(ctx context.Context, t *asynq.Task) error {
+	var p IscsiACLDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.DeleteACL(ctx, p.IQN, p.InitiatorIQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleIscsiSaveConfig(ctx context.Context, t *asynq.Task) error {
+	var p IscsiSaveConfigPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.IscsiMgr.SaveConfig(ctx)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// ---------- NVMe-oF handlers ----------
+
+func (d WorkerDeps) handleNvmeofSubsystemCreate(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofSubsystemCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.CreateSubsystem(ctx, p.Subsystem)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofSubsystemDestroy(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofSubsystemDestroyPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.DeleteSubsystem(ctx, p.NQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofNamespaceAdd(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofNamespaceAddPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.AddNamespace(ctx, p.NQN, p.Namespace)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofNamespaceRemove(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofNamespaceRemovePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.RemoveNamespace(ctx, p.NQN, p.NSID)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofHostAllow(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofHostAllowPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.AllowHost(ctx, p.NQN, p.HostNQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofHostDisallow(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofHostDisallowPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.DisallowHost(ctx, p.NQN, p.HostNQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofPortCreate(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofPortCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.CreatePort(ctx, p.Port)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofPortDelete(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofPortDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.DeletePort(ctx, p.ID)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofPortLink(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofPortLinkPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.LinkSubsystemToPort(ctx, p.NQN, p.PortID)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofPortUnlink(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofPortUnlinkPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.UnlinkSubsystemFromPort(ctx, p.NQN, p.PortID)
 	d.finish(ctx, id, err)
 	return err
 }

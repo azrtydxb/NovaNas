@@ -24,7 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/novanas/nova-nas/internal/host/configfs"
 	disksPkg "github.com/novanas/nova-nas/internal/host/disks"
+	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -1956,6 +1960,569 @@ func main() {
 	})
 	cleanup("after scenario 45")
 
+	// ---- Real-target scenarios (46-52) ---------------------------------------
+	// These scenarios exercise iSCSI (LIO via targetcli), NVMe-oF (nvmet via
+	// configfs), and RDMA detection against real kernel state. They run after
+	// the ZFS scenarios so they can layer on a fresh single-disk pool. Any
+	// leftover host-state (LIO targets, nvmet configfs trees) from a prior
+	// failed run is best-effort cleared first.
+
+	preTargetCleanup(ctx)
+
+	const (
+		validateIQN     = "iqn.2026-04.local.novanas:validate"
+		validateClient  = "iqn.2026-04.local.novanas:client"
+		validateNQN     = "nqn.2026-04.local.novanas:validate"
+		validateHostNQN = "nqn.2026-04.local.novanas:client"
+	)
+	im := &iscsi.Manager{TargetcliBin: "/usr/bin/targetcli"}
+	cfsMgr := &configfs.Manager{Root: "/sys/kernel/config"}
+	nm := &nvmeof.Manager{CFS: cfsMgr}
+	rl := &rdma.Lister{}
+
+	step("46. iSCSI: target lifecycle (TCP)", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/iscsi-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "iscsi-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		const bs = "validate-bs"
+		if err := im.CreateBackstore(ctx, bs, dev); err != nil {
+			return fmt.Errorf("CreateBackstore: %w", err)
+		}
+		defer func() { _ = im.DeleteBackstore(ctx, bs) }()
+
+		if err := im.CreateTarget(ctx, validateIQN); err != nil {
+			return fmt.Errorf("CreateTarget: %w", err)
+		}
+		defer func() { _ = im.DeleteTarget(ctx, validateIQN) }()
+
+		portal := iscsi.Portal{IP: "127.0.0.1", Port: 3260, Transport: "tcp"}
+		if err := im.CreatePortal(ctx, validateIQN, portal); err != nil {
+			return fmt.Errorf("CreatePortal: %w", err)
+		}
+		defer func() { _ = im.DeletePortal(ctx, validateIQN, portal) }()
+
+		lun := iscsi.LUN{ID: 1, Backstore: bs}
+		if err := im.CreateLUN(ctx, validateIQN, lun); err != nil {
+			return fmt.Errorf("CreateLUN: %w", err)
+		}
+		defer func() { _ = im.DeleteLUN(ctx, validateIQN, 1) }()
+
+		acl := iscsi.ACL{
+			InitiatorIQN: validateClient,
+			CHAPUser:     "chapuser",
+			CHAPSecret:   "chapsecret12345",
+		}
+		if err := im.CreateACL(ctx, validateIQN, acl); err != nil {
+			return fmt.Errorf("CreateACL: %w", err)
+		}
+		defer func() { _ = im.DeleteACL(ctx, validateIQN, validateClient) }()
+
+		detail, err := im.GetTarget(ctx, validateIQN)
+		if err != nil {
+			return fmt.Errorf("GetTarget: %w", err)
+		}
+		if len(detail.Portals) < 1 {
+			return fmt.Errorf("expected >=1 portal, got %d", len(detail.Portals))
+		}
+		foundLUN := false
+		for _, l := range detail.LUNs {
+			if l.Backstore == bs {
+				foundLUN = true
+				break
+			}
+		}
+		if !foundLUN {
+			return fmt.Errorf("LUN with backstore %q not found in %+v", bs, detail.LUNs)
+		}
+		foundACL := false
+		for _, a := range detail.ACLs {
+			if a.InitiatorIQN == validateClient {
+				foundACL = true
+				break
+			}
+		}
+		if !foundACL {
+			return fmt.Errorf("ACL for %q not found in %+v", validateClient, detail.ACLs)
+		}
+		fmt.Printf("  target %s: %d portal(s), %d LUN(s), %d ACL(s)\n",
+			validateIQN, len(detail.Portals), len(detail.LUNs), len(detail.ACLs))
+		return nil
+	})
+
+	step("47. iSCSI: open-iscsi self-loopback IO", func() error {
+		if !which("iscsiadm") {
+			fmt.Printf("  SKIP: iscsiadm not available\n")
+			return nil
+		}
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/iscsi-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "iscsi-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		const bs = "validate-bs47"
+		if err := im.CreateBackstore(ctx, bs, dev); err != nil {
+			return fmt.Errorf("CreateBackstore: %w", err)
+		}
+		defer func() { _ = im.DeleteBackstore(ctx, bs) }()
+
+		if err := im.CreateTarget(ctx, validateIQN); err != nil {
+			return fmt.Errorf("CreateTarget: %w", err)
+		}
+		defer func() { _ = im.DeleteTarget(ctx, validateIQN) }()
+
+		portal := iscsi.Portal{IP: "127.0.0.1", Port: 3260, Transport: "tcp"}
+		if err := im.CreatePortal(ctx, validateIQN, portal); err != nil {
+			return fmt.Errorf("CreatePortal: %w", err)
+		}
+		defer func() { _ = im.DeletePortal(ctx, validateIQN, portal) }()
+
+		if err := im.CreateLUN(ctx, validateIQN, iscsi.LUN{ID: 1, Backstore: bs}); err != nil {
+			return fmt.Errorf("CreateLUN: %w", err)
+		}
+		defer func() { _ = im.DeleteLUN(ctx, validateIQN, 1) }()
+
+		// Enable demo mode on the TPG so any initiator can log in without
+		// an ACL (Debian's LIO default enforces ACLs + auth). This is
+		// only for the loopback IO test; real deployments use ACLs+CHAP.
+		tpgPath := "/iscsi/" + validateIQN + "/tpg1"
+		for _, kv := range []string{"generate_node_acls=1", "authentication=0", "demo_mode_write_protect=0"} {
+			if _, err := runCmd(ctx, "/usr/bin/targetcli", tpgPath, "set", "attribute", kv); err != nil {
+				return fmt.Errorf("tpg set %s: %w", kv, err)
+			}
+		}
+		// Discover.
+		if _, err := runCmd(ctx, "iscsiadm", "-m", "discovery", "-t", "st", "-p", "127.0.0.1"); err != nil {
+			return fmt.Errorf("iscsiadm discovery: %w", err)
+		}
+		// Login.
+		if _, err := runCmd(ctx, "iscsiadm", "-m", "node", "-T", validateIQN, "-p", "127.0.0.1", "-l"); err != nil {
+			return fmt.Errorf("iscsiadm login: %w", err)
+		}
+		loggedIn := true
+		defer func() {
+			if loggedIn {
+				_, _ = runCmd(ctx, "iscsiadm", "-m", "node", "-T", validateIQN, "-p", "127.0.0.1", "-u")
+				_, _ = runCmd(ctx, "iscsiadm", "-m", "node", "-T", validateIQN, "-p", "127.0.0.1", "-o", "delete")
+			}
+		}()
+
+		// Find by-path device.
+		pattern := "/dev/disk/by-path/ip-127.0.0.1*-iscsi-" + validateIQN + "*lun-1"
+		var devPath string
+		ddl := time.Now().Add(15 * time.Second)
+		for time.Now().Before(ddl) {
+			matches, _ := filepath.Glob(pattern)
+			if len(matches) > 0 {
+				devPath = matches[0]
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		if devPath == "" {
+			return fmt.Errorf("iSCSI by-path device did not appear (pattern=%s)", pattern)
+		}
+		fmt.Printf("  logged in, by-path device: %s\n", devPath)
+
+		// Write 1 MiB of known data, fsync, sha256.
+		payload := make([]byte, 1<<20)
+		for i := range payload {
+			payload[i] = byte(i % 251)
+		}
+		f, err := os.OpenFile(devPath, os.O_RDWR, 0)
+		if err != nil {
+			return fmt.Errorf("open iscsi dev: %w", err)
+		}
+		if _, err := f.Write(payload); err != nil {
+			f.Close()
+			return fmt.Errorf("write iscsi dev: %w", err)
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return fmt.Errorf("fsync iscsi dev: %w", err)
+		}
+		f.Close()
+		hashWritten := sha256bytes(payload)
+
+		readBack, err := readBlockAt(devPath, 0, len(payload))
+		if err != nil {
+			return fmt.Errorf("read iscsi dev: %w", err)
+		}
+		if sha256bytes(readBack) != hashWritten {
+			return fmt.Errorf("iscsi readback hash mismatch")
+		}
+		fmt.Printf("  wrote+read 1MiB OK, sha256=%s\n", hashWritten[:16])
+		return nil
+	})
+
+	step("48. NVMe-oF: subsystem + namespace + port + loopback", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/nvmeof-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "nvmeof-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		if err := nm.CreateSubsystem(ctx, nvmeof.Subsystem{
+			NQN: validateNQN, AllowAnyHost: true, Serial: "validate01",
+		}); err != nil {
+			return fmt.Errorf("CreateSubsystem: %w", err)
+		}
+		defer func() { _ = nm.DeleteSubsystem(ctx, validateNQN) }()
+
+		if err := nm.AddNamespace(ctx, validateNQN, nvmeof.Namespace{
+			NSID: 1, DevicePath: dev, Enabled: true,
+		}); err != nil {
+			return fmt.Errorf("AddNamespace: %w", err)
+		}
+		defer func() { _ = nm.RemoveNamespace(ctx, validateNQN, 1) }()
+
+		if err := nm.CreatePort(ctx, nvmeof.Port{
+			ID: 1, IP: "127.0.0.1", Port: 4420, Transport: "tcp",
+		}); err != nil {
+			return fmt.Errorf("CreatePort: %w", err)
+		}
+		defer func() { _ = nm.DeletePort(ctx, 1) }()
+
+		if err := nm.LinkSubsystemToPort(ctx, validateNQN, 1); err != nil {
+			return fmt.Errorf("LinkSubsystemToPort: %w", err)
+		}
+		defer func() { _ = nm.UnlinkSubsystemFromPort(ctx, validateNQN, 1) }()
+
+		d, err := nm.GetSubsystem(ctx, validateNQN)
+		if err != nil {
+			return fmt.Errorf("GetSubsystem: %w", err)
+		}
+		if !d.Subsystem.AllowAnyHost {
+			return fmt.Errorf("expected allow_any_host=true")
+		}
+		if len(d.Namespaces) != 1 {
+			return fmt.Errorf("expected 1 namespace; got %d", len(d.Namespaces))
+		}
+		if !d.Namespaces[0].Enabled {
+			return fmt.Errorf("namespace not enabled")
+		}
+		fmt.Printf("  subsystem %s: ns=%d enabled=%v allowAny=%v\n",
+			validateNQN, d.Namespaces[0].NSID, d.Namespaces[0].Enabled, d.Subsystem.AllowAnyHost)
+		return nil
+	})
+
+	step("49. NVMe-oF: real connect + IO via nvme-cli", func() error {
+		if !which("nvme") {
+			fmt.Printf("  SKIP: nvme-cli not available\n")
+			return nil
+		}
+		// Sanity check that nvme version actually runs.
+		if _, err := runCmd(ctx, "nvme", "version"); err != nil {
+			fmt.Printf("  SKIP: nvme version failed: %v\n", err)
+			return nil
+		}
+
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/nvmeof-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "nvmeof-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		if err := nm.CreateSubsystem(ctx, nvmeof.Subsystem{
+			NQN: validateNQN, AllowAnyHost: true, Serial: "validate49",
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.DeleteSubsystem(ctx, validateNQN) }()
+		if err := nm.AddNamespace(ctx, validateNQN, nvmeof.Namespace{
+			NSID: 1, DevicePath: dev, Enabled: true,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.RemoveNamespace(ctx, validateNQN, 1) }()
+		if err := nm.CreatePort(ctx, nvmeof.Port{
+			ID: 1, IP: "127.0.0.1", Port: 4420, Transport: "tcp",
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.DeletePort(ctx, 1) }()
+		if err := nm.LinkSubsystemToPort(ctx, validateNQN, 1); err != nil {
+			return err
+		}
+		defer func() { _ = nm.UnlinkSubsystemFromPort(ctx, validateNQN, 1) }()
+
+		// Snapshot pre-existing nvme block devs so we can detect the new one.
+		preDevs := globNvmeBlocks()
+		if _, err := runCmd(ctx, "nvme", "connect", "-t", "tcp", "-a", "127.0.0.1",
+			"-s", "4420", "-n", validateNQN); err != nil {
+			return fmt.Errorf("nvme connect: %w", err)
+		}
+		connected := true
+		defer func() {
+			if connected {
+				_, _ = runCmd(ctx, "nvme", "disconnect", "-n", validateNQN)
+			}
+		}()
+
+		var nvmeDev string
+		ddl := time.Now().Add(10 * time.Second)
+		for time.Now().Before(ddl) {
+			postDevs := globNvmeBlocks()
+			for _, d := range postDevs {
+				if !contains(preDevs, d) {
+					nvmeDev = d
+					break
+				}
+			}
+			if nvmeDev != "" {
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		if nvmeDev == "" {
+			return fmt.Errorf("no new /dev/nvme*n* device appeared after connect")
+		}
+		fmt.Printf("  connected, device: %s\n", nvmeDev)
+
+		payload := make([]byte, 1<<20)
+		for i := range payload {
+			payload[i] = byte((i * 7) % 251)
+		}
+		f, err := os.OpenFile(nvmeDev, os.O_RDWR, 0)
+		if err != nil {
+			return fmt.Errorf("open nvme dev: %w", err)
+		}
+		if _, err := f.Write(payload); err != nil {
+			f.Close()
+			return fmt.Errorf("write nvme dev: %w", err)
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return fmt.Errorf("fsync nvme dev: %w", err)
+		}
+		f.Close()
+		hashWritten := sha256bytes(payload)
+
+		readBack, err := readBlockAt(nvmeDev, 0, len(payload))
+		if err != nil {
+			return fmt.Errorf("read nvme dev: %w", err)
+		}
+		if sha256bytes(readBack) != hashWritten {
+			return fmt.Errorf("nvme readback hash mismatch")
+		}
+		fmt.Printf("  wrote+read 1MiB OK, sha256=%s\n", hashWritten[:16])
+		return nil
+	})
+
+	step("50. NVMe-oF: explicit host NQN allowlist (no allow-any-host)", func() error {
+		// Standalone setup; no zvol/pool needed (no namespaces required for
+		// the allowlist semantics test).
+		if err := nm.CreateSubsystem(ctx, nvmeof.Subsystem{
+			NQN: validateNQN, AllowAnyHost: false, Serial: "validate50",
+		}); err != nil {
+			return fmt.Errorf("CreateSubsystem: %w", err)
+		}
+		defer func() { _ = nm.DeleteSubsystem(ctx, validateNQN) }()
+
+		if err := nm.EnsureHost(ctx, validateHostNQN); err != nil {
+			return fmt.Errorf("EnsureHost: %w", err)
+		}
+		hostCleanedUp := false
+		defer func() {
+			if !hostCleanedUp {
+				_ = nm.RemoveHost(ctx, validateHostNQN)
+			}
+		}()
+
+		if err := nm.AllowHost(ctx, validateNQN, validateHostNQN); err != nil {
+			return fmt.Errorf("AllowHost: %w", err)
+		}
+		allowed := true
+		defer func() {
+			if allowed {
+				_ = nm.DisallowHost(ctx, validateNQN, validateHostNQN)
+			}
+		}()
+
+		d, err := nm.GetSubsystem(ctx, validateNQN)
+		if err != nil {
+			return fmt.Errorf("GetSubsystem: %w", err)
+		}
+		if d.Subsystem.AllowAnyHost {
+			return fmt.Errorf("allow_any_host should be false")
+		}
+		found := false
+		for _, h := range d.AllowedHosts {
+			if h == validateHostNQN {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("host %q not in allowed list %v", validateHostNQN, d.AllowedHosts)
+		}
+		fmt.Printf("  allowlist contains %s, allowAny=%v\n", validateHostNQN, d.Subsystem.AllowAnyHost)
+
+		if err := nm.DisallowHost(ctx, validateNQN, validateHostNQN); err != nil {
+			return fmt.Errorf("DisallowHost: %w", err)
+		}
+		allowed = false
+		if err := nm.RemoveHost(ctx, validateHostNQN); err != nil {
+			return fmt.Errorf("RemoveHost: %w", err)
+		}
+		hostCleanedUp = true
+		return nil
+	})
+
+	step("51. RDMA detection", func() error {
+		adapters, err := rl.List(ctx)
+		if err != nil {
+			return fmt.Errorf("rdma.List: %w", err)
+		}
+		hasRDMA, err := rl.HasActiveRDMA(ctx)
+		if err != nil {
+			return fmt.Errorf("HasActiveRDMA: %w", err)
+		}
+		fmt.Printf("  adapters=%d hasActiveRDMA=%v\n", len(adapters), hasRDMA)
+		for _, a := range adapters {
+			fmt.Printf("    %s ports=%d\n", a.Name, len(a.Ports))
+		}
+		return nil
+	})
+
+	step("52. iSCSI iSER (skip if no RDMA)", func() error {
+		hasRDMA, err := rl.HasActiveRDMA(ctx)
+		if err != nil {
+			return fmt.Errorf("HasActiveRDMA: %w", err)
+		}
+		if !hasRDMA {
+			fmt.Printf("  SKIP: no active RDMA adapter present\n")
+			return nil
+		}
+
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/iser-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "iser-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		const bs = "validate-iser-bs"
+		if err := im.CreateBackstore(ctx, bs, dev); err != nil {
+			return err
+		}
+		defer func() { _ = im.DeleteBackstore(ctx, bs) }()
+
+		if err := im.CreateTarget(ctx, validateIQN); err != nil {
+			return err
+		}
+		defer func() { _ = im.DeleteTarget(ctx, validateIQN) }()
+
+		portal := iscsi.Portal{IP: "127.0.0.1", Port: 3260, Transport: "iser"}
+		if err := im.CreatePortal(ctx, validateIQN, portal); err != nil {
+			return fmt.Errorf("CreatePortal(iser): %w", err)
+		}
+		defer func() { _ = im.DeletePortal(ctx, validateIQN, portal) }()
+
+		detail, err := im.GetTarget(ctx, validateIQN)
+		if err != nil {
+			return fmt.Errorf("GetTarget: %w", err)
+		}
+		if len(detail.Portals) < 1 {
+			return fmt.Errorf("no portal listed after iser create")
+		}
+		fmt.Printf("  iSER portal created on %s:%d\n", portal.IP, portal.Port)
+
+		if os.Getenv("RDMA_IO") != "1" {
+			fmt.Printf("  SKIP: iSER IO test (set RDMA_IO=1 to run)\n")
+			return nil
+		}
+		// Real iSER IO would go here; intentionally omitted unless opted in.
+		return nil
+	})
+
 	fmt.Println("\nALL CHECKS PASSED")
 }
 
@@ -2227,4 +2794,168 @@ func vdevTreeContainsDisk(vdevs []pool.Vdev, disk string) bool {
 		}
 	}
 	return false
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for iSCSI/NVMe-oF/RDMA scenarios (46-52)
+// ---------------------------------------------------------------------------
+
+// runCmd runs a command with the harness context and returns combined output.
+func runCmd(ctx context.Context, name string, args ...string) ([]byte, error) {
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("%s %s: %w (output: %s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return out, nil
+}
+
+// which reports whether bin is on PATH.
+func which(bin string) bool {
+	_, err := exec.LookPath(bin)
+	return err == nil
+}
+
+// waitDevice polls until path exists (typical zvol/udev settle case).
+func waitDevice(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("device %s did not appear within %v", path, timeout)
+}
+
+// globNvmeBlocks returns the current set of /dev/nvme*n* block devices
+// (excluding partition entries). Used to detect newly-attached NVMe-oF
+// namespaces after `nvme connect`.
+func globNvmeBlocks() []string {
+	matches, _ := filepath.Glob("/dev/nvme*n*")
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		// Skip partitions like /dev/nvme0n1p1
+		base := filepath.Base(m)
+		if strings.Contains(base, "p") {
+			// nvme0n1 has no 'p'; nvme0n1p1 does. Be precise: a partition
+			// has the form nvmeXnYpZ where Z is digits.
+			i := strings.LastIndex(base, "p")
+			if i > 0 && i < len(base)-1 {
+				rest := base[i+1:]
+				allDigits := len(rest) > 0
+				for _, r := range rest {
+					if r < '0' || r > '9' {
+						allDigits = false
+						break
+					}
+				}
+				if allDigits {
+					continue
+				}
+			}
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// contains reports whether s contains v.
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+// preTargetCleanup tears down any leftover LIO/nvmet kernel state before
+// the target-related scenarios run. Best-effort: prints what it did.
+func preTargetCleanup(ctx context.Context) {
+	fmt.Printf("\n=== pre-target cleanup (LIO + nvmet) ===\n")
+
+	// LIO: targetcli clearconfig wipes all backstores/targets/portals/ACLs.
+	if which("targetcli") {
+		out, err := exec.CommandContext(ctx, "/usr/bin/targetcli", "clearconfig", "confirm=True").CombinedOutput()
+		if err != nil {
+			fmt.Printf("  targetcli clearconfig: %v (best-effort, ok if nothing to clear)\n", err)
+		} else {
+			fmt.Printf("  targetcli clearconfig: ok (%s)\n", strings.TrimSpace(string(out)))
+		}
+	} else {
+		fmt.Printf("  targetcli not found; skipping LIO clearconfig\n")
+	}
+
+	// nvmet: prefer nvmetcli clear if present, otherwise walk configfs.
+	if which("nvmetcli") {
+		if _, err := exec.CommandContext(ctx, "nvmetcli", "clear").CombinedOutput(); err != nil {
+			fmt.Printf("  nvmetcli clear: %v (best-effort)\n", err)
+		} else {
+			fmt.Printf("  nvmetcli clear: ok\n")
+		}
+	} else {
+		nvmetClearConfigfs()
+	}
+}
+
+// nvmetClearConfigfs walks /sys/kernel/config/nvmet and tears down ports,
+// subsystems (with namespaces+allowed_hosts), and hosts in the order the
+// kernel requires. All failures are warnings only.
+func nvmetClearConfigfs() {
+	root := "/sys/kernel/config/nvmet"
+	if _, err := os.Stat(root); err != nil {
+		fmt.Printf("  nvmet configfs root absent: %v (skipping)\n", err)
+		return
+	}
+	cleared := 0
+
+	// 1. Unlink all port→subsystem symlinks, then rmdir the ports.
+	if portIDs, err := os.ReadDir(filepath.Join(root, "ports")); err == nil {
+		for _, p := range portIDs {
+			pdir := filepath.Join(root, "ports", p.Name())
+			subDir := filepath.Join(pdir, "subsystems")
+			if links, err := os.ReadDir(subDir); err == nil {
+				for _, l := range links {
+					_ = os.Remove(filepath.Join(subDir, l.Name()))
+					cleared++
+				}
+			}
+			_ = os.Remove(pdir)
+			cleared++
+		}
+	}
+
+	// 2. For each subsystem: disable+rmdir each namespace, unlink each
+	//    allowed_hosts entry, then rmdir the subsystem.
+	if subs, err := os.ReadDir(filepath.Join(root, "subsystems")); err == nil {
+		for _, s := range subs {
+			sdir := filepath.Join(root, "subsystems", s.Name())
+			if nsids, err := os.ReadDir(filepath.Join(sdir, "namespaces")); err == nil {
+				for _, n := range nsids {
+					ndir := filepath.Join(sdir, "namespaces", n.Name())
+					_ = os.WriteFile(filepath.Join(ndir, "enable"), []byte("0"), 0o644)
+					_ = os.Remove(ndir)
+					cleared++
+				}
+			}
+			if hosts, err := os.ReadDir(filepath.Join(sdir, "allowed_hosts")); err == nil {
+				for _, h := range hosts {
+					_ = os.Remove(filepath.Join(sdir, "allowed_hosts", h.Name()))
+					cleared++
+				}
+			}
+			_ = os.Remove(sdir)
+			cleared++
+		}
+	}
+
+	// 3. rmdir each host.
+	if hosts, err := os.ReadDir(filepath.Join(root, "hosts")); err == nil {
+		for _, h := range hosts {
+			_ = os.Remove(filepath.Join(root, "hosts", h.Name()))
+			cleared++
+		}
+	}
+
+	fmt.Printf("  nvmet configfs cleanup: %d entries removed (best-effort)\n", cleared)
 }

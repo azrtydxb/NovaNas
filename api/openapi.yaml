@@ -747,6 +747,379 @@ paths:
         '204':
           description: Cancelled
 
+  /iscsi/targets:
+    get:
+      operationId: listIscsiTargets
+      summary: List iSCSI targets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/IscsiTarget' }
+    post:
+      operationId: createIscsiTarget
+      summary: Create iSCSI target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [iqn]
+              properties:
+                iqn: { type: string }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getIscsiTarget
+      summary: Get iSCSI target detail
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IscsiTargetDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: destroyIscsiTarget
+      summary: Destroy iSCSI target
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/portals:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createIscsiPortal
+      summary: Bind a portal (ip:port[, iSER]) to a target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IscsiPortal' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/portals/{ip}/{port}:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+      - in: path
+        name: ip
+        required: true
+        schema: { type: string }
+      - in: path
+        name: port
+        required: true
+        schema: { type: integer }
+    delete:
+      operationId: deleteIscsiPortal
+      summary: Remove a portal binding
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/luns:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createIscsiLUN
+      summary: Map a backstore as a LUN on this target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IscsiLUN' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/luns/{id}:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    delete:
+      operationId: deleteIscsiLUN
+      summary: Detach a LUN from a target
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/acls:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createIscsiACL
+      summary: Add an initiator ACL (with optional CHAP)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IscsiACL' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/targets/{iqn}/acls/{initiatorIqn}:
+    parameters:
+      - in: path
+        name: iqn
+        required: true
+        schema: { type: string }
+      - in: path
+        name: initiatorIqn
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteIscsiACL
+      summary: Remove an initiator ACL
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /iscsi/saveconfig:
+    post:
+      operationId: iscsiSaveConfig
+      summary: Persist running iSCSI target configuration to disk
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /nvmeof/subsystems:
+    get:
+      operationId: listNvmeofSubsystems
+      summary: List NVMe-oF subsystems
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NvmeofSubsystem' }
+    post:
+      operationId: createNvmeofSubsystem
+      summary: Create NVMe-oF subsystem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NvmeofSubsystem' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/subsystems/{nqn}:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getNvmeofSubsystem
+      summary: Get NVMe-oF subsystem detail
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NvmeofSubsystemDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: destroyNvmeofSubsystem
+      summary: Destroy NVMe-oF subsystem
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/subsystems/{nqn}/namespaces:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+    post:
+      operationId: addNvmeofNamespace
+      summary: Add a namespace to a subsystem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NvmeofNamespace' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/subsystems/{nqn}/namespaces/{nsid}:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+      - in: path
+        name: nsid
+        required: true
+        schema: { type: integer }
+    delete:
+      operationId: removeNvmeofNamespace
+      summary: Remove a namespace from a subsystem
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/subsystems/{nqn}/hosts:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+    post:
+      operationId: allowNvmeofHost
+      summary: Allow a host NQN to connect to the subsystem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NvmeofHost' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/subsystems/{nqn}/hosts/{hostNqn}:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+      - in: path
+        name: hostNqn
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: disallowNvmeofHost
+      summary: Disallow a host NQN
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/ports:
+    get:
+      operationId: listNvmeofPorts
+      summary: List NVMe-oF transport ports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NvmeofPort' }
+    post:
+      operationId: createNvmeofPort
+      summary: Create an NVMe-oF transport port
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NvmeofPort' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/ports/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    delete:
+      operationId: deleteNvmeofPort
+      summary: Delete an NVMe-oF port
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/ports/{id}/subsystems:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: linkNvmeofSubsystem
+      summary: Link a subsystem to this port (activates it on the transport)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nqn]
+              properties:
+                nqn: { type: string }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nvmeof/ports/{id}/subsystems/{nqn}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: unlinkNvmeofSubsystem
+      summary: Unlink a subsystem from a port
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /network/rdma:
+    get:
+      operationId: listRdmaAdapters
+      summary: List RDMA-capable network adapters and their ports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RdmaAdapter' }
+
   /jobs/{id}/stream:
     parameters:
       - in: path
@@ -1019,3 +1392,89 @@ components:
         snapshot:     { type: string }
         tag:          { type: string }
         creationUnix: { type: integer, format: int64 }
+    IscsiTarget:
+      type: object
+      required: [iqn]
+      properties:
+        iqn: { type: string }
+    IscsiPortal:
+      type: object
+      required: [ip, port]
+      properties:
+        ip:        { type: string }
+        port:      { type: integer }
+        transport: { type: string, enum: [tcp, iser] }
+    IscsiLUN:
+      type: object
+      required: [id, backstore]
+      properties:
+        id:        { type: integer }
+        zvol:      { type: string, description: '/dev/zvol/<pool>/<name>' }
+        backstore: { type: string }
+    IscsiACL:
+      type: object
+      required: [initiatorIqn]
+      properties:
+        initiatorIqn: { type: string }
+        chapUser:     { type: string }
+        chapSecret:   { type: string, description: '12-16 characters per RFC 3720; never returned on reads' }
+    IscsiTargetDetail:
+      type: object
+      properties:
+        target:  { $ref: '#/components/schemas/IscsiTarget' }
+        portals: { type: array, items: { $ref: '#/components/schemas/IscsiPortal' } }
+        luns:    { type: array, items: { $ref: '#/components/schemas/IscsiLUN' } }
+        acls:    { type: array, items: { $ref: '#/components/schemas/IscsiACL' } }
+    NvmeofSubsystem:
+      type: object
+      required: [nqn]
+      properties:
+        nqn:          { type: string }
+        allowAnyHost: { type: boolean }
+        serial:       { type: string }
+    NvmeofNamespace:
+      type: object
+      required: [nsid, devicePath]
+      properties:
+        nsid:       { type: integer }
+        devicePath: { type: string, description: 'Must start with /dev/' }
+        enabled:    { type: boolean }
+    NvmeofPort:
+      type: object
+      required: [id, ip, port, transport]
+      properties:
+        id:        { type: integer }
+        ip:        { type: string }
+        port:      { type: integer }
+        transport: { type: string, enum: [tcp, rdma] }
+    NvmeofHost:
+      type: object
+      required: [hostNqn]
+      properties:
+        hostNqn: { type: string }
+    NvmeofSubsystemDetail:
+      type: object
+      properties:
+        subsystem:    { $ref: '#/components/schemas/NvmeofSubsystem' }
+        namespaces:   { type: array, items: { $ref: '#/components/schemas/NvmeofNamespace' } }
+        allowedHosts: { type: array, items: { type: string } }
+    RdmaAdapter:
+      type: object
+      required: [name]
+      properties:
+        name:    { type: string, description: 'e.g. mlx5_0' }
+        boardId: { type: string }
+        hcaType: { type: string }
+        ports:
+          type: array
+          items: { $ref: '#/components/schemas/RdmaAdapterPort' }
+    RdmaAdapterPort:
+      type: object
+      required: [number, state, linkLayer]
+      properties:
+        number:    { type: integer }
+        state:     { type: string, description: 'ACTIVE, DOWN, INIT, ARMED' }
+        linkLayer: { type: string, description: 'InfiniBand or Ethernet (RoCE)' }
+        gids:
+          type: array
+          items: { type: string }

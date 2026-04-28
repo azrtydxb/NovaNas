@@ -10,6 +10,9 @@ import (
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
+	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -28,6 +31,9 @@ type Deps struct {
 	DatasetMgr    *dataset.Manager   // concrete manager for streaming send/receive and queries (diff, bookmarks)
 	PoolMgr       *pool.Manager      // concrete manager for synchronous zpool wait/sync
 	SnapshotMgr   *snapshot.Manager  // concrete manager for synchronous holds queries
+	IscsiMgr      *iscsi.Manager
+	NvmeofMgr     *nvmeof.Manager
+	RdmaLister    *rdma.Lister
 }
 
 type Server struct {
@@ -68,6 +74,19 @@ func New(d Deps) *Server {
 	dsQuery := &handlers.DatasetsQueryHandler{Logger: d.Logger, Dataset: d.DatasetMgr}
 	snapHolds := &handlers.SnapshotsHoldsHandler{Logger: d.Logger, Snapshot: d.SnapshotMgr}
 	poolSync := &handlers.PoolsSyncHandler{Logger: d.Logger, Pool: d.PoolMgr}
+	var iscsiH *handlers.IscsiHandler
+	var iscsiW *handlers.IscsiWriteHandler
+	if d.IscsiMgr != nil {
+		iscsiH = &handlers.IscsiHandler{Logger: d.Logger, Mgr: d.IscsiMgr}
+	}
+	iscsiW = &handlers.IscsiWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var nvmeofH *handlers.NvmeofHandler
+	var nvmeofW *handlers.NvmeofWriteHandler
+	if d.NvmeofMgr != nil {
+		nvmeofH = &handlers.NvmeofHandler{Logger: d.Logger, Mgr: d.NvmeofMgr}
+	}
+	nvmeofW = &handlers.NvmeofWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	rdmaH := &handlers.RDMAHandler{Logger: d.Logger, Lister: d.RdmaLister}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
@@ -117,6 +136,42 @@ func New(d Deps) *Server {
 		r.Post("/snapshots/{fullname}/hold", snapW.Hold)
 		r.Post("/snapshots/{fullname}/release", snapW.Release)
 		r.Get("/snapshots/{fullname}/holds", snapHolds.Holds)
+
+		// iSCSI
+		if iscsiH != nil {
+			r.Get("/iscsi/targets", iscsiH.ListTargets)
+			r.Get("/iscsi/targets/{iqn}", iscsiH.GetTarget)
+		}
+		r.Post("/iscsi/targets", iscsiW.CreateTarget)
+		r.Delete("/iscsi/targets/{iqn}", iscsiW.DestroyTarget)
+		r.Post("/iscsi/targets/{iqn}/portals", iscsiW.CreatePortal)
+		r.Delete("/iscsi/targets/{iqn}/portals/{ip}/{port}", iscsiW.DeletePortal)
+		r.Post("/iscsi/targets/{iqn}/luns", iscsiW.CreateLUN)
+		r.Delete("/iscsi/targets/{iqn}/luns/{id}", iscsiW.DeleteLUN)
+		r.Post("/iscsi/targets/{iqn}/acls", iscsiW.CreateACL)
+		r.Delete("/iscsi/targets/{iqn}/acls/{initiatorIqn}", iscsiW.DeleteACL)
+		r.Post("/iscsi/saveconfig", iscsiW.SaveConfig)
+
+		// NVMe-oF
+		if nvmeofH != nil {
+			r.Get("/nvmeof/subsystems", nvmeofH.ListSubsystems)
+			r.Get("/nvmeof/subsystems/{nqn}", nvmeofH.GetSubsystem)
+			r.Get("/nvmeof/ports", nvmeofH.ListPorts)
+		}
+		r.Post("/nvmeof/subsystems", nvmeofW.CreateSubsystem)
+		r.Delete("/nvmeof/subsystems/{nqn}", nvmeofW.DestroySubsystem)
+		r.Post("/nvmeof/subsystems/{nqn}/namespaces", nvmeofW.AddNamespace)
+		r.Delete("/nvmeof/subsystems/{nqn}/namespaces/{nsid}", nvmeofW.RemoveNamespace)
+		r.Post("/nvmeof/subsystems/{nqn}/hosts", nvmeofW.AllowHost)
+		r.Delete("/nvmeof/subsystems/{nqn}/hosts/{hostNqn}", nvmeofW.DisallowHost)
+		r.Post("/nvmeof/ports", nvmeofW.CreatePort)
+		r.Delete("/nvmeof/ports/{id}", nvmeofW.DeletePort)
+		r.Post("/nvmeof/ports/{id}/subsystems", nvmeofW.LinkSubsystem)
+		r.Delete("/nvmeof/ports/{id}/subsystems/{nqn}", nvmeofW.UnlinkSubsystem)
+
+		// RDMA
+		r.Get("/network/rdma", rdmaH.List)
+
 		// Jobs routes need the store; construct only when available so
 		// tests that build a server without one (e.g. /healthz) still work.
 		if d.Store != nil {

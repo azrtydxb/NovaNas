@@ -69,6 +69,42 @@ func (e DatasetDiffEntryChange) Valid() bool {
 	}
 }
 
+// Defines values for IscsiPortalTransport.
+const (
+	IscsiPortalTransportIser IscsiPortalTransport = "iser"
+	IscsiPortalTransportTcp  IscsiPortalTransport = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the IscsiPortalTransport enum.
+func (e IscsiPortalTransport) Valid() bool {
+	switch e {
+	case IscsiPortalTransportIser:
+		return true
+	case IscsiPortalTransportTcp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NvmeofPortTransport.
+const (
+	NvmeofPortTransportRdma NvmeofPortTransport = "rdma"
+	NvmeofPortTransportTcp  NvmeofPortTransport = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the NvmeofPortTransport enum.
+func (e NvmeofPortTransport) Valid() bool {
+	switch e {
+	case NvmeofPortTransportRdma:
+		return true
+	case NvmeofPortTransportTcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VdevSpecType.
 const (
 	VdevSpecTypeDisk   VdevSpecType = "disk"
@@ -234,6 +270,46 @@ type Hold struct {
 	Tag          string `json:"tag"`
 }
 
+// IscsiACL defines model for IscsiACL.
+type IscsiACL struct {
+	// ChapSecret 12-16 characters per RFC 3720; never returned on reads
+	ChapSecret   *string `json:"chapSecret,omitempty"`
+	ChapUser     *string `json:"chapUser,omitempty"`
+	InitiatorIqn string  `json:"initiatorIqn"`
+}
+
+// IscsiLUN defines model for IscsiLUN.
+type IscsiLUN struct {
+	Backstore string `json:"backstore"`
+	Id        int    `json:"id"`
+
+	// Zvol /dev/zvol/<pool>/<name>
+	Zvol *string `json:"zvol,omitempty"`
+}
+
+// IscsiPortal defines model for IscsiPortal.
+type IscsiPortal struct {
+	Ip        string                `json:"ip"`
+	Port      int                   `json:"port"`
+	Transport *IscsiPortalTransport `json:"transport,omitempty"`
+}
+
+// IscsiPortalTransport defines model for IscsiPortal.Transport.
+type IscsiPortalTransport string
+
+// IscsiTarget defines model for IscsiTarget.
+type IscsiTarget struct {
+	Iqn string `json:"iqn"`
+}
+
+// IscsiTargetDetail defines model for IscsiTargetDetail.
+type IscsiTargetDetail struct {
+	Acls    *[]IscsiACL    `json:"acls,omitempty"`
+	Luns    *[]IscsiLUN    `json:"luns,omitempty"`
+	Portals *[]IscsiPortal `json:"portals,omitempty"`
+	Target  *IscsiTarget   `json:"target,omitempty"`
+}
+
 // Job defines model for Job.
 type Job struct {
 	Command    *string             `json:"command,omitempty"`
@@ -261,6 +337,44 @@ type MetadataPatch struct {
 	Description *string            `json:"description,omitempty"`
 	DisplayName *string            `json:"display_name,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
+}
+
+// NvmeofHost defines model for NvmeofHost.
+type NvmeofHost struct {
+	HostNqn string `json:"hostNqn"`
+}
+
+// NvmeofNamespace defines model for NvmeofNamespace.
+type NvmeofNamespace struct {
+	// DevicePath Must start with /dev/
+	DevicePath string `json:"devicePath"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+	Nsid       int    `json:"nsid"`
+}
+
+// NvmeofPort defines model for NvmeofPort.
+type NvmeofPort struct {
+	Id        int                 `json:"id"`
+	Ip        string              `json:"ip"`
+	Port      int                 `json:"port"`
+	Transport NvmeofPortTransport `json:"transport"`
+}
+
+// NvmeofPortTransport defines model for NvmeofPort.Transport.
+type NvmeofPortTransport string
+
+// NvmeofSubsystem defines model for NvmeofSubsystem.
+type NvmeofSubsystem struct {
+	AllowAnyHost *bool   `json:"allowAnyHost,omitempty"`
+	Nqn          string  `json:"nqn"`
+	Serial       *string `json:"serial,omitempty"`
+}
+
+// NvmeofSubsystemDetail defines model for NvmeofSubsystemDetail.
+type NvmeofSubsystemDetail struct {
+	AllowedHosts *[]string          `json:"allowedHosts,omitempty"`
+	Namespaces   *[]NvmeofNamespace `json:"namespaces,omitempty"`
+	Subsystem    *NvmeofSubsystem   `json:"subsystem,omitempty"`
 }
 
 // Pool defines model for Pool.
@@ -310,6 +424,28 @@ type PoolSyncRequest struct {
 type PoolTrimRequest struct {
 	// Disk Optional vdev path; absent trims the whole pool
 	Disk *string `json:"disk,omitempty"`
+}
+
+// RdmaAdapter defines model for RdmaAdapter.
+type RdmaAdapter struct {
+	BoardId *string `json:"boardId,omitempty"`
+	HcaType *string `json:"hcaType,omitempty"`
+
+	// Name e.g. mlx5_0
+	Name  string             `json:"name"`
+	Ports *[]RdmaAdapterPort `json:"ports,omitempty"`
+}
+
+// RdmaAdapterPort defines model for RdmaAdapterPort.
+type RdmaAdapterPort struct {
+	Gids *[]string `json:"gids,omitempty"`
+
+	// LinkLayer InfiniBand or Ethernet (RoCE)
+	LinkLayer string `json:"linkLayer"`
+	Number    int    `json:"number"`
+
+	// State ACTIVE, DOWN, INIT, ARMED
+	State string `json:"state"`
 }
 
 // ResourceMetadata defines model for ResourceMetadata.
@@ -422,6 +558,11 @@ type UnloadDatasetKeyJSONBody struct {
 	Recursive *bool `json:"recursive,omitempty"`
 }
 
+// CreateIscsiTargetJSONBody defines parameters for CreateIscsiTarget.
+type CreateIscsiTargetJSONBody struct {
+	Iqn string `json:"iqn"`
+}
+
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
 	State  *ListJobsParamsState `form:"state,omitempty" json:"state,omitempty"`
@@ -431,6 +572,11 @@ type ListJobsParams struct {
 
 // ListJobsParamsState defines parameters for ListJobs.
 type ListJobsParamsState string
+
+// LinkNvmeofSubsystemJSONBody defines parameters for LinkNvmeofSubsystem.
+type LinkNvmeofSubsystemJSONBody struct {
+	Nqn string `json:"nqn"`
+}
 
 // ScrubPoolParams defines parameters for ScrubPool.
 type ScrubPoolParams struct {
@@ -498,6 +644,33 @@ type RollbackDatasetJSONRequestBody RollbackDatasetJSONBody
 
 // UnloadDatasetKeyJSONRequestBody defines body for UnloadDatasetKey for application/json ContentType.
 type UnloadDatasetKeyJSONRequestBody UnloadDatasetKeyJSONBody
+
+// CreateIscsiTargetJSONRequestBody defines body for CreateIscsiTarget for application/json ContentType.
+type CreateIscsiTargetJSONRequestBody CreateIscsiTargetJSONBody
+
+// CreateIscsiACLJSONRequestBody defines body for CreateIscsiACL for application/json ContentType.
+type CreateIscsiACLJSONRequestBody = IscsiACL
+
+// CreateIscsiLUNJSONRequestBody defines body for CreateIscsiLUN for application/json ContentType.
+type CreateIscsiLUNJSONRequestBody = IscsiLUN
+
+// CreateIscsiPortalJSONRequestBody defines body for CreateIscsiPortal for application/json ContentType.
+type CreateIscsiPortalJSONRequestBody = IscsiPortal
+
+// CreateNvmeofPortJSONRequestBody defines body for CreateNvmeofPort for application/json ContentType.
+type CreateNvmeofPortJSONRequestBody = NvmeofPort
+
+// LinkNvmeofSubsystemJSONRequestBody defines body for LinkNvmeofSubsystem for application/json ContentType.
+type LinkNvmeofSubsystemJSONRequestBody LinkNvmeofSubsystemJSONBody
+
+// CreateNvmeofSubsystemJSONRequestBody defines body for CreateNvmeofSubsystem for application/json ContentType.
+type CreateNvmeofSubsystemJSONRequestBody = NvmeofSubsystem
+
+// AllowNvmeofHostJSONRequestBody defines body for AllowNvmeofHost for application/json ContentType.
+type AllowNvmeofHostJSONRequestBody = NvmeofHost
+
+// AddNvmeofNamespaceJSONRequestBody defines body for AddNvmeofNamespace for application/json ContentType.
+type AddNvmeofNamespaceJSONRequestBody = NvmeofNamespace
 
 // CreatePoolJSONRequestBody defines body for CreatePool for application/json ContentType.
 type CreatePoolJSONRequestBody = PoolCreateSpec
