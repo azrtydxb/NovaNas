@@ -1,0 +1,60 @@
+package snapshot
+
+import (
+	"os"
+	"testing"
+)
+
+func TestParseList(t *testing.T) {
+	data, err := os.ReadFile("../../../../test/fixtures/zfs_snap_list.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snaps, err := parseList(data)
+	if err != nil {
+		t.Fatalf("parseList: %v", err)
+	}
+	if len(snaps) != 3 {
+		t.Fatalf("want 3, got %d", len(snaps))
+	}
+	if snaps[0].Name != "tank/home@daily-2026-04-27" {
+		t.Errorf("snap0=%+v", snaps[0])
+	}
+	if snaps[0].Dataset != "tank/home" || snaps[0].ShortName != "daily-2026-04-27" {
+		t.Errorf("split wrong: %+v", snaps[0])
+	}
+	if snaps[0].UsedBytes != 12345 || snaps[0].ReferencedBytes != 23456789 || snaps[0].CreationUnix != 1714003200 {
+		t.Errorf("numeric parse wrong: %+v", snaps[0])
+	}
+	if snaps[2].Dataset != "tank/vol1" || snaps[2].ShortName != "pre-upgrade" {
+		t.Errorf("split wrong: %+v", snaps[2])
+	}
+}
+
+func TestParseList_DashSentinel(t *testing.T) {
+	in := []byte("tank@a\t-\t-\t1700000000\n")
+	snaps, err := parseList(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("want 1, got %d", len(snaps))
+	}
+	if snaps[0].UsedBytes != 0 || snaps[0].ReferencedBytes != 0 {
+		t.Errorf("- sentinel not zero: %+v", snaps[0])
+	}
+}
+
+func TestParseList_MissingAt(t *testing.T) {
+	in := []byte("tank/home\t0\t0\t1700000000\n")
+	if _, err := parseList(in); err == nil {
+		t.Fatal("expected error for missing '@'")
+	}
+}
+
+func TestParseList_WrongFieldCount(t *testing.T) {
+	in := []byte("tank@a\t0\t0\n")
+	if _, err := parseList(in); err == nil {
+		t.Fatal("expected error for 3 fields")
+	}
+}

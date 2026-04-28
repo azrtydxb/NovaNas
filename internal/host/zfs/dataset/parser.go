@@ -1,0 +1,90 @@
+// Package dataset wraps `zfs` for filesystem and volume datasets.
+package dataset
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+type Dataset struct {
+	Name            string `json:"name"`
+	Type            string `json:"type"` // filesystem|volume
+	UsedBytes       uint64 `json:"usedBytes"`
+	AvailableBytes  uint64 `json:"availableBytes"`
+	ReferencedBytes uint64 `json:"referencedBytes"`
+	// Mountpoint is the filesystem mount path. Empty for volumes ("-" in zfs
+	// output). May also be the strings "legacy" or "none" for filesystems —
+	// callers must not assume a non-empty value is a real path.
+	Mountpoint  string `json:"mountpoint,omitempty"`
+	Compression string `json:"compression,omitempty"`
+	// RecordSizeBytes is the filesystem recordsize. Always 0 for volumes,
+	// which use volblocksize instead (not surfaced here; query separately
+	// via `zfs get volblocksize` if needed). The omitempty tag drops the
+	// field for volumes intentionally.
+	RecordSizeBytes uint64 `json:"recordSizeBytes,omitempty"`
+}
+
+func parseList(data []byte) ([]Dataset, error) {
+	var out []Dataset
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) != 8 {
+			return nil, fmt.Errorf("zfs list: 8 fields expected, got %d in %q", len(f), line)
+		}
+		d := Dataset{
+			Name:        f[0],
+			Type:        f[1],
+			Compression: f[6],
+		}
+		var err error
+		if d.UsedBytes, err = parseUint(f[2]); err != nil {
+			return nil, err
+		}
+		if d.AvailableBytes, err = parseUint(f[3]); err != nil {
+			return nil, err
+		}
+		if d.ReferencedBytes, err = parseUint(f[4]); err != nil {
+			return nil, err
+		}
+		if f[5] != "-" {
+			d.Mountpoint = f[5]
+		}
+		if d.RecordSizeBytes, err = parseUint(f[7]); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, sc.Err()
+}
+
+func parseUint(s string) (uint64, error) {
+	if s == "-" {
+		return 0, nil
+	}
+	return strconv.ParseUint(s, 10, 64)
+}
+
+func parseProps(data []byte) (map[string]string, error) {
+	out := make(map[string]string)
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 3 {
+			return nil, fmt.Errorf("zfs get: bad line %q", line)
+		}
+		out[f[1]] = f[2]
+	}
+	return out, sc.Err()
+}
