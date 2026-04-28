@@ -35,6 +35,9 @@ func New(d Deps) *Server {
 	r.Use(mw.RequestID)
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
+	if d.Store != nil {
+		r.Use(mw.Audit(d.Store.Queries))
+	}
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
 	})
