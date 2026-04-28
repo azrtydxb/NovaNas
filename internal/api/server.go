@@ -16,6 +16,7 @@ type Deps struct {
 	Logger *slog.Logger
 	Store  *store.Store
 	Disks  handlers.DiskLister
+	Pools  handlers.PoolManager
 }
 
 type Server struct {
@@ -31,8 +32,11 @@ func New(d Deps) *Server {
 	r.Get("/healthz", handlers.Healthz)
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
+	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
+		r.Get("/pools", poolsH.List)
+		r.Get("/pools/{name}", poolsH.Get)
 	})
 
 	return &Server{deps: d, router: r}
