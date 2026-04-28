@@ -65,7 +65,11 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) error {
 	if err != nil {
 		return err
 	}
-	_, err = exec.Run(ctx, m.ZpoolBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZpoolBin, args...)
 	return err
 }
 
@@ -73,7 +77,11 @@ func (m *Manager) Destroy(ctx context.Context, name string) error {
 	if err := names.ValidatePoolName(name); err != nil {
 		return err
 	}
-	_, err := exec.Run(ctx, m.ZpoolBin, "destroy", "-f", name)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err := runner(ctx, m.ZpoolBin, "destroy", "-f", name)
 	return err
 }
 
@@ -93,6 +101,10 @@ func (m *Manager) Scrub(ctx context.Context, name string, action ScrubAction) er
 		args = append(args, "-s")
 	}
 	args = append(args, name)
-	_, err := exec.Run(ctx, m.ZpoolBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err := runner(ctx, m.ZpoolBin, args...)
 	return err
 }

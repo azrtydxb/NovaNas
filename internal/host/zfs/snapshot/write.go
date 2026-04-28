@@ -25,7 +25,11 @@ func (m *Manager) Create(ctx context.Context, dataset, short string, recursive b
 	if err != nil {
 		return err
 	}
-	_, err = exec.Run(ctx, m.ZFSBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZFSBin, args...)
 	return err
 }
 
@@ -33,7 +37,11 @@ func (m *Manager) Destroy(ctx context.Context, name string) error {
 	if err := names.ValidateSnapshotName(name); err != nil {
 		return err
 	}
-	_, err := exec.Run(ctx, m.ZFSBin, "destroy", name)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err := runner(ctx, m.ZFSBin, "destroy", name)
 	return err
 }
 
@@ -41,6 +49,10 @@ func (m *Manager) Rollback(ctx context.Context, snapshot string) error {
 	if err := names.ValidateSnapshotName(snapshot); err != nil {
 		return err
 	}
-	_, err := exec.Run(ctx, m.ZFSBin, "rollback", "-r", snapshot)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err := runner(ctx, m.ZFSBin, "rollback", "-r", snapshot)
 	return err
 }

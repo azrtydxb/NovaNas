@@ -7,6 +7,11 @@ import (
 	osexec "os/exec"
 )
 
+// Runner is the function signature for executing a host command. The
+// default is the package-level Run function; tests can override on a
+// per-Manager basis.
+type Runner func(ctx context.Context, bin string, args ...string) ([]byte, error)
+
 func Run(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	cmd := osexec.CommandContext(ctx, bin, args...)
 	var stdout, stderr bytes.Buffer

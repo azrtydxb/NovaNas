@@ -12,6 +12,8 @@ var ErrNotFound = errors.New("dataset not found")
 
 type Manager struct {
 	ZFSBin string
+	// Runner overrides exec.Run for tests. nil → use exec.Run directly.
+	Runner exec.Runner
 }
 
 type Detail struct {
@@ -28,7 +30,11 @@ func (m *Manager) List(ctx context.Context, root string) ([]Dataset, error) {
 	if root != "" {
 		args = append(args, "-r", root)
 	}
-	out, err := exec.Run(ctx, m.ZFSBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	out, err := runner(ctx, m.ZFSBin, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +61,11 @@ func notFoundErr(err error) error {
 // Get returns full detail (the row + all properties) for a single dataset
 // by name. Returns ErrNotFound if the dataset does not exist.
 func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
-	listOut, err := exec.Run(ctx, m.ZFSBin, "list", "-H", "-p",
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	listOut, err := runner(ctx, m.ZFSBin, "list", "-H", "-p",
 		"-t", "filesystem,volume",
 		"-o", "name,type,used,available,referenced,mountpoint,compression,recordsize",
 		name)
@@ -69,7 +79,7 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 	if len(ds) == 0 {
 		return nil, ErrNotFound
 	}
-	propsOut, err := exec.Run(ctx, m.ZFSBin, "get", "-H", "-p", "all", name)
+	propsOut, err := runner(ctx, m.ZFSBin, "get", "-H", "-p", "all", name)
 	if err != nil {
 		// Race window: dataset destroyed between list and get; surface
 		// ErrNotFound consistently.

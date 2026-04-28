@@ -50,7 +50,11 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) error {
 	if err != nil {
 		return err
 	}
-	_, err = exec.Run(ctx, m.ZFSBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZFSBin, args...)
 	return err
 }
 
@@ -58,13 +62,17 @@ func (m *Manager) SetProps(ctx context.Context, name string, props map[string]st
 	if err := names.ValidateDatasetName(name); err != nil {
 		return err
 	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
 	keys := make([]string, 0, len(props))
 	for k := range props {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if _, err := exec.Run(ctx, m.ZFSBin, "set", k+"="+props[k], name); err != nil {
+		if _, err := runner(ctx, m.ZFSBin, "set", k+"="+props[k], name); err != nil {
 			return err
 		}
 	}
@@ -75,11 +83,15 @@ func (m *Manager) Destroy(ctx context.Context, name string, recursive bool) erro
 	if err := names.ValidateDatasetName(name); err != nil {
 		return err
 	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
 	args := []string{"destroy"}
 	if recursive {
 		args = append(args, "-r")
 	}
 	args = append(args, name)
-	_, err := exec.Run(ctx, m.ZFSBin, args...)
+	_, err := runner(ctx, m.ZFSBin, args...)
 	return err
 }

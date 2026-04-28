@@ -12,6 +12,8 @@ var ErrNotFound = errors.New("pool not found")
 
 type Manager struct {
 	ZpoolBin string
+	// Runner overrides exec.Run for tests. nil → use exec.Run directly.
+	Runner exec.Runner
 }
 
 type Detail struct {
@@ -21,7 +23,11 @@ type Detail struct {
 }
 
 func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
-	listOut, err := exec.Run(ctx, m.ZpoolBin, "list", "-H", "-p",
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	listOut, err := runner(ctx, m.ZpoolBin, "list", "-H", "-p",
 		"-o", "name,size,allocated,free,health,readonly,fragmentation,capacity,dedupratio", name)
 	if err != nil {
 		var he *exec.HostError
@@ -38,7 +44,7 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 		return nil, ErrNotFound
 	}
 
-	propsOut, err := exec.Run(ctx, m.ZpoolBin, "get", "-H", "-p", "all", name)
+	propsOut, err := runner(ctx, m.ZpoolBin, "get", "-H", "-p", "all", name)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +53,7 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 		return nil, err
 	}
 
-	statusOut, err := exec.Run(ctx, m.ZpoolBin, "status", "-P", name)
+	statusOut, err := runner(ctx, m.ZpoolBin, "status", "-P", name)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +66,11 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 }
 
 func (m *Manager) List(ctx context.Context) ([]Pool, error) {
-	out, err := exec.Run(ctx, m.ZpoolBin, "list", "-H", "-p",
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	out, err := runner(ctx, m.ZpoolBin, "list", "-H", "-p",
 		"-o", "name,size,allocated,free,health,readonly,fragmentation,capacity,dedupratio")
 	if err != nil {
 		return nil, err
