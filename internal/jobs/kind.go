@@ -12,6 +12,15 @@ const (
 	KindPoolCreate       Kind = "pool.create"
 	KindPoolDestroy      Kind = "pool.destroy"
 	KindPoolScrub        Kind = "pool.scrub"
+	KindPoolReplace      Kind = "pool.replace"
+	KindPoolOffline      Kind = "pool.offline"
+	KindPoolOnline       Kind = "pool.online"
+	KindPoolClear        Kind = "pool.clear"
+	KindPoolAttach       Kind = "pool.attach"
+	KindPoolDetach       Kind = "pool.detach"
+	KindPoolAdd          Kind = "pool.add"
+	KindPoolExport       Kind = "pool.export"
+	KindPoolImport       Kind = "pool.import"
 	KindDatasetCreate    Kind = "dataset.create"
 	KindDatasetSet       Kind = "dataset.set"
 	KindDatasetDestroy   Kind = "dataset.destroy"
@@ -63,4 +72,51 @@ type SnapshotDestroyPayload struct {
 
 type SnapshotRollbackPayload struct {
 	Snapshot string `json:"snapshot"`
+}
+
+type PoolReplacePayload struct {
+	Name    string `json:"name"`
+	OldDisk string `json:"oldDisk"`
+	NewDisk string `json:"newDisk"`
+}
+
+type PoolOfflinePayload struct {
+	Name      string `json:"name"`
+	Disk      string `json:"disk"`
+	Temporary bool   `json:"temporary"`
+}
+
+type PoolOnlinePayload struct {
+	Name string `json:"name"`
+	Disk string `json:"disk"`
+}
+
+type PoolClearPayload struct {
+	Name string `json:"name"`
+	Disk string `json:"disk"` // optional
+}
+
+type PoolAttachPayload struct {
+	Name     string `json:"name"`
+	Existing string `json:"existing"`
+	NewDisk  string `json:"newDisk"`
+}
+
+type PoolDetachPayload struct {
+	Name string `json:"name"`
+	Disk string `json:"disk"`
+}
+
+type PoolAddPayload struct {
+	Name string       `json:"name"`
+	Spec pool.AddSpec `json:"spec"`
+}
+
+type PoolExportPayload struct {
+	Name  string `json:"name"`
+	Force bool   `json:"force"`
+}
+
+type PoolImportPayload struct {
+	Name string `json:"name"`
 }

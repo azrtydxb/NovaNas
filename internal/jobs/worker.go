@@ -32,6 +32,15 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindPoolCreate), d.handlePoolCreate)
 	mux.HandleFunc(string(KindPoolDestroy), d.handlePoolDestroy)
 	mux.HandleFunc(string(KindPoolScrub), d.handlePoolScrub)
+	mux.HandleFunc(string(KindPoolReplace), d.handlePoolReplace)
+	mux.HandleFunc(string(KindPoolOffline), d.handlePoolOffline)
+	mux.HandleFunc(string(KindPoolOnline), d.handlePoolOnline)
+	mux.HandleFunc(string(KindPoolClear), d.handlePoolClear)
+	mux.HandleFunc(string(KindPoolAttach), d.handlePoolAttach)
+	mux.HandleFunc(string(KindPoolDetach), d.handlePoolDetach)
+	mux.HandleFunc(string(KindPoolAdd), d.handlePoolAdd)
+	mux.HandleFunc(string(KindPoolExport), d.handlePoolExport)
+	mux.HandleFunc(string(KindPoolImport), d.handlePoolImport)
 	mux.HandleFunc(string(KindDatasetCreate), d.handleDatasetCreate)
 	mux.HandleFunc(string(KindDatasetSet), d.handleDatasetSet)
 	mux.HandleFunc(string(KindDatasetDestroy), d.handleDatasetDestroy)
@@ -192,6 +201,114 @@ func (d WorkerDeps) handleSnapshotRollback(ctx context.Context, t *asynq.Task) e
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.Snapshots.Rollback(ctx, p.Snapshot)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolReplace(ctx context.Context, t *asynq.Task) error {
+	var p PoolReplacePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Replace(ctx, p.Name, p.OldDisk, p.NewDisk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolOffline(ctx context.Context, t *asynq.Task) error {
+	var p PoolOfflinePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Offline(ctx, p.Name, p.Disk, p.Temporary)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolOnline(ctx context.Context, t *asynq.Task) error {
+	var p PoolOnlinePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Online(ctx, p.Name, p.Disk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolClear(ctx context.Context, t *asynq.Task) error {
+	var p PoolClearPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Clear(ctx, p.Name, p.Disk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolAttach(ctx context.Context, t *asynq.Task) error {
+	var p PoolAttachPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Attach(ctx, p.Name, p.Existing, p.NewDisk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolDetach(ctx context.Context, t *asynq.Task) error {
+	var p PoolDetachPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Detach(ctx, p.Name, p.Disk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolAdd(ctx context.Context, t *asynq.Task) error {
+	var p PoolAddPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Add(ctx, p.Name, p.Spec)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolExport(ctx context.Context, t *asynq.Task) error {
+	var p PoolExportPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Export(ctx, p.Name, p.Force)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolImport(ctx context.Context, t *asynq.Task) error {
+	var p PoolImportPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Import(ctx, p.Name)
 	d.finish(ctx, id, err)
 	return err
 }
