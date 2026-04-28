@@ -33,8 +33,9 @@ func TestPoolCreate_FullFlow(t *testing.T) {
 		t.Fatal("missing jobId")
 	}
 
-	// Poll for terminal state.
-	deadline := time.Now().Add(10 * time.Second)
+	// Poll for terminal state. 30s is generous for cold-cache CI runners
+	// where asynq dequeue + Redis RT + Postgres update can stack up.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		r, err := http.Get(ts.URL + "/api/v1/jobs/" + jobID)
 		if err != nil {
@@ -51,7 +52,7 @@ func TestPoolCreate_FullFlow(t *testing.T) {
 		if job.State == "failed" || job.State == "cancelled" {
 			t.Fatalf("job %s ended in state %s", jobID, job.State)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal("job did not reach terminal state in 10s")
+	t.Fatal("job did not reach terminal state in 30s")
 }

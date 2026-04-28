@@ -44,9 +44,6 @@ func (m *Manager) List(ctx context.Context, root string) ([]Dataset, error) {
 // notFoundErr maps ZFS's `cannot open 'X': dataset does not exist` stderr
 // (stable across OpenZFS versions) to ErrNotFound. Returns the original
 // error otherwise.
-//
-// TODO(plan-2): once Manager grows a Runner func field for testability,
-// add a unit test that drives this path with a stubbed *exec.HostError.
 func notFoundErr(err error) error {
 	if err == nil {
 		return nil
