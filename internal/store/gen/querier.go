@@ -6,11 +6,22 @@ package storedb
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	CancelJob(ctx context.Context, id pgtype.UUID) error
+	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetResourceMetadata(ctx context.Context, arg GetResourceMetadataParams) (ResourceMetadatum, error)
+	InsertAudit(ctx context.Context, arg InsertAuditParams) error
+	InsertJob(ctx context.Context, arg InsertJobParams) (Job, error)
+	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
+	MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error
+	MarkJobRunning(ctx context.Context, id pgtype.UUID) error
+	MarkRunningInterrupted(ctx context.Context) error
 }
 
 var _ Querier = (*Queries)(nil)
