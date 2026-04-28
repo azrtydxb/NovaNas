@@ -54,6 +54,7 @@ func New(d Deps) *Server {
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
 	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
+	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
@@ -64,6 +65,9 @@ func New(d Deps) *Server {
 		r.Post("/pools/{name}/scrub", poolsWriteH.Scrub)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
+		r.Post("/datasets", dsW.Create)
+		r.Patch("/datasets/{fullname}", dsW.SetProps)
+		r.Delete("/datasets/{fullname}", dsW.Destroy)
 		r.Get("/snapshots", snapH.List)
 	})
 
