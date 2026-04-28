@@ -377,6 +377,43 @@ type Job struct {
 	Target     *string             `json:"target,omitempty"`
 }
 
+// Krb5Config defines model for Krb5Config.
+type Krb5Config struct {
+	// DefaultRealm Uppercase realm name (e.g. EXAMPLE.COM)
+	DefaultRealm   string               `json:"defaultRealm"`
+	DnsLookupKdc   *bool                `json:"dnsLookupKdc,omitempty"`
+	DnsLookupRealm *bool                `json:"dnsLookupRealm,omitempty"`
+	DomainRealm    *map[string]string   `json:"domainRealm,omitempty"`
+	Realms         map[string]Krb5Realm `json:"realms"`
+}
+
+// Krb5IdmapdConfig defines model for Krb5IdmapdConfig.
+type Krb5IdmapdConfig struct {
+	// Domain NFSv4 ID-map domain (typically lowercase realm)
+	Domain    string `json:"domain"`
+	Verbosity *int   `json:"verbosity,omitempty"`
+}
+
+// Krb5KeytabEntry defines model for Krb5KeytabEntry.
+type Krb5KeytabEntry struct {
+	Encryption string `json:"encryption"`
+	Kvno       int    `json:"kvno"`
+	Principal  string `json:"principal"`
+}
+
+// Krb5KeytabUpload defines model for Krb5KeytabUpload.
+type Krb5KeytabUpload struct {
+	// Data Base64-encoded raw keytab bytes (must begin with magic byte 0x05)
+	Data []byte `json:"data"`
+}
+
+// Krb5Realm defines model for Krb5Realm.
+type Krb5Realm struct {
+	AdminServer   *string  `json:"adminServer,omitempty"`
+	DefaultDomain *string  `json:"defaultDomain,omitempty"`
+	Kdc           []string `json:"kdc"`
+}
+
 // LoadKeyRequest defines model for LoadKeyRequest.
 type LoadKeyRequest struct {
 	Keylocation *string `json:"keylocation,omitempty"`
@@ -388,6 +425,33 @@ type MetadataPatch struct {
 	Description *string            `json:"description,omitempty"`
 	DisplayName *string            `json:"display_name,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
+}
+
+// NfsActiveExport defines model for NfsActiveExport.
+type NfsActiveExport struct {
+	Client  string `json:"Client"`
+	Options string `json:"Options"`
+	Path    string `json:"Path"`
+}
+
+// NfsClientRule defines model for NfsClientRule.
+type NfsClientRule struct {
+	// Options Comma-separated NFS export options (e.g. "rw,sync,sec=krb5p")
+	Options string `json:"options"`
+
+	// Spec CIDR, IP, "*", or hostname/wildcard pattern
+	Spec string `json:"spec"`
+}
+
+// NfsExport defines model for NfsExport.
+type NfsExport struct {
+	Clients []NfsClientRule `json:"clients"`
+
+	// Name Filename-safe identifier (alnum, -, _; 1-64 chars)
+	Name string `json:"name"`
+
+	// Path Absolute host path
+	Path string `json:"path"`
 }
 
 // NvmeofDHChapConfig Per-host DH-HMAC-CHAP (NVMe TP4022) configuration. Secrets must be in "DHHC-1:NN:..." form. Empty fields are left unchanged on PATCH-style updates.
@@ -732,6 +796,21 @@ type CreateIscsiLUNJSONRequestBody = IscsiLUN
 
 // CreateIscsiPortalJSONRequestBody defines body for CreateIscsiPortal for application/json ContentType.
 type CreateIscsiPortalJSONRequestBody = IscsiPortal
+
+// SetKrb5ConfigJSONRequestBody defines body for SetKrb5Config for application/json ContentType.
+type SetKrb5ConfigJSONRequestBody = Krb5Config
+
+// SetKrb5IdmapdJSONRequestBody defines body for SetKrb5Idmapd for application/json ContentType.
+type SetKrb5IdmapdJSONRequestBody = Krb5IdmapdConfig
+
+// UploadKrb5KeytabJSONRequestBody defines body for UploadKrb5Keytab for application/json ContentType.
+type UploadKrb5KeytabJSONRequestBody = Krb5KeytabUpload
+
+// CreateNfsExportJSONRequestBody defines body for CreateNfsExport for application/json ContentType.
+type CreateNfsExportJSONRequestBody = NfsExport
+
+// UpdateNfsExportJSONRequestBody defines body for UpdateNfsExport for application/json ContentType.
+type UpdateNfsExportJSONRequestBody = NfsExport
 
 // SetNvmeofHostDHChapJSONRequestBody defines body for SetNvmeofHostDHChap for application/json ContentType.
 type SetNvmeofHostDHChapJSONRequestBody = NvmeofDHChapConfig

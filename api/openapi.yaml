@@ -1157,6 +1157,157 @@ paths:
         '202': { $ref: '#/components/responses/Accepted' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /nfs/exports:
+    get:
+      operationId: listNfsExports
+      summary: List managed NFS exports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NfsExport' }
+    post:
+      operationId: createNfsExport
+      summary: Create an NFS export and reload the kernel exports table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NfsExport' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nfs/exports/active:
+    get:
+      operationId: listNfsActiveExports
+      summary: List active exports as reported by `exportfs -v`
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NfsActiveExport' }
+
+  /nfs/exports/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getNfsExport
+      summary: Get a single NFS export
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NfsExport' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateNfsExport
+      summary: Replace an existing NFS export (full body)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NfsExport' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteNfsExport
+      summary: Delete an NFS export
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /nfs/reload:
+    post:
+      operationId: nfsReload
+      summary: Run `exportfs -ra` to reload the kernel exports table
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /krb5/config:
+    get:
+      operationId: getKrb5Config
+      summary: Read /etc/krb5.conf (zero-value if missing)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Krb5Config' }
+    put:
+      operationId: setKrb5Config
+      summary: Write /etc/krb5.conf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Krb5Config' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /krb5/idmapd:
+    get:
+      operationId: getKrb5Idmapd
+      summary: Read /etc/idmapd.conf (zero-value if missing)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Krb5IdmapdConfig' }
+    put:
+      operationId: setKrb5Idmapd
+      summary: Write /etc/idmapd.conf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Krb5IdmapdConfig' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /krb5/keytab:
+    get:
+      operationId: listKrb5Keytab
+      summary: Inspect /etc/krb5.keytab via klist (no key material returned)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Krb5KeytabEntry' }
+    put:
+      operationId: uploadKrb5Keytab
+      summary: Replace /etc/krb5.keytab with base64-encoded bytes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Krb5KeytabUpload' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteKrb5Keytab
+      summary: Remove /etc/krb5.keytab
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
   /network/rdma:
     get:
       operationId: listRdmaAdapters
@@ -1525,6 +1676,71 @@ components:
         subsystem:    { $ref: '#/components/schemas/NvmeofSubsystem' }
         namespaces:   { type: array, items: { $ref: '#/components/schemas/NvmeofNamespace' } }
         allowedHosts: { type: array, items: { type: string } }
+    NfsClientRule:
+      type: object
+      required: [spec, options]
+      properties:
+        spec:    { type: string, description: 'CIDR, IP, "*", or hostname/wildcard pattern' }
+        options: { type: string, description: 'Comma-separated NFS export options (e.g. "rw,sync,sec=krb5p")' }
+    NfsExport:
+      type: object
+      required: [name, path, clients]
+      properties:
+        name:    { type: string, description: 'Filename-safe identifier (alnum, -, _; 1-64 chars)' }
+        path:    { type: string, description: 'Absolute host path' }
+        clients:
+          type: array
+          items: { $ref: '#/components/schemas/NfsClientRule' }
+    NfsActiveExport:
+      type: object
+      required: [Path, Client, Options]
+      properties:
+        Path:    { type: string }
+        Client:  { type: string }
+        Options: { type: string }
+    Krb5Realm:
+      type: object
+      required: [kdc]
+      properties:
+        kdc:
+          type: array
+          items: { type: string, description: 'host or host:port' }
+        adminServer:   { type: string }
+        defaultDomain: { type: string }
+    Krb5Config:
+      type: object
+      required: [defaultRealm, realms]
+      properties:
+        defaultRealm: { type: string, description: 'Uppercase realm name (e.g. EXAMPLE.COM)' }
+        realms:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/Krb5Realm' }
+        domainRealm:
+          type: object
+          additionalProperties: { type: string }
+        dnsLookupKdc:   { type: boolean }
+        dnsLookupRealm: { type: boolean }
+    Krb5IdmapdConfig:
+      type: object
+      required: [domain]
+      properties:
+        domain:    { type: string, description: 'NFSv4 ID-map domain (typically lowercase realm)' }
+        verbosity: { type: integer, minimum: 0, maximum: 9 }
+    Krb5KeytabEntry:
+      type: object
+      required: [kvno, principal, encryption]
+      properties:
+        kvno:       { type: integer }
+        principal:  { type: string }
+        encryption: { type: string }
+    Krb5KeytabUpload:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: string
+          format: byte
+          description: 'Base64-encoded raw keytab bytes (must begin with magic byte 0x05)'
     RdmaAdapter:
       type: object
       required: [name]

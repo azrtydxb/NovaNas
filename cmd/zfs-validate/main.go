@@ -27,6 +27,8 @@ import (
 	"github.com/novanas/nova-nas/internal/host/configfs"
 	disksPkg "github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
@@ -2808,6 +2810,448 @@ func main() {
 		return nil
 	})
 
+	step("55. NFS export with sec=sys (real loopback mount + IO)", func() error {
+		// Pre-clean any stale nova-nas-*.exports left over from a prior
+		// failed run — those would reference paths that no longer
+		// exist and make `exportfs -ra` fail this scenario before it
+		// even starts.
+		if entries, err := os.ReadDir("/etc/exports.d"); err == nil {
+			for _, e := range entries {
+				if strings.HasPrefix(e.Name(), "nova-nas-") {
+					_ = os.Remove(filepath.Join("/etc/exports.d", e.Name()))
+				}
+			}
+		}
+		_, _ = runCmd(ctx, "/usr/sbin/exportfs", "-ra")
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() {
+			// NFS server can briefly hold the path even after umount/
+			// DeleteExport. Drop all kernel-side exports first, then
+			// destroy.
+			_, _ = runCmd(ctx, "/usr/sbin/exportfs", "-ua")
+			if err := pm.Destroy(ctx, poolName); err != nil {
+				fmt.Printf("  WARN scenario 55 pool destroy: %v\n", err)
+			}
+		}()
+
+		dsName := "nfs-share"
+		full := poolName + "/" + dsName
+		mp := "/validate/nfs-share"
+		if err := os.MkdirAll("/validate", 0o755); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: dsName, Type: "filesystem",
+			Properties: map[string]string{"mountpoint": mp},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, full, false) }()
+
+		// Marker file for visibility check.
+		markerPath := filepath.Join(mp, "marker.txt")
+		markerBody := []byte("hello from host fs\n")
+		if err := os.WriteFile(markerPath, markerBody, 0o644); err != nil {
+			return fmt.Errorf("write marker: %w", err)
+		}
+
+		nm := &nfs.Manager{ExportsBin: "/usr/sbin/exportfs"}
+		exp := nfs.Export{
+			Name: "validate",
+			Path: mp,
+			Clients: []nfs.ClientRule{{
+				Spec:    "127.0.0.1",
+				Options: "rw,sync,no_subtree_check,no_root_squash,sec=sys",
+			}},
+		}
+		if err := nm.CreateExport(ctx, exp); err != nil {
+			return fmt.Errorf("CreateExport: %w", err)
+		}
+		defer func() { _ = nm.DeleteExport(ctx, "validate") }()
+
+		mountPoint := "/mnt/validate-nfs"
+		if err := os.MkdirAll(mountPoint, 0o755); err != nil {
+			return err
+		}
+		if _, err := runCmd(ctx, "mount", "-t", "nfs", "-o", "vers=4,sec=sys",
+			"127.0.0.1:"+mp, mountPoint); err != nil {
+			return fmt.Errorf("mount: %w", err)
+		}
+		unmounted := false
+		defer func() {
+			if !unmounted {
+				_, _ = runCmd(ctx, "umount", mountPoint)
+			}
+		}()
+
+		// Verify marker visible across NFS.
+		gotMarker, err := os.ReadFile(filepath.Join(mountPoint, "marker.txt"))
+		if err != nil {
+			return fmt.Errorf("read marker via NFS: %w", err)
+		}
+		if !bytes.Equal(gotMarker, markerBody) {
+			return fmt.Errorf("marker mismatch via NFS: got %q want %q", gotMarker, markerBody)
+		}
+		fmt.Printf("  marker file visible via NFS mount\n")
+
+		// 1 MiB known data, fsync, hash.
+		payload := filepath.Join(mountPoint, "payload.bin")
+		writePayload(payload, 1<<20)
+		hashWrote := sha256file(payload)
+
+		readBack, err := os.ReadFile(payload)
+		if err != nil {
+			return fmt.Errorf("readback: %w", err)
+		}
+		hashRead := sha256bytes(readBack)
+		if hashRead != hashWrote {
+			return fmt.Errorf("sha256 mismatch: write=%s read=%s", hashWrote, hashRead)
+		}
+		fmt.Printf("  1 MiB payload sha256 round-trip ok (%s)\n", hashRead[:16])
+
+		if _, err := runCmd(ctx, "umount", mountPoint); err != nil {
+			return fmt.Errorf("umount: %w", err)
+		}
+		unmounted = true
+
+		if err := nm.DeleteExport(ctx, "validate"); err != nil {
+			return fmt.Errorf("DeleteExport: %w", err)
+		}
+		return nil
+	})
+
+	step("56. NFS export with sec=krb5 (full local KDC + real mount + IO)", func() error {
+		if !which("kadmin.local") {
+			fmt.Printf("  SKIP: kadmin.local not available\n")
+			return nil
+		}
+
+		// Snapshot the host state we are about to clobber so cleanup can
+		// restore it. Files we touch and may need to remove on teardown.
+		krb5Conf := "/etc/krb5.conf"
+		krb5Keytab := "/etc/krb5.keytab"
+		idmapdConf := "/etc/idmapd.conf"
+		kdcConf := "/etc/krb5kdc/kdc.conf"
+		kdcStateDir := "/var/lib/krb5kdc-test"
+		exportName := "krbvalidate"
+		exportMP := "/validate/nfs-krb"
+		mountPoint := "/mnt/validate-nfs-krb"
+		testKeytabPath := "/tmp/nfs-test.keytab"
+
+		// Capture pre-existing files (best-effort): empty []byte means
+		// "no file existed", non-nil means restore those bytes on teardown.
+		readIfExists := func(p string) ([]byte, bool) {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return nil, false
+			}
+			return b, true
+		}
+		preKrb5Conf, hadKrb5Conf := readIfExists(krb5Conf)
+		preKeytab, hadKeytab := readIfExists(krb5Keytab)
+		preIdmapd, hadIdmapd := readIfExists(idmapdConf)
+		preKdcConf, hadKdcConf := readIfExists(kdcConf)
+
+		mounted := false
+		exportCreated := false
+		poolCreated := false
+
+		// Master cleanup: runs unconditionally to put the box back.
+		// Best-effort everywhere — we do not want cleanup failures to
+		// shadow the real scenario error.
+		defer func() {
+			if mounted {
+				_, _ = runCmd(ctx, "umount", mountPoint)
+			}
+			if exportCreated {
+				nm := &nfs.Manager{ExportsBin: "/usr/sbin/exportfs"}
+				_ = nm.DeleteExport(ctx, exportName)
+			}
+			if poolCreated {
+				_ = pm.Destroy(ctx, poolName)
+			}
+			// Stop KDC services (best-effort).
+			_, _ = runCmd(ctx, "systemctl", "stop", "krb5-kdc")
+			_, _ = runCmd(ctx, "systemctl", "stop", "krb5-admin-server")
+			// Restart nfs-server so it releases keytab/idmapd state.
+			_, _ = runCmd(ctx, "systemctl", "restart", "nfs-server")
+			// Remove the test KDC state dir.
+			_ = os.RemoveAll(kdcStateDir)
+			_ = os.Remove(testKeytabPath)
+			// Restore (or remove) the host config files.
+			restore := func(p string, pre []byte, had bool) {
+				if had {
+					_ = os.WriteFile(p, pre, 0o644)
+				} else {
+					_ = os.Remove(p)
+				}
+			}
+			restore(krb5Conf, preKrb5Conf, hadKrb5Conf)
+			restore(idmapdConf, preIdmapd, hadIdmapd)
+			restore(kdcConf, preKdcConf, hadKdcConf)
+			if hadKeytab {
+				_ = os.WriteFile(krb5Keytab, preKeytab, 0o600)
+			} else {
+				_ = os.Remove(krb5Keytab)
+			}
+		}()
+
+		// Step 2: stop any running KDC.
+		_, _ = runCmd(ctx, "systemctl", "stop", "krb5-kdc")
+		_, _ = runCmd(ctx, "systemctl", "stop", "krb5-admin-server")
+
+		// Step 3: write krb5.conf + idmapd.conf via the Manager.
+		km := &krb5.Manager{
+			Krb5ConfPath:   krb5Conf,
+			KeytabPath:     krb5Keytab,
+			IdmapdConfPath: idmapdConf,
+			KlistBin:       "/usr/bin/klist",
+		}
+		if err := km.SetConfig(ctx, krb5.Config{
+			DefaultRealm: "NOVANAS.LOCAL",
+			Realms: map[string]krb5.Realm{
+				"NOVANAS.LOCAL": {
+					KDC:         []string{"127.0.0.1:88"},
+					AdminServer: "127.0.0.1:749",
+				},
+			},
+			DomainRealm: map[string]string{".novanas.local": "NOVANAS.LOCAL"},
+		}); err != nil {
+			return fmt.Errorf("step3 krb5.SetConfig: %w", err)
+		}
+		if err := km.SetIdmapdConfig(ctx, krb5.IdmapdConfig{Domain: "novanas.local"}); err != nil {
+			return fmt.Errorf("step3 krb5.SetIdmapdConfig: %w", err)
+		}
+
+		// Step 4: kdc.conf pointing at the test directory.
+		// On Debian 13 /etc/krb5kdc is provided by the krb5-kdc package; if
+		// the directory is missing for any reason, MkdirAll creates it.
+		if err := os.MkdirAll(filepath.Dir(kdcConf), 0o755); err != nil {
+			return fmt.Errorf("step4 mkdir krb5kdc: %w", err)
+		}
+		kdcConfBody := `[kdcdefaults]
+    kdc_ports = 88
+[realms]
+    NOVANAS.LOCAL = {
+        database_name = /var/lib/krb5kdc-test/principal
+        admin_keytab = FILE:/var/lib/krb5kdc-test/kadm5.keytab
+        acl_file = /var/lib/krb5kdc-test/kadm5.acl
+        key_stash_file = /var/lib/krb5kdc-test/.k5.NOVANAS.LOCAL
+        max_life = 10h 0m 0s
+        max_renewable_life = 7d 0h 0m 0s
+        supported_enctypes = aes256-cts-hmac-sha1-96:normal aes128-cts-hmac-sha1-96:normal
+    }
+`
+		if err := os.WriteFile(kdcConf, []byte(kdcConfBody), 0o644); err != nil {
+			return fmt.Errorf("step4 write kdc.conf: %w", err)
+		}
+
+		// Step 5: mkdir kdc state dir + empty acl.
+		// Remove any leftover from a previous run so kdb5_util create
+		// (step 6) is one-shot.
+		_ = os.RemoveAll(kdcStateDir)
+		if err := os.MkdirAll(kdcStateDir, 0o700); err != nil {
+			return fmt.Errorf("step5 mkdir kdc state: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(kdcStateDir, "kadm5.acl"), []byte{}, 0o600); err != nil {
+			return fmt.Errorf("step5 write acl: %w", err)
+		}
+
+		// Step 6: initialize realm DB.
+		if _, err := runCmd(ctx, "kdb5_util", "-r", "NOVANAS.LOCAL", "create", "-s", "-P", "testmasterpw"); err != nil {
+			return fmt.Errorf("step6 kdb5_util create: %w", err)
+		}
+
+		// Step 7: start the KDC + kadmin.
+		dumpJournal := func(unit string) {
+			if out, err := runCmd(ctx, "journalctl", "-u", unit, "--no-pager", "-n", "30"); err == nil {
+				fmt.Printf("  journalctl -u %s:\n%s\n", unit, string(out))
+			}
+		}
+		if _, err := runCmd(ctx, "systemctl", "start", "krb5-kdc"); err != nil {
+			dumpJournal("krb5-kdc")
+			return fmt.Errorf("step7 start krb5-kdc: %w", err)
+		}
+		if _, err := runCmd(ctx, "systemctl", "start", "krb5-admin-server"); err != nil {
+			dumpJournal("krb5-admin-server")
+			return fmt.Errorf("step7 start krb5-admin-server: %w", err)
+		}
+		if !systemctlIsActive(ctx, "krb5-kdc") {
+			dumpJournal("krb5-kdc")
+			return fmt.Errorf("step7: krb5-kdc not active")
+		}
+		if !systemctlIsActive(ctx, "krb5-admin-server") {
+			dumpJournal("krb5-admin-server")
+			return fmt.Errorf("step7: krb5-admin-server not active")
+		}
+
+		// Step 8: create NFS service principals.
+		// Get the host's name (uname -n). Linux NFS clients try the FQDN
+		// for sec=krb5 mounts; we add both 127.0.0.1 and the host name.
+		hostnameOut, err := runCmd(ctx, "uname", "-n")
+		if err != nil {
+			return fmt.Errorf("step8 uname -n: %w", err)
+		}
+		hostname := strings.TrimSpace(string(hostnameOut))
+		// Sanity: must look DNS-ish (alnum + . + -). If exotic, addprinc
+		// may reject it.
+		if hostname == "" {
+			return fmt.Errorf("step8: empty hostname")
+		}
+		// Linux NFS resolves the server's IP back to a hostname before
+		// asking gssd for credentials. For 127.0.0.1 the kernel asks for
+		// `nfs/localhost@REALM` (not nfs/127.0.0.1). We create all three
+		// (127.0.0.1, localhost, $hostname) so the test is robust to
+		// whichever name the kernel happens to ask for.
+		for _, host := range []string{"127.0.0.1", "localhost", hostname} {
+			if _, err := runCmd(ctx, "kadmin.local", "-q",
+				"addprinc -randkey nfs/"+host+"@NOVANAS.LOCAL"); err != nil {
+				return fmt.Errorf("step8 addprinc nfs/%s: %w", host, err)
+			}
+		}
+
+		// Step 9: create user principal (kept for completeness; not used
+		// for the loopback mount which uses host machine creds).
+		if _, err := runCmd(ctx, "kadmin.local", "-q",
+			"addprinc -pw testpass1 testuser@NOVANAS.LOCAL"); err != nil {
+			return fmt.Errorf("step9 addprinc testuser: %w", err)
+		}
+
+		// Step 10: ktadd both NFS service principals into a temp keytab,
+		// then upload it through the Manager (exercises UploadKeytab).
+		_ = os.Remove(testKeytabPath)
+		if _, err := runCmd(ctx, "kadmin.local", "-q",
+			"ktadd -k "+testKeytabPath+
+				" nfs/127.0.0.1@NOVANAS.LOCAL"+
+				" nfs/localhost@NOVANAS.LOCAL"+
+				" nfs/"+hostname+"@NOVANAS.LOCAL"); err != nil {
+			return fmt.Errorf("step10 ktadd: %w", err)
+		}
+		ktData, err := os.ReadFile(testKeytabPath)
+		if err != nil {
+			return fmt.Errorf("step10 read keytab: %w", err)
+		}
+		if err := km.UploadKeytab(ctx, ktData); err != nil {
+			return fmt.Errorf("step10 UploadKeytab: %w", err)
+		}
+
+		// Step 11: restart nfs-server to pick up new keytab + idmapd.
+		// Debian 13: rpc-svcgssd is folded into nfs-server.
+		if _, err := runCmd(ctx, "systemctl", "restart", "nfs-server"); err != nil {
+			dumpJournal("nfs-server")
+			return fmt.Errorf("step11 restart nfs-server: %w", err)
+		}
+
+		// Step 12: ensure client-side gssd is running. On Debian 13
+		// nfs-common provides rpc-gssd as part of nfs-client.target.
+		_, _ = runCmd(ctx, "systemctl", "start", "nfs-client.target")
+		_, _ = runCmd(ctx, "systemctl", "start", "rpc-gssd")
+
+		// Step 13: pool, dataset, export.
+		// Belt-and-suspenders: scenario 55's deferred pool destroy can
+		// fail silently if NFS still holds a reference to the export's
+		// path. Force-destroy any leftover "validate" pool, unmount any
+		// stale NFS export, then aggressively wipe.
+		_, _ = runCmd(ctx, "umount", "-f", "/mnt/validate-nfs")
+		_, _ = runCmd(ctx, "/usr/sbin/exportfs", "-ua")
+		_ = pm.Destroy(ctx, poolName)
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return fmt.Errorf("step13 pool create: %w", err)
+		}
+		poolCreated = true
+
+		if err := os.MkdirAll("/validate", 0o755); err != nil {
+			return fmt.Errorf("step13 mkdir /validate: %w", err)
+		}
+		dsName := "nfs-krb"
+		full := poolName + "/" + dsName
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: dsName, Type: "filesystem",
+			Properties: map[string]string{"mountpoint": exportMP},
+		}); err != nil {
+			return fmt.Errorf("step13 dataset create: %w", err)
+		}
+		defer func() { _ = dm.Destroy(ctx, full, false) }()
+
+		nm := &nfs.Manager{ExportsBin: "/usr/sbin/exportfs"}
+		if err := nm.CreateExport(ctx, nfs.Export{
+			Name: exportName,
+			Path: exportMP,
+			Clients: []nfs.ClientRule{{
+				Spec:    "127.0.0.1",
+				// all_squash + anonuid/gid=0: with sec=krb5 and no user
+				// TGT in the kernel keyring, the kernel uses machine
+				// creds and idmapd maps unknown principals to nobody.
+				// Squashing everyone to uid 0 lets the test write
+				// without setting up a per-user TGT — this is a
+				// test-only relaxation, not a recommended production
+				// setting. Real deployments use krb5 + per-user
+				// kinit + a properly populated idmapd domain.
+				Options: "rw,sync,no_subtree_check,sec=krb5,all_squash,anonuid=0,anongid=0",
+			}},
+		}); err != nil {
+			return fmt.Errorf("step13 CreateExport: %w", err)
+		}
+		exportCreated = true
+
+		// Steps 14-15: mount with sec=krb5. Linux NFS client + sec=krb5
+		// uses /etc/krb5.keytab (machine creds) under the root context.
+		// Force-unmount any stale mount left over from a previous run,
+		// then re-create the dir cleanly.
+		_, _ = runCmd(ctx, "umount", "-f", "-l", mountPoint)
+		_ = os.Remove(mountPoint)
+		if err := os.MkdirAll(mountPoint, 0o755); err != nil {
+			return fmt.Errorf("step15 mkdir mountpoint: %w", err)
+		}
+		if _, err := runCmd(ctx, "mount", "-t", "nfs",
+			"-o", "vers=4.2,sec=krb5",
+			"127.0.0.1:"+exportMP, mountPoint); err != nil {
+			if dmesg, derr := runCmd(ctx, "dmesg"); derr == nil {
+				lines := strings.Split(string(dmesg), "\n")
+				if len(lines) > 50 {
+					lines = lines[len(lines)-50:]
+				}
+				fmt.Printf("  dmesg tail:\n%s\n", strings.Join(lines, "\n"))
+			}
+			dumpJournal("rpc-gssd")
+			return fmt.Errorf("step15 mount sec=krb5: %w", err)
+		}
+		mounted = true
+
+		// Step 16: 1 MiB IO + sha256 verify.
+		payload := filepath.Join(mountPoint, "payload.bin")
+		writePayload(payload, 1<<20)
+		hashWrote := sha256file(payload)
+		readBack, err := os.ReadFile(payload)
+		if err != nil {
+			return fmt.Errorf("step16 readback: %w", err)
+		}
+		hashRead := sha256bytes(readBack)
+		if hashRead != hashWrote {
+			return fmt.Errorf("step16 sha256 mismatch: write=%s read=%s", hashWrote, hashRead)
+		}
+		fmt.Printf("  sec=krb5 1 MiB payload sha256 round-trip ok (%s)\n", hashRead[:16])
+
+		// Step 17: umount.
+		if _, err := runCmd(ctx, "umount", mountPoint); err != nil {
+			return fmt.Errorf("step17 umount: %w", err)
+		}
+		mounted = false
+
+		// Step 18: tear-down handled by deferred cleanup above.
+		return nil
+	})
+
 	fmt.Println("\nALL CHECKS PASSED")
 }
 
@@ -3098,6 +3542,16 @@ func runCmd(ctx context.Context, name string, args ...string) ([]byte, error) {
 func which(bin string) bool {
 	_, err := exec.LookPath(bin)
 	return err == nil
+}
+
+// systemctlIsActive reports whether `systemctl is-active <unit>` exits 0
+// and emits "active" (the standard signal that the unit is up).
+func systemctlIsActive(ctx context.Context, unit string) bool {
+	out, err := exec.CommandContext(ctx, "systemctl", "is-active", unit).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "active")
 }
 
 // waitDevice polls until path exists (typical zvol/udev settle case).

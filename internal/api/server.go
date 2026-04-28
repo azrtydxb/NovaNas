@@ -11,6 +11,8 @@ import (
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
@@ -33,6 +35,8 @@ type Deps struct {
 	SnapshotMgr   *snapshot.Manager  // concrete manager for synchronous holds queries
 	IscsiMgr      *iscsi.Manager
 	NvmeofMgr     *nvmeof.Manager
+	NfsMgr        *nfs.Manager
+	Krb5Mgr       *krb5.Manager
 	RdmaLister    *rdma.Lister
 }
 
@@ -86,6 +90,16 @@ func New(d Deps) *Server {
 		nvmeofH = &handlers.NvmeofHandler{Logger: d.Logger, Mgr: d.NvmeofMgr}
 	}
 	nvmeofW = &handlers.NvmeofWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var nfsH *handlers.NfsHandler
+	if d.NfsMgr != nil {
+		nfsH = &handlers.NfsHandler{Logger: d.Logger, Mgr: d.NfsMgr}
+	}
+	nfsW := &handlers.NfsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var krb5H *handlers.Krb5Handler
+	if d.Krb5Mgr != nil {
+		krb5H = &handlers.Krb5Handler{Logger: d.Logger, Mgr: d.Krb5Mgr}
+	}
+	krb5W := &handlers.Krb5WriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	rdmaH := &handlers.RDMAHandler{Logger: d.Logger, Lister: d.RdmaLister}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
@@ -172,6 +186,28 @@ func New(d Deps) *Server {
 		r.Post("/nvmeof/hosts/{nqn}/dhchap", nvmeofW.SetHostDHChap)
 		r.Delete("/nvmeof/hosts/{nqn}/dhchap", nvmeofW.ClearHostDHChap)
 		r.Post("/nvmeof/saveconfig", nvmeofW.SaveConfig)
+
+		// NFS
+		if nfsH != nil {
+			r.Get("/nfs/exports", nfsH.ListExports)
+			r.Get("/nfs/exports/active", nfsH.ListActive)
+			r.Get("/nfs/exports/{name}", nfsH.GetExport)
+		}
+		r.Post("/nfs/exports", nfsW.CreateExport)
+		r.Patch("/nfs/exports/{name}", nfsW.UpdateExport)
+		r.Delete("/nfs/exports/{name}", nfsW.DeleteExport)
+		r.Post("/nfs/reload", nfsW.Reload)
+
+		// Kerberos
+		if krb5H != nil {
+			r.Get("/krb5/config", krb5H.GetConfig)
+			r.Get("/krb5/idmapd", krb5H.GetIdmapd)
+			r.Get("/krb5/keytab", krb5H.ListKeytab)
+		}
+		r.Put("/krb5/config", krb5W.SetConfig)
+		r.Put("/krb5/idmapd", krb5W.SetIdmapd)
+		r.Put("/krb5/keytab", krb5W.UploadKeytab)
+		r.Delete("/krb5/keytab", krb5W.DeleteKeytab)
 
 		// RDMA
 		r.Get("/network/rdma", rdmaH.List)

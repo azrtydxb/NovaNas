@@ -14,6 +14,8 @@ import (
 
 	"github.com/novanas/nova-nas/internal/host/exec"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -30,6 +32,8 @@ type WorkerDeps struct {
 	Snapshots *snapshot.Manager
 	IscsiMgr  *iscsi.Manager
 	NvmeofMgr *nvmeof.Manager
+	NfsMgr    *nfs.Manager
+	Krb5Mgr   *krb5.Manager
 }
 
 func NewServeMux(d WorkerDeps) *asynq.ServeMux {
@@ -90,6 +94,14 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindNvmeofSetHostDHChap), d.handleNvmeofSetHostDHChap)
 	mux.HandleFunc(string(KindNvmeofClearHostDHChap), d.handleNvmeofClearHostDHChap)
 	mux.HandleFunc(string(KindNvmeofSaveConfig), d.handleNvmeofSaveConfig)
+	mux.HandleFunc(string(KindNfsExportCreate), d.handleNfsExportCreate)
+	mux.HandleFunc(string(KindNfsExportUpdate), d.handleNfsExportUpdate)
+	mux.HandleFunc(string(KindNfsExportDelete), d.handleNfsExportDelete)
+	mux.HandleFunc(string(KindNfsReload), d.handleNfsReload)
+	mux.HandleFunc(string(KindKrb5SetConfig), d.handleKrb5SetConfig)
+	mux.HandleFunc(string(KindKrb5SetIdmapd), d.handleKrb5SetIdmapd)
+	mux.HandleFunc(string(KindKrb5UploadKeytab), d.handleKrb5UploadKeytab)
+	mux.HandleFunc(string(KindKrb5DeleteKeytab), d.handleKrb5DeleteKeytab)
 	return mux
 }
 
@@ -827,6 +839,106 @@ func (d WorkerDeps) handleNvmeofSaveConfig(ctx context.Context, t *asynq.Task) e
 		path = "/etc/nova-nas/nvmet-config.json"
 	}
 	err = d.NvmeofMgr.SaveToFile(ctx, path)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// ---------- NFS handlers ----------
+
+func (d WorkerDeps) handleNfsExportCreate(ctx context.Context, t *asynq.Task) error {
+	var p NfsExportCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NfsMgr.CreateExport(ctx, p.Export)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNfsExportUpdate(ctx context.Context, t *asynq.Task) error {
+	var p NfsExportUpdatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NfsMgr.UpdateExport(ctx, p.Export)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNfsExportDelete(ctx context.Context, t *asynq.Task) error {
+	var p NfsExportDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NfsMgr.DeleteExport(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNfsReload(ctx context.Context, t *asynq.Task) error {
+	var p NfsReloadPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NfsMgr.Reload(ctx)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// ---------- Kerberos handlers ----------
+
+func (d WorkerDeps) handleKrb5SetConfig(ctx context.Context, t *asynq.Task) error {
+	var p Krb5SetConfigPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Krb5Mgr.SetConfig(ctx, p.Config)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleKrb5SetIdmapd(ctx context.Context, t *asynq.Task) error {
+	var p Krb5SetIdmapdPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Krb5Mgr.SetIdmapdConfig(ctx, p.Config)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleKrb5UploadKeytab(ctx context.Context, t *asynq.Task) error {
+	var p Krb5UploadKeytabPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Krb5Mgr.UploadKeytab(ctx, p.Data)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleKrb5DeleteKeytab(ctx context.Context, t *asynq.Task) error {
+	var p Krb5DeleteKeytabPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Krb5Mgr.DeleteKeytab(ctx)
 	d.finish(ctx, id, err)
 	return err
 }

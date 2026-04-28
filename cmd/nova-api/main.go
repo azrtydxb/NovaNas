@@ -19,6 +19,8 @@ import (
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
@@ -55,6 +57,8 @@ func main() {
 	snapMgr := &snapshot.Manager{ZFSBin: cfg.ZFSBin}
 	iscsiMgr := &iscsi.Manager{}
 	nvmeofMgr := &nvmeof.Manager{}
+	nfsMgr := &nfs.Manager{}
+	krb5Mgr := &krb5.Manager{}
 	rdmaLister := &rdma.Lister{}
 
 	// Asynq client (dispatcher uses this)
@@ -100,6 +104,8 @@ func main() {
 		Snapshots: snapMgr,
 		IscsiMgr:  iscsiMgr,
 		NvmeofMgr: nvmeofMgr,
+		NfsMgr:    nfsMgr,
+		Krb5Mgr:   krb5Mgr,
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
@@ -126,6 +132,8 @@ func main() {
 		SnapshotMgr: snapMgr,
 		IscsiMgr:    iscsiMgr,
 		NvmeofMgr:   nvmeofMgr,
+		NfsMgr:      nfsMgr,
+		Krb5Mgr:     krb5Mgr,
 		RdmaLister:  rdmaLister,
 	})
 	httpSrv := &http.Server{

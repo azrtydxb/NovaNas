@@ -3,6 +3,8 @@ package jobs
 
 import (
 	"github.com/novanas/nova-nas/internal/host/iscsi"
+	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -72,6 +74,18 @@ const (
 	KindNvmeofSetHostDHChap    Kind = "nvmeof.host.dhchap.set"
 	KindNvmeofClearHostDHChap  Kind = "nvmeof.host.dhchap.clear"
 	KindNvmeofSaveConfig       Kind = "nvmeof.saveconfig"
+
+	// NFS
+	KindNfsExportCreate Kind = "nfs.export.create"
+	KindNfsExportUpdate Kind = "nfs.export.update"
+	KindNfsExportDelete Kind = "nfs.export.delete"
+	KindNfsReload       Kind = "nfs.reload"
+
+	// Kerberos
+	KindKrb5SetConfig     Kind = "krb5.config.set"
+	KindKrb5SetIdmapd     Kind = "krb5.idmapd.set"
+	KindKrb5UploadKeytab  Kind = "krb5.keytab.upload"
+	KindKrb5DeleteKeytab  Kind = "krb5.keytab.delete"
 )
 
 // ---------- iSCSI payloads ----------
@@ -352,3 +366,37 @@ type PoolUpgradePayload struct {
 type PoolReguidPayload struct {
 	Name string `json:"name"`
 }
+
+// ---------- NFS payloads ----------
+
+type NfsExportCreatePayload struct {
+	Export nfs.Export `json:"export"`
+}
+
+type NfsExportUpdatePayload struct {
+	Export nfs.Export `json:"export"`
+}
+
+type NfsExportDeletePayload struct {
+	Name string `json:"name"`
+}
+
+type NfsReloadPayload struct{}
+
+// ---------- Kerberos payloads ----------
+
+type Krb5SetConfigPayload struct {
+	Config krb5.Config `json:"config"`
+}
+
+type Krb5SetIdmapdPayload struct {
+	Config krb5.IdmapdConfig `json:"config"`
+}
+
+// Krb5UploadKeytabPayload carries the raw keytab bytes. encoding/json
+// emits []byte as base64, so the on-the-wire shape is `{"data":"<base64>"}`.
+type Krb5UploadKeytabPayload struct {
+	Data []byte `json:"data"`
+}
+
+type Krb5DeleteKeytabPayload struct{}
