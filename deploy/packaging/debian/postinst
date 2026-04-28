@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        if [ ! -f /etc/nova-api/env ]; then
+            mkdir -p /etc/nova-api
+            cat > /etc/nova-api/env <<'EOF'
+DATABASE_URL=postgres://novanas:novanas@127.0.0.1:5432/novanas?sslmode=disable
+REDIS_URL=redis://127.0.0.1:6379/0
+LISTEN_ADDR=:8080
+LOG_LEVEL=info
+EOF
+            chmod 0640 /etc/nova-api/env
+        fi
+        systemd-tmpfiles --create /usr/lib/tmpfiles.d/nova-api.conf || true
+        deb-systemd-helper enable nova-api.service || true
+        deb-systemd-invoke start nova-api.service || true
+    ;;
+esac
+exit 0

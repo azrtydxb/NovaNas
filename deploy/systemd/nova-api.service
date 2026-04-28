@@ -1,0 +1,27 @@
+[Unit]
+Description=NovaNAS API server
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+Requires=postgresql.service redis.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/nova-api/env
+ExecStart=/usr/bin/nova-api
+Restart=on-failure
+RestartSec=2
+User=root
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/log/nova-api /var/lib/nova-api
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+# Capabilities needed for ZFS + future host ops
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_DAC_READ_SEARCH CAP_SYS_MODULE
+AmbientCapabilities=CAP_SYS_ADMIN CAP_NET_ADMIN
+# ZFS device node
+DeviceAllow=/dev/zfs rw
+
+[Install]
+WantedBy=multi-user.target
