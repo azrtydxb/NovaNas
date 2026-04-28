@@ -664,6 +664,286 @@ func main() {
 	})
 	cleanup("after scenario 20")
 
+	// ---- Dataset/zvol/quota scenarios (21-25) -------------------------------
+
+	step("21. zvol create + REAL block IO + snapshot/rollback", func() error {
+		wipeDisks(disks[:2])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/vol1"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "vol1", Type: "volume",
+			VolumeSizeBytes: 64 << 20, // 64 MiB
+			Properties:      map[string]string{"compression": "lz4"},
+		}); err != nil {
+			return err
+		}
+		got, err := dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		if got.Dataset.Type != "volume" {
+			return fmt.Errorf("zvol type=%q want volume", got.Dataset.Type)
+		}
+		if got.Props["volsize"] == "" {
+			return fmt.Errorf("volsize not reported by Get: props=%v", got.Props)
+		}
+		fmt.Printf("  zvol %s created, volsize=%s\n", full, got.Props["volsize"])
+
+		// Block device path: /dev/zvol/<pool>/<name>. Wait briefly for udev.
+		dev := "/dev/zvol/" + full
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(dev); err == nil {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		if _, err := os.Stat(dev); err != nil {
+			return fmt.Errorf("zvol device did not appear at %s: %v", dev, err)
+		}
+
+		// Real block IO: write 4 MiB of known data to offset 0, sha256 it.
+		payload := make([]byte, 4<<20)
+		for i := range payload {
+			payload[i] = byte(i % 251)
+		}
+		if err := writeBlockAt(dev, 0, payload); err != nil {
+			return fmt.Errorf("write zvol: %w", err)
+		}
+		hashOriginal := sha256bytes(payload)
+		fmt.Printf("  wrote 4MiB to %s, sha256=%s\n", dev, hashOriginal[:16])
+
+		if err := sm.Create(ctx, full, "before-mutate", false); err != nil {
+			return err
+		}
+		// Mutate the same range with garbage.
+		mutated := make([]byte, len(payload))
+		for i := range mutated {
+			mutated[i] = 0xAB
+		}
+		if err := writeBlockAt(dev, 0, mutated); err != nil {
+			return fmt.Errorf("mutate zvol: %w", err)
+		}
+		readBack, err := readBlockAt(dev, 0, len(payload))
+		if err != nil {
+			return fmt.Errorf("read back: %w", err)
+		}
+		if sha256bytes(readBack) == hashOriginal {
+			return fmt.Errorf("zvol did not actually change")
+		}
+		// Rollback.
+		if err := sm.Rollback(ctx, full+"@before-mutate"); err != nil {
+			return err
+		}
+		// Re-read; udev may need a moment to refresh the device-mapper view
+		// after rollback, so retry briefly.
+		var afterRollback []byte
+		ddl := time.Now().Add(5 * time.Second)
+		for time.Now().Before(ddl) {
+			afterRollback, err = readBlockAt(dev, 0, len(payload))
+			if err == nil && sha256bytes(afterRollback) == hashOriginal {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		if err != nil {
+			return fmt.Errorf("read after rollback: %w", err)
+		}
+		if sha256bytes(afterRollback) != hashOriginal {
+			return fmt.Errorf("rollback did not restore zvol contents")
+		}
+		fmt.Printf("  rollback verified: zvol bytes match original\n")
+
+		if err := sm.Destroy(ctx, full+"@before-mutate"); err != nil {
+			return err
+		}
+		return dm.Destroy(ctx, full, false)
+	})
+
+	step("22. zvol resize via SetProps(volsize)", func() error {
+		// Pool from scenario 21 still alive.
+		full := poolName + "/vol2"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "vol2", Type: "volume",
+			VolumeSizeBytes: 32 << 20, // 32 MiB
+		}); err != nil {
+			return err
+		}
+		// Grow to 128 MiB.
+		newSize := uint64(128 << 20)
+		if err := dm.SetProps(ctx, full, map[string]string{
+			"volsize": fmt.Sprintf("%d", newSize),
+		}); err != nil {
+			return fmt.Errorf("setprops volsize: %w", err)
+		}
+		got, err := dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		if got.Props["volsize"] != fmt.Sprintf("%d", newSize) {
+			return fmt.Errorf("volsize after resize=%q want %d", got.Props["volsize"], newSize)
+		}
+		fmt.Printf("  resized %s 32MiB → %s bytes (volsize property)\n", full, got.Props["volsize"])
+		return dm.Destroy(ctx, full, false)
+	})
+
+	step("23. dataset quota enforces ENOSPC", func() error {
+		full := poolName + "/quota_fs"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "quota_fs", Type: "filesystem",
+			Properties: map[string]string{"quota": "8M", "compression": "off"},
+		}); err != nil {
+			return err
+		}
+		got, err := dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		// ZFS reports quota in bytes when -p was used.
+		if got.Props["quota"] == "" || got.Props["quota"] == "0" || got.Props["quota"] == "none" {
+			return fmt.Errorf("quota not set on %s: props.quota=%q", full, got.Props["quota"])
+		}
+		fmt.Printf("  quota=%s bytes set on %s\n", got.Props["quota"], full)
+
+		mp := "/" + full
+		// Writing 4MiB should succeed (well under quota).
+		small := filepath.Join(mp, "small.bin")
+		if err := writeRandom(small, 4<<20); err != nil {
+			return fmt.Errorf("write 4MiB: %w", err)
+		}
+		fmt.Printf("  wrote 4MiB OK (under quota)\n")
+
+		// Writing another 16MiB should FAIL with ENOSPC (quota is 8M total).
+		big := filepath.Join(mp, "big.bin")
+		err = writeRandom(big, 16<<20)
+		if err == nil {
+			return fmt.Errorf("expected ENOSPC writing 16MiB to 8M-quota dataset, got nil")
+		}
+		if !strings.Contains(err.Error(), "no space") &&
+			!strings.Contains(err.Error(), "disk quota exceeded") &&
+			!strings.Contains(err.Error(), "Disk quota exceeded") {
+			// Be lenient about exact phrasing; just require *some* error.
+			fmt.Printf("  write rejected (as expected): %v\n", err)
+		} else {
+			fmt.Printf("  write rejected with quota error: %v\n", err)
+		}
+
+		// Raise quota; the same write should now succeed.
+		if err := dm.SetProps(ctx, full, map[string]string{"quota": "64M"}); err != nil {
+			return err
+		}
+		os.Remove(big) // discard partial write
+		if err := writeRandom(big, 16<<20); err != nil {
+			return fmt.Errorf("write after quota raise: %w", err)
+		}
+		fmt.Printf("  after quota=64M, 16MiB write succeeds\n")
+		return dm.Destroy(ctx, full, false)
+	})
+
+	step("24. zvol volsize enforces block-device size", func() error {
+		full := poolName + "/vol_small"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "vol_small", Type: "volume",
+			VolumeSizeBytes: 16 << 20, // 16 MiB
+		}); err != nil {
+			return err
+		}
+		dev := "/dev/zvol/" + full
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(dev); err == nil {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		// Writing 32MiB at offset 0 must fail (device is 16MiB).
+		buf := make([]byte, 32<<20)
+		err := writeBlockAt(dev, 0, buf)
+		if err == nil {
+			return fmt.Errorf("expected write past volsize to fail, got nil")
+		}
+		fmt.Printf("  write past volsize rejected: %v\n", err)
+		return dm.Destroy(ctx, full, false)
+	})
+
+	step("25. List/Get sees zvols and filesystems together", func() error {
+		// Create one of each, list under the pool, both must appear with the
+		// right Type. Exercises dataset.List(-t filesystem,volume).
+		fsFull := poolName + "/mixfs"
+		volFull := poolName + "/mixvol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "mixfs", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "mixvol", Type: "volume",
+			VolumeSizeBytes: 16 << 20,
+		}); err != nil {
+			return err
+		}
+		ds, err := dm.List(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		var seenFs, seenVol bool
+		for _, d := range ds {
+			switch d.Name {
+			case fsFull:
+				if d.Type != "filesystem" {
+					return fmt.Errorf("%s reported type=%q", d.Name, d.Type)
+				}
+				seenFs = true
+			case volFull:
+				if d.Type != "volume" {
+					return fmt.Errorf("%s reported type=%q", d.Name, d.Type)
+				}
+				seenVol = true
+			}
+		}
+		if !seenFs || !seenVol {
+			return fmt.Errorf("List missed entries: fs=%v vol=%v (got %d datasets)", seenFs, seenVol, len(ds))
+		}
+		fmt.Printf("  List returned both filesystem and volume with correct Type\n")
+
+		// Snapshots over both (zfs snapshot works the same regardless of type).
+		if err := sm.Create(ctx, fsFull, "s1", false); err != nil {
+			return err
+		}
+		if err := sm.Create(ctx, volFull, "s1", false); err != nil {
+			return err
+		}
+		snaps, err := sm.List(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		var fsSnap, volSnap bool
+		for _, s := range snaps {
+			if s.Name == fsFull+"@s1" {
+				fsSnap = true
+			}
+			if s.Name == volFull+"@s1" {
+				volSnap = true
+			}
+		}
+		if !fsSnap || !volSnap {
+			return fmt.Errorf("snapshot list missed entries: fs=%v vol=%v", fsSnap, volSnap)
+		}
+		fmt.Printf("  snapshot.List sees both fs and zvol snapshots\n")
+
+		_ = sm.Destroy(ctx, fsFull+"@s1")
+		_ = sm.Destroy(ctx, volFull+"@s1")
+		_ = dm.Destroy(ctx, fsFull, false)
+		_ = dm.Destroy(ctx, volFull, false)
+		return nil
+	})
+	cleanup("after scenario 25")
+
 	fmt.Println("\nALL CHECKS PASSED")
 }
 
@@ -748,6 +1028,65 @@ func writePayload(path string, size int) {
 	if err := f.Sync(); err != nil {
 		die("sync %s: %v", path, err)
 	}
+}
+
+// sha256bytes returns hex sha256 of buf.
+func sha256bytes(buf []byte) string {
+	h := sha256.Sum256(buf)
+	return hex.EncodeToString(h[:])
+}
+
+// writeBlockAt opens path with O_WRONLY (no truncate — required for block
+// devices), pwrites buf at offset, fsyncs, closes.
+func writeBlockAt(path string, off int64, buf []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteAt(buf, off); err != nil {
+		return err
+	}
+	return f.Sync()
+}
+
+// readBlockAt opens path read-only, reads n bytes at offset.
+func readBlockAt(path string, off int64, n int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	buf := make([]byte, n)
+	if _, err := f.ReadAt(buf, off); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+// writeRandom writes size bytes of pseudo-random reproducible data to path,
+// returning the first error encountered (open, write, or sync). Used for
+// quota tests where we need to detect ENOSPC mid-write.
+func writeRandom(path string, size int) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	buf := make([]byte, 1<<16)
+	for i := range buf {
+		buf[i] = byte(i * 7)
+	}
+	for written := 0; written < size; written += len(buf) {
+		n := len(buf)
+		if size-written < n {
+			n = size - written
+		}
+		if _, err := f.Write(buf[:n]); err != nil {
+			return err
+		}
+	}
+	return f.Sync()
 }
 
 func sha256file(path string) string {

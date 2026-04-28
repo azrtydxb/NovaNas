@@ -45,27 +45,30 @@ func (e DatasetCreateSpecType) Valid() bool {
 	}
 }
 
-// Defines values for PoolCreateSpecVdevsType.
+// Defines values for VdevSpecType.
 const (
-	Mirror PoolCreateSpecVdevsType = "mirror"
-	Raidz1 PoolCreateSpecVdevsType = "raidz1"
-	Raidz2 PoolCreateSpecVdevsType = "raidz2"
-	Raidz3 PoolCreateSpecVdevsType = "raidz3"
-	Stripe PoolCreateSpecVdevsType = "stripe"
+	VdevSpecTypeDisk   VdevSpecType = "disk"
+	VdevSpecTypeMirror VdevSpecType = "mirror"
+	VdevSpecTypeRaidz1 VdevSpecType = "raidz1"
+	VdevSpecTypeRaidz2 VdevSpecType = "raidz2"
+	VdevSpecTypeRaidz3 VdevSpecType = "raidz3"
+	VdevSpecTypeStripe VdevSpecType = "stripe"
 )
 
-// Valid indicates whether the value is a known member of the PoolCreateSpecVdevsType enum.
-func (e PoolCreateSpecVdevsType) Valid() bool {
+// Valid indicates whether the value is a known member of the VdevSpecType enum.
+func (e VdevSpecType) Valid() bool {
 	switch e {
-	case Mirror:
+	case VdevSpecTypeDisk:
 		return true
-	case Raidz1:
+	case VdevSpecTypeMirror:
 		return true
-	case Raidz2:
+	case VdevSpecTypeRaidz1:
 		return true
-	case Raidz3:
+	case VdevSpecTypeRaidz2:
 		return true
-	case Stripe:
+	case VdevSpecTypeRaidz3:
+		return true
+	case VdevSpecTypeStripe:
 		return true
 	default:
 		return false
@@ -190,18 +193,12 @@ type Pool struct {
 
 // PoolCreateSpec defines model for PoolCreateSpec.
 type PoolCreateSpec struct {
-	Cache *[]string `json:"cache,omitempty"`
-	Log   *[]string `json:"log,omitempty"`
-	Name  string    `json:"name"`
-	Spare *[]string `json:"spare,omitempty"`
-	Vdevs []struct {
-		Disks []string                `json:"disks"`
-		Type  PoolCreateSpecVdevsType `json:"type"`
-	} `json:"vdevs"`
+	Cache *[]string   `json:"cache,omitempty"`
+	Log   *[]VdevSpec `json:"log,omitempty"`
+	Name  string      `json:"name"`
+	Spare *[]string   `json:"spare,omitempty"`
+	Vdevs []VdevSpec  `json:"vdevs"`
 }
-
-// PoolCreateSpecVdevsType defines model for PoolCreateSpec.Vdevs.Type.
-type PoolCreateSpecVdevsType string
 
 // PoolDetail defines model for PoolDetail.
 type PoolDetail struct {
@@ -243,6 +240,15 @@ type Vdev struct {
 	Type           *string `json:"type,omitempty"`
 	WriteErrors    *int    `json:"writeErrors,omitempty"`
 }
+
+// VdevSpec defines model for VdevSpec.
+type VdevSpec struct {
+	Disks []string     `json:"disks"`
+	Type  VdevSpecType `json:"type"`
+}
+
+// VdevSpecType defines model for VdevSpec.Type.
+type VdevSpecType string
 
 // Accepted defines model for Accepted.
 type Accepted struct {

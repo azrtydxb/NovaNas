@@ -403,6 +403,12 @@ components:
         children:
           type: array
           items: { $ref: '#/components/schemas/Vdev' }
+    VdevSpec:
+      type: object
+      required: [type, disks]
+      properties:
+        type:  { type: string, enum: [mirror, raidz1, raidz2, raidz3, stripe, disk] }
+        disks: { type: array, items: { type: string } }
     PoolCreateSpec:
       type: object
       required: [name, vdevs]
@@ -410,13 +416,10 @@ components:
         name: { type: string }
         vdevs:
           type: array
-          items:
-            type: object
-            required: [type, disks]
-            properties:
-              type: { type: string, enum: [mirror, raidz1, raidz2, raidz3, stripe] }
-              disks: { type: array, items: { type: string } }
-        log:   { type: array, items: { type: string } }
+          items: { $ref: '#/components/schemas/VdevSpec' }
+        # Log accepts mirror|stripe|disk vdevs only (raidz/draid are rejected
+        # by the API — ZFS does not support them for log vdevs).
+        log:   { type: array, items: { $ref: '#/components/schemas/VdevSpec' } }
         cache: { type: array, items: { type: string } }
         spare: { type: array, items: { type: string } }
     Dataset:
