@@ -1,0 +1,39 @@
+{
+  "blockdevices": [
+    {
+      "name": "sda",
+      "size": "1000204886016",
+      "model": "ST1000DM010-2EP102",
+      "serial": "ZN12ABCD",
+      "type": "disk",
+      "rota": true,
+      "fstype": null,
+      "mountpoint": null,
+      "wwn": "0x5000c500abcdef00",
+      "children": [
+        {
+          "name": "sda1",
+          "size": "1000204869632",
+          "model": null,
+          "serial": null,
+          "type": "part",
+          "rota": true,
+          "fstype": "zfs_member",
+          "mountpoint": null,
+          "wwn": "0x5000c500abcdef00"
+        }
+      ]
+    },
+    {
+      "name": "sdb",
+      "size": "500107862016",
+      "model": "INTEL SSDSC2KW",
+      "serial": "BTYM12345678",
+      "type": "disk",
+      "rota": false,
+      "fstype": null,
+      "mountpoint": null,
+      "wwn": "0x55cd2e404abcdef0"
+    }
+  ]
+}
