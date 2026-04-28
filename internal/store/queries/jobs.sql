@@ -18,6 +18,10 @@ UPDATE jobs
  WHERE id = $1 AND state IN ('queued','interrupted');
 
 -- name: MarkJobFinished :exec
+-- Only writes if the row is still 'running'. A user CancelJob between
+-- markRunning and finish flips state to 'cancelled' and the host op is
+-- already underway — we honor the user's cancel intent in the row even
+-- though the host effect can't be unwound.
 UPDATE jobs
    SET state = $2,
        stdout = $3,
@@ -25,7 +29,7 @@ UPDATE jobs
        exit_code = $5,
        error = $6,
        finished_at = now()
- WHERE id = $1;
+ WHERE id = $1 AND state = 'running';
 
 -- name: MarkRunningInterrupted :exec
 UPDATE jobs

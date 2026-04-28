@@ -143,7 +143,7 @@ UPDATE jobs
        exit_code = $5,
        error = $6,
        finished_at = now()
- WHERE id = $1
+ WHERE id = $1 AND state = 'running'
 `
 
 type MarkJobFinishedParams struct {
@@ -155,6 +155,10 @@ type MarkJobFinishedParams struct {
 	Error    *string     `json:"error"`
 }
 
+// Only writes if the row is still 'running'. A user CancelJob between
+// markRunning and finish flips state to 'cancelled' and the host op is
+// already underway — we honor the user's cancel intent in the row even
+// though the host effect can't be unwound.
 func (q *Queries) MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error {
 	_, err := q.db.Exec(ctx, markJobFinished,
 		arg.ID,

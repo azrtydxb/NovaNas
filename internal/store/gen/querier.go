@@ -20,6 +20,10 @@ type Querier interface {
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
+	// Only writes if the row is still 'running'. A user CancelJob between
+	// markRunning and finish flips state to 'cancelled' and the host op is
+	// already underway — we honor the user's cancel intent in the row even
+	// though the host effect can't be unwound.
 	MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error
 	MarkJobRunning(ctx context.Context, id pgtype.UUID) error
 	MarkRunningInterrupted(ctx context.Context) error
