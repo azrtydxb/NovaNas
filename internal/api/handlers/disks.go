@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -23,9 +22,11 @@ func (h *DisksHandler) List(w http.ResponseWriter, r *http.Request) {
 	ds, err := h.Lister.List(r.Context())
 	if err != nil {
 		h.Logger.Error("disks list", "err", err)
-		middleware.WriteError(w, http.StatusInternalServerError, "host_error", err.Error())
+		middleware.WriteError(w, http.StatusInternalServerError, "host_error", "failed to list disks")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(ds)
+	if ds == nil {
+		ds = []disks.Disk{}
+	}
+	middleware.WriteJSON(w, h.Logger, http.StatusOK, ds)
 }
