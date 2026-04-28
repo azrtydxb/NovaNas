@@ -1,0 +1,17 @@
+# Build
+/bin/
+/dist/
+nova-api
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.local
