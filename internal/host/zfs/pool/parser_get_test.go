@@ -44,3 +44,40 @@ func TestParseStatus_VdevTree(t *testing.T) {
 		t.Errorf("mirror children=%d", len(st.Vdevs[0].Children))
 	}
 }
+
+// Group headers (logs/cache/spares) appear in zpool status with only the
+// group name on a line — no STATE column. The parser must accept these.
+func TestParseStatus_LogsAndCacheGroups(t *testing.T) {
+	in := []byte("  pool: tank\n state: ONLINE\nconfig:\n\n" +
+		"\tNAME             STATE     READ WRITE CKSUM\n" +
+		"\ttank             ONLINE       0     0     0\n" +
+		"\t  mirror-0       ONLINE       0     0     0\n" +
+		"\t    /dev/A       ONLINE       0     0     0\n" +
+		"\t    /dev/B       ONLINE       0     0     0\n" +
+		"\tlogs\n" +
+		"\t  /dev/log1      ONLINE       0     0     0\n" +
+		"\tcache\n" +
+		"\t  /dev/cache1    ONLINE       0     0     0\n" +
+		"\nerrors: No known data errors\n")
+	st, err := parseStatus(in)
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	// Top-level: mirror, logs, cache (3 entries)
+	if len(st.Vdevs) != 3 {
+		t.Fatalf("want 3 top-level vdevs, got %d: %+v", len(st.Vdevs), st.Vdevs)
+	}
+	types := []string{st.Vdevs[0].Type, st.Vdevs[1].Type, st.Vdevs[2].Type}
+	wantTypes := []string{"mirror", "log", "cache"}
+	for i, want := range wantTypes {
+		if types[i] != want {
+			t.Errorf("vdev[%d].Type=%q want %q", i, types[i], want)
+		}
+	}
+	if len(st.Vdevs[1].Children) != 1 || st.Vdevs[1].Children[0].Path != "/dev/log1" {
+		t.Errorf("log children=%+v", st.Vdevs[1].Children)
+	}
+	if len(st.Vdevs[2].Children) != 1 || st.Vdevs[2].Children[0].Path != "/dev/cache1" {
+		t.Errorf("cache children=%+v", st.Vdevs[2].Children)
+	}
+}

@@ -132,10 +132,16 @@ func parseStatus(data []byte) (*Status, error) {
 			}
 		}
 		fields := strings.Fields(trim)
-		if len(fields) < 2 {
+		if len(fields) == 0 {
 			continue
 		}
-		name, state := fields[0], fields[1]
+		// Group-header lines (logs/cache/spares) appear with no STATE column.
+		// Accept them as single-field rows with state "-".
+		name := fields[0]
+		state := "-"
+		if len(fields) >= 2 {
+			state = fields[1]
+		}
 
 		// Skip the root pool line itself
 		if !rootSeen {
