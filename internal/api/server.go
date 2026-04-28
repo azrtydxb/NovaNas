@@ -85,6 +85,11 @@ func New(d Deps) *Server {
 				sseH := &handlers.SSEJobsHandler{Logger: d.Logger, Redis: d.Redis, Q: d.Store.Queries}
 				r.Get("/jobs/{id}/stream", sseH.Stream)
 			}
+
+			metaH := &handlers.MetadataHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Patch("/pools/{name}/metadata", metaH.PoolPatch)
+			r.Patch("/datasets/{fullname}/metadata", metaH.DatasetPatch)
+			r.Patch("/snapshots/{fullname}/metadata", metaH.SnapshotPatch)
 		}
 	})
 

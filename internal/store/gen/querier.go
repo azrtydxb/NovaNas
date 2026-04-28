@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CancelJob(ctx context.Context, id pgtype.UUID) error
+	DeleteResourceMetadata(ctx context.Context, arg DeleteResourceMetadataParams) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetResourceMetadata(ctx context.Context, arg GetResourceMetadataParams) (ResourceMetadatum, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
@@ -22,6 +23,7 @@ type Querier interface {
 	MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error
 	MarkJobRunning(ctx context.Context, id pgtype.UUID) error
 	MarkRunningInterrupted(ctx context.Context) error
+	UpsertResourceMetadata(ctx context.Context, arg UpsertResourceMetadataParams) (ResourceMetadatum, error)
 }
 
 var _ Querier = (*Queries)(nil)
