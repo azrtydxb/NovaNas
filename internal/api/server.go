@@ -80,6 +80,11 @@ func New(d Deps) *Server {
 			r.Get("/jobs", jobsH.List)
 			r.Get("/jobs/{id}", jobsH.Get)
 			r.Delete("/jobs/{id}", jobsH.Cancel)
+
+			if d.Redis != nil {
+				sseH := &handlers.SSEJobsHandler{Logger: d.Logger, Redis: d.Redis, Q: d.Store.Queries}
+				r.Get("/jobs/{id}/stream", sseH.Stream)
+			}
 		}
 	})
 

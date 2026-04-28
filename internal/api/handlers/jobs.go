@@ -35,6 +35,10 @@ func parseUUIDParam(r *http.Request) (pgtype.UUID, bool) {
 	return pgtype.UUID{Bytes: id, Valid: true}, true
 }
 
+func pgUUIDToString(p pgtype.UUID) string {
+	return uuid.UUID(p.Bytes).String()
+}
+
 func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	pgID, ok := parseUUIDParam(r)
 	if !ok {
