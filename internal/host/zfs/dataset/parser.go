@@ -10,13 +10,20 @@ import (
 )
 
 type Dataset struct {
-	Name           string `json:"name"`
-	Type           string `json:"type"` // filesystem|volume
-	UsedBytes      uint64 `json:"usedBytes"`
-	AvailableBytes uint64 `json:"availableBytes"`
+	Name            string `json:"name"`
+	Type            string `json:"type"` // filesystem|volume
+	UsedBytes       uint64 `json:"usedBytes"`
+	AvailableBytes  uint64 `json:"availableBytes"`
 	ReferencedBytes uint64 `json:"referencedBytes"`
-	Mountpoint     string `json:"mountpoint,omitempty"`
-	Compression    string `json:"compression,omitempty"`
+	// Mountpoint is the filesystem mount path. Empty for volumes ("-" in zfs
+	// output). May also be the strings "legacy" or "none" for filesystems —
+	// callers must not assume a non-empty value is a real path.
+	Mountpoint  string `json:"mountpoint,omitempty"`
+	Compression string `json:"compression,omitempty"`
+	// RecordSizeBytes is the filesystem recordsize. Always 0 for volumes,
+	// which use volblocksize instead (not surfaced here; query separately
+	// via `zfs get volblocksize` if needed). The omitempty tag drops the
+	// field for volumes intentionally.
 	RecordSizeBytes uint64 `json:"recordSizeBytes,omitempty"`
 }
 
