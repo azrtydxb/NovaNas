@@ -321,9 +321,6 @@ pub fn query_bdev(name: &str) -> Result<(u64, u32)> {
     })
 }
 
-// Re-export the cached-bdev helpers for the volume_bdev module.
-pub(crate) use ffi as spdk_ffi;
-
 // Suppress dead-code warnings on the AsyncCompletion bridge that's shipped for
 // future I/O integration but not yet consumed.
 #[allow(dead_code)]

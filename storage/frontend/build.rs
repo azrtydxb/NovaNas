@@ -110,6 +110,7 @@ fn main() {
             .allowlist_function("spdk_rpc.*")
             .allowlist_function("spdk_log.*")
             .allowlist_function("spdk_thread.*")
+            .allowlist_function("spdk_get_thread")
             .allowlist_function("spdk_dma_.*")
             .allowlist_function("spdk_io_device_register")
             .allowlist_function("spdk_io_device_unregister")
