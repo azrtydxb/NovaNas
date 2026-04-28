@@ -25,6 +25,16 @@ func (rw *respWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// Flush forwards http.Flusher.Flush so SSE handlers wrapped by this
+// middleware can still push response bytes immediately. Without this,
+// `w.(http.Flusher)` in a downstream handler fails because *respWriter
+// does not satisfy the interface via embedding alone.
+func (rw *respWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
