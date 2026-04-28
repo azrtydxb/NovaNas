@@ -3,6 +3,7 @@ package dataset
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/novanas/nova-nas/internal/host/exec"
 )
@@ -11,6 +12,11 @@ var ErrNotFound = errors.New("dataset not found")
 
 type Manager struct {
 	ZFSBin string
+}
+
+type Detail struct {
+	Dataset Dataset           `json:"dataset"`
+	Props   map[string]string `json:"properties"`
 }
 
 // List returns datasets recursively under root, or all datasets if root is "".
@@ -27,4 +33,36 @@ func (m *Manager) List(ctx context.Context, root string) ([]Dataset, error) {
 		return nil, err
 	}
 	return parseList(out)
+}
+
+// Get returns full detail (the row + all properties) for a single dataset
+// by name. Returns ErrNotFound if the dataset does not exist.
+func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
+	listOut, err := exec.Run(ctx, m.ZFSBin, "list", "-H", "-p",
+		"-t", "filesystem,volume",
+		"-o", "name,type,used,available,referenced,mountpoint,compression,recordsize",
+		name)
+	if err != nil {
+		var he *exec.HostError
+		if errors.As(err, &he) && strings.Contains(he.Stderr, "does not exist") {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ds, err := parseList(listOut)
+	if err != nil {
+		return nil, err
+	}
+	if len(ds) == 0 {
+		return nil, ErrNotFound
+	}
+	propsOut, err := exec.Run(ctx, m.ZFSBin, "get", "-H", "-p", "all", name)
+	if err != nil {
+		return nil, err
+	}
+	props, err := parseProps(propsOut)
+	if err != nil {
+		return nil, err
+	}
+	return &Detail{Dataset: ds[0], Props: props}, nil
 }

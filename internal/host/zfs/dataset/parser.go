@@ -71,3 +71,20 @@ func parseUint(s string) (uint64, error) {
 	}
 	return strconv.ParseUint(s, 10, 64)
 }
+
+func parseProps(data []byte) (map[string]string, error) {
+	out := make(map[string]string)
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 3 {
+			return nil, fmt.Errorf("zfs get: bad line %q", line)
+		}
+		out[f[1]] = f[2]
+	}
+	return out, sc.Err()
+}
