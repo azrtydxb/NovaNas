@@ -52,12 +52,16 @@ func New(d Deps) *Server {
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
+	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
 		r.Get("/pools/{name}", poolsH.Get)
+		r.Post("/pools", poolsWriteH.Create)
+		r.Delete("/pools/{name}", poolsWriteH.Destroy)
+		r.Post("/pools/{name}/scrub", poolsWriteH.Scrub)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
 		r.Get("/snapshots", snapH.List)
