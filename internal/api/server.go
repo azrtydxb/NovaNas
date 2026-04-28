@@ -9,10 +9,12 @@ import (
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
+	"github.com/novanas/nova-nas/internal/store"
 )
 
 type Deps struct {
 	Logger *slog.Logger
+	Store  *store.Store
 }
 
 type Server struct {

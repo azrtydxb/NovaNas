@@ -14,6 +14,7 @@ import (
 	"github.com/novanas/nova-nas/internal/api"
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/logging"
+	"github.com/novanas/nova-nas/internal/store"
 )
 
 func main() {
@@ -28,7 +29,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := api.New(api.Deps{Logger: logger})
+	ctx := context.Background()
+	st, err := store.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("db open", "err", err)
+		os.Exit(1)
+	}
+	defer st.Close()
+
+	srv := api.New(api.Deps{Logger: logger, Store: st})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
