@@ -20,8 +20,11 @@ const (
 	KindSnapshotRollback Kind = "snapshot.rollback"
 )
 
+// PoolCreatePayload carries the full pool spec to the worker. Name is
+// duplicated at the top level so the dispatcher can use it as a
+// concurrency-key and for log/audit fields without unmarshalling Spec.
 type PoolCreatePayload struct {
-	Name string         `json:"name"`
+	Name string          `json:"name"`
 	Spec pool.CreateSpec `json:"spec"`
 }
 
@@ -30,7 +33,7 @@ type PoolDestroyPayload struct {
 }
 
 type PoolScrubPayload struct {
-	Name   string            `json:"name"`
+	Name   string           `json:"name"`
 	Action pool.ScrubAction `json:"action"`
 }
 
