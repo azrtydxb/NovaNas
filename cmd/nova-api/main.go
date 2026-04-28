@@ -95,7 +95,11 @@ func main() {
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
-			logger.Error("asynq", "err", err)
+			// Mirror the HTTP listener: a dead worker is a hard failure.
+			// Without this, HTTP keeps accepting writes that enqueue
+			// jobs nothing will ever execute.
+			logger.Error("asynq run", "err", err)
+			os.Exit(1)
 		}
 	}()
 	defer asyncSrv.Stop()
