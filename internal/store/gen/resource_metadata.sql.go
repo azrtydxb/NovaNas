@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const deleteResourceMetadata = `-- name: DeleteResourceMetadata :exec
+DELETE FROM resource_metadata WHERE kind = $1 AND zfs_name = $2
+`
+
+type DeleteResourceMetadataParams struct {
+	Kind    string `json:"kind"`
+	ZfsName string `json:"zfs_name"`
+}
+
+func (q *Queries) DeleteResourceMetadata(ctx context.Context, arg DeleteResourceMetadataParams) error {
+	_, err := q.db.Exec(ctx, deleteResourceMetadata, arg.Kind, arg.ZfsName)
+	return err
+}
+
 const getResourceMetadata = `-- name: GetResourceMetadata :one
 SELECT id, kind, zfs_name, display_name, description, tags
 FROM resource_metadata
@@ -66,4 +80,42 @@ func (q *Queries) ListResourceMetadataByKind(ctx context.Context, kind string) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertResourceMetadata = `-- name: UpsertResourceMetadata :one
+INSERT INTO resource_metadata (kind, zfs_name, display_name, description, tags)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (kind, zfs_name) DO UPDATE
+   SET display_name = COALESCE(EXCLUDED.display_name, resource_metadata.display_name),
+       description  = COALESCE(EXCLUDED.description,  resource_metadata.description),
+       tags         = COALESCE(EXCLUDED.tags,         resource_metadata.tags)
+RETURNING id, kind, zfs_name, display_name, description, tags
+`
+
+type UpsertResourceMetadataParams struct {
+	Kind        string  `json:"kind"`
+	ZfsName     string  `json:"zfs_name"`
+	DisplayName *string `json:"display_name"`
+	Description *string `json:"description"`
+	Tags        []byte  `json:"tags"`
+}
+
+func (q *Queries) UpsertResourceMetadata(ctx context.Context, arg UpsertResourceMetadataParams) (ResourceMetadatum, error) {
+	row := q.db.QueryRow(ctx, upsertResourceMetadata,
+		arg.Kind,
+		arg.ZfsName,
+		arg.DisplayName,
+		arg.Description,
+		arg.Tags,
+	)
+	var i ResourceMetadatum
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.ZfsName,
+		&i.DisplayName,
+		&i.Description,
+		&i.Tags,
+	)
+	return i, err
 }

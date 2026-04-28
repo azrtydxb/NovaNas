@@ -14,6 +14,8 @@ var ErrNotFound = errors.New("snapshot not found")
 
 type Manager struct {
 	ZFSBin string
+	// Runner overrides exec.Run for tests. nil → use exec.Run directly.
+	Runner exec.Runner
 }
 
 // List returns snapshots recursively under root, or all snapshots on the
@@ -26,7 +28,11 @@ func (m *Manager) List(ctx context.Context, root string) ([]Snapshot, error) {
 	if root != "" {
 		args = append(args, "-r", root)
 	}
-	out, err := exec.Run(ctx, m.ZFSBin, args...)
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	out, err := runner(ctx, m.ZFSBin, args...)
 	if err != nil {
 		return nil, err
 	}

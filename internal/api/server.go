@@ -6,19 +6,23 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
+	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
 type Deps struct {
-	Logger    *slog.Logger
-	Store     *store.Store
-	Disks     handlers.DiskLister
-	Pools     handlers.PoolManager
-	Datasets  handlers.DatasetManager
-	Snapshots handlers.SnapshotManager
+	Logger     *slog.Logger
+	Store      *store.Store
+	Disks      handlers.DiskLister
+	Pools      handlers.PoolManager
+	Datasets   handlers.DatasetManager
+	Snapshots  handlers.SnapshotManager
+	Dispatcher *jobs.Dispatcher
+	Redis      *redis.Client
 }
 
 type Server struct {
@@ -29,6 +33,13 @@ type Server struct {
 func New(d Deps) *Server {
 	r := chi.NewRouter()
 	r.Use(mw.RequestID)
+	// Audit is registered before Recoverer so that a panicking handler
+	// still writes its audit row (Recoverer catches the panic and writes
+	// the 500, then control returns up to Audit's post-`next` block,
+	// which observes the captured status and inserts the row).
+	if d.Store != nil {
+		r.Use(mw.Audit(d.Store.Queries, d.Logger))
+	}
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
@@ -41,15 +52,45 @@ func New(d Deps) *Server {
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
+	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
+	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
+	snapW := &handlers.SnapshotsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
 		r.Get("/pools/{name}", poolsH.Get)
+		r.Post("/pools", poolsWriteH.Create)
+		r.Delete("/pools/{name}", poolsWriteH.Destroy)
+		r.Post("/pools/{name}/scrub", poolsWriteH.Scrub)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
+		r.Post("/datasets", dsW.Create)
+		r.Patch("/datasets/{fullname}", dsW.SetProps)
+		r.Delete("/datasets/{fullname}", dsW.Destroy)
 		r.Get("/snapshots", snapH.List)
+		r.Post("/snapshots", snapW.Create)
+		r.Delete("/snapshots/{fullname}", snapW.Destroy)
+		r.Post("/datasets/{fullname}/rollback", snapW.Rollback)
+		// Jobs routes need the store; construct only when available so
+		// tests that build a server without one (e.g. /healthz) still work.
+		if d.Store != nil {
+			jobsH := &handlers.JobsHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Get("/jobs", jobsH.List)
+			r.Get("/jobs/{id}", jobsH.Get)
+			r.Delete("/jobs/{id}", jobsH.Cancel)
+
+			if d.Redis != nil {
+				sseH := &handlers.SSEJobsHandler{Logger: d.Logger, Redis: d.Redis, Q: d.Store.Queries}
+				r.Get("/jobs/{id}/stream", sseH.Stream)
+			}
+
+			metaH := &handlers.MetadataHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Patch("/pools/{name}/metadata", metaH.PoolPatch)
+			r.Patch("/datasets/{fullname}/metadata", metaH.DatasetPatch)
+			r.Patch("/snapshots/{fullname}/metadata", metaH.SnapshotPatch)
+		}
 	})
 
 	return &Server{deps: d, router: r}

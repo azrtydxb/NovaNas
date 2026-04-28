@@ -1,0 +1,97 @@
+package dataset
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strconv"
+
+	"github.com/novanas/nova-nas/internal/host/exec"
+	"github.com/novanas/nova-nas/internal/host/zfs/names"
+)
+
+type CreateSpec struct {
+	Parent          string            `json:"parent"`
+	Name            string            `json:"name"`
+	Type            string            `json:"type"` // filesystem|volume
+	VolumeSizeBytes uint64            `json:"volumeSizeBytes,omitempty"`
+	Properties      map[string]string `json:"properties,omitempty"`
+}
+
+func buildCreateArgs(spec CreateSpec) ([]string, error) {
+	if spec.Type != "filesystem" && spec.Type != "volume" {
+		return nil, fmt.Errorf("invalid dataset type %q", spec.Type)
+	}
+	full := spec.Parent + "/" + spec.Name
+	if err := names.ValidateDatasetName(full); err != nil {
+		return nil, err
+	}
+	args := []string{"create"}
+	keys := make([]string, 0, len(spec.Properties))
+	for k := range spec.Properties {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		args = append(args, "-o", k+"="+spec.Properties[k])
+	}
+	if spec.Type == "volume" {
+		if spec.VolumeSizeBytes == 0 {
+			return nil, fmt.Errorf("volume requires volumeSizeBytes")
+		}
+		args = append(args, "-V", strconv.FormatUint(spec.VolumeSizeBytes, 10))
+	}
+	args = append(args, full)
+	return args, nil
+}
+
+func (m *Manager) Create(ctx context.Context, spec CreateSpec) error {
+	args, err := buildCreateArgs(spec)
+	if err != nil {
+		return err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZFSBin, args...)
+	return err
+}
+
+func (m *Manager) SetProps(ctx context.Context, name string, props map[string]string) error {
+	if err := names.ValidateDatasetName(name); err != nil {
+		return err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if _, err := runner(ctx, m.ZFSBin, "set", k+"="+props[k], name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) Destroy(ctx context.Context, name string, recursive bool) error {
+	if err := names.ValidateDatasetName(name); err != nil {
+		return err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	args := []string{"destroy"}
+	if recursive {
+		args = append(args, "-r")
+	}
+	args = append(args, name)
+	_, err := runner(ctx, m.ZFSBin, args...)
+	return err
+}
