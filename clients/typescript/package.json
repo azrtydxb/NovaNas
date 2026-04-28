@@ -1,0 +1,11 @@
+{
+  "name": "@novanas/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "gen": "openapi --input ../../api/openapi.yaml --output ./src --client fetch --useUnionTypes"
+  },
+  "devDependencies": {
+    "openapi-typescript-codegen": "^0.29.0"
+  }
+}
