@@ -11,6 +11,9 @@ type ErrorBody struct {
 	Message string `json:"message,omitempty"`
 }
 
+// WriteError writes a JSON error envelope. Encoder failures are intentionally
+// swallowed: the client connection is likely already half-closed at that
+// point, and there is no recovery path that wouldn't make things worse.
 func WriteError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

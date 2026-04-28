@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/novanas/nova-nas/internal/api"
-	"github.com/novanas/nova-nas/internal/api/handlers"
 	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -69,10 +68,10 @@ func TestReadOnlyEndpoints(t *testing.T) {
 	srv := api.New(api.Deps{
 		Logger:    logger,
 		Store:     st,
-		Disks:     handlers.DiskLister(stubDisks{}),
-		Pools:     handlers.PoolManager(stubPools{}),
-		Datasets:  handlers.DatasetManager(stubDatasets{}),
-		Snapshots: handlers.SnapshotManager(stubSnapshots{}),
+		Disks:     stubDisks{},
+		Pools:     stubPools{},
+		Datasets:  stubDatasets{},
+		Snapshots: stubSnapshots{},
 	})
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()

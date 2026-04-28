@@ -31,6 +31,12 @@ func New(d Deps) *Server {
 	r.Use(mw.RequestID)
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
+	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+		mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
+		mw.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed for this route")
+	})
 	r.Get("/healthz", handlers.Healthz)
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
