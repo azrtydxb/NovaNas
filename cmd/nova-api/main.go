@@ -14,6 +14,7 @@ import (
 	"github.com/novanas/nova-nas/internal/api"
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/host/disks"
+	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/logging"
 	"github.com/novanas/nova-nas/internal/store"
@@ -41,11 +42,13 @@ func main() {
 
 	disksLister := &disks.Lister{LsblkBin: cfg.LsblkBin}
 	poolMgr := &pool.Manager{ZpoolBin: cfg.ZpoolBin}
+	datasetMgr := &dataset.Manager{ZFSBin: cfg.ZFSBin}
 	srv := api.New(api.Deps{
-		Logger: logger,
-		Store:  st,
-		Disks:  disksLister,
-		Pools:  poolMgr,
+		Logger:   logger,
+		Store:    st,
+		Disks:    disksLister,
+		Pools:    poolMgr,
+		Datasets: datasetMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

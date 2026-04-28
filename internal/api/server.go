@@ -13,10 +13,11 @@ import (
 )
 
 type Deps struct {
-	Logger *slog.Logger
-	Store  *store.Store
-	Disks  handlers.DiskLister
-	Pools  handlers.PoolManager
+	Logger   *slog.Logger
+	Store    *store.Store
+	Disks    handlers.DiskLister
+	Pools    handlers.PoolManager
+	Datasets handlers.DatasetManager
 }
 
 type Server struct {
@@ -33,10 +34,13 @@ func New(d Deps) *Server {
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
+	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
 		r.Get("/pools/{name}", poolsH.Get)
+		r.Get("/datasets", dsH.List)
+		r.Get("/datasets/{fullname}", dsH.Get)
 	})
 
 	return &Server{deps: d, router: r}
