@@ -2523,6 +2523,291 @@ func main() {
 		return nil
 	})
 
+	step("53. NVMe-oF DH-HMAC-CHAP authentication", func() error {
+		if !which("nvme") {
+			fmt.Printf("  SKIP: nvme-cli not available\n")
+			return nil
+		}
+		if _, err := runCmd(ctx, "nvme", "version"); err != nil {
+			fmt.Printf("  SKIP: nvme version failed: %v\n", err)
+			return nil
+		}
+
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+
+		zvol := poolName + "/dhchap-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "dhchap-vol", Type: "volume",
+			VolumeSizeBytes: 64 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		if err := nm.CreateSubsystem(ctx, nvmeof.Subsystem{
+			NQN: validateNQN, AllowAnyHost: false, Serial: "validate53",
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.DeleteSubsystem(ctx, validateNQN) }()
+		if err := nm.AddNamespace(ctx, validateNQN, nvmeof.Namespace{
+			NSID: 1, DevicePath: dev, Enabled: true,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.RemoveNamespace(ctx, validateNQN, 1) }()
+		// Use port 4421 to avoid colliding with any leftover state
+		// from scenario 49 (which uses port 4420).
+		if err := nm.CreatePort(ctx, nvmeof.Port{
+			ID: 2, IP: "127.0.0.1", Port: 4421, Transport: "tcp",
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = nm.DeletePort(ctx, 2) }()
+		if err := nm.LinkSubsystemToPort(ctx, validateNQN, 2); err != nil {
+			return err
+		}
+		defer func() { _ = nm.UnlinkSubsystemFromPort(ctx, validateNQN, 2) }()
+
+		// Generate a real TP4022 host secret via nvme-cli.
+		genCmd := exec.CommandContext(ctx, "nvme", "gen-dhchap-key", "-n", validateHostNQN)
+		genOut, err := genCmd.Output()
+		if err != nil {
+			return fmt.Errorf("nvme gen-dhchap-key: %w", err)
+		}
+		secret := strings.TrimSpace(string(genOut))
+		if !strings.HasPrefix(secret, "DHHC-1:") {
+			return fmt.Errorf("unexpected dhchap-key format: %q", secret)
+		}
+		fmt.Printf("  generated dhchap secret: %s...\n", secret[:20])
+
+		if err := nm.SetHostDHChap(ctx, validateHostNQN, nvmeof.DHChapConfig{
+			Key: secret, Hash: "hmac(sha256)", DHGroup: "null",
+		}); err != nil {
+			return fmt.Errorf("SetHostDHChap: %w", err)
+		}
+		defer func() { _ = nm.ClearHostDHChap(ctx, validateHostNQN) }()
+
+		if err := nm.AllowHost(ctx, validateNQN, validateHostNQN); err != nil {
+			return fmt.Errorf("AllowHost: %w", err)
+		}
+		defer func() { _ = nm.DisallowHost(ctx, validateNQN, validateHostNQN) }()
+
+		preDevs := globNvmeBlocks()
+		connectArgs := []string{
+			"connect", "-t", "tcp", "-a", "127.0.0.1", "-s", "4421",
+			"-n", validateNQN, "--hostnqn=" + validateHostNQN,
+			"--dhchap-secret=" + secret,
+		}
+		if _, err := runCmd(ctx, "nvme", connectArgs...); err != nil {
+			return fmt.Errorf("nvme connect with dhchap: %w", err)
+		}
+		connected := true
+		defer func() {
+			if connected {
+				_, _ = runCmd(ctx, "nvme", "disconnect", "-n", validateNQN)
+			}
+		}()
+
+		var nvmeDev string
+		ddl := time.Now().Add(10 * time.Second)
+		for time.Now().Before(ddl) {
+			postDevs := globNvmeBlocks()
+			for _, d := range postDevs {
+				if !contains(preDevs, d) {
+					nvmeDev = d
+					break
+				}
+			}
+			if nvmeDev != "" {
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		if nvmeDev == "" {
+			return fmt.Errorf("no new /dev/nvme*n* device appeared after authenticated connect")
+		}
+		fmt.Printf("  authenticated connect succeeded, device: %s\n", nvmeDev)
+
+		payload := make([]byte, 1<<20)
+		for i := range payload {
+			payload[i] = byte((i*11 + 3) % 251)
+		}
+		f, err := os.OpenFile(nvmeDev, os.O_RDWR, 0)
+		if err != nil {
+			return fmt.Errorf("open nvme dev: %w", err)
+		}
+		if _, err := f.Write(payload); err != nil {
+			f.Close()
+			return fmt.Errorf("write nvme dev: %w", err)
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return fmt.Errorf("fsync nvme dev: %w", err)
+		}
+		f.Close()
+		hashWritten := sha256bytes(payload)
+		readBack, err := readBlockAt(nvmeDev, 0, len(payload))
+		if err != nil {
+			return fmt.Errorf("read nvme dev: %w", err)
+		}
+		if sha256bytes(readBack) != hashWritten {
+			return fmt.Errorf("nvme readback hash mismatch")
+		}
+		fmt.Printf("  authenticated IO ok, sha256=%s\n", hashWritten[:16])
+
+		// Disconnect, then prove a wrong secret is rejected.
+		if _, err := runCmd(ctx, "nvme", "disconnect", "-n", validateNQN); err != nil {
+			return fmt.Errorf("disconnect before wrong-secret test: %w", err)
+		}
+		connected = false
+
+		// Generate a different secret that the target won't accept.
+		wrongCmd := exec.CommandContext(ctx, "nvme", "gen-dhchap-key", "-n", validateHostNQN)
+		wrongOut, err := wrongCmd.Output()
+		if err != nil {
+			return fmt.Errorf("nvme gen-dhchap-key (wrong): %w", err)
+		}
+		wrongSecret := strings.TrimSpace(string(wrongOut))
+		if wrongSecret == secret {
+			return fmt.Errorf("expected gen-dhchap-key to produce a fresh secret")
+		}
+		wrongArgs := []string{
+			"connect", "-t", "tcp", "-a", "127.0.0.1", "-s", "4421",
+			"-n", validateNQN, "--hostnqn=" + validateHostNQN,
+			"--dhchap-secret=" + wrongSecret,
+		}
+		if _, err := runCmd(ctx, "nvme", wrongArgs...); err == nil {
+			// Connect succeeded — that's a security failure. Tear down
+			// the bogus session before returning the error.
+			_, _ = runCmd(ctx, "nvme", "disconnect", "-n", validateNQN)
+			return fmt.Errorf("connect with wrong dhchap secret unexpectedly succeeded")
+		}
+		fmt.Printf("  wrong-secret connect correctly rejected\n")
+		return nil
+	})
+
+	step("54. NVMe-oF persistence: Save → ClearAll → Restore round trip", func() error {
+		// Build a non-trivial config in configfs, snapshot it to JSON,
+		// tear down (simulating a reboot), restore, and verify the
+		// post-restore state matches.
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = pm.Destroy(ctx, poolName) }()
+		zvol := poolName + "/persist-vol"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "persist-vol", Type: "volume",
+			VolumeSizeBytes: 32 << 20,
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, zvol, false) }()
+		dev := "/dev/zvol/" + zvol
+		if err := waitDevice(dev, 10*time.Second); err != nil {
+			return err
+		}
+
+		subsysNQN := "nqn.2026-04.local.novanas:persist"
+		hostNQN := "nqn.2026-04.local.novanas:client"
+		nm := &nvmeof.Manager{CFS: &configfs.Manager{Root: "/sys/kernel/config"}}
+
+		// Build it.
+		if err := nm.CreateSubsystem(ctx, nvmeof.Subsystem{NQN: subsysNQN, AllowAnyHost: false, Serial: "persist01"}); err != nil {
+			return fmt.Errorf("CreateSubsystem: %w", err)
+		}
+		if err := nm.AddNamespace(ctx, subsysNQN, nvmeof.Namespace{NSID: 1, DevicePath: dev, Enabled: true}); err != nil {
+			return fmt.Errorf("AddNamespace: %w", err)
+		}
+		if err := nm.EnsureHost(ctx, hostNQN); err != nil {
+			return fmt.Errorf("EnsureHost: %w", err)
+		}
+		if err := nm.AllowHost(ctx, subsysNQN, hostNQN); err != nil {
+			return fmt.Errorf("AllowHost: %w", err)
+		}
+		if err := nm.CreatePort(ctx, nvmeof.Port{ID: 7, IP: "127.0.0.1", Port: 4422, Transport: "tcp"}); err != nil {
+			return fmt.Errorf("CreatePort: %w", err)
+		}
+		if err := nm.LinkSubsystemToPort(ctx, subsysNQN, 7); err != nil {
+			return fmt.Errorf("LinkSubsystemToPort: %w", err)
+		}
+
+		// Save snapshot.
+		snapPath := "/tmp/nova-nvmet-test.json"
+		if err := nm.SaveToFile(ctx, snapPath); err != nil {
+			return fmt.Errorf("SaveToFile: %w", err)
+		}
+		defer os.Remove(snapPath)
+		fmt.Printf("  saved nvmet snapshot to %s\n", snapPath)
+
+		// Tear down (simulating reboot wiping nvmet RAM state).
+		if err := nm.ClearAll(ctx); err != nil {
+			return fmt.Errorf("ClearAll: %w", err)
+		}
+		// Verify it's empty.
+		subs, _ := nm.ListSubsystems(ctx)
+		ports, _ := nm.ListPorts(ctx)
+		if len(subs) != 0 || len(ports) != 0 {
+			return fmt.Errorf("ClearAll left subs=%d ports=%d", len(subs), len(ports))
+		}
+		fmt.Printf("  cleared all nvmet state\n")
+
+		// Restore from JSON.
+		if err := nm.RestoreFromFile(ctx, snapPath); err != nil {
+			return fmt.Errorf("RestoreFromFile: %w", err)
+		}
+		fmt.Printf("  restored from snapshot\n")
+
+		// Verify the state is back.
+		got, err := nm.GetSubsystem(ctx, subsysNQN)
+		if err != nil {
+			return fmt.Errorf("GetSubsystem after restore: %w", err)
+		}
+		if len(got.Namespaces) != 1 || got.Namespaces[0].NSID != 1 || !got.Namespaces[0].Enabled {
+			return fmt.Errorf("namespace not restored: %+v", got.Namespaces)
+		}
+		if len(got.AllowedHosts) != 1 || got.AllowedHosts[0] != hostNQN {
+			return fmt.Errorf("allowed_hosts not restored: %+v", got.AllowedHosts)
+		}
+		ports, _ = nm.ListPorts(ctx)
+		var seenPort *nvmeof.Port
+		for i := range ports {
+			if ports[i].ID == 7 {
+				seenPort = &ports[i]
+			}
+		}
+		if seenPort == nil {
+			return fmt.Errorf("port 7 not restored: %+v", ports)
+		}
+		fmt.Printf("  state matches post-restore: subsys=%s nsCount=%d port=%d:%s\n",
+			subsysNQN, len(got.Namespaces), seenPort.Port, seenPort.Transport)
+
+		// Tear down for next runs.
+		_ = nm.UnlinkSubsystemFromPort(ctx, subsysNQN, 7)
+		_ = nm.DeletePort(ctx, 7)
+		_ = nm.DisallowHost(ctx, subsysNQN, hostNQN)
+		_ = nm.RemoveHost(ctx, hostNQN)
+		_ = nm.RemoveNamespace(ctx, subsysNQN, 1)
+		_ = nm.DeleteSubsystem(ctx, subsysNQN)
+		return nil
+	})
+
 	fmt.Println("\nALL CHECKS PASSED")
 }
 

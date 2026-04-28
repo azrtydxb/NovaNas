@@ -1031,6 +1031,56 @@ paths:
         '202': { $ref: '#/components/responses/Accepted' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /nvmeof/saveconfig:
+    post:
+      operationId: saveNvmeofConfig
+      description: |
+        Snapshot the current nvmet configfs state to
+        /etc/nova-nas/nvmet-config.json so it can be restored on next
+        boot by the nova-nvmet-restore systemd unit (nvmet itself is
+        in-memory only).
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /nvmeof/hosts/{nqn}/dhchap:
+    parameters:
+      - in: path
+        name: nqn
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getNvmeofHostDHChap
+      summary: Get DH-HMAC-CHAP configuration for a host (secrets elided)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NvmeofDHChapDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: setNvmeofHostDHChap
+      summary: Set DH-HMAC-CHAP authentication configuration for a host
+      description: |
+        Writes per-host DH-HMAC-CHAP (NVMe TP4022) attributes. Empty
+        fields are not modified, allowing partial updates. Use DELETE
+        to fully clear the configuration to kernel defaults.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NvmeofDHChapConfig' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: clearNvmeofHostDHChap
+      summary: Clear DH-HMAC-CHAP configuration for a host
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   /nvmeof/ports:
     get:
       operationId: listNvmeofPorts
@@ -1452,6 +1502,23 @@ components:
       required: [hostNqn]
       properties:
         hostNqn: { type: string }
+    NvmeofDHChapConfig:
+      type: object
+      description: 'Per-host DH-HMAC-CHAP (NVMe TP4022) configuration. Secrets must be in "DHHC-1:NN:..." form. Empty fields are left unchanged on PATCH-style updates.'
+      properties:
+        key:     { type: string, description: 'Host secret in TP4022 format' }
+        ctrlKey: { type: string, description: 'Controller secret for bidirectional auth' }
+        hash:    { type: string, enum: ['hmac(sha256)', 'hmac(sha384)', 'hmac(sha512)'] }
+        dhgroup: { type: string, enum: [null, ffdhe2048, ffdhe3072, ffdhe4096, ffdhe6144, ffdhe8192] }
+    NvmeofDHChapDetail:
+      type: object
+      description: 'Read-side DH-HMAC-CHAP detail. Raw key material is never returned.'
+      required: [hasKey, hasCtrlKey]
+      properties:
+        hasKey:     { type: boolean }
+        hasCtrlKey: { type: boolean }
+        hash:       { type: string }
+        dhgroup:    { type: string }
     NvmeofSubsystemDetail:
       type: object
       properties:

@@ -87,6 +87,9 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindNvmeofPortDelete), d.handleNvmeofPortDelete)
 	mux.HandleFunc(string(KindNvmeofPortLink), d.handleNvmeofPortLink)
 	mux.HandleFunc(string(KindNvmeofPortUnlink), d.handleNvmeofPortUnlink)
+	mux.HandleFunc(string(KindNvmeofSetHostDHChap), d.handleNvmeofSetHostDHChap)
+	mux.HandleFunc(string(KindNvmeofClearHostDHChap), d.handleNvmeofClearHostDHChap)
+	mux.HandleFunc(string(KindNvmeofSaveConfig), d.handleNvmeofSaveConfig)
 	return mux
 }
 
@@ -784,6 +787,46 @@ func (d WorkerDeps) handleNvmeofPortUnlink(ctx context.Context, t *asynq.Task) e
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.NvmeofMgr.UnlinkSubsystemFromPort(ctx, p.NQN, p.PortID)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofSetHostDHChap(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofSetHostDHChapPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.SetHostDHChap(ctx, p.HostNQN, p.Config)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofClearHostDHChap(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofClearHostDHChapPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.NvmeofMgr.ClearHostDHChap(ctx, p.HostNQN)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleNvmeofSaveConfig(ctx context.Context, t *asynq.Task) error {
+	var p NvmeofSaveConfigPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	path := p.Path
+	if path == "" {
+		path = "/etc/nova-nas/nvmet-config.json"
+	}
+	err = d.NvmeofMgr.SaveToFile(ctx, path)
 	d.finish(ctx, id, err)
 	return err
 }

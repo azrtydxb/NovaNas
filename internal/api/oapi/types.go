@@ -87,6 +87,57 @@ func (e IscsiPortalTransport) Valid() bool {
 	}
 }
 
+// Defines values for NvmeofDHChapConfigDhgroup.
+const (
+	Ffdhe2048   NvmeofDHChapConfigDhgroup = "ffdhe2048"
+	Ffdhe3072   NvmeofDHChapConfigDhgroup = "ffdhe3072"
+	Ffdhe4096   NvmeofDHChapConfigDhgroup = "ffdhe4096"
+	Ffdhe6144   NvmeofDHChapConfigDhgroup = "ffdhe6144"
+	Ffdhe8192   NvmeofDHChapConfigDhgroup = "ffdhe8192"
+	LessThannil NvmeofDHChapConfigDhgroup = "<nil>"
+)
+
+// Valid indicates whether the value is a known member of the NvmeofDHChapConfigDhgroup enum.
+func (e NvmeofDHChapConfigDhgroup) Valid() bool {
+	switch e {
+	case Ffdhe2048:
+		return true
+	case Ffdhe3072:
+		return true
+	case Ffdhe4096:
+		return true
+	case Ffdhe6144:
+		return true
+	case Ffdhe8192:
+		return true
+	case LessThannil:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NvmeofDHChapConfigHash.
+const (
+	HmacSha256 NvmeofDHChapConfigHash = "hmac(sha256)"
+	HmacSha384 NvmeofDHChapConfigHash = "hmac(sha384)"
+	HmacSha512 NvmeofDHChapConfigHash = "hmac(sha512)"
+)
+
+// Valid indicates whether the value is a known member of the NvmeofDHChapConfigHash enum.
+func (e NvmeofDHChapConfigHash) Valid() bool {
+	switch e {
+	case HmacSha256:
+		return true
+	case HmacSha384:
+		return true
+	case HmacSha512:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NvmeofPortTransport.
 const (
 	NvmeofPortTransportRdma NvmeofPortTransport = "rdma"
@@ -337,6 +388,31 @@ type MetadataPatch struct {
 	Description *string            `json:"description,omitempty"`
 	DisplayName *string            `json:"display_name,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
+}
+
+// NvmeofDHChapConfig Per-host DH-HMAC-CHAP (NVMe TP4022) configuration. Secrets must be in "DHHC-1:NN:..." form. Empty fields are left unchanged on PATCH-style updates.
+type NvmeofDHChapConfig struct {
+	// CtrlKey Controller secret for bidirectional auth
+	CtrlKey *string                    `json:"ctrlKey,omitempty"`
+	Dhgroup *NvmeofDHChapConfigDhgroup `json:"dhgroup,omitempty"`
+	Hash    *NvmeofDHChapConfigHash    `json:"hash,omitempty"`
+
+	// Key Host secret in TP4022 format
+	Key *string `json:"key,omitempty"`
+}
+
+// NvmeofDHChapConfigDhgroup defines model for NvmeofDHChapConfig.Dhgroup.
+type NvmeofDHChapConfigDhgroup string
+
+// NvmeofDHChapConfigHash defines model for NvmeofDHChapConfig.Hash.
+type NvmeofDHChapConfigHash string
+
+// NvmeofDHChapDetail Read-side DH-HMAC-CHAP detail. Raw key material is never returned.
+type NvmeofDHChapDetail struct {
+	Dhgroup    *string `json:"dhgroup,omitempty"`
+	HasCtrlKey bool    `json:"hasCtrlKey"`
+	HasKey     bool    `json:"hasKey"`
+	Hash       *string `json:"hash,omitempty"`
 }
 
 // NvmeofHost defines model for NvmeofHost.
@@ -656,6 +732,9 @@ type CreateIscsiLUNJSONRequestBody = IscsiLUN
 
 // CreateIscsiPortalJSONRequestBody defines body for CreateIscsiPortal for application/json ContentType.
 type CreateIscsiPortalJSONRequestBody = IscsiPortal
+
+// SetNvmeofHostDHChapJSONRequestBody defines body for SetNvmeofHostDHChap for application/json ContentType.
+type SetNvmeofHostDHChapJSONRequestBody = NvmeofDHChapConfig
 
 // CreateNvmeofPortJSONRequestBody defines body for CreateNvmeofPort for application/json ContentType.
 type CreateNvmeofPortJSONRequestBody = NvmeofPort

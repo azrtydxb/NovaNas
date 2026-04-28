@@ -1,0 +1,17 @@
+[Unit]
+Description=Restore NovaNAS NVMe-oF target configuration
+After=local-fs.target sys-kernel-config.mount
+Requires=sys-kernel-config.mount
+Before=nova-api.service
+ConditionPathExists=/etc/nova-nas/nvmet-config.json
+
+[Service]
+Type=oneshot
+ExecStartPre=/sbin/modprobe nvmet
+ExecStartPre=-/sbin/modprobe nvmet-tcp
+ExecStartPre=-/sbin/modprobe nvmet-rdma
+ExecStart=/usr/local/bin/nova-nvmet-restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -69,6 +69,9 @@ const (
 	KindNvmeofPortDelete       Kind = "nvmeof.port.delete"
 	KindNvmeofPortLink         Kind = "nvmeof.port.link"
 	KindNvmeofPortUnlink       Kind = "nvmeof.port.unlink"
+	KindNvmeofSetHostDHChap    Kind = "nvmeof.host.dhchap.set"
+	KindNvmeofClearHostDHChap  Kind = "nvmeof.host.dhchap.clear"
+	KindNvmeofSaveConfig       Kind = "nvmeof.saveconfig"
 )
 
 // ---------- iSCSI payloads ----------
@@ -159,6 +162,22 @@ type NvmeofPortLinkPayload struct {
 type NvmeofPortUnlinkPayload struct {
 	PortID int    `json:"portId"`
 	NQN    string `json:"nqn"`
+}
+
+type NvmeofSetHostDHChapPayload struct {
+	HostNQN string              `json:"hostNqn"`
+	Config  nvmeof.DHChapConfig `json:"config"`
+}
+
+type NvmeofClearHostDHChapPayload struct {
+	HostNQN string `json:"hostNqn"`
+}
+
+// NvmeofSaveConfigPayload carries the path to write the JSON snapshot to.
+// Empty Path means "use the binary's default" (the worker resolves this
+// against the configured /etc/nova-nas/nvmet-config.json path).
+type NvmeofSaveConfigPayload struct {
+	Path string `json:"path,omitempty"`
 }
 
 // PoolCreatePayload carries the full pool spec to the worker. Name is

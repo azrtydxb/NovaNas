@@ -157,6 +157,7 @@ func New(d Deps) *Server {
 			r.Get("/nvmeof/subsystems", nvmeofH.ListSubsystems)
 			r.Get("/nvmeof/subsystems/{nqn}", nvmeofH.GetSubsystem)
 			r.Get("/nvmeof/ports", nvmeofH.ListPorts)
+			r.Get("/nvmeof/hosts/{nqn}/dhchap", nvmeofH.GetHostDHChap)
 		}
 		r.Post("/nvmeof/subsystems", nvmeofW.CreateSubsystem)
 		r.Delete("/nvmeof/subsystems/{nqn}", nvmeofW.DestroySubsystem)
@@ -168,6 +169,9 @@ func New(d Deps) *Server {
 		r.Delete("/nvmeof/ports/{id}", nvmeofW.DeletePort)
 		r.Post("/nvmeof/ports/{id}/subsystems", nvmeofW.LinkSubsystem)
 		r.Delete("/nvmeof/ports/{id}/subsystems/{nqn}", nvmeofW.UnlinkSubsystem)
+		r.Post("/nvmeof/hosts/{nqn}/dhchap", nvmeofW.SetHostDHChap)
+		r.Delete("/nvmeof/hosts/{nqn}/dhchap", nvmeofW.ClearHostDHChap)
+		r.Post("/nvmeof/saveconfig", nvmeofW.SaveConfig)
 
 		// RDMA
 		r.Get("/network/rdma", rdmaH.List)

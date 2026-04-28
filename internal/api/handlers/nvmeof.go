@@ -18,6 +18,7 @@ type NvmeofReader interface {
 	ListSubsystems(ctx context.Context) ([]nvmeof.Subsystem, error)
 	GetSubsystem(ctx context.Context, nqn string) (*nvmeof.SubsystemDetail, error)
 	ListPorts(ctx context.Context) ([]nvmeof.Port, error)
+	GetHostDHChap(ctx context.Context, hostNQN string) (nvmeof.DHChapDetail, error)
 }
 
 // NvmeofHandler exposes synchronous read endpoints for nvmet state.
