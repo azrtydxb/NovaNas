@@ -22,6 +22,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	}
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConns = 8
+	cfg.ConnConfig.ConnectTimeout = 10 * time.Second
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -33,4 +34,9 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	return &Store{Pool: pool, Queries: storedb.New(pool)}, nil
 }
 
-func (s *Store) Close() { s.Pool.Close() }
+func (s *Store) Close() {
+	if s == nil || s.Pool == nil {
+		return
+	}
+	s.Pool.Close()
+}
