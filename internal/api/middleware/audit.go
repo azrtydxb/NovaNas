@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 
 	storedb "github.com/novanas/nova-nas/internal/store/gen"
@@ -21,7 +22,17 @@ type AuditQuerier interface {
 // re-read it. Bodies that aren't valid JSON are recorded as nil; valid
 // JSON is stored verbatim. Secret redaction (`password`, `token`, etc.)
 // is deferred to Plan 3.
-func Audit(q AuditQuerier) func(http.Handler) http.Handler {
+//
+// Panic recovery: register Audit BEFORE Recoverer in the chain. Then a
+// panic from a handler is caught by Recoverer (which writes 500 via
+// rw), and Audit's post-`next` block still runs to record the rejected
+// request. Reordering breaks this guarantee.
+//
+// Insert failures: logged at error level via the supplied logger. The
+// request is NOT failed if the audit row can't be written — silent drop
+// is the right tradeoff for availability over compliance, but the log
+// line ensures operators see persistent failures.
+func Audit(q AuditQuerier, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -45,14 +56,20 @@ func Audit(q AuditQuerier) func(http.Handler) http.Handler {
 				payloadParam = body
 			}
 
-			_ = q.InsertAudit(r.Context(), storedb.InsertAuditParams{
+			if err := q.InsertAudit(r.Context(), storedb.InsertAuditParams{
 				Actor:     nil, // v1 has no auth; populated when auth lands
 				Action:    r.Method + " " + r.URL.Path,
 				Target:    r.URL.Path,
 				RequestID: RequestIDOf(r.Context()),
 				Payload:   payloadParam,
 				Result:    result,
-			})
+			}); err != nil && logger != nil {
+				logger.Error("audit insert failed",
+					"err", err,
+					"action", r.Method+" "+r.URL.Path,
+					"requestID", RequestIDOf(r.Context()),
+				)
+			}
 		})
 	}
 }

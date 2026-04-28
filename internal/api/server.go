@@ -33,11 +33,15 @@ type Server struct {
 func New(d Deps) *Server {
 	r := chi.NewRouter()
 	r.Use(mw.RequestID)
+	// Audit is registered before Recoverer so that a panicking handler
+	// still writes its audit row (Recoverer catches the panic and writes
+	// the 500, then control returns up to Audit's post-`next` block,
+	// which observes the captured status and inserts the row).
+	if d.Store != nil {
+		r.Use(mw.Audit(d.Store.Queries, d.Logger))
+	}
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
-	if d.Store != nil {
-		r.Use(mw.Audit(d.Store.Queries))
-	}
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
 	})
