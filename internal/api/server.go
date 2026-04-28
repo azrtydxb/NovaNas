@@ -6,19 +6,23 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
+	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
 type Deps struct {
-	Logger    *slog.Logger
-	Store     *store.Store
-	Disks     handlers.DiskLister
-	Pools     handlers.PoolManager
-	Datasets  handlers.DatasetManager
-	Snapshots handlers.SnapshotManager
+	Logger     *slog.Logger
+	Store      *store.Store
+	Disks      handlers.DiskLister
+	Pools      handlers.PoolManager
+	Datasets   handlers.DatasetManager
+	Snapshots  handlers.SnapshotManager
+	Dispatcher *jobs.Dispatcher
+	Redis      *redis.Client
 }
 
 type Server struct {
