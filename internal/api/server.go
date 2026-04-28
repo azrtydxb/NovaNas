@@ -10,19 +10,23 @@ import (
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
+	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
+	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
 type Deps struct {
-	Logger     *slog.Logger
-	Store      *store.Store
-	Disks      handlers.DiskLister
-	Pools      handlers.PoolManager
-	Datasets   handlers.DatasetManager
-	Snapshots  handlers.SnapshotManager
-	Dispatcher *jobs.Dispatcher
-	Redis      *redis.Client
+	Logger        *slog.Logger
+	Store         *store.Store
+	Disks         handlers.DiskLister
+	Pools         handlers.PoolManager
+	Datasets      handlers.DatasetManager
+	Snapshots     handlers.SnapshotManager
+	Dispatcher    *jobs.Dispatcher
+	Redis         *redis.Client
+	DatasetMgr    *dataset.Manager // concrete manager for streaming send/receive
+	PoolMgr       *pool.Manager    // concrete manager for synchronous zpool wait
 }
 
 type Server struct {
@@ -56,6 +60,8 @@ func New(d Deps) *Server {
 	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher, Pools: d.Pools}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	dsStream := &handlers.DatasetsStreamHandler{Logger: d.Logger, Dataset: d.DatasetMgr}
+	poolWait := &handlers.PoolsWaitHandler{Logger: d.Logger, Pools: d.PoolMgr}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
 	snapW := &handlers.SnapshotsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	r.Route("/api/v1", func(r chi.Router) {
@@ -75,11 +81,22 @@ func New(d Deps) *Server {
 		r.Post("/pools/{name}/detach", poolsWriteH.Detach)
 		r.Post("/pools/{name}/add", poolsWriteH.Add)
 		r.Post("/pools/{name}/export", poolsWriteH.Export)
+		r.Post("/pools/{name}/trim", poolsWriteH.Trim)
+		r.Patch("/pools/{name}/properties", poolsWriteH.SetProps)
+		r.Post("/pools/{name}/wait", poolWait.Wait)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
 		r.Post("/datasets", dsW.Create)
 		r.Patch("/datasets/{fullname}", dsW.SetProps)
 		r.Delete("/datasets/{fullname}", dsW.Destroy)
+		r.Post("/datasets/{fullname}/rename", dsW.Rename)
+		r.Post("/datasets/{fullname}/clone", dsW.Clone)
+		r.Post("/datasets/{fullname}/promote", dsW.Promote)
+		r.Post("/datasets/{fullname}/load-key", dsW.LoadKey)
+		r.Post("/datasets/{fullname}/unload-key", dsW.UnloadKey)
+		r.Post("/datasets/{fullname}/change-key", dsW.ChangeKey)
+		r.Post("/datasets/{fullname}/send", dsStream.Send)
+		r.Post("/datasets/{fullname}/receive", dsStream.Receive)
 		r.Get("/snapshots", snapH.List)
 		r.Post("/snapshots", snapW.Create)
 		r.Delete("/snapshots/{fullname}", snapW.Destroy)

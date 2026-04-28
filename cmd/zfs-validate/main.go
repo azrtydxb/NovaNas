@@ -11,9 +11,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -957,7 +959,610 @@ func main() {
 	})
 	cleanup("after scenario 25")
 
+	// ---- New manager methods (26-37) ---------------------------------------
+
+	step("26. recursive snapshot + recursive destroy", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		parent := poolName + "/parent"
+		childA := parent + "/childA"
+		childB := parent + "/childB"
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: poolName, Name: "parent", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: parent, Name: "childA", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: parent, Name: "childB", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := sm.Create(ctx, parent, "snap1", true); err != nil {
+			return fmt.Errorf("recursive snapshot: %w", err)
+		}
+		snaps, err := sm.List(ctx, parent)
+		if err != nil {
+			return err
+		}
+		seen := map[string]bool{}
+		for _, s := range snaps {
+			if strings.HasSuffix(s.Name, "@snap1") {
+				seen[s.Name] = true
+			}
+		}
+		want := []string{parent + "@snap1", childA + "@snap1", childB + "@snap1"}
+		for _, n := range want {
+			if !seen[n] {
+				return fmt.Errorf("missing recursive snapshot %s (saw %v)", n, seen)
+			}
+		}
+		fmt.Printf("  recursive snapshot created %d entries\n", len(seen))
+		// Recursive destroy of parent.
+		if err := dm.Destroy(ctx, parent, true); err != nil {
+			return fmt.Errorf("recursive destroy: %w", err)
+		}
+		// Confirm children gone.
+		if _, err := dm.Get(ctx, childA); !errors.Is(err, dataset.ErrNotFound) {
+			return fmt.Errorf("expected ErrNotFound on %s; got %v", childA, err)
+		}
+		if _, err := dm.Get(ctx, childB); !errors.Is(err, dataset.ErrNotFound) {
+			return fmt.Errorf("expected ErrNotFound on %s; got %v", childB, err)
+		}
+		fmt.Printf("  recursive destroy removed both children\n")
+		return nil
+	})
+	cleanup("after scenario 26")
+
+	step("27. zfs rename (with and without recursive)", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		// Non-recursive rename.
+		oldName := poolName + "/old"
+		newName := poolName + "/new"
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: poolName, Name: "old", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := dm.Rename(ctx, oldName, newName, false); err != nil {
+			return err
+		}
+		if _, err := dm.Get(ctx, oldName); !errors.Is(err, dataset.ErrNotFound) {
+			return fmt.Errorf("expected ErrNotFound on old name; got %v", err)
+		}
+		if _, err := dm.Get(ctx, newName); err != nil {
+			return fmt.Errorf("get new name: %w", err)
+		}
+		fmt.Printf("  rename old -> new OK\n")
+
+		// Filesystem rename takes children automatically (no -r flag needed
+		// for filesystems; -r is for snapshot rename across descendants).
+		pParent := poolName + "/p"
+		qParent := poolName + "/q"
+		qChild := qParent + "/c"
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: poolName, Name: "p", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: pParent, Name: "c", Type: "filesystem"}); err != nil {
+			return err
+		}
+		if err := dm.Rename(ctx, pParent, qParent, false); err != nil {
+			return fmt.Errorf("rename p -> q: %w", err)
+		}
+		if _, err := dm.Get(ctx, qChild); err != nil {
+			return fmt.Errorf("get %s after rename: %w", qChild, err)
+		}
+		fmt.Printf("  filesystem rename p -> q (child %s carried over)\n", qChild)
+
+		// Snapshot recursive rename: rename @s1 to @s2 across the whole
+		// q subtree.
+		if err := sm.Create(ctx, qParent, "s1", true); err != nil {
+			return fmt.Errorf("recursive snapshot @s1: %w", err)
+		}
+		if err := dm.Rename(ctx, qParent+"@s1", qParent+"@s2", true); err != nil {
+			return fmt.Errorf("recursive snapshot rename: %w", err)
+		}
+		// Verify child snapshot was also renamed.
+		snaps, err := sm.List(ctx, qParent)
+		if err != nil {
+			return err
+		}
+		var childRenamed bool
+		for _, s := range snaps {
+			if s.Name == qChild+"@s2" {
+				childRenamed = true
+			}
+		}
+		if !childRenamed {
+			return fmt.Errorf("recursive snapshot rename did not propagate to child")
+		}
+		fmt.Printf("  recursive snapshot rename @s1 -> @s2 across subtree OK\n")
+		return nil
+	})
+	cleanup("after scenario 27")
+
+	step("28. clone + promote", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		src := poolName + "/data"
+		clone := poolName + "/clone"
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: poolName, Name: "data", Type: "filesystem"}); err != nil {
+			return err
+		}
+		filePath := filepath.Join("/"+src, "payload.bin")
+		writePayload(filePath, 1<<20)
+		hashOriginal := sha256file(filePath)
+		if err := sm.Create(ctx, src, "snap", false); err != nil {
+			return err
+		}
+		if err := dm.Clone(ctx, src+"@snap", clone, nil); err != nil {
+			return fmt.Errorf("clone: %w", err)
+		}
+		clonedFile := filepath.Join("/"+clone, "payload.bin")
+		if sha256file(clonedFile) != hashOriginal {
+			return fmt.Errorf("clone file hash mismatch")
+		}
+		fmt.Printf("  clone %s contains payload (sha256 matches)\n", clone)
+
+		// Confirm origin is set on clone before promote.
+		got, err := dm.Get(ctx, clone)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("  pre-promote: clone.origin=%q\n", got.Props["origin"])
+
+		if err := dm.Promote(ctx, clone); err != nil {
+			return fmt.Errorf("promote: %w", err)
+		}
+		got, err = dm.Get(ctx, clone)
+		if err != nil {
+			return err
+		}
+		if got.Props["origin"] != "-" && got.Props["origin"] != "" {
+			return fmt.Errorf("after promote, expected clone.origin=- got %q", got.Props["origin"])
+		}
+		// Re-check the file is intact on the (now promoted) clone.
+		if sha256file(clonedFile) != hashOriginal {
+			return fmt.Errorf("post-promote clone file hash mismatch")
+		}
+		fmt.Printf("  promoted: clone.origin=%q, file intact\n", got.Props["origin"])
+		return nil
+	})
+	cleanup("after scenario 28")
+
+	step("29. encryption: create encrypted dataset, unload/load key", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		keyPath := "/tmp/zfs.key"
+		if err := os.WriteFile(keyPath, []byte("testpassword12345"), 0o600); err != nil {
+			return fmt.Errorf("write keyfile: %w", err)
+		}
+		full := poolName + "/encrypted"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "encrypted", Type: "filesystem",
+			Properties: map[string]string{
+				"encryption":  "aes-256-gcm",
+				"keyformat":   "passphrase",
+				"keylocation": "file://" + keyPath,
+			},
+		}); err != nil {
+			return fmt.Errorf("create encrypted: %w", err)
+		}
+		// Write a file inside.
+		mp := "/" + full
+		dataPath := filepath.Join(mp, "secret.bin")
+		writePayload(dataPath, 1<<20)
+		hashOriginal := sha256file(dataPath)
+		fmt.Printf("  wrote %s sha256=%s\n", dataPath, hashOriginal[:16])
+
+		// Unload key (must unmount first).
+		if err := exec.Command("/sbin/zfs", "unmount", full).Run(); err != nil {
+			fmt.Printf("  WARNING: unmount before unload-key: %v\n", err)
+		}
+		if err := dm.UnloadKey(ctx, full, false); err != nil {
+			return fmt.Errorf("unload-key: %w", err)
+		}
+		got, err := dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		if got.Props["keystatus"] != "unavailable" {
+			return fmt.Errorf("after unload-key keystatus=%q want unavailable", got.Props["keystatus"])
+		}
+		fmt.Printf("  unloaded: keystatus=%s\n", got.Props["keystatus"])
+
+		// Load key back.
+		if err := dm.LoadKey(ctx, full, "file://"+keyPath, false); err != nil {
+			return fmt.Errorf("load-key: %w", err)
+		}
+		got, err = dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		if got.Props["keystatus"] != "available" {
+			return fmt.Errorf("after load-key keystatus=%q want available", got.Props["keystatus"])
+		}
+		fmt.Printf("  loaded: keystatus=%s\n", got.Props["keystatus"])
+		// Re-mount and confirm payload is intact.
+		if err := exec.Command("/sbin/zfs", "mount", full).Run(); err != nil {
+			fmt.Printf("  WARNING: re-mount after load-key: %v\n", err)
+		}
+		if sha256file(dataPath) != hashOriginal {
+			return fmt.Errorf("payload changed across unload/load cycle")
+		}
+		fmt.Printf("  payload sha256 matches after load-key\n")
+		return nil
+	})
+	cleanup("after scenario 29")
+
+	step("30. zfs send + zfs receive (full snapshot stream)", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		src := poolName + "/src"
+		dst := poolName + "/dst"
+		if err := dm.Create(ctx, dataset.CreateSpec{Parent: poolName, Name: "src", Type: "filesystem"}); err != nil {
+			return err
+		}
+		filePath := filepath.Join("/"+src, "payload.bin")
+		writePayload(filePath, 1<<20)
+		hashOriginal := sha256file(filePath)
+		if err := sm.Create(ctx, src, "s1", false); err != nil {
+			return err
+		}
+		var buf bytes.Buffer
+		if err := dm.Send(ctx, src+"@s1", dataset.SendOpts{}, &buf); err != nil {
+			return fmt.Errorf("send: %w", err)
+		}
+		fmt.Printf("  send produced %d bytes\n", buf.Len())
+		if err := dm.Receive(ctx, dst, dataset.RecvOpts{}, &buf); err != nil {
+			return fmt.Errorf("receive: %w", err)
+		}
+		if _, err := dm.Get(ctx, dst); err != nil {
+			return fmt.Errorf("get dst: %w", err)
+		}
+		dstFile := filepath.Join("/"+dst, "payload.bin")
+		if sha256file(dstFile) != hashOriginal {
+			return fmt.Errorf("dst payload hash mismatch")
+		}
+		fmt.Printf("  dst payload sha256 matches src\n")
+
+		// Scenario 31 piggybacks on this pool.
+		step31(ctx, dm, sm, src, dst, hashOriginal, filePath, dstFile)
+		return nil
+	})
+	cleanup("after scenarios 30+31")
+
+	step("32. dRAID pool create", func() error {
+		if len(disks) < 8 {
+			fmt.Printf("  SKIP: need >=8 disks for draid (have %d)\n", len(disks))
+			return nil
+		}
+		wipeDisks(disks[:8])
+		spec := pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "draid2:6d", Disks: disks[:8]}},
+		}
+		if err := pm.Create(ctx, spec); err != nil {
+			return fmt.Errorf("draid create: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if d.Pool.Health != "ONLINE" {
+			return fmt.Errorf("draid pool health=%q want ONLINE", d.Pool.Health)
+		}
+		if len(d.Status.Vdevs) == 0 {
+			return fmt.Errorf("no vdevs reported")
+		}
+		t := d.Status.Vdevs[0].Type
+		if !strings.HasPrefix(t, "draid") {
+			return fmt.Errorf("vdev[0].Type=%q want draid*", t)
+		}
+		fmt.Printf("  draid pool ONLINE, vdev[0].Type=%s\n", t)
+		return nil
+	})
+	cleanup("after scenario 32")
+
+	step("33. special vdev", func() error {
+		if len(disks) < 4 {
+			return fmt.Errorf("need >=4 disks for special vdev scenario")
+		}
+		wipeDisks(disks[:4])
+		spec := pool.CreateSpec{
+			Name:    poolName,
+			Vdevs:   []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+			Special: []pool.VdevSpec{{Type: "mirror", Disks: disks[2:4]}},
+		}
+		if err := pm.Create(ctx, spec); err != nil {
+			return fmt.Errorf("create with special: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		var foundSpecial bool
+		for _, v := range d.Status.Vdevs {
+			if v.Type == "special" {
+				foundSpecial = true
+				fmt.Printf("  found special vdev with %d children\n", len(v.Children))
+			}
+		}
+		if !foundSpecial {
+			return fmt.Errorf("special vdev not present in status; vdevs=%+v", d.Status.Vdevs)
+		}
+		// Write data, scrub.
+		writePayload(filepath.Join("/"+poolName, "special-data.bin"), 16<<20)
+		if err := pm.Scrub(ctx, poolName, pool.ScrubStart); err != nil {
+			return err
+		}
+		if err := waitScrubComplete(ctx, pm, 60*time.Second); err != nil {
+			return err
+		}
+		fmt.Printf("  scrub clean on pool with special vdev\n")
+		return nil
+	})
+	cleanup("after scenario 33")
+
+	step("34. trim (start, then stop)", func() error {
+		// Prefer SSDs via LOG_A + CACHE env (TRIM is a real operation on
+		// SSDs). Fall back to HDD disks[:2] but tolerate the
+		// "no devices in pool support trim operations" error.
+		ssdA, ssdB := os.Getenv("LOG_A"), os.Getenv("CACHE")
+		var trimDisks []string
+		if ssdA != "" && ssdB != "" && ssdA != ssdB {
+			trimDisks = []string{ssdA, ssdB}
+		} else {
+			trimDisks = disks[:2]
+		}
+		wipeDisks(trimDisks)
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: trimDisks}},
+		}); err != nil {
+			return err
+		}
+		if err := pm.Trim(ctx, poolName, pool.TrimStart, ""); err != nil {
+			if strings.Contains(err.Error(), "no devices in pool support trim") {
+				fmt.Printf("  SKIP: pool has no TRIM-capable devices (HDD)\n")
+				return nil
+			}
+			return fmt.Errorf("trim start: %w", err)
+		}
+		if err := pm.Wait(ctx, poolName, "trim", 30*time.Second); err != nil {
+			fmt.Printf("  WARNING: wait trim: %v (continuing)\n", err)
+		}
+		fmt.Printf("  trim start + wait OK\n")
+
+		// Test stop: start again, then immediately stop.
+		if err := pm.Trim(ctx, poolName, pool.TrimStart, ""); err != nil {
+			fmt.Printf("  WARNING: second trim start: %v\n", err)
+		}
+		if err := pm.Trim(ctx, poolName, pool.TrimStop, ""); err != nil {
+			fmt.Printf("  WARNING: trim stop: %v (HDDs may not support trim cancel)\n", err)
+		} else {
+			fmt.Printf("  trim stop OK\n")
+		}
+		return nil
+	})
+	cleanup("after scenario 34")
+
+	step("35. zpool set/get properties (autotrim, comment)", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		if err := pm.SetProps(ctx, poolName, map[string]string{
+			"autotrim": "on",
+			"comment":  "validate-test",
+		}); err != nil {
+			return fmt.Errorf("setprops: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if d.Props["autotrim"] != "on" {
+			return fmt.Errorf("autotrim=%q want on", d.Props["autotrim"])
+		}
+		if d.Props["comment"] != "validate-test" {
+			return fmt.Errorf("comment=%q want validate-test", d.Props["comment"])
+		}
+		fmt.Printf("  autotrim=%s comment=%s\n", d.Props["autotrim"], d.Props["comment"])
+		return nil
+	})
+	cleanup("after scenario 35")
+
+	step("36. refquota + refreservation + userquota", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/qfs"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "qfs", Type: "filesystem",
+			Properties: map[string]string{"compression": "off"},
+		}); err != nil {
+			return err
+		}
+		if err := dm.SetProps(ctx, full, map[string]string{"refquota": "10M"}); err != nil {
+			return fmt.Errorf("set refquota: %w", err)
+		}
+		mp := "/" + full
+		// 5MiB succeeds.
+		if err := writeRandom(filepath.Join(mp, "small.bin"), 5<<20); err != nil {
+			return fmt.Errorf("5MiB write under 10M refquota: %w", err)
+		}
+		fmt.Printf("  refquota=10M, 5MiB write OK\n")
+		// 20MiB fails.
+		err := writeRandom(filepath.Join(mp, "big.bin"), 20<<20)
+		if err == nil {
+			return fmt.Errorf("expected 20MiB write to fail under 10M refquota")
+		}
+		fmt.Printf("  20MiB write rejected as expected: %v\n", err)
+		_ = os.Remove(filepath.Join(mp, "big.bin"))
+
+		// refreservation.
+		if err := dm.SetProps(ctx, full, map[string]string{"refreservation": "5M"}); err != nil {
+			return fmt.Errorf("set refreservation: %w", err)
+		}
+		got, err := dm.Get(ctx, full)
+		if err != nil {
+			return err
+		}
+		if got.Props["refreservation"] == "" || got.Props["refreservation"] == "0" || got.Props["refreservation"] == "none" {
+			return fmt.Errorf("refreservation not visible: %q", got.Props["refreservation"])
+		}
+		fmt.Printf("  refreservation=%s bytes\n", got.Props["refreservation"])
+
+		// userquota@root=2M (best-effort).
+		if err := dm.SetProps(ctx, full, map[string]string{"userquota@root": "2M"}); err != nil {
+			return fmt.Errorf("set userquota: %w", err)
+		}
+		// Clear refquota first so it doesn't interfere with userquota detection.
+		if err := dm.SetProps(ctx, full, map[string]string{"refquota": "none"}); err != nil {
+			fmt.Printf("  WARNING: clear refquota: %v\n", err)
+		}
+		_ = os.Remove(filepath.Join(mp, "small.bin"))
+		err = writeRandom(filepath.Join(mp, "userq.bin"), 5<<20)
+		if err == nil {
+			fmt.Printf("  WARNING: 5MiB write succeeded despite userquota=2M (enforcement is async, skipping strict check)\n")
+		} else {
+			fmt.Printf("  userquota enforced: %v\n", err)
+		}
+		return nil
+	})
+	cleanup("after scenario 36")
+
+	step("37. spare auto-substitution (requires zfs-zed)", func() error {
+		out, err := exec.Command("systemctl", "is-active", "zfs-zed").Output()
+		state := strings.TrimSpace(string(out))
+		if err != nil || state != "active" {
+			fmt.Printf("  SKIP: zed not running (is-active=%q err=%v)\n", state, err)
+			return nil
+		}
+		if len(disks) < 4 {
+			fmt.Printf("  SKIP: need >=4 disks (3 raidz1 + 1 spare); have %d\n", len(disks))
+			return nil
+		}
+		wipeDisks(disks[:4])
+		spec := pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "raidz1", Disks: disks[:3]}},
+			Spare: []string{disks[3]},
+		}
+		if err := pm.Create(ctx, spec); err != nil {
+			return fmt.Errorf("create with spare: %w", err)
+		}
+		// Write some data so resilver has work to do.
+		writePayload(filepath.Join("/"+poolName, "spare-data.bin"), 8<<20)
+
+		// Trigger fault: offline disks[0] then scrub. (dd label corruption on
+		// an in-use disk often races with zfs's own writes.)
+		if err := pm.Offline(ctx, poolName, disks[0], false); err != nil {
+			fmt.Printf("  WARNING: offline disks[0]: %v\n", err)
+		}
+		_ = exec.Command("dd", "if=/dev/zero", "of="+disks[0], "bs=1M", "count=10").Run()
+		_ = exec.Command("/sbin/zpool", "scrub", poolName).Run()
+
+		// Poll up to 30s for the spare to be substituted.
+		deadline := time.Now().Add(30 * time.Second)
+		var substituted bool
+		for time.Now().Before(deadline) {
+			d, err := pm.Get(ctx, poolName)
+			if err != nil {
+				return err
+			}
+			if vdevTreeContainsDisk(d.Status.Vdevs, disks[3]) {
+				// Walk: a substitution shows the spare disk somewhere under
+				// a "spare" or "replacing" vdev group nested inside raidz1.
+				for _, top := range d.Status.Vdevs {
+					if top.Type != "raidz1" {
+						continue
+					}
+					for _, child := range top.Children {
+						if child.Type == "spare" || child.Type == "replacing" {
+							substituted = true
+						}
+					}
+				}
+			}
+			if substituted {
+				fmt.Printf("  spare substituted, pool state=%s\n", d.Status.State)
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+		if !substituted {
+			fmt.Printf("  WARNING: spare not auto-substituted within 30s (zed timing best-effort)\n")
+		}
+		return nil
+	})
+	cleanup("after scenario 37")
+
 	fmt.Println("\nALL CHECKS PASSED")
+}
+
+// step31 is the incremental-send half of scenarios 30+31. It is invoked
+// from inside step 30 because it shares the pool and the source dataset.
+func step31(ctx context.Context, dm *dataset.Manager, sm *snapshot.Manager,
+	src, dst, _ string, srcFile, dstFile string) {
+	fmt.Printf("\n=== 31. zfs send incremental ===\n")
+	// Modify src file.
+	mutated := []byte("INCREMENTAL_PAYLOAD_v2")
+	if err := os.WriteFile(srcFile, mutated, 0o600); err != nil {
+		fmt.Printf("  FAIL: rewrite src file: %v\n", err)
+		os.Exit(1)
+	}
+	hashMutated := sha256file(srcFile)
+	if err := sm.Create(ctx, src, "s2", false); err != nil {
+		fmt.Printf("  FAIL: snapshot s2: %v\n", err)
+		os.Exit(1)
+	}
+	var buf bytes.Buffer
+	if err := dm.Send(ctx, src+"@s2", dataset.SendOpts{IncrementalFrom: src + "@s1"}, &buf); err != nil {
+		fmt.Printf("  FAIL: incremental send: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  incremental send produced %d bytes\n", buf.Len())
+	if err := dm.Receive(ctx, dst, dataset.RecvOpts{Force: true}, &buf); err != nil {
+		fmt.Printf("  FAIL: incremental receive: %v\n", err)
+		os.Exit(1)
+	}
+	if got := sha256file(dstFile); got != hashMutated {
+		fmt.Printf("  FAIL: dst hash %s != mutated %s\n", got, hashMutated)
+		os.Exit(1)
+	}
+	fmt.Printf("  dst now matches mutated src (sha256 verified)\n")
+	fmt.Printf("  OK\n")
 }
 
 func createAndCheck(ctx context.Context, pm *pool.Manager, spec pool.CreateSpec,

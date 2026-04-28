@@ -14,6 +14,9 @@ type Manager struct {
 	ZFSBin string
 	// Runner overrides exec.Run for tests. nil → use exec.Run directly.
 	Runner exec.Runner
+	// StreamRunner overrides exec.RunStream for tests (used by Send/Receive
+	// where stdout/stdin is a binary stream). nil → use exec.RunStream.
+	StreamRunner exec.StreamRunner
 }
 
 type Detail struct {

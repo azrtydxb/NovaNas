@@ -105,6 +105,11 @@ func (e ListJobsParamsState) Valid() bool {
 	}
 }
 
+// ChangeKeyRequest defines model for ChangeKeyRequest.
+type ChangeKeyRequest struct {
+	Properties map[string]string `json:"properties"`
+}
+
 // Dataset defines model for Dataset.
 type Dataset struct {
 	AvailableBytes  *int         `json:"availableBytes,omitempty"`
@@ -119,6 +124,12 @@ type Dataset struct {
 
 // DatasetType defines model for Dataset.Type.
 type DatasetType string
+
+// DatasetCloneRequest defines model for DatasetCloneRequest.
+type DatasetCloneRequest struct {
+	Properties *map[string]string `json:"properties,omitempty"`
+	Target     string             `json:"target"`
+}
 
 // DatasetCreateSpec defines model for DatasetCreateSpec.
 type DatasetCreateSpec struct {
@@ -136,6 +147,12 @@ type DatasetCreateSpecType string
 type DatasetDetail struct {
 	Dataset    *Dataset           `json:"dataset,omitempty"`
 	Properties *map[string]string `json:"properties,omitempty"`
+}
+
+// DatasetRenameRequest defines model for DatasetRenameRequest.
+type DatasetRenameRequest struct {
+	NewName   string `json:"newName"`
+	Recursive *bool  `json:"recursive,omitempty"`
 }
 
 // Disk defines model for Disk.
@@ -169,6 +186,12 @@ type Job struct {
 	Stderr     *string             `json:"stderr,omitempty"`
 	Stdout     *string             `json:"stdout,omitempty"`
 	Target     *string             `json:"target,omitempty"`
+}
+
+// LoadKeyRequest defines model for LoadKeyRequest.
+type LoadKeyRequest struct {
+	Keylocation *string `json:"keylocation,omitempty"`
+	Recursive   *bool   `json:"recursive,omitempty"`
 }
 
 // MetadataPatch defines model for MetadataPatch.
@@ -208,6 +231,17 @@ type PoolDetail struct {
 		State *string `json:"state,omitempty"`
 		Vdevs *[]Vdev `json:"vdevs,omitempty"`
 	} `json:"status,omitempty"`
+}
+
+// PoolPropertiesPatch defines model for PoolPropertiesPatch.
+type PoolPropertiesPatch struct {
+	Properties map[string]string `json:"properties"`
+}
+
+// PoolTrimRequest defines model for PoolTrimRequest.
+type PoolTrimRequest struct {
+	// Disk Optional vdev path; absent trims the whole pool
+	Disk *string `json:"disk,omitempty"`
 }
 
 // ResourceMetadata defines model for ResourceMetadata.
@@ -276,9 +310,31 @@ type PatchDatasetPropsJSONBody struct {
 	Properties map[string]string `json:"properties"`
 }
 
+// ReceiveDatasetParams defines parameters for ReceiveDataset.
+type ReceiveDatasetParams struct {
+	Force     *bool   `form:"force,omitempty" json:"force,omitempty"`
+	Resumable *bool   `form:"resumable,omitempty" json:"resumable,omitempty"`
+	Origin    *string `form:"origin,omitempty" json:"origin,omitempty"`
+}
+
 // RollbackDatasetJSONBody defines parameters for RollbackDataset.
 type RollbackDatasetJSONBody struct {
 	Snapshot string `json:"snapshot"`
+}
+
+// SendDatasetParams defines parameters for SendDataset.
+type SendDatasetParams struct {
+	Recursive    *bool   `form:"recursive,omitempty" json:"recursive,omitempty"`
+	Raw          *bool   `form:"raw,omitempty" json:"raw,omitempty"`
+	Compressed   *bool   `form:"compressed,omitempty" json:"compressed,omitempty"`
+	LargeBlock   *bool   `form:"largeBlock,omitempty" json:"largeBlock,omitempty"`
+	EmbeddedData *bool   `form:"embeddedData,omitempty" json:"embeddedData,omitempty"`
+	From         *string `form:"from,omitempty" json:"from,omitempty"`
+}
+
+// UnloadDatasetKeyJSONBody defines parameters for UnloadDatasetKey.
+type UnloadDatasetKeyJSONBody struct {
+	Recursive *bool `json:"recursive,omitempty"`
 }
 
 // ListJobsParams defines parameters for ListJobs.
@@ -294,6 +350,17 @@ type ListJobsParamsState string
 // ScrubPoolParams defines parameters for ScrubPool.
 type ScrubPoolParams struct {
 	Action *string `form:"action,omitempty" json:"action,omitempty"`
+}
+
+// TrimPoolParams defines parameters for TrimPool.
+type TrimPoolParams struct {
+	Action *string `form:"action,omitempty" json:"action,omitempty"`
+}
+
+// WaitPoolParams defines parameters for WaitPool.
+type WaitPoolParams struct {
+	Activity   string `form:"activity" json:"activity"`
+	TimeoutSec *int   `form:"timeoutSec,omitempty" json:"timeoutSec,omitempty"`
 }
 
 // ListSnapshotsParams defines parameters for ListSnapshots.
@@ -314,17 +381,38 @@ type CreateDatasetJSONRequestBody = DatasetCreateSpec
 // PatchDatasetPropsJSONRequestBody defines body for PatchDatasetProps for application/json ContentType.
 type PatchDatasetPropsJSONRequestBody PatchDatasetPropsJSONBody
 
+// ChangeDatasetKeyJSONRequestBody defines body for ChangeDatasetKey for application/json ContentType.
+type ChangeDatasetKeyJSONRequestBody = ChangeKeyRequest
+
+// CloneDatasetJSONRequestBody defines body for CloneDataset for application/json ContentType.
+type CloneDatasetJSONRequestBody = DatasetCloneRequest
+
+// LoadDatasetKeyJSONRequestBody defines body for LoadDatasetKey for application/json ContentType.
+type LoadDatasetKeyJSONRequestBody = LoadKeyRequest
+
 // PatchDatasetMetadataJSONRequestBody defines body for PatchDatasetMetadata for application/json ContentType.
 type PatchDatasetMetadataJSONRequestBody = MetadataPatch
 
+// RenameDatasetJSONRequestBody defines body for RenameDataset for application/json ContentType.
+type RenameDatasetJSONRequestBody = DatasetRenameRequest
+
 // RollbackDatasetJSONRequestBody defines body for RollbackDataset for application/json ContentType.
 type RollbackDatasetJSONRequestBody RollbackDatasetJSONBody
+
+// UnloadDatasetKeyJSONRequestBody defines body for UnloadDatasetKey for application/json ContentType.
+type UnloadDatasetKeyJSONRequestBody UnloadDatasetKeyJSONBody
 
 // CreatePoolJSONRequestBody defines body for CreatePool for application/json ContentType.
 type CreatePoolJSONRequestBody = PoolCreateSpec
 
 // PatchPoolMetadataJSONRequestBody defines body for PatchPoolMetadata for application/json ContentType.
 type PatchPoolMetadataJSONRequestBody = MetadataPatch
+
+// PatchPoolPropertiesJSONRequestBody defines body for PatchPoolProperties for application/json ContentType.
+type PatchPoolPropertiesJSONRequestBody = PoolPropertiesPatch
+
+// TrimPoolJSONRequestBody defines body for TrimPool for application/json ContentType.
+type TrimPoolJSONRequestBody = PoolTrimRequest
 
 // CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
 type CreateSnapshotJSONRequestBody CreateSnapshotJSONBody

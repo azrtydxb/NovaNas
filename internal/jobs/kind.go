@@ -24,6 +24,14 @@ const (
 	KindDatasetCreate    Kind = "dataset.create"
 	KindDatasetSet       Kind = "dataset.set"
 	KindDatasetDestroy   Kind = "dataset.destroy"
+	KindDatasetRename    Kind = "dataset.rename"
+	KindDatasetClone     Kind = "dataset.clone"
+	KindDatasetPromote   Kind = "dataset.promote"
+	KindDatasetLoadKey   Kind = "dataset.load_key"
+	KindDatasetUnloadKey Kind = "dataset.unload_key"
+	KindDatasetChangeKey Kind = "dataset.change_key"
+	KindPoolTrim         Kind = "pool.trim"
+	KindPoolSetProps     Kind = "pool.set_props"
 	KindSnapshotCreate   Kind = "snapshot.create"
 	KindSnapshotDestroy  Kind = "snapshot.destroy"
 	KindSnapshotRollback Kind = "snapshot.rollback"
@@ -119,4 +127,47 @@ type PoolExportPayload struct {
 
 type PoolImportPayload struct {
 	Name string `json:"name"`
+}
+
+type DatasetRenamePayload struct {
+	OldName   string `json:"oldName"`
+	NewName   string `json:"newName"`
+	Recursive bool   `json:"recursive"`
+}
+
+type DatasetClonePayload struct {
+	Snapshot   string            `json:"snapshot"`
+	Target     string            `json:"target"`
+	Properties map[string]string `json:"properties,omitempty"`
+}
+
+type DatasetPromotePayload struct {
+	Name string `json:"name"`
+}
+
+type DatasetLoadKeyPayload struct {
+	Name        string `json:"name"`
+	Keylocation string `json:"keylocation,omitempty"`
+	Recursive   bool   `json:"recursive"`
+}
+
+type DatasetUnloadKeyPayload struct {
+	Name      string `json:"name"`
+	Recursive bool   `json:"recursive"`
+}
+
+type DatasetChangeKeyPayload struct {
+	Name       string            `json:"name"`
+	Properties map[string]string `json:"properties"`
+}
+
+type PoolTrimPayload struct {
+	Name   string `json:"name"`
+	Action string `json:"action"` // "start" | "stop"
+	Disk   string `json:"disk,omitempty"`
+}
+
+type PoolSetPropsPayload struct {
+	Name       string            `json:"name"`
+	Properties map[string]string `json:"properties"`
 }

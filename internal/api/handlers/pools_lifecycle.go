@@ -241,6 +241,76 @@ func (h *PoolsWriteHandler) Import(w http.ResponseWriter, r *http.Request) {
 	writeDispatchResult(w, h.Logger, "pools.import", out, err)
 }
 
+// Trim enqueues a `zpool trim` start/stop job. action comes from the
+// `action` query parameter ("start" default; "stop" issues `-c`). If a
+// disk is in the body, the trim is scoped to that vdev.
+func (h *PoolsWriteHandler) Trim(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if err := names.ValidatePoolName(name); err != nil {
+		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "pool name is invalid")
+		return
+	}
+	var action string
+	switch r.URL.Query().Get("action") {
+	case "", "start":
+		action = "start"
+	case "stop":
+		action = "stop"
+	default:
+		middleware.WriteError(w, http.StatusBadRequest, "bad_action", "action must be 'start' or 'stop'")
+		return
+	}
+	var body struct {
+		Disk string `json:"disk"`
+	}
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			middleware.WriteError(w, http.StatusBadRequest, "bad_json", "request body is not valid JSON")
+			return
+		}
+	}
+	out, err := h.Dispatcher.Dispatch(r.Context(), jobs.DispatchInput{
+		Kind:      jobs.KindPoolTrim,
+		Target:    name,
+		Payload:   jobs.PoolTrimPayload{Name: name, Action: action, Disk: body.Disk},
+		Command:   "zpool trim " + name,
+		RequestID: middleware.RequestIDOf(r.Context()),
+		UniqueKey: "pool:" + name,
+	})
+	writeDispatchResult(w, h.Logger, "pools.trim", out, err)
+}
+
+// SetProps enqueues a `zpool set` job for one or more pool properties.
+// Mirrors PATCH /datasets/{fullname}: the request body has a top-level
+// `properties` map.
+func (h *PoolsWriteHandler) SetProps(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if err := names.ValidatePoolName(name); err != nil {
+		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "pool name is invalid")
+		return
+	}
+	var body struct {
+		Properties map[string]string `json:"properties"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		middleware.WriteError(w, http.StatusBadRequest, "bad_json", "request body is not valid JSON")
+		return
+	}
+	if len(body.Properties) == 0 {
+		middleware.WriteError(w, http.StatusBadRequest, "no_props", "properties required")
+		return
+	}
+	out, err := h.Dispatcher.Dispatch(r.Context(), jobs.DispatchInput{
+		Kind:      jobs.KindPoolSetProps,
+		Target:    name,
+		Payload:   jobs.PoolSetPropsPayload{Name: name, Properties: body.Properties},
+		Command:   "zpool set " + name,
+		RequestID: middleware.RequestIDOf(r.Context()),
+		UniqueKey: "pool:" + name,
+	})
+	writeDispatchResult(w, h.Logger, "pools.set_props", out, err)
+}
+
 // Importable returns the list of pools available for import synchronously.
 // It calls the pool Manager directly — no job is enqueued.
 func (h *PoolsWriteHandler) Importable(w http.ResponseWriter, r *http.Request) {

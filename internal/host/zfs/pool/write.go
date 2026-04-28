@@ -13,6 +13,10 @@ import (
 type CreateSpec struct {
 	Name  string     `json:"name"`
 	Vdevs []VdevSpec `json:"vdevs"`
+	// Special vdevs hold metadata/small-blocks. Same shape as data vdevs.
+	Special []VdevSpec `json:"special,omitempty"`
+	// Dedup vdevs hold the dedup table. Same shape as data vdevs.
+	Dedup []VdevSpec `json:"dedup,omitempty"`
 	// Log accepts one or more log vdevs. Each log vdev is a single disk
 	// (Type="disk") or a mirror (Type="mirror" with two disks). Other
 	// types (raidz/draid) are rejected — ZFS does not support them for
@@ -32,10 +36,12 @@ type VdevSpec struct {
 // AddSpec is the shape for `zpool add`. Same vdev shape as CreateSpec
 // minus the pool name (the pool already exists).
 type AddSpec struct {
-	Vdevs []VdevSpec `json:"vdevs,omitempty"`
-	Log   []VdevSpec `json:"log,omitempty"`
-	Cache []string   `json:"cache,omitempty"`
-	Spare []string   `json:"spare,omitempty"`
+	Vdevs   []VdevSpec `json:"vdevs,omitempty"`
+	Special []VdevSpec `json:"special,omitempty"`
+	Dedup   []VdevSpec `json:"dedup,omitempty"`
+	Log     []VdevSpec `json:"log,omitempty"`
+	Cache   []string   `json:"cache,omitempty"`
+	Spare   []string   `json:"spare,omitempty"`
 }
 
 var validVdevTypes = map[string]struct{}{
@@ -50,14 +56,17 @@ var validLogTypes = map[string]struct{}{
 
 func emitVdevs(args []string, vdevs []VdevSpec, allowed map[string]struct{}) ([]string, error) {
 	for _, v := range vdevs {
-		if _, ok := allowed[v.Type]; !ok {
-			return nil, fmt.Errorf("invalid vdev type %q for this position", v.Type)
+		isDraid := strings.HasPrefix(v.Type, "draid")
+		if !isDraid {
+			if _, ok := allowed[v.Type]; !ok {
+				return nil, fmt.Errorf("invalid vdev type %q for this position", v.Type)
+			}
 		}
 		if len(v.Disks) == 0 {
 			return nil, fmt.Errorf("vdev %q has no disks", v.Type)
 		}
 		// "stripe" and "disk" are emitted as bare disks (no group token).
-		// All other types prefix with the type name.
+		// All other types (including draid<spec>) prefix with the type name.
 		if v.Type != "stripe" && v.Type != "disk" {
 			args = append(args, v.Type)
 		}
@@ -77,6 +86,18 @@ func buildCreateArgs(spec CreateSpec) ([]string, error) {
 	var err error
 	if args, err = emitVdevs(args, spec.Vdevs, validVdevTypes); err != nil {
 		return nil, err
+	}
+	if len(spec.Special) > 0 {
+		args = append(args, "special")
+		if args, err = emitVdevs(args, spec.Special, validVdevTypes); err != nil {
+			return nil, fmt.Errorf("special: %w", err)
+		}
+	}
+	if len(spec.Dedup) > 0 {
+		args = append(args, "dedup")
+		if args, err = emitVdevs(args, spec.Dedup, validVdevTypes); err != nil {
+			return nil, fmt.Errorf("dedup: %w", err)
+		}
 	}
 	if len(spec.Log) > 0 {
 		args = append(args, "log")
@@ -99,13 +120,26 @@ func buildAddArgs(name string, spec AddSpec) ([]string, error) {
 	if err := names.ValidatePoolName(name); err != nil {
 		return nil, err
 	}
-	if len(spec.Vdevs) == 0 && len(spec.Log) == 0 && len(spec.Cache) == 0 && len(spec.Spare) == 0 {
+	if len(spec.Vdevs) == 0 && len(spec.Special) == 0 && len(spec.Dedup) == 0 &&
+		len(spec.Log) == 0 && len(spec.Cache) == 0 && len(spec.Spare) == 0 {
 		return nil, fmt.Errorf("add: nothing to add")
 	}
 	args := []string{"add", "-f", name}
 	var err error
 	if args, err = emitVdevs(args, spec.Vdevs, validVdevTypes); err != nil {
 		return nil, err
+	}
+	if len(spec.Special) > 0 {
+		args = append(args, "special")
+		if args, err = emitVdevs(args, spec.Special, validVdevTypes); err != nil {
+			return nil, fmt.Errorf("special: %w", err)
+		}
+	}
+	if len(spec.Dedup) > 0 {
+		args = append(args, "dedup")
+		if args, err = emitVdevs(args, spec.Dedup, validVdevTypes); err != nil {
+			return nil, fmt.Errorf("dedup: %w", err)
+		}
 	}
 	if len(spec.Log) > 0 {
 		args = append(args, "log")

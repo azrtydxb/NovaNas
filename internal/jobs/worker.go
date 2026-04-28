@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -44,6 +45,14 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindDatasetCreate), d.handleDatasetCreate)
 	mux.HandleFunc(string(KindDatasetSet), d.handleDatasetSet)
 	mux.HandleFunc(string(KindDatasetDestroy), d.handleDatasetDestroy)
+	mux.HandleFunc(string(KindDatasetRename), d.handleDatasetRename)
+	mux.HandleFunc(string(KindDatasetClone), d.handleDatasetClone)
+	mux.HandleFunc(string(KindDatasetPromote), d.handleDatasetPromote)
+	mux.HandleFunc(string(KindDatasetLoadKey), d.handleDatasetLoadKey)
+	mux.HandleFunc(string(KindDatasetUnloadKey), d.handleDatasetUnloadKey)
+	mux.HandleFunc(string(KindDatasetChangeKey), d.handleDatasetChangeKey)
+	mux.HandleFunc(string(KindPoolTrim), d.handlePoolTrim)
+	mux.HandleFunc(string(KindPoolSetProps), d.handlePoolSetProps)
 	mux.HandleFunc(string(KindSnapshotCreate), d.handleSnapshotCreate)
 	mux.HandleFunc(string(KindSnapshotDestroy), d.handleSnapshotDestroy)
 	mux.HandleFunc(string(KindSnapshotRollback), d.handleSnapshotRollback)
@@ -309,6 +318,113 @@ func (d WorkerDeps) handlePoolImport(ctx context.Context, t *asynq.Task) error {
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.Pools.Import(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetRename(ctx context.Context, t *asynq.Task) error {
+	var p DatasetRenamePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.Rename(ctx, p.OldName, p.NewName, p.Recursive)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetClone(ctx context.Context, t *asynq.Task) error {
+	var p DatasetClonePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.Clone(ctx, p.Snapshot, p.Target, p.Properties)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetPromote(ctx context.Context, t *asynq.Task) error {
+	var p DatasetPromotePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.Promote(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetLoadKey(ctx context.Context, t *asynq.Task) error {
+	var p DatasetLoadKeyPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.LoadKey(ctx, p.Name, p.Keylocation, p.Recursive)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetUnloadKey(ctx context.Context, t *asynq.Task) error {
+	var p DatasetUnloadKeyPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.UnloadKey(ctx, p.Name, p.Recursive)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetChangeKey(ctx context.Context, t *asynq.Task) error {
+	var p DatasetChangeKeyPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.ChangeKey(ctx, p.Name, p.Properties)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolTrim(ctx context.Context, t *asynq.Task) error {
+	var p PoolTrimPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	var action pool.TrimAction
+	switch p.Action {
+	case "start":
+		action = pool.TrimStart
+	case "stop":
+		action = pool.TrimStop
+	default:
+		err = fmt.Errorf("invalid trim action %q", p.Action)
+		d.finish(ctx, id, err)
+		return err
+	}
+	err = d.Pools.Trim(ctx, p.Name, action, p.Disk)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolSetProps(ctx context.Context, t *asynq.Task) error {
+	var p PoolSetPropsPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.SetProps(ctx, p.Name, p.Properties)
 	d.finish(ctx, id, err)
 	return err
 }

@@ -234,6 +234,10 @@ func classifyVdev(name, state string) Vdev {
 		v.Type = "cache"
 	case name == "spares":
 		v.Type = "spare"
+	case name == "special":
+		v.Type = "special"
+	case name == "dedup":
+		v.Type = "dedup"
 	default:
 		v.Type = "disk"
 		v.Path = name

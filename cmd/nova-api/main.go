@@ -113,6 +113,8 @@ func main() {
 		Snapshots:  snapMgr,
 		Dispatcher: dispatcher,
 		Redis:      redisClient,
+		DatasetMgr: datasetMgr,
+		PoolMgr:    poolMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

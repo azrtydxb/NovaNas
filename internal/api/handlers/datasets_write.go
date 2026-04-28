@@ -86,14 +86,25 @@ func (h *DatasetsWriteHandler) Destroy(w http.ResponseWriter, r *http.Request) {
 }
 
 func decodeDatasetFullname(w http.ResponseWriter, r *http.Request) (string, bool) {
-	encoded := chi.URLParam(r, "fullname")
-	name, err := url.PathUnescape(encoded)
-	if err != nil {
-		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "invalid url-encoded name")
+	name, ok := decodeAndUnescapeFullname(w, r)
+	if !ok {
 		return "", false
 	}
 	if err := names.ValidateDatasetName(name); err != nil {
 		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "dataset name is invalid")
+		return "", false
+	}
+	return name, true
+}
+
+// decodeAndUnescapeFullname returns the URL-decoded {fullname} path
+// parameter. Validation is left to the caller (callers want either
+// dataset or snapshot semantics).
+func decodeAndUnescapeFullname(w http.ResponseWriter, r *http.Request) (string, bool) {
+	encoded := chi.URLParam(r, "fullname")
+	name, err := url.PathUnescape(encoded)
+	if err != nil {
+		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "invalid url-encoded name")
 		return "", false
 	}
 	return name, true
