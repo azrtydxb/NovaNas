@@ -1,0 +1,28 @@
+name: e2e
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  zfs-e2e:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'needs-e2e')
+    runs-on: [self-hosted, zfs]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: ZFS sanity
+        run: |
+          zfs --version
+          zpool --version
+          test -e /dev/zfs
+      - name: Run e2e tests
+        run: sudo -E go test -tags=e2e -timeout=10m ./test/e2e/...
