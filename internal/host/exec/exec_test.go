@@ -19,6 +19,8 @@ func TestRun_Success(t *testing.T) {
 }
 
 func TestRun_NonZeroExit(t *testing.T) {
+	// `/bin/sh -c "exit 1"` is portable; `/bin/false` is Linux-only
+	// (macOS only has /usr/bin/false). The plan spec was Linux-centric.
 	_, err := Run(context.Background(), "/bin/sh", "-c", "exit 1")
 	if err == nil {
 		t.Fatal("expected error")
