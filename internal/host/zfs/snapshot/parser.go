@@ -31,6 +31,10 @@ func parseList(data []byte) ([]Snapshot, error) {
 			return nil, fmt.Errorf("zfs snapshot list: 4 fields expected, got %d in %q", len(f), line)
 		}
 		s := Snapshot{Name: f[0]}
+		// ZFS forbids '@' in dataset and snapshot-shortname components, so
+		// the first '@' is always the separator. IndexByte (not
+		// LastIndexByte) is intentional. `at <= 0` rejects both "no @" and
+		// a leading @ (empty dataset).
 		at := strings.IndexByte(f[0], '@')
 		if at <= 0 {
 			return nil, fmt.Errorf("snapshot name missing '@': %q", f[0])
