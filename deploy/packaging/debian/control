@@ -1,0 +1,15 @@
+Source: nova-api
+Section: admin
+Priority: optional
+Maintainer: NovaNAS <root@localhost>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 1.25) | golang-1.25
+Standards-Version: 4.6.2
+
+Package: nova-api
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ postgresql (>= 15),
+ redis-server,
+ zfsutils-linux
+Description: NovaNAS storage control plane
+ ZFS-based NAS control plane API server.

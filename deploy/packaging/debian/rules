@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	CGO_ENABLED=0 GOFLAGS=-trimpath go build -ldflags="-s -w" -o nova-api ./cmd/nova-api
+
+override_dh_auto_install:
+	install -D -m 0755 nova-api debian/nova-api/usr/bin/nova-api
+	install -D -m 0644 deploy/systemd/nova-api.service debian/nova-api/lib/systemd/system/nova-api.service
+	install -D -m 0644 deploy/systemd/tmpfiles.d/nova-api.conf debian/nova-api/usr/lib/tmpfiles.d/nova-api.conf
+
+override_dh_auto_test:
+	# tests run in CI, not at package time

@@ -118,6 +118,12 @@ func main() {
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		// WriteTimeout is intentionally 0: SSE on /api/v1/jobs/{id}/stream
+		// holds the connection open indefinitely while pushing state
+		// updates. A non-zero WriteTimeout would terminate the stream.
+		WriteTimeout: 0,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	logger.Info("starting", "addr", cfg.ListenAddr)

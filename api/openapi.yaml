@@ -1,0 +1,489 @@
+openapi: 3.1.0
+info:
+  title: NovaNAS Storage API
+  version: 0.1.0
+  description: ZFS-based storage control plane for a single-node NAS appliance.
+servers:
+  - url: /api/v1
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      operationId: getHealthz
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string } }
+
+  /disks:
+    get:
+      operationId: listDisks
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Disk' }
+
+  /pools:
+    get:
+      operationId: listPools
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pool' }
+    post:
+      operationId: createPool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PoolCreateSpec' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /pools/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPool
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PoolDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: destroyPool
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /pools/{name}/scrub:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: query
+        name: action
+        schema: { type: string, enum: [start, stop] }
+    post:
+      operationId: scrubPool
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /pools/{name}/metadata:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: patchPoolMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetadataPatch' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResourceMetadata' }
+
+  /datasets:
+    get:
+      operationId: listDatasets
+      parameters:
+        - in: query
+          name: pool
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Dataset' }
+    post:
+      operationId: createDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatasetCreateSpec' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /datasets/{fullname}:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded dataset name }
+    get:
+      operationId: getDataset
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DatasetDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchDatasetProps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [properties]
+              properties:
+                properties:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+    delete:
+      operationId: destroyDataset
+      parameters:
+        - in: query
+          name: recursive
+          schema: { type: boolean }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /datasets/{fullname}/metadata:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: patchDatasetMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetadataPatch' }
+      responses:
+        '200':
+          description: OK
+
+  /datasets/{fullname}/rollback:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    post:
+      operationId: rollbackDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [snapshot]
+              properties:
+                snapshot: { type: string }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /snapshots:
+    get:
+      operationId: listSnapshots
+      parameters:
+        - in: query
+          name: dataset
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Snapshot' }
+    post:
+      operationId: createSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataset, name]
+              properties:
+                dataset: { type: string }
+                name:    { type: string }
+                recursive: { type: boolean, default: false }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /snapshots/{fullname}:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: destroySnapshot
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /snapshots/{fullname}/metadata:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: patchSnapshotMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetadataPatch' }
+      responses:
+        '200':
+          description: OK
+
+  /jobs:
+    get:
+      operationId: listJobs
+      parameters:
+        - in: query
+          name: state
+          schema: { type: string, enum: [queued, running, succeeded, failed, cancelled, interrupted] }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Job' }
+
+  /jobs/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getJob
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: cancelJob
+      responses:
+        '204':
+          description: Cancelled
+
+  /jobs/{id}/stream:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: streamJob
+      responses:
+        '200':
+          description: SSE stream of job state events
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+components:
+  responses:
+    Accepted:
+      description: Async operation accepted; check Location header for job URL.
+      headers:
+        Location:
+          schema: { type: string }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              jobId: { type: string, format: uuid }
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:   { type: string }
+        message: { type: string }
+    Disk:
+      type: object
+      properties:
+        name:        { type: string }
+        sizeBytes:   { type: integer, format: int64 }
+        model:       { type: string }
+        serial:      { type: string }
+        wwn:         { type: string }
+        rotational:  { type: boolean }
+        inUseByPool: { type: boolean }
+    Pool:
+      type: object
+      properties:
+        name:             { type: string }
+        sizeBytes:        { type: integer }
+        allocated:        { type: integer }
+        free:             { type: integer }
+        health:           { type: string }
+        readOnly:         { type: boolean }
+        fragmentationPct: { type: integer }
+        capacityPct:      { type: integer }
+        dedupRatio:       { type: string }
+    PoolDetail:
+      type: object
+      properties:
+        pool:       { $ref: '#/components/schemas/Pool' }
+        properties: { type: object, additionalProperties: { type: string } }
+        status:
+          type: object
+          properties:
+            state: { type: string }
+            vdevs:
+              type: array
+              items: { $ref: '#/components/schemas/Vdev' }
+    Vdev:
+      type: object
+      properties:
+        type:           { type: string }
+        path:           { type: string }
+        state:          { type: string }
+        readErrors:     { type: integer }
+        writeErrors:    { type: integer }
+        checksumErrors: { type: integer }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/Vdev' }
+    PoolCreateSpec:
+      type: object
+      required: [name, vdevs]
+      properties:
+        name: { type: string }
+        vdevs:
+          type: array
+          items:
+            type: object
+            required: [type, disks]
+            properties:
+              type: { type: string, enum: [mirror, raidz1, raidz2, raidz3, stripe] }
+              disks: { type: array, items: { type: string } }
+        log:   { type: array, items: { type: string } }
+        cache: { type: array, items: { type: string } }
+        spare: { type: array, items: { type: string } }
+    Dataset:
+      type: object
+      properties:
+        name:            { type: string }
+        type:            { type: string, enum: [filesystem, volume] }
+        usedBytes:       { type: integer }
+        availableBytes:  { type: integer }
+        referencedBytes: { type: integer }
+        mountpoint:      { type: string }
+        compression:     { type: string }
+        recordSizeBytes: { type: integer }
+    DatasetDetail:
+      type: object
+      properties:
+        dataset:    { $ref: '#/components/schemas/Dataset' }
+        properties: { type: object, additionalProperties: { type: string } }
+    DatasetCreateSpec:
+      type: object
+      required: [parent, name, type]
+      properties:
+        parent: { type: string }
+        name:   { type: string }
+        type:   { type: string, enum: [filesystem, volume] }
+        volumeSizeBytes: { type: integer }
+        properties:
+          type: object
+          additionalProperties: { type: string }
+    Snapshot:
+      type: object
+      properties:
+        name:            { type: string }
+        dataset:         { type: string }
+        shortName:       { type: string }
+        usedBytes:       { type: integer }
+        referencedBytes: { type: integer }
+        creationUnix:    { type: integer }
+    Job:
+      type: object
+      properties:
+        id:        { type: string, format: uuid }
+        kind:      { type: string }
+        target:    { type: string }
+        state:     { type: string }
+        command:   { type: string }
+        stdout:    { type: string }
+        stderr:    { type: string }
+        exitCode:  { type: integer, nullable: true }
+        error:     { type: string, nullable: true }
+        createdAt:  { type: string, format: date-time }
+        startedAt:  { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    MetadataPatch:
+      type: object
+      properties:
+        display_name: { type: string }
+        description:  { type: string }
+        tags:
+          type: object
+          additionalProperties: { type: string }
+    ResourceMetadata:
+      type: object
+      properties:
+        id:           { type: integer }
+        kind:         { type: string }
+        zfsName:      { type: string }
+        displayName:  { type: string, nullable: true }
+        description:  { type: string, nullable: true }
+        tags:         { type: object, nullable: true, additionalProperties: { type: string } }

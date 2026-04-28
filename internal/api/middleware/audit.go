@@ -52,8 +52,7 @@ func Audit(q AuditQuerier, logger *slog.Logger) func(http.Handler) http.Handler 
 
 			var payloadParam []byte
 			if json.Valid(body) {
-				// TODO(plan-3): apply RedactSecrets once that helper lands
-				payloadParam = body
+				payloadParam = RedactSecrets(body)
 			}
 
 			if err := q.InsertAudit(r.Context(), storedb.InsertAuditParams{

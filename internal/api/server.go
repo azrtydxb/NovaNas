@@ -33,6 +33,7 @@ type Server struct {
 func New(d Deps) *Server {
 	r := chi.NewRouter()
 	r.Use(mw.RequestID)
+	r.Use(mw.BodyLimit(0)) // 0 = DefaultMaxBody (1 MiB)
 	// Audit is registered before Recoverer so that a panicking handler
 	// still writes its audit row (Recoverer catches the panic and writes
 	// the 500, then control returns up to Audit's post-`next` block,

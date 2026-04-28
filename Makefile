@@ -1,4 +1,4 @@
-.PHONY: build test test-integration test-e2e lint fmt gen run clean migrate-up migrate-down migrate-status
+.PHONY: build test test-integration test-e2e lint fmt gen gen-sqlc gen-openapi gen-ts run clean migrate-up migrate-down migrate-status
 
 GO ?= go
 BIN := bin/nova-api
@@ -21,8 +21,16 @@ lint:
 fmt:
 	$(GO) fmt ./...
 
-gen:
+gen: gen-sqlc gen-openapi
+
+gen-sqlc:
 	sqlc generate
+
+gen-openapi:
+	./scripts/gen-openapi.sh
+
+gen-ts:
+	./scripts/gen-ts-client.sh
 
 run: build
 	./$(BIN)
