@@ -15,13 +15,15 @@ import (
 )
 
 type fakeDatasetMgr struct {
-	list    []dataset.Dataset
-	listErr error
-	detail  *dataset.Detail
-	getErr  error
+	list      []dataset.Dataset
+	listErr   error
+	lastRoot  string
+	detail    *dataset.Detail
+	getErr    error
 }
 
-func (f *fakeDatasetMgr) List(_ context.Context, _ string) ([]dataset.Dataset, error) {
+func (f *fakeDatasetMgr) List(_ context.Context, root string) ([]dataset.Dataset, error) {
+	f.lastRoot = root
 	return f.list, f.listErr
 }
 func (f *fakeDatasetMgr) Get(_ context.Context, _ string) (*dataset.Detail, error) {
@@ -97,5 +99,51 @@ func TestDatasetsGet_NotFound(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("status=%d", rr.Code)
+	}
+}
+
+func TestDatasetsList_ForwardsPoolQueryAsRoot(t *testing.T) {
+	mgr := &fakeDatasetMgr{}
+	h := &DatasetsHandler{Logger: newDiscardLogger(), Datasets: mgr}
+
+	// no query → root should be empty
+	rr1 := httptest.NewRecorder()
+	h.List(rr1, httptest.NewRequest(http.MethodGet, "/api/v1/datasets", nil))
+	if mgr.lastRoot != "" {
+		t.Errorf("no-query lastRoot=%q want empty", mgr.lastRoot)
+	}
+
+	// ?pool=tank/home → root should be "tank/home"
+	rr2 := httptest.NewRecorder()
+	h.List(rr2, httptest.NewRequest(http.MethodGet, "/api/v1/datasets?pool=tank/home", nil))
+	if mgr.lastRoot != "tank/home" {
+		t.Errorf("?pool=tank/home lastRoot=%q", mgr.lastRoot)
+	}
+}
+
+func TestDatasetsGet_HostErrorReturns500(t *testing.T) {
+	h := &DatasetsHandler{Logger: newDiscardLogger(), Datasets: &fakeDatasetMgr{getErr: errors.New("boom")}}
+	r := chi.NewRouter()
+	r.Get("/api/v1/datasets/{fullname}", h.Get)
+	target := "/api/v1/datasets/" + url.PathEscape("tank/home")
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Error != "host_error" {
+		t.Errorf("error=%q", env.Error)
+	}
+	if env.Message == "boom" {
+		t.Errorf("internal err leaked: %q", env.Message)
 	}
 }

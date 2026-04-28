@@ -23,6 +23,10 @@ type DatasetsHandler struct {
 	Datasets DatasetManager
 }
 
+// List handles GET /datasets. The query parameter is named `pool` for API
+// ergonomics, but the underlying dataset.Manager.List accepts any dataset
+// path as a recursion root — `?pool=tank/home` will correctly list a
+// subtree.
 func (h *DatasetsHandler) List(w http.ResponseWriter, r *http.Request) {
 	root := r.URL.Query().Get("pool")
 	ds, err := h.Datasets.List(r.Context(), root)
