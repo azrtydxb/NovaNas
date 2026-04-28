@@ -126,6 +126,76 @@ paths:
         '202': { $ref: '#/components/responses/Accepted' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /pools/{name}/checkpoint:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      operationId: checkpointPool
+      description: Create a pool-wide checkpoint that can be rolled back to.
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /pools/{name}/discard-checkpoint:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      operationId: discardPoolCheckpoint
+      description: Discard a previously-created pool checkpoint.
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /pools/{name}/upgrade:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: query
+        name: all
+        schema: { type: boolean }
+        description: When true, upgrade all pools (`zpool upgrade -a`); the path name is ignored.
+    post:
+      operationId: upgradePool
+      description: Upgrade the on-disk format of the named pool, or all pools when `all=true`.
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /pools/{name}/reguid:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      operationId: reguidPool
+      description: Generate a new unique identifier for the pool.
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /pools/sync:
+    post:
+      operationId: syncPools
+      description: Force in-flight transaction groups to disk for the named pools, or all pools when names is empty/omitted. Synchronous.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PoolSyncRequest' }
+      responses:
+        '200':
+          description: Sync completed
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   /pools/{name}/wait:
     parameters:
       - in: path
@@ -401,6 +471,88 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /datasets/{fullname}/bookmark:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded snapshot name (must contain '@') }
+    post:
+      operationId: bookmarkSnapshot
+      description: Create a bookmark for a snapshot (`zfs bookmark`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatasetBookmarkRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /datasets/{fullname}/destroy-bookmark:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded dataset name (no '@', no '#') }
+    post:
+      operationId: destroyDatasetBookmark
+      description: |
+        Destroy a ZFS bookmark. The URL `{fullname}` is the dataset; the
+        request body's `bookmark` field is either the short name (e.g.
+        `b1`) — which is combined with the URL dataset to form
+        `<dataset>#<short>` — or the full bookmark name `<dataset>#<short>`,
+        in which case the dataset prefix must match the URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookmarkDestroyRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /datasets/{fullname}/diff:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded from-snapshot name (must contain '@') }
+      - in: query
+        name: to
+        schema: { type: string, description: Optional second argument; either a snapshot or a dataset name }
+    get:
+      operationId: diffDataset
+      description: Return the result of `zfs diff -H <from> [<to>]`. Synchronous.
+      responses:
+        '200':
+          description: Diff entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DatasetDiffEntry' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /datasets/{fullname}/bookmarks:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded dataset name }
+    get:
+      operationId: listDatasetBookmarks
+      description: List bookmarks under a dataset (`zfs list -t bookmark -r`). Synchronous.
+      responses:
+        '200':
+          description: Bookmark list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Bookmark' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   /datasets/{fullname}/metadata:
     parameters:
       - in: path
@@ -479,6 +631,61 @@ paths:
       operationId: destroySnapshot
       responses:
         '202': { $ref: '#/components/responses/Accepted' }
+
+  /snapshots/{fullname}/hold:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded snapshot name }
+    post:
+      operationId: holdSnapshot
+      description: Place a user hold on a snapshot (`zfs hold`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotHoldRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /snapshots/{fullname}/release:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded snapshot name }
+    post:
+      operationId: releaseSnapshot
+      description: Release a user hold from a snapshot (`zfs release`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotReleaseRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /snapshots/{fullname}/holds:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded snapshot name }
+    get:
+      operationId: listSnapshotHolds
+      description: List user holds on a snapshot (`zfs holds -H -p`). Synchronous.
+      responses:
+        '200':
+          description: Holds list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Hold' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 
   /snapshots/{fullname}/metadata:
     parameters:
@@ -755,3 +962,60 @@ components:
         displayName:  { type: string, nullable: true }
         description:  { type: string, nullable: true }
         tags:         { type: object, nullable: true, additionalProperties: { type: string } }
+    DatasetBookmarkRequest:
+      type: object
+      required: [bookmark]
+      properties:
+        bookmark:
+          type: string
+          description: Full bookmark name `<dataset>#<short>`.
+    BookmarkDestroyRequest:
+      type: object
+      required: [bookmark]
+      properties:
+        bookmark:
+          type: string
+          description: Either a short name (combined with the URL dataset) or full `<dataset>#<short>`.
+    SnapshotHoldRequest:
+      type: object
+      required: [tag]
+      properties:
+        tag:       { type: string }
+        recursive: { type: boolean, default: false }
+    SnapshotReleaseRequest:
+      type: object
+      required: [tag]
+      properties:
+        tag:       { type: string }
+        recursive: { type: boolean, default: false }
+    PoolUpgradeRequest:
+      type: object
+      properties:
+        all: { type: boolean, default: false }
+    PoolSyncRequest:
+      type: object
+      properties:
+        names:
+          type: array
+          description: Pool names to sync; empty/omitted means all pools.
+          items: { type: string }
+    DatasetDiffEntry:
+      type: object
+      required: [change, path]
+      properties:
+        change:  { type: string, enum: ['+', '-', M, R], description: Change type — added, removed, modified, renamed }
+        path:    { type: string }
+        newPath: { type: string, description: Set only when change is `R` (rename) }
+    Bookmark:
+      type: object
+      required: [name, creationUnix]
+      properties:
+        name:         { type: string }
+        creationUnix: { type: integer, format: int64 }
+    Hold:
+      type: object
+      required: [snapshot, tag, creationUnix]
+      properties:
+        snapshot:     { type: string }
+        tag:          { type: string }
+        creationUnix: { type: integer, format: int64 }

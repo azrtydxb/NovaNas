@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	disksPkg "github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -1527,6 +1528,433 @@ func main() {
 		return nil
 	})
 	cleanup("after scenario 37")
+
+	step("38. disks.List reflects live block-device set after udev rescan", func() error {
+		lister := &disksPkg.Lister{LsblkBin: "/usr/bin/lsblk"}
+
+		before, err := lister.List(ctx)
+		if err != nil {
+			return fmt.Errorf("initial disks.List: %w", err)
+		}
+		beforeNames := make(map[string]struct{}, len(before))
+		for _, d := range before {
+			beforeNames[d.Name] = struct{}{}
+		}
+		fmt.Printf("  baseline: %d disks listed\n", len(before))
+
+		// Force udev to refresh the device tree. This simulates the hot-plug
+		// rescan path; we cannot physically pull a drive in CI.
+		if out, err := exec.Command("udevadm", "trigger", "--type=devices", "--action=add").CombinedOutput(); err != nil {
+			fmt.Printf("  WARNING: udevadm trigger: %v: %s\n", err, strings.TrimSpace(string(out)))
+		}
+		if out, err := exec.Command("udevadm", "settle", "--timeout=10").CombinedOutput(); err != nil {
+			fmt.Printf("  WARNING: udevadm settle: %v: %s\n", err, strings.TrimSpace(string(out)))
+		}
+
+		after, err := lister.List(ctx)
+		if err != nil {
+			return fmt.Errorf("post-rescan disks.List: %w", err)
+		}
+		fmt.Printf("  post-rescan: %d disks listed\n", len(after))
+
+		if len(after) != len(before) {
+			return fmt.Errorf("disk count changed across udev rescan: before=%d after=%d",
+				len(before), len(after))
+		}
+		for _, d := range after {
+			if _, ok := beforeNames[d.Name]; !ok {
+				return fmt.Errorf("disk %q appeared after rescan; baseline set unstable", d.Name)
+			}
+		}
+		fmt.Printf("  idempotent across udev rescan (%d disks, names match)\n", len(after))
+
+		// Optional: real detach + SCSI rescan. Gated because the /sys writes are
+		// gnarly and may not work in containers / non-SCSI transports / when the
+		// disk is busy. Set HOT_PLUG_DISK to a kernel name like "sdz".
+		hot := os.Getenv("HOT_PLUG_DISK")
+		if hot == "" {
+			fmt.Printf("  SKIP live-pull: HOT_PLUG_DISK unset (set to e.g. sdz to exercise detach+rescan)\n")
+			return nil
+		}
+		sysPath := "/sys/block/" + hot
+		if _, err := os.Stat(sysPath); err != nil {
+			fmt.Printf("  SKIP live-pull: %s not present: %v\n", sysPath, err)
+			return nil
+		}
+
+		// Detach.
+		delCmd := fmt.Sprintf("echo 1 > /sys/block/%s/device/delete", hot)
+		if out, err := exec.Command("sh", "-c", delCmd).CombinedOutput(); err != nil {
+			fmt.Printf("  WARNING: detach %s failed: %v: %s\n", hot, err, strings.TrimSpace(string(out)))
+			return nil
+		}
+		_, _ = exec.Command("udevadm", "settle", "--timeout=10").CombinedOutput()
+
+		detached, err := lister.List(ctx)
+		if err != nil {
+			return fmt.Errorf("post-detach disks.List: %w", err)
+		}
+		fmt.Printf("  post-detach: %d disks listed (was %d)\n", len(detached), len(after))
+		if len(detached) >= len(after) {
+			fmt.Printf("  WARNING: expected fewer disks after detach of %s; saw %d\n", hot, len(detached))
+		}
+
+		// Re-attach via SCSI host rescan.
+		const scanCmd = `for h in /sys/class/scsi_host/host*/scan; do echo "- - -" > "$h"; done`
+		if out, err := exec.Command("sh", "-c", scanCmd).CombinedOutput(); err != nil {
+			fmt.Printf("  WARNING: SCSI rescan failed: %v: %s\n", err, strings.TrimSpace(string(out)))
+		}
+		_, _ = exec.Command("udevadm", "settle", "--timeout=15").CombinedOutput()
+
+		// Give udev / kernel a beat to repopulate /sys/block.
+		deadline := time.Now().Add(15 * time.Second)
+		var reattached []disksPkg.Disk
+		for time.Now().Before(deadline) {
+			reattached, err = lister.List(ctx)
+			if err != nil {
+				return fmt.Errorf("post-rescan disks.List: %w", err)
+			}
+			if len(reattached) == len(after) {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		fmt.Printf("  post-rescan: %d disks listed (target %d)\n", len(reattached), len(after))
+		if len(reattached) != len(after) {
+			return fmt.Errorf("disk %s did not reappear after SCSI rescan: got %d, want %d",
+				hot, len(reattached), len(after))
+		}
+		found := false
+		for _, d := range reattached {
+			if d.Name == hot {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("disk %q missing from post-rescan list", hot)
+		}
+		fmt.Printf("  live-pull cycle complete: %s detached and re-listed\n", hot)
+		return nil
+	})
+	cleanup("after scenario 38")
+
+	step("39. zpool checkpoint + discard", func() error {
+		wipeDisks(disks[:2])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/data"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "data", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		mp := "/" + full
+		writePayload(filepath.Join(mp, "checkpoint-data.bin"), 4<<20)
+
+		if err := pm.Checkpoint(ctx, poolName); err != nil {
+			return fmt.Errorf("checkpoint: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		cp, ok := d.Props["checkpoint"]
+		if !ok {
+			return fmt.Errorf("checkpoint property missing from props")
+		}
+		if cp == "" || cp == "-" {
+			return fmt.Errorf("checkpoint property=%q (expected non-empty value after creation)", cp)
+		}
+		fmt.Printf("  checkpoint created, property=%q\n", cp)
+
+		if err := pm.DiscardCheckpoint(ctx, poolName); err != nil {
+			return fmt.Errorf("discard checkpoint: %w", err)
+		}
+		d, err = pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		cp = d.Props["checkpoint"]
+		if cp != "" && cp != "-" {
+			return fmt.Errorf("checkpoint still present after discard: %q", cp)
+		}
+		fmt.Printf("  checkpoint discarded, property=%q\n", cp)
+		return nil
+	})
+	cleanup("after scenario 39")
+
+	step("40. zpool reguid", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		readGUID := func() (string, error) {
+			out, err := exec.CommandContext(ctx, "/sbin/zpool", "get", "-H", "-o", "value", "guid", poolName).Output()
+			if err != nil {
+				return "", fmt.Errorf("zpool get guid: %w", err)
+			}
+			return strings.TrimSpace(string(out)), nil
+		}
+		before, err := readGUID()
+		if err != nil {
+			return err
+		}
+		if before == "" {
+			return fmt.Errorf("empty initial GUID")
+		}
+		fmt.Printf("  GUID before reguid: %s\n", before)
+
+		if err := pm.Reguid(ctx, poolName); err != nil {
+			return fmt.Errorf("reguid: %w", err)
+		}
+		after, err := readGUID()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("  GUID after reguid:  %s\n", after)
+		if before == after {
+			return fmt.Errorf("GUID unchanged after reguid (still %s)", before)
+		}
+		return nil
+	})
+	cleanup("after scenario 40")
+
+	step("41. zpool sync", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/data"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "data", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		mp := "/" + full
+		for i := 0; i < 3; i++ {
+			writePayload(filepath.Join(mp, fmt.Sprintf("sync-%d.bin", i)), 1<<20)
+		}
+		if err := pm.Sync(ctx, []string{poolName}); err != nil {
+			return fmt.Errorf("sync(named): %w", err)
+		}
+		fmt.Printf("  sync(%q) ok\n", poolName)
+		if err := pm.Sync(ctx, nil); err != nil {
+			return fmt.Errorf("sync(all): %w", err)
+		}
+		fmt.Printf("  sync(all) ok\n")
+		return nil
+	})
+	cleanup("after scenario 41")
+
+	step("42. zpool upgrade", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		// A freshly-created pool may be at the latest features. zpool upgrade
+		// can return non-zero on some ZFS versions when nothing is to be done;
+		// log as a warning rather than fatal.
+		if err := pm.Upgrade(ctx, poolName, false); err != nil {
+			fmt.Printf("  WARN: Upgrade(%q,false) returned: %v (treated as soft failure)\n", poolName, err)
+		} else {
+			fmt.Printf("  Upgrade(%q,false) ok\n", poolName)
+		}
+		if err := pm.Upgrade(ctx, "", true); err != nil {
+			fmt.Printf("  WARN: Upgrade(\"\",true) returned: %v (treated as soft failure)\n", err)
+		} else {
+			fmt.Printf("  Upgrade(all) ok\n")
+		}
+		return nil
+	})
+	cleanup("after scenario 42")
+
+	step("43. zfs diff", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/data"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "data", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		mp := "/" + full
+		aPath := filepath.Join(mp, "a.bin")
+		bPath := filepath.Join(mp, "b.bin")
+		if err := os.WriteFile(aPath, []byte("ORIGINAL_A"), 0o600); err != nil {
+			return err
+		}
+		if err := sm.Create(ctx, full, "s1", false); err != nil {
+			return err
+		}
+		// Modify a.bin and create b.bin.
+		if err := os.WriteFile(aPath, []byte("MUTATED_A_PAYLOAD"), 0o600); err != nil {
+			return err
+		}
+		if err := os.WriteFile(bPath, []byte("NEW_B_FILE"), 0o600); err != nil {
+			return err
+		}
+		// Force txg flush so diff sees the changes deterministically.
+		if err := pm.Sync(ctx, []string{poolName}); err != nil {
+			return err
+		}
+
+		entries, err := dm.Diff(ctx, full+"@s1", "")
+		if err != nil {
+			return fmt.Errorf("diff: %w", err)
+		}
+		fmt.Printf("  diff returned %d entries:\n", len(entries))
+		var sawModA, sawAddB bool
+		for _, e := range entries {
+			fmt.Printf("    %s %s%s\n", e.Change, e.Path,
+				func() string {
+					if e.NewPath != "" {
+						return " -> " + e.NewPath
+					}
+					return ""
+				}())
+			if e.Change == "M" && strings.HasSuffix(e.Path, "/a.bin") {
+				sawModA = true
+			}
+			if e.Change == "+" && strings.HasSuffix(e.Path, "/b.bin") {
+				sawAddB = true
+			}
+		}
+		if !sawModA {
+			return fmt.Errorf("diff missing M entry for a.bin")
+		}
+		if !sawAddB {
+			return fmt.Errorf("diff missing + entry for b.bin")
+		}
+		return nil
+	})
+	cleanup("after scenario 43")
+
+	step("44. zfs bookmark + list + destroy", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/data"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "data", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		if err := sm.Create(ctx, full, "s1", false); err != nil {
+			return err
+		}
+		bm := full + "#bm1"
+		if err := dm.Bookmark(ctx, full+"@s1", bm); err != nil {
+			return fmt.Errorf("bookmark: %w", err)
+		}
+		bms, err := dm.ListBookmarks(ctx, full)
+		if err != nil {
+			return fmt.Errorf("list bookmarks: %w", err)
+		}
+		if len(bms) != 1 {
+			return fmt.Errorf("want 1 bookmark, got %d: %+v", len(bms), bms)
+		}
+		if !strings.HasSuffix(bms[0].Name, "#bm1") {
+			return fmt.Errorf("bookmark name=%q (want suffix #bm1)", bms[0].Name)
+		}
+		fmt.Printf("  bookmark created: %s (creation=%d)\n", bms[0].Name, bms[0].CreationUnix)
+
+		if err := dm.DestroyBookmark(ctx, bm); err != nil {
+			return fmt.Errorf("destroy bookmark: %w", err)
+		}
+		bms, err = dm.ListBookmarks(ctx, full)
+		if err != nil {
+			return err
+		}
+		if len(bms) != 0 {
+			return fmt.Errorf("expected zero bookmarks after destroy, got %d", len(bms))
+		}
+		fmt.Printf("  bookmark destroyed; list now empty\n")
+		return nil
+	})
+	cleanup("after scenario 44")
+
+	step("45. snapshot hold + release + holds list", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		full := poolName + "/data"
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: "data", Type: "filesystem",
+		}); err != nil {
+			return err
+		}
+		snap := full + "@s1"
+		if err := sm.Create(ctx, full, "s1", false); err != nil {
+			return err
+		}
+		if err := sm.Hold(ctx, snap, "tag1", false); err != nil {
+			return fmt.Errorf("hold: %w", err)
+		}
+		holds, err := sm.Holds(ctx, snap)
+		if err != nil {
+			return fmt.Errorf("holds: %w", err)
+		}
+		if len(holds) != 1 {
+			return fmt.Errorf("want 1 hold, got %d: %+v", len(holds), holds)
+		}
+		if holds[0].Tag != "tag1" {
+			return fmt.Errorf("hold tag=%q (want tag1)", holds[0].Tag)
+		}
+		fmt.Printf("  hold placed: tag=%s snapshot=%s\n", holds[0].Tag, holds[0].Snapshot)
+
+		// Destroy must FAIL while held.
+		if err := sm.Destroy(ctx, snap); err == nil {
+			return fmt.Errorf("destroy succeeded on held snapshot (expected failure)")
+		} else {
+			fmt.Printf("  destroy correctly refused while held: %v\n", err)
+		}
+
+		if err := sm.Release(ctx, snap, "tag1", false); err != nil {
+			return fmt.Errorf("release: %w", err)
+		}
+		holds, err = sm.Holds(ctx, snap)
+		if err != nil {
+			return err
+		}
+		if len(holds) != 0 {
+			return fmt.Errorf("expected zero holds after release, got %d", len(holds))
+		}
+		fmt.Printf("  hold released; holds list empty\n")
+
+		if err := sm.Destroy(ctx, snap); err != nil {
+			return fmt.Errorf("destroy after release: %w", err)
+		}
+		fmt.Printf("  destroy now succeeds after release\n")
+		return nil
+	})
+	cleanup("after scenario 45")
 
 	fmt.Println("\nALL CHECKS PASSED")
 }

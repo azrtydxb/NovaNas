@@ -35,6 +35,15 @@ const (
 	KindSnapshotCreate   Kind = "snapshot.create"
 	KindSnapshotDestroy  Kind = "snapshot.destroy"
 	KindSnapshotRollback Kind = "snapshot.rollback"
+
+	KindDatasetBookmark        Kind = "dataset.bookmark"
+	KindDatasetDestroyBookmark Kind = "dataset.destroy_bookmark"
+	KindSnapshotHold           Kind = "snapshot.hold"
+	KindSnapshotRelease        Kind = "snapshot.release"
+	KindPoolCheckpoint         Kind = "pool.checkpoint"
+	KindPoolDiscardCheckpoint  Kind = "pool.discard_checkpoint"
+	KindPoolUpgrade            Kind = "pool.upgrade"
+	KindPoolReguid             Kind = "pool.reguid"
 )
 
 // PoolCreatePayload carries the full pool spec to the worker. Name is
@@ -170,4 +179,42 @@ type PoolTrimPayload struct {
 type PoolSetPropsPayload struct {
 	Name       string            `json:"name"`
 	Properties map[string]string `json:"properties"`
+}
+
+type DatasetBookmarkPayload struct {
+	Snapshot string `json:"snapshot"`
+	Bookmark string `json:"bookmark"`
+}
+
+type DatasetDestroyBookmarkPayload struct {
+	Bookmark string `json:"bookmark"`
+}
+
+type SnapshotHoldPayload struct {
+	Snapshot  string `json:"snapshot"`
+	Tag       string `json:"tag"`
+	Recursive bool   `json:"recursive"`
+}
+
+type SnapshotReleasePayload struct {
+	Snapshot  string `json:"snapshot"`
+	Tag       string `json:"tag"`
+	Recursive bool   `json:"recursive"`
+}
+
+type PoolCheckpointPayload struct {
+	Name string `json:"name"`
+}
+
+type PoolDiscardCheckpointPayload struct {
+	Name string `json:"name"`
+}
+
+type PoolUpgradePayload struct {
+	Name string `json:"name"`
+	All  bool   `json:"all"`
+}
+
+type PoolReguidPayload struct {
+	Name string `json:"name"`
 }

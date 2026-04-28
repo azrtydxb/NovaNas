@@ -12,7 +12,7 @@ import (
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
-	"github.com/novanas/nova-nas/internal/jobs"
+	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
@@ -23,10 +23,11 @@ type Deps struct {
 	Pools         handlers.PoolManager
 	Datasets      handlers.DatasetManager
 	Snapshots     handlers.SnapshotManager
-	Dispatcher    *jobs.Dispatcher
+	Dispatcher    handlers.Dispatcher
 	Redis         *redis.Client
-	DatasetMgr    *dataset.Manager // concrete manager for streaming send/receive
-	PoolMgr       *pool.Manager    // concrete manager for synchronous zpool wait
+	DatasetMgr    *dataset.Manager   // concrete manager for streaming send/receive and queries (diff, bookmarks)
+	PoolMgr       *pool.Manager      // concrete manager for synchronous zpool wait/sync
+	SnapshotMgr   *snapshot.Manager  // concrete manager for synchronous holds queries
 }
 
 type Server struct {
@@ -64,6 +65,9 @@ func New(d Deps) *Server {
 	poolWait := &handlers.PoolsWaitHandler{Logger: d.Logger, Pools: d.PoolMgr}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
 	snapW := &handlers.SnapshotsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	dsQuery := &handlers.DatasetsQueryHandler{Logger: d.Logger, Dataset: d.DatasetMgr}
+	snapHolds := &handlers.SnapshotsHoldsHandler{Logger: d.Logger, Snapshot: d.SnapshotMgr}
+	poolSync := &handlers.PoolsSyncHandler{Logger: d.Logger, Pool: d.PoolMgr}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
@@ -84,6 +88,11 @@ func New(d Deps) *Server {
 		r.Post("/pools/{name}/trim", poolsWriteH.Trim)
 		r.Patch("/pools/{name}/properties", poolsWriteH.SetProps)
 		r.Post("/pools/{name}/wait", poolWait.Wait)
+		r.Post("/pools/{name}/checkpoint", poolsWriteH.Checkpoint)
+		r.Post("/pools/{name}/discard-checkpoint", poolsWriteH.DiscardCheckpoint)
+		r.Post("/pools/{name}/upgrade", poolsWriteH.Upgrade)
+		r.Post("/pools/{name}/reguid", poolsWriteH.Reguid)
+		r.Post("/pools/sync", poolSync.Sync)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
 		r.Post("/datasets", dsW.Create)
@@ -97,10 +106,17 @@ func New(d Deps) *Server {
 		r.Post("/datasets/{fullname}/change-key", dsW.ChangeKey)
 		r.Post("/datasets/{fullname}/send", dsStream.Send)
 		r.Post("/datasets/{fullname}/receive", dsStream.Receive)
+		r.Post("/datasets/{fullname}/bookmark", dsW.Bookmark)
+		r.Post("/datasets/{fullname}/destroy-bookmark", dsW.DestroyBookmark)
+		r.Get("/datasets/{fullname}/diff", dsQuery.Diff)
+		r.Get("/datasets/{fullname}/bookmarks", dsQuery.ListBookmarks)
 		r.Get("/snapshots", snapH.List)
 		r.Post("/snapshots", snapW.Create)
 		r.Delete("/snapshots/{fullname}", snapW.Destroy)
 		r.Post("/datasets/{fullname}/rollback", snapW.Rollback)
+		r.Post("/snapshots/{fullname}/hold", snapW.Hold)
+		r.Post("/snapshots/{fullname}/release", snapW.Release)
+		r.Get("/snapshots/{fullname}/holds", snapHolds.Holds)
 		// Jobs routes need the store; construct only when available so
 		// tests that build a server without one (e.g. /healthz) still work.
 		if d.Store != nil {

@@ -45,6 +45,30 @@ func (e DatasetCreateSpecType) Valid() bool {
 	}
 }
 
+// Defines values for DatasetDiffEntryChange.
+const (
+	M     DatasetDiffEntryChange = "M"
+	Minus DatasetDiffEntryChange = "-"
+	Plus  DatasetDiffEntryChange = "+"
+	R     DatasetDiffEntryChange = "R"
+)
+
+// Valid indicates whether the value is a known member of the DatasetDiffEntryChange enum.
+func (e DatasetDiffEntryChange) Valid() bool {
+	switch e {
+	case M:
+		return true
+	case Minus:
+		return true
+	case Plus:
+		return true
+	case R:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VdevSpecType.
 const (
 	VdevSpecTypeDisk   VdevSpecType = "disk"
@@ -105,6 +129,18 @@ func (e ListJobsParamsState) Valid() bool {
 	}
 }
 
+// Bookmark defines model for Bookmark.
+type Bookmark struct {
+	CreationUnix int64  `json:"creationUnix"`
+	Name         string `json:"name"`
+}
+
+// BookmarkDestroyRequest defines model for BookmarkDestroyRequest.
+type BookmarkDestroyRequest struct {
+	// Bookmark Either a short name (combined with the URL dataset) or full `<dataset>#<short>`.
+	Bookmark string `json:"bookmark"`
+}
+
 // ChangeKeyRequest defines model for ChangeKeyRequest.
 type ChangeKeyRequest struct {
 	Properties map[string]string `json:"properties"`
@@ -124,6 +160,12 @@ type Dataset struct {
 
 // DatasetType defines model for Dataset.Type.
 type DatasetType string
+
+// DatasetBookmarkRequest defines model for DatasetBookmarkRequest.
+type DatasetBookmarkRequest struct {
+	// Bookmark Full bookmark name `<dataset>#<short>`.
+	Bookmark string `json:"bookmark"`
+}
 
 // DatasetCloneRequest defines model for DatasetCloneRequest.
 type DatasetCloneRequest struct {
@@ -149,6 +191,19 @@ type DatasetDetail struct {
 	Properties *map[string]string `json:"properties,omitempty"`
 }
 
+// DatasetDiffEntry defines model for DatasetDiffEntry.
+type DatasetDiffEntry struct {
+	// Change Change type — added
+	Change DatasetDiffEntryChange `json:"change"`
+
+	// NewPath Set only when change is `R` (rename)
+	NewPath *string `json:"newPath,omitempty"`
+	Path    string  `json:"path"`
+}
+
+// DatasetDiffEntryChange Change type — added
+type DatasetDiffEntryChange string
+
 // DatasetRenameRequest defines model for DatasetRenameRequest.
 type DatasetRenameRequest struct {
 	NewName   string `json:"newName"`
@@ -170,6 +225,13 @@ type Disk struct {
 type Error struct {
 	Error   *string `json:"error,omitempty"`
 	Message *string `json:"message,omitempty"`
+}
+
+// Hold defines model for Hold.
+type Hold struct {
+	CreationUnix int64  `json:"creationUnix"`
+	Snapshot     string `json:"snapshot"`
+	Tag          string `json:"tag"`
 }
 
 // Job defines model for Job.
@@ -238,6 +300,12 @@ type PoolPropertiesPatch struct {
 	Properties map[string]string `json:"properties"`
 }
 
+// PoolSyncRequest defines model for PoolSyncRequest.
+type PoolSyncRequest struct {
+	// Names Pool names to sync; empty/omitted means all pools.
+	Names *[]string `json:"names,omitempty"`
+}
+
 // PoolTrimRequest defines model for PoolTrimRequest.
 type PoolTrimRequest struct {
 	// Disk Optional vdev path; absent trims the whole pool
@@ -262,6 +330,18 @@ type Snapshot struct {
 	ReferencedBytes *int    `json:"referencedBytes,omitempty"`
 	ShortName       *string `json:"shortName,omitempty"`
 	UsedBytes       *int    `json:"usedBytes,omitempty"`
+}
+
+// SnapshotHoldRequest defines model for SnapshotHoldRequest.
+type SnapshotHoldRequest struct {
+	Recursive *bool  `json:"recursive,omitempty"`
+	Tag       string `json:"tag"`
+}
+
+// SnapshotReleaseRequest defines model for SnapshotReleaseRequest.
+type SnapshotReleaseRequest struct {
+	Recursive *bool  `json:"recursive,omitempty"`
+	Tag       string `json:"tag"`
 }
 
 // Vdev defines model for Vdev.
@@ -308,6 +388,11 @@ type DestroyDatasetParams struct {
 // PatchDatasetPropsJSONBody defines parameters for PatchDatasetProps.
 type PatchDatasetPropsJSONBody struct {
 	Properties map[string]string `json:"properties"`
+}
+
+// DiffDatasetParams defines parameters for DiffDataset.
+type DiffDatasetParams struct {
+	To *string `form:"to,omitempty" json:"to,omitempty"`
 }
 
 // ReceiveDatasetParams defines parameters for ReceiveDataset.
@@ -357,6 +442,12 @@ type TrimPoolParams struct {
 	Action *string `form:"action,omitempty" json:"action,omitempty"`
 }
 
+// UpgradePoolParams defines parameters for UpgradePool.
+type UpgradePoolParams struct {
+	// All When true, upgrade all pools (`zpool upgrade -a`); the path name is ignored.
+	All *bool `form:"all,omitempty" json:"all,omitempty"`
+}
+
 // WaitPoolParams defines parameters for WaitPool.
 type WaitPoolParams struct {
 	Activity   string `form:"activity" json:"activity"`
@@ -381,11 +472,17 @@ type CreateDatasetJSONRequestBody = DatasetCreateSpec
 // PatchDatasetPropsJSONRequestBody defines body for PatchDatasetProps for application/json ContentType.
 type PatchDatasetPropsJSONRequestBody PatchDatasetPropsJSONBody
 
+// BookmarkSnapshotJSONRequestBody defines body for BookmarkSnapshot for application/json ContentType.
+type BookmarkSnapshotJSONRequestBody = DatasetBookmarkRequest
+
 // ChangeDatasetKeyJSONRequestBody defines body for ChangeDatasetKey for application/json ContentType.
 type ChangeDatasetKeyJSONRequestBody = ChangeKeyRequest
 
 // CloneDatasetJSONRequestBody defines body for CloneDataset for application/json ContentType.
 type CloneDatasetJSONRequestBody = DatasetCloneRequest
+
+// DestroyDatasetBookmarkJSONRequestBody defines body for DestroyDatasetBookmark for application/json ContentType.
+type DestroyDatasetBookmarkJSONRequestBody = BookmarkDestroyRequest
 
 // LoadDatasetKeyJSONRequestBody defines body for LoadDatasetKey for application/json ContentType.
 type LoadDatasetKeyJSONRequestBody = LoadKeyRequest
@@ -405,6 +502,9 @@ type UnloadDatasetKeyJSONRequestBody UnloadDatasetKeyJSONBody
 // CreatePoolJSONRequestBody defines body for CreatePool for application/json ContentType.
 type CreatePoolJSONRequestBody = PoolCreateSpec
 
+// SyncPoolsJSONRequestBody defines body for SyncPools for application/json ContentType.
+type SyncPoolsJSONRequestBody = PoolSyncRequest
+
 // PatchPoolMetadataJSONRequestBody defines body for PatchPoolMetadata for application/json ContentType.
 type PatchPoolMetadataJSONRequestBody = MetadataPatch
 
@@ -417,5 +517,11 @@ type TrimPoolJSONRequestBody = PoolTrimRequest
 // CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
 type CreateSnapshotJSONRequestBody CreateSnapshotJSONBody
 
+// HoldSnapshotJSONRequestBody defines body for HoldSnapshot for application/json ContentType.
+type HoldSnapshotJSONRequestBody = SnapshotHoldRequest
+
 // PatchSnapshotMetadataJSONRequestBody defines body for PatchSnapshotMetadata for application/json ContentType.
 type PatchSnapshotMetadataJSONRequestBody = MetadataPatch
+
+// ReleaseSnapshotJSONRequestBody defines body for ReleaseSnapshot for application/json ContentType.
+type ReleaseSnapshotJSONRequestBody = SnapshotReleaseRequest

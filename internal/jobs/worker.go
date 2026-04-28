@@ -56,6 +56,14 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindSnapshotCreate), d.handleSnapshotCreate)
 	mux.HandleFunc(string(KindSnapshotDestroy), d.handleSnapshotDestroy)
 	mux.HandleFunc(string(KindSnapshotRollback), d.handleSnapshotRollback)
+	mux.HandleFunc(string(KindDatasetBookmark), d.handleDatasetBookmark)
+	mux.HandleFunc(string(KindDatasetDestroyBookmark), d.handleDatasetDestroyBookmark)
+	mux.HandleFunc(string(KindSnapshotHold), d.handleSnapshotHold)
+	mux.HandleFunc(string(KindSnapshotRelease), d.handleSnapshotRelease)
+	mux.HandleFunc(string(KindPoolCheckpoint), d.handlePoolCheckpoint)
+	mux.HandleFunc(string(KindPoolDiscardCheckpoint), d.handlePoolDiscardCheckpoint)
+	mux.HandleFunc(string(KindPoolUpgrade), d.handlePoolUpgrade)
+	mux.HandleFunc(string(KindPoolReguid), d.handlePoolReguid)
 	return mux
 }
 
@@ -425,6 +433,102 @@ func (d WorkerDeps) handlePoolSetProps(ctx context.Context, t *asynq.Task) error
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.Pools.SetProps(ctx, p.Name, p.Properties)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetBookmark(ctx context.Context, t *asynq.Task) error {
+	var p DatasetBookmarkPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.Bookmark(ctx, p.Snapshot, p.Bookmark)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetDestroyBookmark(ctx context.Context, t *asynq.Task) error {
+	var p DatasetDestroyBookmarkPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.DestroyBookmark(ctx, p.Bookmark)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleSnapshotHold(ctx context.Context, t *asynq.Task) error {
+	var p SnapshotHoldPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Snapshots.Hold(ctx, p.Snapshot, p.Tag, p.Recursive)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleSnapshotRelease(ctx context.Context, t *asynq.Task) error {
+	var p SnapshotReleasePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Snapshots.Release(ctx, p.Snapshot, p.Tag, p.Recursive)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolCheckpoint(ctx context.Context, t *asynq.Task) error {
+	var p PoolCheckpointPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Checkpoint(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolDiscardCheckpoint(ctx context.Context, t *asynq.Task) error {
+	var p PoolDiscardCheckpointPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.DiscardCheckpoint(ctx, p.Name)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolUpgrade(ctx context.Context, t *asynq.Task) error {
+	var p PoolUpgradePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Upgrade(ctx, p.Name, p.All)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handlePoolReguid(ctx context.Context, t *asynq.Task) error {
+	var p PoolReguidPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Pools.Reguid(ctx, p.Name)
 	d.finish(ctx, id, err)
 	return err
 }

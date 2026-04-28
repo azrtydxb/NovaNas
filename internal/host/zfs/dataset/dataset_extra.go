@@ -1,10 +1,13 @@
 package dataset
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/novanas/nova-nas/internal/host/exec"
@@ -303,4 +306,219 @@ func (m *Manager) Receive(ctx context.Context, target string, opts RecvOpts, r i
 		runner = exec.RunStream
 	}
 	return runner(ctx, m.ZFSBin, r, nil, args...)
+}
+
+// --- Diff ------------------------------------------------------------------
+
+// DatasetDiffEntry is one line of `zfs diff -H` output. Change is one of
+// "+" (added), "-" (removed), "M" (modified), or "R" (renamed). For renames,
+// Path holds the old path and NewPath holds the new path; for all other
+// change types, NewPath is empty.
+type DatasetDiffEntry struct {
+	Change  string `json:"change"`
+	Path    string `json:"path"`
+	NewPath string `json:"newPath,omitempty"`
+}
+
+// validateDiffTarget accepts either a dataset name or a snapshot name. It
+// tries dataset validation first and falls back to snapshot validation.
+func validateDiffTarget(s string) error {
+	if strings.Contains(s, "@") {
+		return names.ValidateSnapshotName(s)
+	}
+	return names.ValidateDatasetName(s)
+}
+
+func buildDiffArgs(from, to string) ([]string, error) {
+	if err := names.ValidateSnapshotName(from); err != nil {
+		return nil, fmt.Errorf("from snapshot: %w", err)
+	}
+	args := []string{"diff", "-H", from}
+	if to != "" {
+		if err := validateDiffTarget(to); err != nil {
+			return nil, fmt.Errorf("to target: %w", err)
+		}
+		args = append(args, to)
+	}
+	return args, nil
+}
+
+// parseDiff parses tab-separated `zfs diff -H` output. Each line is either
+// "<change>\t<path>" for +, -, M; or "R\t<old>\t<new>" for renames.
+func parseDiff(data []byte) ([]DatasetDiffEntry, error) {
+	var out []DatasetDiffEntry
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	// `zfs diff` paths can be very long; bump the buffer.
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 2 {
+			return nil, fmt.Errorf("zfs diff: bad line %q", line)
+		}
+		switch f[0] {
+		case "+", "-", "M":
+			if len(f) != 2 {
+				return nil, fmt.Errorf("zfs diff: %s expects 2 fields, got %d in %q", f[0], len(f), line)
+			}
+			out = append(out, DatasetDiffEntry{Change: f[0], Path: f[1]})
+		case "R":
+			if len(f) != 3 {
+				return nil, fmt.Errorf("zfs diff: R expects 3 fields, got %d in %q", len(f), line)
+			}
+			out = append(out, DatasetDiffEntry{Change: "R", Path: f[1], NewPath: f[2]})
+		default:
+			return nil, fmt.Errorf("zfs diff: unknown change code %q in %q", f[0], line)
+		}
+	}
+	return out, sc.Err()
+}
+
+func (m *Manager) Diff(ctx context.Context, fromSnapshot, toName string) ([]DatasetDiffEntry, error) {
+	args, err := buildDiffArgs(fromSnapshot, toName)
+	if err != nil {
+		return nil, err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	out, err := runner(ctx, m.ZFSBin, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiff(out)
+}
+
+// --- Bookmarks -------------------------------------------------------------
+
+// Bookmark is a row from `zfs list -t bookmark`.
+type Bookmark struct {
+	Name         string `json:"name"`
+	CreationUnix int64  `json:"creationUnix"`
+}
+
+// validateBookmarkName checks <pool/ds#name> form. The part before '#' must
+// be a valid dataset name; the part after must be alphanumeric/dash/underscore
+// and may not start with a dash.
+func validateBookmarkName(s string) error {
+	if strings.HasPrefix(s, "-") {
+		return fmt.Errorf("bookmark name cannot start with '-'")
+	}
+	hash := strings.IndexByte(s, '#')
+	if hash <= 0 {
+		return fmt.Errorf("bookmark name must contain '<dataset>#<short>'")
+	}
+	if strings.Count(s, "#") != 1 {
+		return fmt.Errorf("bookmark name must contain exactly one '#'")
+	}
+	if err := names.ValidateDatasetName(s[:hash]); err != nil {
+		return err
+	}
+	short := s[hash+1:]
+	if short == "" {
+		return fmt.Errorf("bookmark short name empty")
+	}
+	for _, r := range short {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_'
+		if !ok {
+			return fmt.Errorf("bookmark short name has illegal character %q", r)
+		}
+	}
+	return nil
+}
+
+func buildBookmarkArgs(snapshot, bookmarkName string) ([]string, error) {
+	if err := names.ValidateSnapshotName(snapshot); err != nil {
+		return nil, err
+	}
+	if err := validateBookmarkName(bookmarkName); err != nil {
+		return nil, err
+	}
+	return []string{"bookmark", snapshot, bookmarkName}, nil
+}
+
+func (m *Manager) Bookmark(ctx context.Context, snapshot, bookmarkName string) error {
+	args, err := buildBookmarkArgs(snapshot, bookmarkName)
+	if err != nil {
+		return err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZFSBin, args...)
+	return err
+}
+
+func buildListBookmarksArgs(root string) ([]string, error) {
+	args := []string{"list", "-H", "-p", "-t", "bookmark", "-o", "name,creation"}
+	if root != "" {
+		if err := names.ValidateDatasetName(root); err != nil {
+			return nil, err
+		}
+		args = append(args, "-r", root)
+	}
+	return args, nil
+}
+
+func parseBookmarkList(data []byte) ([]Bookmark, error) {
+	var out []Bookmark
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) != 2 {
+			return nil, fmt.Errorf("zfs bookmark list: 2 fields expected, got %d in %q", len(f), line)
+		}
+		creation, err := strconv.ParseInt(f[1], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("zfs bookmark list: bad creation %q: %w", f[1], err)
+		}
+		out = append(out, Bookmark{Name: f[0], CreationUnix: creation})
+	}
+	return out, sc.Err()
+}
+
+func (m *Manager) ListBookmarks(ctx context.Context, root string) ([]Bookmark, error) {
+	args, err := buildListBookmarksArgs(root)
+	if err != nil {
+		return nil, err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	out, err := runner(ctx, m.ZFSBin, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseBookmarkList(out)
+}
+
+func buildDestroyBookmarkArgs(bookmarkName string) ([]string, error) {
+	if err := validateBookmarkName(bookmarkName); err != nil {
+		return nil, err
+	}
+	return []string{"destroy", bookmarkName}, nil
+}
+
+func (m *Manager) DestroyBookmark(ctx context.Context, bookmarkName string) error {
+	args, err := buildDestroyBookmarkArgs(bookmarkName)
+	if err != nil {
+		return err
+	}
+	runner := m.Runner
+	if runner == nil {
+		runner = exec.Run
+	}
+	_, err = runner(ctx, m.ZFSBin, args...)
+	return err
 }
