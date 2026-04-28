@@ -1,4 +1,4 @@
-.PHONY: build test test-integration test-e2e lint fmt gen run clean
+.PHONY: build test test-integration test-e2e lint fmt gen run clean migrate-up migrate-down migrate-status
 
 GO ?= go
 BIN := bin/nova-api

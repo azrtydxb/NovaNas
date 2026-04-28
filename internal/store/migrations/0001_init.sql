@@ -17,6 +17,7 @@ CREATE TABLE jobs (
 );
 CREATE INDEX jobs_state_idx ON jobs(state);
 CREATE INDEX jobs_created_idx ON jobs(created_at DESC);
+CREATE INDEX jobs_target_idx ON jobs(target);
 
 CREATE TABLE audit_log (
     id           bigserial   PRIMARY KEY,
@@ -30,6 +31,7 @@ CREATE TABLE audit_log (
     CHECK (result IN ('accepted','rejected'))
 );
 CREATE INDEX audit_log_ts_idx ON audit_log(ts DESC);
+CREATE INDEX audit_log_request_id_idx ON audit_log(request_id);
 
 CREATE TABLE resource_metadata (
     id            bigserial   PRIMARY KEY,
