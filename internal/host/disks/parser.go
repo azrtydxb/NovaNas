@@ -62,9 +62,15 @@ func deref(s *string) string {
 	return *s
 }
 
+// parseSize accepts either a JSON number (older lsblk) or a JSON string
+// (newer lsblk -b) and returns 0 for unparseable input. The 0 sentinel is
+// intentional: a single bad size shouldn't fail the whole disk-list call.
 func parseSize(v any) uint64 {
 	switch x := v.(type) {
 	case float64:
+		if x < 0 {
+			return 0
+		}
 		return uint64(x)
 	case string:
 		n, _ := strconv.ParseUint(x, 10, 64)
