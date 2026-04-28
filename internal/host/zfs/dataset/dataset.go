@@ -35,6 +35,23 @@ func (m *Manager) List(ctx context.Context, root string) ([]Dataset, error) {
 	return parseList(out)
 }
 
+// notFoundErr maps ZFS's `cannot open 'X': dataset does not exist` stderr
+// (stable across OpenZFS versions) to ErrNotFound. Returns the original
+// error otherwise.
+//
+// TODO(plan-2): once Manager grows a Runner func field for testability,
+// add a unit test that drives this path with a stubbed *exec.HostError.
+func notFoundErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	var he *exec.HostError
+	if errors.As(err, &he) && strings.Contains(he.Stderr, "does not exist") {
+		return ErrNotFound
+	}
+	return err
+}
+
 // Get returns full detail (the row + all properties) for a single dataset
 // by name. Returns ErrNotFound if the dataset does not exist.
 func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
@@ -43,11 +60,7 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 		"-o", "name,type,used,available,referenced,mountpoint,compression,recordsize",
 		name)
 	if err != nil {
-		var he *exec.HostError
-		if errors.As(err, &he) && strings.Contains(he.Stderr, "does not exist") {
-			return nil, ErrNotFound
-		}
-		return nil, err
+		return nil, notFoundErr(err)
 	}
 	ds, err := parseList(listOut)
 	if err != nil {
@@ -58,7 +71,9 @@ func (m *Manager) Get(ctx context.Context, name string) (*Detail, error) {
 	}
 	propsOut, err := exec.Run(ctx, m.ZFSBin, "get", "-H", "-p", "all", name)
 	if err != nil {
-		return nil, err
+		// Race window: dataset destroyed between list and get; surface
+		// ErrNotFound consistently.
+		return nil, notFoundErr(err)
 	}
 	props, err := parseProps(propsOut)
 	if err != nil {
