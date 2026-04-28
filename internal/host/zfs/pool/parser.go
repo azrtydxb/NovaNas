@@ -60,9 +60,19 @@ func parseList(data []byte) ([]Pool, error) {
 	return out, sc.Err()
 }
 
+// ScrubStatus holds the parsed state of the most recent pool scan/scrub.
+type ScrubStatus struct {
+	// State is one of: "none", "in-progress", "finished", "resilver".
+	State        string `json:"state"`
+	RawLine      string `json:"rawLine,omitempty"`
+	ScannedBytes uint64 `json:"scannedBytes,omitempty"`
+	TotalBytes   uint64 `json:"totalBytes,omitempty"`
+}
+
 type Status struct {
-	State string `json:"state"`
-	Vdevs []Vdev `json:"vdevs"`
+	State string       `json:"state"`
+	Scan  *ScrubStatus `json:"scan,omitempty"`
+	Vdevs []Vdev       `json:"vdevs"`
 }
 
 type Vdev struct {
@@ -117,6 +127,10 @@ func parseStatus(data []byte) (*Status, error) {
 		trim := strings.TrimSpace(line)
 		if strings.HasPrefix(trim, "state:") {
 			st.State = strings.TrimSpace(strings.TrimPrefix(trim, "state:"))
+			continue
+		}
+		if strings.HasPrefix(trim, "scan:") {
+			st.Scan = parseScrubStatus(strings.TrimSpace(strings.TrimPrefix(trim, "scan:")))
 			continue
 		}
 		if strings.HasPrefix(trim, "config:") {
@@ -206,4 +220,79 @@ func parseInt(s string) (int, error) {
 		return 0, nil
 	}
 	return strconv.Atoi(s)
+}
+
+// parseScrubStatus interprets the content after "scan: " from zpool status.
+// raw is that content, already stripped of the "scan:" prefix and trimmed.
+// On any unexpected format it falls back to State="finished" with just RawLine.
+func parseScrubStatus(raw string) *ScrubStatus {
+	ss := &ScrubStatus{RawLine: raw}
+	switch {
+	case raw == "none requested":
+		ss.State = "none"
+	case strings.HasPrefix(raw, "scrub in progress"):
+		ss.State = "in-progress"
+		// "... 1.50G scanned at ..., 0B issued at ..., 5.00G total ..."
+		if scanned, ok := extractToken(raw, "scanned"); ok {
+			ss.ScannedBytes = parseHumanSize(scanned)
+		}
+		if total, ok := extractToken(raw, "total"); ok {
+			ss.TotalBytes = parseHumanSize(total)
+		}
+	case strings.HasPrefix(raw, "resilvered"):
+		ss.State = "resilver"
+	case strings.HasPrefix(raw, "scrub repaired"):
+		ss.State = "finished"
+	default:
+		ss.State = "finished"
+	}
+	return ss
+}
+
+// extractToken finds the token immediately before the given keyword word in s.
+// e.g. extractToken("1.50G scanned at 1.00G/s, 5.00G total", "scanned") → "1.50G", true
+func extractToken(s, keyword string) (string, bool) {
+	idx := strings.Index(s, " "+keyword)
+	if idx < 0 {
+		return "", false
+	}
+	before := strings.TrimSpace(s[:idx])
+	// grab the last whitespace-separated token
+	parts := strings.Fields(before)
+	if len(parts) == 0 {
+		return "", false
+	}
+	return parts[len(parts)-1], true
+}
+
+// parseHumanSize converts a human-readable size string (e.g. "1.50G", "750M",
+// "5G", "0B") to bytes. Unrecognised formats return 0.
+func parseHumanSize(s string) uint64 {
+	if len(s) == 0 {
+		return 0
+	}
+	suffixes := map[byte]uint64{
+		'B': 1,
+		'K': 1024,
+		'M': 1024 * 1024,
+		'G': 1024 * 1024 * 1024,
+		'T': 1024 * 1024 * 1024 * 1024,
+		'P': 1024 * 1024 * 1024 * 1024 * 1024,
+	}
+	last := s[len(s)-1]
+	mult, ok := suffixes[last]
+	if !ok {
+		// Try pure integer
+		v, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0
+		}
+		return v
+	}
+	num := s[:len(s)-1]
+	f, err := strconv.ParseFloat(num, 64)
+	if err != nil {
+		return 0
+	}
+	return uint64(f * float64(mult))
 }

@@ -70,6 +70,91 @@ func TestParseStatus_RealZpoolFormat(t *testing.T) {
 	}
 }
 
+// --- scrub / scan tests -------------------------------------------------------
+
+func makeStatusInput(scanLine string) []byte {
+	base := "  pool: tank\n state: ONLINE\n" + scanLine + "\nconfig:\n\n" +
+		"\tNAME        STATE     READ WRITE CKSUM\n" +
+		"\ttank        ONLINE       0     0     0\n" +
+		"\t  /dev/sda  ONLINE       0     0     0\n" +
+		"\nerrors: No known data errors\n"
+	return []byte(base)
+}
+
+func TestParseScrubStatus_None(t *testing.T) {
+	st, err := parseStatus(makeStatusInput("scan: none requested"))
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if st.Scan == nil {
+		t.Fatal("Scan is nil")
+	}
+	if st.Scan.State != "none" {
+		t.Errorf("State=%q want %q", st.Scan.State, "none")
+	}
+	if st.Scan.RawLine != "none requested" {
+		t.Errorf("RawLine=%q", st.Scan.RawLine)
+	}
+}
+
+func TestParseScrubStatus_Finished(t *testing.T) {
+	line := "scan: scrub repaired 0B in 00:01:30 with 0 errors on Tue Apr 28 18:30:00 2026"
+	st, err := parseStatus(makeStatusInput(line))
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if st.Scan == nil {
+		t.Fatal("Scan is nil")
+	}
+	if st.Scan.State != "finished" {
+		t.Errorf("State=%q want %q", st.Scan.State, "finished")
+	}
+	wantRaw := "scrub repaired 0B in 00:01:30 with 0 errors on Tue Apr 28 18:30:00 2026"
+	if st.Scan.RawLine != wantRaw {
+		t.Errorf("RawLine=%q", st.Scan.RawLine)
+	}
+}
+
+func TestParseScrubStatus_InProgress(t *testing.T) {
+	line := "scan: scrub in progress since Tue Apr 28 18:30:00 2026, 1.50G scanned at 1.00G/s, 0B issued at 0B/s, 5.00G total"
+	st, err := parseStatus(makeStatusInput(line))
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if st.Scan == nil {
+		t.Fatal("Scan is nil")
+	}
+	if st.Scan.State != "in-progress" {
+		t.Errorf("State=%q want %q", st.Scan.State, "in-progress")
+	}
+	wantScanned := uint64(1.50 * 1024 * 1024 * 1024)
+	if st.Scan.ScannedBytes != wantScanned {
+		t.Errorf("ScannedBytes=%d want %d", st.Scan.ScannedBytes, wantScanned)
+	}
+	wantTotal := uint64(5.00 * 1024 * 1024 * 1024)
+	if st.Scan.TotalBytes != wantTotal {
+		t.Errorf("TotalBytes=%d want %d", st.Scan.TotalBytes, wantTotal)
+	}
+}
+
+func TestParseScrubStatus_Resilver(t *testing.T) {
+	line := "scan: resilvered 752K in 00:00:01 with 0 errors on Tue Apr 28 18:28:47 2026"
+	st, err := parseStatus(makeStatusInput(line))
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if st.Scan == nil {
+		t.Fatal("Scan is nil")
+	}
+	if st.Scan.State != "resilver" {
+		t.Errorf("State=%q want %q", st.Scan.State, "resilver")
+	}
+	wantRaw := "resilvered 752K in 00:00:01 with 0 errors on Tue Apr 28 18:28:47 2026"
+	if st.Scan.RawLine != wantRaw {
+		t.Errorf("RawLine=%q", st.Scan.RawLine)
+	}
+}
+
 // Group headers (logs/cache/spares) appear in zpool status with only the
 // group name on a line — no STATE column. The parser must accept these.
 func TestParseStatus_LogsAndCacheGroups(t *testing.T) {
