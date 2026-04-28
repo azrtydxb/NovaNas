@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -14,11 +12,6 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/jobs"
 )
-
-// Dispatcher is the interface the write handlers use to enqueue async jobs.
-type Dispatcher interface {
-	Dispatch(ctx context.Context, in jobs.DispatchInput) (jobs.DispatchOutput, error)
-}
 
 // PoolsWriteHandler handles mutating pool operations.
 type PoolsWriteHandler struct {
@@ -44,19 +37,7 @@ func (h *PoolsWriteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		RequestID: middleware.RequestIDOf(r.Context()),
 		UniqueKey: "pool:" + spec.Name,
 	})
-	if err != nil {
-		if errors.Is(err, jobs.ErrDuplicate) {
-			middleware.WriteError(w, http.StatusConflict, "duplicate", "another op for this pool is already in flight")
-			return
-		}
-		h.Logger.Error("pools create dispatch", "err", err)
-		middleware.WriteError(w, http.StatusInternalServerError, "dispatch_error", "failed to enqueue job")
-		return
-	}
-	w.Header().Set("Location", "/api/v1/jobs/"+out.JobID.String())
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{"jobId": out.JobID.String()})
+	writeDispatchResult(w, h.Logger, "pools.create", out, err)
 }
 
 func (h *PoolsWriteHandler) Destroy(w http.ResponseWriter, r *http.Request) {
@@ -73,19 +54,7 @@ func (h *PoolsWriteHandler) Destroy(w http.ResponseWriter, r *http.Request) {
 		RequestID: middleware.RequestIDOf(r.Context()),
 		UniqueKey: "pool:" + name,
 	})
-	if err != nil {
-		if errors.Is(err, jobs.ErrDuplicate) {
-			middleware.WriteError(w, http.StatusConflict, "duplicate", "another op for this pool is already in flight")
-			return
-		}
-		h.Logger.Error("pools destroy dispatch", "err", err)
-		middleware.WriteError(w, http.StatusInternalServerError, "dispatch_error", "failed to enqueue job")
-		return
-	}
-	w.Header().Set("Location", "/api/v1/jobs/"+out.JobID.String())
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{"jobId": out.JobID.String()})
+	writeDispatchResult(w, h.Logger, "pools.destroy", out, err)
 }
 
 func (h *PoolsWriteHandler) Scrub(w http.ResponseWriter, r *http.Request) {
@@ -94,9 +63,15 @@ func (h *PoolsWriteHandler) Scrub(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, http.StatusBadRequest, "bad_name", "pool name is invalid")
 		return
 	}
-	action := pool.ScrubStart
-	if r.URL.Query().Get("action") == "stop" {
+	var action pool.ScrubAction
+	switch r.URL.Query().Get("action") {
+	case "", "start":
+		action = pool.ScrubStart
+	case "stop":
 		action = pool.ScrubStop
+	default:
+		middleware.WriteError(w, http.StatusBadRequest, "bad_action", "action must be 'start' or 'stop'")
+		return
 	}
 	out, err := h.Dispatcher.Dispatch(r.Context(), jobs.DispatchInput{
 		Kind:      jobs.KindPoolScrub,
@@ -106,17 +81,5 @@ func (h *PoolsWriteHandler) Scrub(w http.ResponseWriter, r *http.Request) {
 		RequestID: middleware.RequestIDOf(r.Context()),
 		UniqueKey: "pool:" + name,
 	})
-	if err != nil {
-		if errors.Is(err, jobs.ErrDuplicate) {
-			middleware.WriteError(w, http.StatusConflict, "duplicate", "another op for this pool is already in flight")
-			return
-		}
-		h.Logger.Error("pools scrub dispatch", "err", err)
-		middleware.WriteError(w, http.StatusInternalServerError, "dispatch_error", "failed to enqueue job")
-		return
-	}
-	w.Header().Set("Location", "/api/v1/jobs/"+out.JobID.String())
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{"jobId": out.JobID.String()})
+	writeDispatchResult(w, h.Logger, "pools.scrub", out, err)
 }
