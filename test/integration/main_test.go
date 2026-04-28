@@ -20,7 +20,7 @@ import (
 
 var (
 	dbDSN    string
-	redisAddr string
+	redisURL string
 )
 
 func TestMain(m *testing.M) {
@@ -63,12 +63,15 @@ func runMain(m *testing.M) int {
 	}
 	defer func() { _ = rc.Terminate(ctx) }()
 
-	endpoint, err := rc.Endpoint(ctx, "")
+	// Use ConnectionString (returns redis://host:port) so callers can
+	// feed it to asynq.ParseRedisURI as well as construct
+	// asynq.RedisClientOpt directly.
+	uri, err := rc.ConnectionString(ctx)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "redis endpoint:", err)
+		fmt.Fprintln(os.Stderr, "redis uri:", err)
 		return 1
 	}
-	redisAddr = endpoint
+	redisURL = uri
 
 	return m.Run()
 }
