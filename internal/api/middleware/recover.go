@@ -15,7 +15,7 @@ func Recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 						"path", r.URL.Path,
 						"requestID", RequestIDOf(r.Context()),
 					)
-					http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+					WriteError(w, http.StatusInternalServerError, "internal_error", "")
 				}
 			}()
 			next.ServeHTTP(w, r)

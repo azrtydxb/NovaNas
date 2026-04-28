@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,11 +19,13 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, "config:", err)
+		os.Exit(1)
 	}
 	logger, err := logging.New(cfg.LogLevel, os.Stderr)
 	if err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, "logger:", err)
+		os.Exit(1)
 	}
 
 	srv := api.New(api.Deps{Logger: logger})

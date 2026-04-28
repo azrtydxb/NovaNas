@@ -1,7 +1,6 @@
 # Build
 /bin/
 /dist/
-/bin/nova-api
 
 # Test artifacts
 *.test
