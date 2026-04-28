@@ -145,13 +145,19 @@ fn main() -> Result<()> {
         #[cfg(feature = "spdk-sys")]
         {
             log::info!(
-                "spawning subscriber and entering SPDK reactor on mask={} mem={}MB",
+                "wiring SPDK callback path to tokio runtime; entering reactor (mask={} mem={}MB)",
                 args.reactor_mask,
                 args.mem_size_mb
             );
+            // The custom volume bdev's submit_request callback runs on
+            // the SPDK reactor thread but spawns work onto tokio. The
+            // handle has to be installed before the reactor starts so
+            // the very first I/O can find it.
+            novanas_frontend::spdk::set_tokio_handle(tokio::runtime::Handle::current());
+
             let sub = subscriber.clone();
             tokio::spawn(async move { sub.run().await });
-            // SPDK reactor blocks the current thread.
+            // SPDK reactor blocks the current thread until app_stop fires.
             let res = tokio::task::spawn_blocking({
                 let mask = args.reactor_mask.clone();
                 let mem = args.mem_size_mb;

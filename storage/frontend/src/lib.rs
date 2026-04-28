@@ -25,10 +25,11 @@
 //! - `api_subscriber` — HTTP polling reconciler against `novanas-api`.
 //! - `reconciler` — wire-up between API events, meta, bdev manager and
 //!   NVMe-oF target.
-//! - `spdk` (cfg `spdk-sys`) — SPDK env / reactor / bdev mgmt scaffold,
-//!   placeholder ports of dataplane modules pending Agent C's split.
-//! - `spdk_nvmf` (cfg `spdk-sys`) — SPDK-backed `NvmfTarget` impl
-//!   (placeholder port).
+//! - `spdk` (cfg `spdk-sys`) — SPDK env / reactor / bdev mgmt + custom
+//!   `novanas_<volume>` bdev, ported from `dataplane/src/spdk/...` and
+//!   `dataplane/src/bdev/novanas_bdev.rs`.
+//! - `spdk_nvmf` (cfg `spdk-sys`) — SPDK-backed `NvmfTarget` impl,
+//!   ported from the now-removed `dataplane/src/spdk/nvmf_manager.rs`.
 
 pub mod api_subscriber;
 pub mod chunk_engine;
