@@ -45,22 +45,47 @@ func TestParseStatus_VdevTree(t *testing.T) {
 	}
 }
 
+// TestParseStatus_RealZpoolFormat exercises the actual `zpool status -P`
+// output shape: one leading TAB, then SPACES for visual nesting (2 per
+// level). Captured from a live mirror pool — historically the parser
+// only counted tabs, which collapsed every row to depth 1 and lost the
+// vdev tree. Regression guard.
+func TestParseStatus_RealZpoolFormat(t *testing.T) {
+	in := []byte("  pool: tank\n state: ONLINE\nconfig:\n\n" +
+		"\tNAME                STATE     READ WRITE CKSUM\n" +
+		"\ttank                ONLINE       0     0     0\n" +
+		"\t  mirror-0          ONLINE       0     0     0\n" +
+		"\t    /dev/sda        ONLINE       0     0     0\n" +
+		"\t    /dev/sdb        ONLINE       0     0     0\n" +
+		"\nerrors: No known data errors\n")
+	st, err := parseStatus(in)
+	if err != nil {
+		t.Fatalf("parseStatus: %v", err)
+	}
+	if len(st.Vdevs) != 1 || st.Vdevs[0].Type != "mirror" {
+		t.Fatalf("want one mirror vdev, got %+v", st.Vdevs)
+	}
+	if len(st.Vdevs[0].Children) != 2 {
+		t.Errorf("mirror children=%d (want 2)", len(st.Vdevs[0].Children))
+	}
+}
+
 // Group headers (logs/cache/spares) appear in zpool status with only the
 // group name on a line — no STATE column. The parser must accept these.
 func TestParseStatus_LogsAndCacheGroups(t *testing.T) {
-	// Note: parser counts leading TABS for depth. Visual spaces inside the
-	// row are ignored. Group headers (logs/cache) sit at depth=1 alongside
-	// data vdevs; their leaves are at depth=2.
+	// Real `zpool status -P` indent: one leading TAB plus 2 spaces per
+	// nesting level. Pool root has no extra spaces, top-level vdevs
+	// (mirror/log/cache) get 2 spaces, leaves get 4.
 	in := []byte("  pool: tank\n state: ONLINE\nconfig:\n\n" +
 		"\tNAME             STATE     READ WRITE CKSUM\n" +
 		"\ttank             ONLINE       0     0     0\n" +
-		"\tmirror-0         ONLINE       0     0     0\n" +
-		"\t\t/dev/A         ONLINE       0     0     0\n" +
-		"\t\t/dev/B         ONLINE       0     0     0\n" +
-		"\tlogs\n" +
-		"\t\t/dev/log1      ONLINE       0     0     0\n" +
-		"\tcache\n" +
-		"\t\t/dev/cache1    ONLINE       0     0     0\n" +
+		"\t  mirror-0       ONLINE       0     0     0\n" +
+		"\t    /dev/A       ONLINE       0     0     0\n" +
+		"\t    /dev/B       ONLINE       0     0     0\n" +
+		"\t  logs\n" +
+		"\t    /dev/log1    ONLINE       0     0     0\n" +
+		"\t  cache\n" +
+		"\t    /dev/cache1  ONLINE       0     0     0\n" +
 		"\nerrors: No known data errors\n")
 	st, err := parseStatus(in)
 	if err != nil {

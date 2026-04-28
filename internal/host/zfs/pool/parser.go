@@ -93,11 +93,23 @@ func parseProps(data []byte) (map[string]string, error) {
 	return out, sc.Err()
 }
 
+// parseStatus parses `zpool status -P` output into a Status with a
+// 2-level vdev tree. ZFS output is irregular:
+//   - Pool root: 1 leading tab
+//   - Mirror/raidz/draid groups: 1 tab + 2 spaces (one indent step)
+//   - Group-leaf disks: 1 tab + 4 spaces (two indent steps)
+//   - logs/cache/spares group HEADERS: 1 tab (same as pool root)
+//   - logs/cache/spares LEAVES: 1 tab + 2 spaces (same indent as mirror)
+//
+// Different visual indent for semantic siblings, so depth-stack tracking
+// is unreliable. Instead: classify each row by name pattern. Known
+// vdev-group types become top-level entries; everything else becomes
+// either a child of the most recent group or a top-level leaf (for
+// striped pools whose top level is bare disks).
 func parseStatus(data []byte) (*Status, error) {
 	st := &Status{}
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	inConfig := false
-	var stack []*Vdev
 	rootSeen := false
 
 	for sc.Scan() {
@@ -115,75 +127,71 @@ func parseStatus(data []byte) (*Status, error) {
 			inConfig = false
 			continue
 		}
-		if !inConfig || trim == "" {
+		if !inConfig || trim == "" || strings.HasPrefix(trim, "NAME") {
 			continue
-		}
-		// header line
-		if strings.HasPrefix(trim, "NAME") {
-			continue
-		}
-		// Determine indent depth in tabs
-		depth := 0
-		for _, c := range line {
-			if c == '\t' {
-				depth++
-			} else {
-				break
-			}
 		}
 		fields := strings.Fields(trim)
 		if len(fields) == 0 {
 			continue
 		}
-		// Group-header lines (logs/cache/spares) appear with no STATE column.
-		// Accept them as single-field rows with state "-".
 		name := fields[0]
 		state := "-"
 		if len(fields) >= 2 {
 			state = fields[1]
 		}
-
-		// Skip the root pool line itself
 		if !rootSeen {
 			rootSeen = true
 			continue
 		}
+		v := classifyVdev(name, state)
 
-		v := Vdev{State: state}
-		switch {
-		case strings.HasPrefix(name, "mirror"):
-			v.Type = "mirror"
-		case strings.HasPrefix(name, "raidz3"):
-			v.Type = "raidz3"
-		case strings.HasPrefix(name, "raidz2"):
-			v.Type = "raidz2"
-		case strings.HasPrefix(name, "raidz1"), strings.HasPrefix(name, "raidz"):
-			v.Type = "raidz1"
-		case name == "logs":
-			v.Type = "log"
-		case name == "cache":
-			v.Type = "cache"
-		case name == "spares":
-			v.Type = "spare"
-		default:
-			v.Type = "disk"
-			v.Path = name
-		}
-
-		// Pop stack to current depth
-		for len(stack) > 0 && len(stack) >= depth {
-			stack = stack[:len(stack)-1]
-		}
-		if len(stack) == 0 {
+		// If this row is a top-level vdev group, append it.
+		// If it's a leaf and the most recent top-level is a group, nest it.
+		// Otherwise (no vdevs yet, or last top-level is itself a leaf — a
+		// stripe-of-disks layout), append as another top-level leaf.
+		if isVdevGroup(v.Type) {
 			st.Vdevs = append(st.Vdevs, v)
-			stack = append(stack, &st.Vdevs[len(st.Vdevs)-1])
+		} else if n := len(st.Vdevs); n > 0 && isVdevGroup(st.Vdevs[n-1].Type) {
+			st.Vdevs[n-1].Children = append(st.Vdevs[n-1].Children, v)
 		} else {
-			parent := stack[len(stack)-1]
-			parent.Children = append(parent.Children, v)
-			stack = append(stack, &parent.Children[len(parent.Children)-1])
+			st.Vdevs = append(st.Vdevs, v)
 		}
 	}
 	return st, sc.Err()
+}
+
+func classifyVdev(name, state string) Vdev {
+	v := Vdev{State: state}
+	switch {
+	case strings.HasPrefix(name, "mirror"):
+		v.Type = "mirror"
+	case strings.HasPrefix(name, "raidz3"):
+		v.Type = "raidz3"
+	case strings.HasPrefix(name, "raidz2"):
+		v.Type = "raidz2"
+	case strings.HasPrefix(name, "raidz1"), strings.HasPrefix(name, "raidz"):
+		v.Type = "raidz1"
+	case strings.HasPrefix(name, "draid"):
+		v.Type = "draid"
+	case name == "logs":
+		v.Type = "log"
+	case name == "cache":
+		v.Type = "cache"
+	case name == "spares":
+		v.Type = "spare"
+	default:
+		v.Type = "disk"
+		v.Path = name
+	}
+	return v
+}
+
+func isVdevGroup(t string) bool {
+	switch t {
+	case "mirror", "raidz1", "raidz2", "raidz3", "draid", "log", "cache", "spare":
+		return true
+	}
+	return false
 }
 
 func parseUint(s string) (uint64, error) {
