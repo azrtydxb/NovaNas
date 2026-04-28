@@ -17,6 +17,7 @@ import (
 type PoolsWriteHandler struct {
 	Logger     *slog.Logger
 	Dispatcher Dispatcher
+	Pools      ImportableLister
 }
 
 func (h *PoolsWriteHandler) Create(w http.ResponseWriter, r *http.Request) {

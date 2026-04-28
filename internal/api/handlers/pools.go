@@ -15,6 +15,7 @@ import (
 type PoolManager interface {
 	List(ctx context.Context) ([]pool.Pool, error)
 	Get(ctx context.Context, name string) (*pool.Detail, error)
+	Importable(ctx context.Context) ([]pool.ImportablePool, error)
 }
 
 type PoolsHandler struct {

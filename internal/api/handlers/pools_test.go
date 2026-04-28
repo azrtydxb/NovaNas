@@ -29,6 +29,9 @@ func (f *fakePoolMgr) Get(_ context.Context, _ string) (*pool.Detail, error) {
 	}
 	return f.detail, nil
 }
+func (f *fakePoolMgr) Importable(_ context.Context) ([]pool.ImportablePool, error) {
+	return nil, nil
+}
 
 func TestPoolsList(t *testing.T) {
 	h := &PoolsHandler{Logger: newDiscardLogger(), Pools: &fakePoolMgr{

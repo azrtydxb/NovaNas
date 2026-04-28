@@ -53,7 +53,7 @@ func New(d Deps) *Server {
 
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
-	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher, Pools: d.Pools}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
@@ -65,6 +65,16 @@ func New(d Deps) *Server {
 		r.Post("/pools", poolsWriteH.Create)
 		r.Delete("/pools/{name}", poolsWriteH.Destroy)
 		r.Post("/pools/{name}/scrub", poolsWriteH.Scrub)
+		r.Get("/pools/import", poolsWriteH.Importable)
+		r.Post("/pools/import", poolsWriteH.Import)
+		r.Post("/pools/{name}/replace", poolsWriteH.Replace)
+		r.Post("/pools/{name}/offline", poolsWriteH.Offline)
+		r.Post("/pools/{name}/online", poolsWriteH.Online)
+		r.Post("/pools/{name}/clear", poolsWriteH.Clear)
+		r.Post("/pools/{name}/attach", poolsWriteH.Attach)
+		r.Post("/pools/{name}/detach", poolsWriteH.Detach)
+		r.Post("/pools/{name}/add", poolsWriteH.Add)
+		r.Post("/pools/{name}/export", poolsWriteH.Export)
 		r.Get("/datasets", dsH.List)
 		r.Get("/datasets/{fullname}", dsH.Get)
 		r.Post("/datasets", dsW.Create)
