@@ -56,6 +56,7 @@ func New(d Deps) *Server {
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
+	snapW := &handlers.SnapshotsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
@@ -69,6 +70,9 @@ func New(d Deps) *Server {
 		r.Patch("/datasets/{fullname}", dsW.SetProps)
 		r.Delete("/datasets/{fullname}", dsW.Destroy)
 		r.Get("/snapshots", snapH.List)
+		r.Post("/snapshots", snapW.Create)
+		r.Delete("/snapshots/{fullname}", snapW.Destroy)
+		r.Post("/datasets/{fullname}/rollback", snapW.Rollback)
 	})
 
 	return &Server{deps: d, router: r}
