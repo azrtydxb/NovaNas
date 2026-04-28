@@ -42,7 +42,7 @@ func TestValidateDatasetName(t *testing.T) {
 
 func TestValidateSnapshotName(t *testing.T) {
 	good := []string{"tank@a", "tank/home@daily-2026-04-27", "p/v@x_1"}
-	bad := []string{"", "tank", "tank@", "@x", "tank/@x", "tank@x@y"}
+	bad := []string{"", "tank", "tank@", "@x", "tank/@x", "tank@x@y", "tank@-malicious"}
 	for _, n := range good {
 		if err := ValidateSnapshotName(n); err != nil {
 			t.Errorf("good %q: %v", n, err)

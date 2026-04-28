@@ -82,6 +82,9 @@ func ValidateSnapshotName(s string) error {
 	if short == "" {
 		return fmt.Errorf("snapshot short name empty")
 	}
+	if str.HasPrefix(short, "-") {
+		return fmt.Errorf("snapshot short name cannot start with '-'")
+	}
 	for _, r := range short {
 		if !isAllowedComponent(r) {
 			return fmt.Errorf("snapshot short name has illegal character %q", r)
