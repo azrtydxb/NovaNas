@@ -48,16 +48,19 @@ func TestParseStatus_VdevTree(t *testing.T) {
 // Group headers (logs/cache/spares) appear in zpool status with only the
 // group name on a line — no STATE column. The parser must accept these.
 func TestParseStatus_LogsAndCacheGroups(t *testing.T) {
+	// Note: parser counts leading TABS for depth. Visual spaces inside the
+	// row are ignored. Group headers (logs/cache) sit at depth=1 alongside
+	// data vdevs; their leaves are at depth=2.
 	in := []byte("  pool: tank\n state: ONLINE\nconfig:\n\n" +
 		"\tNAME             STATE     READ WRITE CKSUM\n" +
 		"\ttank             ONLINE       0     0     0\n" +
-		"\t  mirror-0       ONLINE       0     0     0\n" +
-		"\t    /dev/A       ONLINE       0     0     0\n" +
-		"\t    /dev/B       ONLINE       0     0     0\n" +
+		"\tmirror-0         ONLINE       0     0     0\n" +
+		"\t\t/dev/A         ONLINE       0     0     0\n" +
+		"\t\t/dev/B         ONLINE       0     0     0\n" +
 		"\tlogs\n" +
-		"\t  /dev/log1      ONLINE       0     0     0\n" +
+		"\t\t/dev/log1      ONLINE       0     0     0\n" +
 		"\tcache\n" +
-		"\t  /dev/cache1    ONLINE       0     0     0\n" +
+		"\t\t/dev/cache1    ONLINE       0     0     0\n" +
 		"\nerrors: No known data errors\n")
 	st, err := parseStatus(in)
 	if err != nil {
