@@ -29,3 +29,14 @@ run: build
 
 clean:
 	rm -rf bin/ dist/
+
+DB_URL ?= postgres://novanas:novanas@localhost:5432/novanas?sslmode=disable
+
+migrate-up:
+	goose -dir internal/store/migrations postgres "$(DB_URL)" up
+
+migrate-down:
+	goose -dir internal/store/migrations postgres "$(DB_URL)" down
+
+migrate-status:
+	goose -dir internal/store/migrations postgres "$(DB_URL)" status
