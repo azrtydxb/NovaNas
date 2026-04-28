@@ -15,7 +15,12 @@ EOF
         fi
         systemd-tmpfiles --create /usr/lib/tmpfiles.d/nova-api.conf || true
         deb-systemd-helper enable nova-api.service || true
-        deb-systemd-invoke start nova-api.service || true
+        # Don't start automatically — operator must bootstrap the database first:
+        #   1) Edit /etc/nova-api/env and change the default Postgres password
+        #   2) Run nova-api-init.sql against the postgres superuser
+        #   3) Apply migrations:  goose -dir /usr/share/nova-api/migrations postgres "$DATABASE_URL" up
+        #   4) systemctl start nova-api
+        echo "nova-api installed. See /usr/share/doc/nova-api/README for bootstrap steps before starting."
     ;;
 esac
 exit 0

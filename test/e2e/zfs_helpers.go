@@ -45,12 +45,17 @@ func destroyPoolIfExists(name string) {
 	_ = exec.Command("zpool", "destroy", "-f", name).Run()
 }
 
-// uniquePoolName returns a name unlikely to collide with other state on
-// the host (uses pid). Registers a t.Cleanup that destroys the pool if
-// the test forgets to.
+// uniquePoolName returns a name unique per test (pid + sanitized test
+// name). ZFS pool names are constrained to a small alphabet, so any
+// '/' or other illegal char from the test path is replaced with '_'.
+// Registers a t.Cleanup that destroys the pool if the test forgets to.
 func uniquePoolName(t *testing.T) string {
 	t.Helper()
-	name := fmt.Sprintf("e2e_%d", os.Getpid())
+	safe := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+	name := fmt.Sprintf("e2e_%d_%s", os.Getpid(), safe)
+	if len(name) > 31 {
+		name = name[:31]
+	}
 	t.Cleanup(func() { destroyPoolIfExists(name) })
 	return name
 }
