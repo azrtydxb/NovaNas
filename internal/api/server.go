@@ -57,7 +57,6 @@ func New(d Deps) *Server {
 	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	snapH := &handlers.SnapshotsHandler{Logger: d.Logger, Snapshots: d.Snapshots}
 	snapW := &handlers.SnapshotsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
-	jobsH := &handlers.JobsHandler{Logger: d.Logger, Q: d.Store.Queries}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
@@ -74,9 +73,14 @@ func New(d Deps) *Server {
 		r.Post("/snapshots", snapW.Create)
 		r.Delete("/snapshots/{fullname}", snapW.Destroy)
 		r.Post("/datasets/{fullname}/rollback", snapW.Rollback)
-		r.Get("/jobs", jobsH.List)
-		r.Get("/jobs/{id}", jobsH.Get)
-		r.Delete("/jobs/{id}", jobsH.Cancel)
+		// Jobs routes need the store; construct only when available so
+		// tests that build a server without one (e.g. /healthz) still work.
+		if d.Store != nil {
+			jobsH := &handlers.JobsHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Get("/jobs", jobsH.List)
+			r.Get("/jobs/{id}", jobsH.Get)
+			r.Delete("/jobs/{id}", jobsH.Cancel)
+		}
 	})
 
 	return &Server{deps: d, router: r}
