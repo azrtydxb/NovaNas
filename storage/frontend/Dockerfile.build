@@ -1,21 +1,28 @@
 # syntax=docker/dockerfile:1
 #
-# Multi-stage build for the NovaNas SPDK dataplane.
-# Stage 1: Build SPDK from source and install into /usr/local.
-# Stage 2: Build the Rust dataplane binary against those SPDK libraries.
+# Multi-stage build for novanas-frontend (architecture-v2 hot-path daemon).
+# Stage 1: Build SPDK from source and install into /usr/local. Same recipe
+#          as dataplane/Dockerfile.build — both daemons need their own
+#          SPDK env so the binaries can run in separate processes.
+# Stage 2: Build the Rust frontend binary against those SPDK libraries.
 # Stage 3: Minimal runtime image.
 #
-# Usage:
-#   docker build -f Dockerfile.build -t novanas-dataplane .
+# Build context = `storage/` (parent of `frontend/`), so the canonical
+# proto at `storage/api/proto/meta/meta.proto` is reachable as
+# `../api/...` from the frontend Cargo manifest's perspective.
+#
+# Usage (from the storage/ directory):
+#   docker build -f frontend/Dockerfile.build -t novanas-frontend:dev .
 #
 # To run (requires hugepages on the host):
 #   docker run --privileged \
 #     -v /dev/hugepages:/dev/hugepages \
 #     -v /dev/shm:/dev/shm \
-#     novanas-dataplane
+#     -v /var/run/novanas:/var/run/novanas \
+#     novanas-frontend:dev
 
 # ---------------------------------------------------------------------------
-# Stage 1 — Build SPDK
+# Stage 1 — Build SPDK (mirrors dataplane/Dockerfile.build)
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim AS spdk-builder
 
@@ -56,11 +63,10 @@ RUN make -j"$(nproc)"
 RUN make install DESTDIR=/spdk-install
 
 # ---------------------------------------------------------------------------
-# Stage 2 — Build the Rust dataplane
+# Stage 2 — Build the Rust frontend
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim AS rust-builder
 
-# Install build dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config \
     libaio-dev libssl-dev libnuma-dev liburing-dev \
@@ -70,41 +76,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust.
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
 
-# Copy SPDK install from stage 1.
+# SPDK install from stage 1.
 COPY --from=spdk-builder /spdk-install/usr/local /usr/local
 RUN ldconfig
 
-# Build the dataplane.
-WORKDIR /build/dataplane
+# Frontend crate. Manifests + build.rs first for caching, then sources.
+WORKDIR /build/frontend
 ENV SPDK_DIR=/usr/local
 
-# Copy manifests first for dependency caching.
-COPY dataplane/Cargo.toml dataplane/Cargo.lock dataplane/build.rs ./
-COPY dataplane/proto/ proto/
-COPY dataplane/src/ src/
-COPY dataplane/ndp/ ndp/
-# build.rs references ../api/proto/meta/meta.proto (the canonical wire
-# contract shared with novanas-meta and novanas-frontend); make it
-# available at /build/api/proto/.
+COPY frontend/Cargo.toml frontend/Cargo.lock frontend/build.rs ./
+COPY frontend/src/ src/
+COPY frontend/tests/ tests/
+
+# Frontend's build.rs reads ../api/proto/meta/meta.proto.
 COPY api/ /build/api/
 
-RUN cargo build --release --features spdk-sys
+# Frontend Cargo.toml has `ndp = { path = "../dataplane/ndp" }` for the
+# NDP client — bring just that subcrate.
+COPY dataplane/ndp/ /build/dataplane/ndp/
 
-# Test target — compile the SPDK-linked test binaries without executing them.
-# Actually *running* the tests requires a full SPDK runtime (hugepages,
-# root, DPDK env_init); DPDK's constructors SIGILL when invoked in a
-# plain `docker build` context. Compile-only validates that the test
-# code stays in sync with the production API (the scope of #37);
-# runtime integration lives in a separate nightly KVM job.
-# Usage: docker build -f Dockerfile.build --target test .
-FROM rust-builder AS test
-RUN cargo test --release --features spdk-sys --no-run
+RUN cargo build --release --features spdk-sys
 
 # ---------------------------------------------------------------------------
 # Stage 3 — Minimal runtime image
@@ -118,13 +114,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nvme-cli e2fsprogs kmod fdisk parted \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy SPDK shared libraries (if any) and the binary.
 COPY --from=spdk-builder /spdk-install/usr/local/lib /usr/local/lib
-COPY --from=rust-builder /build/dataplane/target/release/novanas-dataplane /usr/local/bin/novanas-dataplane
-COPY dataplane/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY dataplane/test_backends.sh /usr/local/bin/test_backends.sh
-COPY dataplane/test_nvmeof.sh /usr/local/bin/test_nvmeof.sh
-COPY dataplane/test_real_nvme.sh /usr/local/bin/test_real_nvme.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/test_backends.sh /usr/local/bin/test_nvmeof.sh /usr/local/bin/test_real_nvme.sh && ldconfig
+COPY --from=rust-builder /build/frontend/target/release/novanas-frontend /usr/local/bin/novanas-frontend
+RUN ldconfig
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/novanas-frontend"]
