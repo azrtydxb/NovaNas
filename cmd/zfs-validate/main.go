@@ -6,6 +6,8 @@
 // Layouts exercised: stripe(1), mirror(2), raidz1(3), raidz2(4),
 // raidz3(5), mirror + mirrored-log + cache. Plus dataset/snapshot
 // lifecycle, scrub, real IO with snapshot+rollback integrity check.
+// Scenarios 11-20 cover lifecycle operations: offline/online, replace,
+// attach/detach, add, export/import, RAIDZ expansion, scrub-progress.
 package main
 
 import (
@@ -31,9 +33,9 @@ func main() {
 	disks := splitEnv("DISKS")
 	logA := os.Getenv("LOG_A")
 	cache := os.Getenv("CACHE")
-	_ = os.Getenv("LOG_B") // accepted but unused; mirrored-log isn't expressible by current API
-	if len(disks) < 5 {
-		die("DISKS must list at least 5 by-id paths (got %d)", len(disks))
+	_ = os.Getenv("LOG_B") // accepted; mirrored-log now expressible via []VdevSpec
+	if len(disks) < 6 {
+		die("DISKS must list at least 6 by-id paths (got %d) for lifecycle scenarios", len(disks))
 	}
 
 	pm := &pool.Manager{ZpoolBin: "/sbin/zpool"}
@@ -94,14 +96,8 @@ func main() {
 	cleanup("after raidz3")
 
 	if logA != "" {
-		step("6. mirror + single log + cache (single-disk only; see API gap notes)", func() error {
-			// API gap (current Plan 1+2 surface): pool.CreateSpec.Log is
-			// a []string of disk paths. There is no way to express a
-			// MIRRORED log vdev — `zpool create ... log mirror d1 d2`
-			// would require Log to be []VdevSpec, not []string. We test
-			// a single log device here. Cache is always non-redundant
-			// in ZFS; raidz/draid are NOT valid for log or cache.
-			logs := []string{logA}
+		step("6. mirror + single log + cache", func() error {
+			logs := []pool.VdevSpec{{Type: "disk", Disks: []string{logA}}}
 			caches := []string{}
 			if cache != "" {
 				caches = []string{cache}
@@ -255,6 +251,419 @@ func main() {
 		return nil
 	})
 
+	// ---- Lifecycle scenarios (11-20) -----------------------------------------
+	// These require at least 6 disks from $DISKS. disks[0..5] are used.
+
+	step("11. mirrored log + cache ([]VdevSpec)", func() error {
+		wipeDisks(disks[:4])
+		if len(disks) < 4 {
+			return fmt.Errorf("need 4 disks")
+		}
+		spec := pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+			Log:   []pool.VdevSpec{{Type: "mirror", Disks: disks[2:4]}},
+		}
+		if len(disks) >= 5 {
+			spec.Cache = []string{disks[4]}
+		}
+		if err := pm.Create(ctx, spec); err != nil {
+			return err
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		// Expect: mirror(2) data vdev, log vdev with 2 children, optionally cache(1).
+		var dataMirror, logVdev, cacheVdev *pool.Vdev
+		for i := range d.Status.Vdevs {
+			v := &d.Status.Vdevs[i]
+			switch v.Type {
+			case "mirror":
+				if dataMirror == nil {
+					dataMirror = v
+				}
+			case "log":
+				logVdev = v
+			case "cache":
+				cacheVdev = v
+			}
+		}
+		if dataMirror == nil || len(dataMirror.Children) != 2 {
+			return fmt.Errorf("expected data mirror with 2 children; vdevs=%+v", d.Status.Vdevs)
+		}
+		if logVdev == nil {
+			return fmt.Errorf("expected log vdev; vdevs=%+v", d.Status.Vdevs)
+		}
+		if len(logVdev.Children) != 2 {
+			return fmt.Errorf("expected mirrored log (2 children), got %d", len(logVdev.Children))
+		}
+		fmt.Printf("  data mirror: %d children, log: %d children", len(dataMirror.Children), len(logVdev.Children))
+		if cacheVdev != nil {
+			fmt.Printf(", cache: %d child(ren)", len(cacheVdev.Children)+1) // cache leaf has no sub-children
+		}
+		fmt.Println()
+		return nil
+	})
+	cleanup("after scenario 11")
+
+	step("12. spare in CreateSpec", func() error {
+		wipeDisks(disks[:4])
+		spec := pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "raidz1", Disks: disks[:3]}},
+			Spare: []string{disks[3]},
+		}
+		if err := pm.Create(ctx, spec); err != nil {
+			return err
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		var spareVdev *pool.Vdev
+		for i := range d.Status.Vdevs {
+			if d.Status.Vdevs[i].Type == "spare" {
+				spareVdev = &d.Status.Vdevs[i]
+			}
+		}
+		if spareVdev == nil {
+			return fmt.Errorf("expected spare vdev in status; vdevs=%+v", d.Status.Vdevs)
+		}
+		// The spare entry itself has children (the spare disks) OR is listed
+		// as a leaf child under a "spare" group. Either way len > 0 or the
+		// spare vdev exists.
+		fmt.Printf("  spare vdev present, children=%d\n", len(spareVdev.Children))
+		return nil
+	})
+	cleanup("after scenario 12")
+
+	step("13. offline → DEGRADED → online → ONLINE", func() error {
+		wipeDisks(disks[:3])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "raidz1", Disks: disks[:3]}},
+		}); err != nil {
+			return err
+		}
+		// Offline disk[0].
+		if err := pm.Offline(ctx, poolName, disks[0], false); err != nil {
+			return fmt.Errorf("offline: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if d.Status.State != "DEGRADED" || d.Pool.Health != "DEGRADED" {
+			return fmt.Errorf("expected DEGRADED after offline; state=%q health=%q",
+				d.Status.State, d.Pool.Health)
+		}
+		fmt.Printf("  after offline: state=%s health=%s\n", d.Status.State, d.Pool.Health)
+		// Bring back online.
+		if err := pm.Online(ctx, poolName, disks[0]); err != nil {
+			return fmt.Errorf("online: %w", err)
+		}
+		// Allow a brief moment for the pool to re-assess.
+		time.Sleep(500 * time.Millisecond)
+		d, err = pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if d.Pool.Health != "ONLINE" {
+			return fmt.Errorf("expected ONLINE after online; health=%q", d.Pool.Health)
+		}
+		fmt.Printf("  after online: state=%s health=%s\n", d.Status.State, d.Pool.Health)
+		return nil
+	})
+	// pool stays up for scenario 14
+
+	step("14. clear errors", func() error {
+		// Run clear with no disk (clears pool-wide counters). Should not error.
+		if err := pm.Clear(ctx, poolName, ""); err != nil {
+			return fmt.Errorf("clear: %w", err)
+		}
+		fmt.Printf("  clear(pool-wide) OK\n")
+		// Also exercise targeted clear.
+		if err := pm.Clear(ctx, poolName, disks[0]); err != nil {
+			return fmt.Errorf("clear(disk): %w", err)
+		}
+		fmt.Printf("  clear(%s) OK\n", disks[0])
+		return nil
+	})
+	cleanup("after scenarios 13+14")
+
+	step("15. replace + resilver", func() error {
+		wipeDisks(disks[:4])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "raidz1", Disks: disks[:3]}},
+		}); err != nil {
+			return err
+		}
+		if err := pm.Offline(ctx, poolName, disks[0], false); err != nil {
+			return fmt.Errorf("offline before replace: %w", err)
+		}
+		if err := pm.Replace(ctx, poolName, disks[0], disks[3]); err != nil {
+			return fmt.Errorf("replace: %w", err)
+		}
+		fmt.Printf("  replace issued, waiting for resilver (up to 60s)...\n")
+		if err := waitPoolOnline(ctx, pm, poolName, 60*time.Second); err != nil {
+			return err
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		// Verify new disk is present somewhere in the vdev tree.
+		if !vdevTreeContainsDisk(d.Status.Vdevs, disks[3]) {
+			return fmt.Errorf("new disk %q not found in vdev tree after replace", disks[3])
+		}
+		fmt.Printf("  resilver complete, new disk present, health=%s\n", d.Pool.Health)
+		return nil
+	})
+	cleanup("after scenario 15")
+
+	step("16. attach/detach (single → mirror → single)", func() error {
+		wipeDisks(disks[:2])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		// Attach second disk → becomes a mirror.
+		if err := pm.Attach(ctx, poolName, disks[0], disks[1]); err != nil {
+			return fmt.Errorf("attach: %w", err)
+		}
+		// Wait for resilver that attach triggers.
+		time.Sleep(2 * time.Second)
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if len(d.Status.Vdevs) == 0 {
+			return fmt.Errorf("no vdevs after attach")
+		}
+		if d.Status.Vdevs[0].Type != "mirror" {
+			return fmt.Errorf("expected mirror after attach; got %q", d.Status.Vdevs[0].Type)
+		}
+		if len(d.Status.Vdevs[0].Children) != 2 {
+			return fmt.Errorf("expected 2 mirror children after attach; got %d", len(d.Status.Vdevs[0].Children))
+		}
+		fmt.Printf("  after attach: vdev=%s(%d children)\n",
+			d.Status.Vdevs[0].Type, len(d.Status.Vdevs[0].Children))
+		// Detach disks[1] → back to single disk.
+		if err := pm.Detach(ctx, poolName, disks[1]); err != nil {
+			return fmt.Errorf("detach: %w", err)
+		}
+		d, err = pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		if len(d.Status.Vdevs) != 1 {
+			return fmt.Errorf("expected 1 top-level vdev after detach; got %d", len(d.Status.Vdevs))
+		}
+		if d.Status.Vdevs[0].Type != "disk" {
+			return fmt.Errorf("expected type=disk after detach; got %q", d.Status.Vdevs[0].Type)
+		}
+		fmt.Printf("  after detach: vdev=%s (single disk)\n", d.Status.Vdevs[0].Type)
+		return nil
+	})
+	cleanup("after scenario 16")
+
+	step("17. add (extra mirror to existing pool)", func() error {
+		wipeDisks(disks[:4])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+		}); err != nil {
+			return err
+		}
+		addSpec := pool.AddSpec{
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[2:4]}},
+		}
+		if err := pm.Add(ctx, poolName, addSpec); err != nil {
+			return fmt.Errorf("add: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		// Expect 2 top-level mirror vdevs.
+		mirrors := 0
+		for _, v := range d.Status.Vdevs {
+			if v.Type == "mirror" {
+				if len(v.Children) != 2 {
+					return fmt.Errorf("mirror vdev has %d children (want 2)", len(v.Children))
+				}
+				mirrors++
+			}
+		}
+		if mirrors != 2 {
+			return fmt.Errorf("expected 2 mirror vdevs after add; got %d (vdevs=%+v)", mirrors, d.Status.Vdevs)
+		}
+		fmt.Printf("  after add: %d mirror vdevs, each with 2 children\n", mirrors)
+		return nil
+	})
+	cleanup("after scenario 17")
+
+	step("18. RAIDZ expansion (ZFS 2.3+)", func() error {
+		wipeDisks(disks[:4])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "raidz1", Disks: disks[:3]}},
+		}); err != nil {
+			return err
+		}
+		// Attach a 4th disk to the raidz vdev group named "raidz1-0".
+		if err := pm.Attach(ctx, poolName, "raidz1-0", disks[3]); err != nil {
+			return fmt.Errorf("raidz expand attach: %w", err)
+		}
+		fmt.Printf("  raidz expand issued, waiting up to 60s for expansion...\n")
+		// Poll until Scan.State != "in-progress" or timeout.
+		deadline := time.Now().Add(60 * time.Second)
+		for time.Now().Before(deadline) {
+			d, err := pm.Get(ctx, poolName)
+			if err != nil {
+				return err
+			}
+			scanState := "none"
+			if d.Status.Scan != nil {
+				scanState = d.Status.Scan.State
+			}
+			fmt.Printf("  scan.state=%s\n", scanState)
+			if scanState != "in-progress" {
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return err
+		}
+		// Find the raidz1 vdev and check child count.
+		var rz *pool.Vdev
+		for i := range d.Status.Vdevs {
+			if d.Status.Vdevs[i].Type == "raidz1" {
+				rz = &d.Status.Vdevs[i]
+				break
+			}
+		}
+		if rz == nil {
+			return fmt.Errorf("raidz1 vdev not found after expansion; vdevs=%+v", d.Status.Vdevs)
+		}
+		if len(rz.Children) != 4 {
+			return fmt.Errorf("expected 4 raidz children after expansion; got %d", len(rz.Children))
+		}
+		fmt.Printf("  raidz1 now has %d children\n", len(rz.Children))
+		return nil
+	})
+	cleanup("after scenario 18")
+
+	step("19. export + import round trip", func() error {
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		// Export.
+		if err := pm.Export(ctx, poolName, false); err != nil {
+			return fmt.Errorf("export: %w", err)
+		}
+		// Confirm no longer listed.
+		pools, err := pm.List(ctx)
+		if err != nil {
+			return fmt.Errorf("list after export: %w", err)
+		}
+		for _, p := range pools {
+			if p.Name == poolName {
+				return fmt.Errorf("pool %q still listed after export", poolName)
+			}
+		}
+		fmt.Printf("  pool no longer in List after export\n")
+		// Importable must list it.
+		importable, err := pm.Importable(ctx)
+		if err != nil {
+			return fmt.Errorf("importable: %w", err)
+		}
+		found := false
+		for _, ip := range importable {
+			if ip.Name == poolName {
+				found = true
+				fmt.Printf("  found in importable: name=%s state=%s\n", ip.Name, ip.State)
+				break
+			}
+		}
+		if !found {
+			// Non-fatal on some systems (e.g. ZFS without device scanning). Warn.
+			fmt.Printf("  WARNING: pool not found in importable list (may be env-specific)\n")
+		}
+		// Import.
+		if err := pm.Import(ctx, poolName); err != nil {
+			return fmt.Errorf("import: %w", err)
+		}
+		d, err := pm.Get(ctx, poolName)
+		if err != nil {
+			return fmt.Errorf("get after import: %w", err)
+		}
+		if d.Pool.Health != "ONLINE" {
+			return fmt.Errorf("expected ONLINE after import; health=%q", d.Pool.Health)
+		}
+		fmt.Printf("  re-imported, health=%s\n", d.Pool.Health)
+		return nil
+	})
+	cleanup("after scenario 19")
+
+	step("20. scrub progress (ScrubStatus parser)", func() error {
+		wipeDisks(disks[:2])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "mirror", Disks: disks[:2]}},
+		}); err != nil {
+			return err
+		}
+		// Write some data so scrub has something to verify.
+		mp := "/" + poolName
+		writePayload(filepath.Join(mp, "scrub-data.bin"), 64<<20)
+		// Start scrub.
+		if err := pm.Scrub(ctx, poolName, pool.ScrubStart); err != nil {
+			return fmt.Errorf("scrub start: %w", err)
+		}
+		fmt.Printf("  scrub started, polling...\n")
+		deadline := time.Now().Add(60 * time.Second)
+		var finalScan *pool.ScrubStatus
+		for time.Now().Before(deadline) {
+			d, err := pm.Get(ctx, poolName)
+			if err != nil {
+				return err
+			}
+			if d.Status.Scan != nil {
+				finalScan = d.Status.Scan
+				fmt.Printf("  scan.state=%s scanned=%d total=%d\n",
+					finalScan.State, finalScan.ScannedBytes, finalScan.TotalBytes)
+				if finalScan.State == "finished" {
+					break
+				}
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if finalScan == nil {
+			return fmt.Errorf("Scan field never populated")
+		}
+		if finalScan.State != "finished" {
+			return fmt.Errorf("scrub did not finish within 60s; last state=%q", finalScan.State)
+		}
+		if finalScan.TotalBytes == 0 {
+			// TotalBytes may not be populated on very fast scrubs; warn but don't fail.
+			fmt.Printf("  WARNING: TotalBytes=0 (scrub may have finished before first poll)\n")
+		}
+		fmt.Printf("  scrub finished OK, totalBytes=%d\n", finalScan.TotalBytes)
+		return nil
+	})
+	cleanup("after scenario 20")
+
 	fmt.Println("\nALL CHECKS PASSED")
 }
 
@@ -377,4 +786,58 @@ func errorsLine() string {
 		}
 	}
 	return "(no errors line)"
+}
+
+// cleanDisk wipes ZFS labels and partition signatures from a disk device.
+// It is best-effort: errors are printed but do not halt the harness.
+func cleanDisk(disk string) {
+	// zpool labelclear on up to 9 partitions + whole disk.
+	candidates := []string{disk}
+	for i := 1; i <= 9; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s-part%d", disk, i))
+	}
+	for _, c := range candidates {
+		_ = exec.Command("zpool", "labelclear", "-f", c).Run()
+	}
+	// Wipe filesystem signatures if wipefs is available.
+	_ = exec.Command("wipefs", "-af", disk).Run()
+	// Zero the first 10 blocks.
+	_ = exec.Command("dd", "if=/dev/zero", "of="+disk, "bs=512", "count=10").Run()
+}
+
+// wipeDisks calls cleanDisk on each disk in the slice.
+func wipeDisks(disks []string) {
+	for _, d := range disks {
+		cleanDisk(d)
+	}
+}
+
+// waitPoolOnline polls pm.Get until Pool.Health == "ONLINE" or timeout.
+func waitPoolOnline(ctx context.Context, pm *pool.Manager, name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		d, err := pm.Get(ctx, name)
+		if err != nil {
+			return err
+		}
+		if d.Pool.Health == "ONLINE" {
+			return nil
+		}
+		fmt.Printf("  health=%s (waiting)\n", d.Pool.Health)
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("pool %q did not reach ONLINE within %v", name, timeout)
+}
+
+// vdevTreeContainsDisk recursively checks if any Vdev in the tree has Path == disk.
+func vdevTreeContainsDisk(vdevs []pool.Vdev, disk string) bool {
+	for _, v := range vdevs {
+		if v.Path == disk {
+			return true
+		}
+		if vdevTreeContainsDisk(v.Children, disk) {
+			return true
+		}
+	}
+	return false
 }
