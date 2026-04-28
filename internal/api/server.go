@@ -15,6 +15,7 @@ import (
 type Deps struct {
 	Logger *slog.Logger
 	Store  *store.Store
+	Disks  handlers.DiskLister
 }
 
 type Server struct {
@@ -28,6 +29,12 @@ func New(d Deps) *Server {
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
 	r.Get("/healthz", handlers.Healthz)
+
+	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/disks", disksH.List)
+	})
+
 	return &Server{deps: d, router: r}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/novanas/nova-nas/internal/api"
 	"github.com/novanas/nova-nas/internal/config"
+	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/logging"
 	"github.com/novanas/nova-nas/internal/store"
 )
@@ -37,7 +38,12 @@ func main() {
 	}
 	defer st.Close()
 
-	srv := api.New(api.Deps{Logger: logger, Store: st})
+	disksLister := &disks.Lister{LsblkBin: cfg.LsblkBin}
+	srv := api.New(api.Deps{
+		Logger: logger,
+		Store:  st,
+		Disks:  disksLister,
+	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
