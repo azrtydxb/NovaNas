@@ -8,6 +8,14 @@ Type=simple
 User=alertmanager
 Group=alertmanager
 EnvironmentFile=/etc/alertmanager/alertmanager.env
+# SMTP credentials. The file at /etc/alertmanager/smtp.env contains
+# SMTP_USERNAME=… and SMTP_PASSWORD=… on separate lines. LoadCredential=
+# copies it into $CREDENTIALS_DIRECTORY (read-only, mode 0400) so the
+# secret is not visible via /proc/<pid>/environ. EnvironmentFile= then
+# imports those vars so alertmanager.yml's `${SMTP_*}` placeholders
+# expand at config-load time.
+LoadCredential=smtp.env:/etc/alertmanager/smtp.env
+EnvironmentFile=-/run/credentials/alertmanager.service/smtp.env
 ExecStart=/usr/bin/alertmanager \
   --config.file=/etc/alertmanager/alertmanager.yml \
   --storage.path=/var/lib/alertmanager \

@@ -1,10 +1,15 @@
 global:
   resolve_timeout: 5m
-  # SMTP configuration (operators customize from OpenBao secrets)
-  # smtp_smarthost: 'smtp.example.com:587'
-  # smtp_auth_username: '{{ SECRET:alertmanager/smtp_user }}'
-  # smtp_auth_password: '{{ SECRET:alertmanager/smtp_pass }}'
-  # smtp_from: 'alerts@novanas.local'
+  # SMTP relay (shared with nova-api). Credentials are sourced from
+  # /etc/alertmanager/smtp.env (see deploy/systemd/alertmanager.service —
+  # LoadCredential= drops the file at $CREDENTIALS_DIRECTORY/smtp.env and
+  # the EnvironmentFile= line in alertmanager.env interpolates
+  # $SMTP_USERNAME / $SMTP_PASSWORD into this file at process start).
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  smtp_from: '${SMTP_FROM}'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
 
 # Inhibition rules
 inhibit_rules:
@@ -35,6 +40,16 @@ route:
 receivers:
   - name: 'null'
     # Null receiver intentionally does nothing; operators configure webhook_configs, email_configs, etc.
+
+  # Email pages via the shared SMTP relay (see global.smtp_*). Add the
+  # receiver to a route's `receiver:` to start delivering. The `to:`
+  # value below is a sane default; operators usually template per-team.
+  - name: 'email-ops'
+    email_configs:
+      - to: 'ops@novanas.local'
+        send_resolved: true
+        headers:
+          Subject: '[NovaNAS] {{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
 
   # Example webhook receiver (commented out)
   # - name: 'slack'
