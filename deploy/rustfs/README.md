@@ -106,7 +106,11 @@ journalctl -u rustfs.service -f
 Service ports:
 
 - **9000** — S3 API (HTTPS)
-- **9001** — Console UI (HTTPS, OIDC-protected via Keycloak auth-code)
+- **9001** — Console UI (HTTPS, OIDC-protected via Keycloak auth-code).
+  The console is served at the path prefix `/rustfs/console`; hitting
+  `/` returns the S3 `AccessDenied` XML response because S3 API and
+  console share the listener but are routed by URL prefix. Browse to
+  `https://<host>:9001/rustfs/console`.
 
 ## Upgrade procedure
 

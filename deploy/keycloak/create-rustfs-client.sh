@@ -19,7 +19,7 @@
 #   - creates a confidential client `rustfs` with both auth-code flow
 #     (for the RustFS web console) AND service-account flow (so nova-api
 #     or other backend services can mint tokens via client_credentials)
-#   - registers the console redirect URI (default: https://novanas.local:9001/oauth_callback)
+#   - registers the console redirect URI (default: https://novanas.local:9001/rustfs/console/oauth_callback)
 #   - adds an audience mapper so `rustfs` is in the access token `aud`
 #   - adds a "groups" protocol mapper that emits realm_access.roles values
 #     into a flat `groups` claim, which is what RustFS reads
@@ -38,7 +38,7 @@
 #   KC_ADMIN_PASS Keycloak admin password
 #   KCADM         Path to kcadm.sh (default: kcadm.sh on PATH)
 #   REDIRECT_URI  RustFS console OIDC redirect URI
-#                 (default: https://novanas.local:9001/oauth_callback)
+#                 (default: https://novanas.local:9001/rustfs/console/oauth_callback)
 #   ROOT_URL      RustFS console root URL (default: https://novanas.local:9001)
 
 set -euo pipefail
@@ -49,7 +49,7 @@ KC_ADMIN_USER="${KC_ADMIN_USER:-admin}"
 KC_ADMIN_PASS="${KC_ADMIN_PASS:-}"
 KCADM="${KCADM:-kcadm.sh}"
 CLIENT_ID="${CLIENT_ID:-rustfs}"
-REDIRECT_URI="${REDIRECT_URI:-https://novanas.local:9001/oauth_callback}"
+REDIRECT_URI="${REDIRECT_URI:-https://novanas.local:9001/rustfs/console/oauth_callback}"
 ROOT_URL="${ROOT_URL:-https://novanas.local:9001}"
 TLS_INSECURE="${TLS_INSECURE:-false}"
 

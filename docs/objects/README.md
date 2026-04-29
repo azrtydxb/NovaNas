@@ -13,7 +13,7 @@ to the Nova Keycloak realm so the same `nova-admin` / `nova-operator` /
 
 - **S3 API** on `https://<host>:9000` — works with any S3 SDK (AWS, boto3,
   go-aws-sdk-v2, s3cmd, rclone, mc, …).
-- **Web console** on `https://<host>:9001` — protected by Keycloak SSO
+- **Web console** on `https://<host>:9001/rustfs/console` — protected by Keycloak SSO
   (auth-code flow). Log in as a user with realm role `nova-admin`,
   `nova-operator`, or `nova-viewer`.
 - **ZFS-native storage**: data lives on the dataset `tank/objects`, so you
@@ -25,7 +25,7 @@ to the Nova Keycloak realm so the same `nova-admin` / `nova-operator` /
 
 The flow is the standard OAuth 2.0 / OIDC auth-code flow:
 
-1. User browses to `https://<host>:9001`.
+1. User browses to `https://<host>:9001/rustfs/console`.
 2. RustFS console redirects them to Keycloak
    (`https://192.168.10.204:8443/realms/novanas`).
 3. User authenticates against Keycloak (password, mTLS, whatever the realm
