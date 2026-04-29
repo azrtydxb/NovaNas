@@ -103,8 +103,12 @@ func main() {
 	snapMgr := &snapshot.Manager{ZFSBin: cfg.ZFSBin}
 	iscsiMgr := &iscsi.Manager{}
 	nvmeofMgr := &nvmeof.Manager{}
-	nfsMgr := &nfs.Manager{}
+	nfsMgr := &nfs.Manager{RequireKerberos: cfg.NFSRequireKerberos}
 	krb5Mgr := &krb5.Manager{}
+	var krb5KDC *krb5.KDCManager
+	if cfg.Krb5KDCEnabled {
+		krb5KDC = &krb5.KDCManager{Cfg: krb5.KDCConfig{Realm: cfg.Krb5Realm}}
+	}
 	rdmaLister := &rdma.Lister{}
 	sambaMgr := &samba.Manager{}
 	smartMgr := &smart.Manager{}
@@ -223,6 +227,7 @@ func main() {
 		NvmeofMgr:   nvmeofMgr,
 		NfsMgr:      nfsMgr,
 		Krb5Mgr:     krb5Mgr,
+		Krb5KDC:     krb5KDC,
 		RdmaLister:  rdmaLister,
 		SambaMgr:     sambaMgr,
 		SmartMgr:     smartMgr,

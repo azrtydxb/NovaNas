@@ -16,6 +16,23 @@ type Config struct {
 	LsblkBin    string `envconfig:"LSBLK_BIN" default:"/usr/bin/lsblk"`
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
 
+	// NFSRequireKerberos, when true, makes the NFS exports manager prepend
+	// `sec=krb5p` to every export's client options. Operators with no KDC
+	// or no host keytab should leave this false (the default) — exports
+	// will use sec=sys and behave as before.
+	NFSRequireKerberos bool `envconfig:"NFS_REQUIRE_KERBEROS" default:"false"`
+
+	// Krb5KDCEnabled exposes the embedded MIT KDC's principal-management
+	// API endpoints (POST/GET/DELETE /api/v1/krb5/principals + KDC status).
+	// Operators with no embedded KDC (BYO Active Directory or FreeIPA)
+	// should leave this false. Defaults false to preserve the original
+	// "no KDC" architecture for upgrades.
+	Krb5KDCEnabled bool `envconfig:"KRB5_KDC_ENABLED" default:"false"`
+
+	// Krb5Realm overrides the realm name used by the embedded KDC.
+	// Empty falls back to the krb5 package default (NOVANAS.LOCAL).
+	Krb5Realm string `envconfig:"KRB5_REALM"`
+
 	// MetricsAddr, when set, binds the Prometheus /metrics endpoint to a
 	// separate listener (e.g. ":9100") so the public API listener does
 	// not expose it. Empty (the default) keeps /metrics on the main
