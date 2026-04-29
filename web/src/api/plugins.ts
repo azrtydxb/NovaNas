@@ -98,9 +98,20 @@ function qs(params: Record<string, string | string[] | boolean | undefined>): st
   return s ? `?${s}` : "";
 }
 
+// Backend response shapes:
+//   GET /plugins/index       → { version, updated, plugins: [...] }
+//   GET /plugins/categories  → CategoryCount[]   (bare array)
+//   GET /plugins             → PluginManifest[]  (bare array, when wired)
+//   GET /marketplaces        → Marketplace[]     (bare array)
+type PluginIndexResponse = {
+  version: number;
+  updated: string;
+  plugins: PluginIndexEntry[];
+};
+
 export const plugins = {
   listIndex: (params: ListIndexParams = {}) =>
-    api<{ plugins: PluginIndexEntry[] }>(
+    api<PluginIndexResponse>(
       `/api/v1/plugins/index${qs({
         displayCategory: params.displayCategory,
         tag: params.tags,
@@ -108,16 +119,14 @@ export const plugins = {
       })}`
     ).then((r) => r.plugins),
 
-  listCategories: () =>
-    api<{ categories: CategoryCount[] }>(`/api/v1/plugins/categories`).then((r) => r.categories),
+  listCategories: () => api<CategoryCount[]>(`/api/v1/plugins/categories`),
 
   getManifestPreview: (name: string, version: string) =>
     api<PreviewResponse>(
       `/api/v1/plugins/index/${encodeURIComponent(name)}/manifest?version=${encodeURIComponent(version)}`
     ),
 
-  listInstalled: () =>
-    api<{ plugins: PluginManifest[] }>(`/api/v1/plugins`).then((r) => r.plugins),
+  listInstalled: () => api<PluginManifest[]>(`/api/v1/plugins`),
 };
 
 export const marketplaces = {

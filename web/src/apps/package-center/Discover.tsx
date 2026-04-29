@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { plugins, type DisplayCategory } from "../../api/plugins";
+import { formatBytes } from "../../lib/format";
 
 export function Discover() {
   const [cat, setCat] = useState<DisplayCategory | "all">("all");
@@ -72,9 +73,7 @@ export function Discover() {
                     {p.displayCategory && (
                       <span className="pill">{p.displayCategory}</span>
                     )}
-                    {v && (
-                      <span className="muted mono">{(v.size / 1e6).toFixed(1)} MB</span>
-                    )}
+                    {v && <span className="muted mono">{formatBytes(v.size)}</span>}
                     <button className="btn btn--sm btn--primary mkt-card__cta">
                       Install
                     </button>

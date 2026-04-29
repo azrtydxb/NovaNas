@@ -1,8 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { marketplaces } from "../../api/plugins";
+import { marketplaces, type Marketplace } from "../../api/plugins";
+import { pemFingerprint } from "../../lib/format";
+
+// Backend returns the full PEM but no derived fingerprint. We hash
+// client-side. Result is cached on `m._fingerprint` per row.
+type MarketplaceRow = Marketplace & { _fingerprint?: string };
 
 export function Marketplaces() {
-  const q = useQuery({ queryKey: ["marketplaces"], queryFn: () => marketplaces.list() });
+  const q = useQuery<MarketplaceRow[]>({
+    queryKey: ["marketplaces"],
+    queryFn: async () => {
+      const list = await marketplaces.list();
+      return Promise.all(
+        list.map(async (m) => ({
+          ...m,
+          _fingerprint: m.trustKeyPem ? await pemFingerprint(m.trustKeyPem) : undefined,
+        }))
+      );
+    },
+  });
 
   if (q.isLoading) return <div className="discover__msg">Loading marketplaces…</div>;
   if (q.isError)
@@ -37,9 +53,9 @@ export function Marketplaces() {
                   {m.locked && <span className="trust-badge trust-badge--official">locked</span>}
                 </div>
               </td>
-              <td className="mono muted">{m.indexUrl}</td>
-              <td className="mono muted small">
-                {m.trustKeyFingerprint ?? <span className="muted">—</span>}
+              <td className="mono muted small">{m.indexUrl}</td>
+              <td className="mono muted small" title={m._fingerprint ?? ""}>
+                {m._fingerprint ? truncate(m._fingerprint, 24) : <span className="muted">—</span>}
               </td>
               <td className="muted">{m.addedAt ? new Date(m.addedAt).toLocaleDateString() : "—"}</td>
               <td>
@@ -53,4 +69,9 @@ export function Marketplaces() {
       </table>
     </div>
   );
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + "…";
 }

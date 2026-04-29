@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { useAuth } from "./store/auth";
 import { Login } from "./auth/Login";
 import { Callback } from "./auth/Callback";
@@ -28,14 +28,22 @@ export function App() {
           )
         }
       />
-      <Route path="/" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
 function Loading() {
   return (
-    <div style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", color: "var(--fg-3)", fontSize: 12 }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        color: "var(--fg-3)",
+        fontSize: 12,
+      }}
+    >
       Loading…
     </div>
   );

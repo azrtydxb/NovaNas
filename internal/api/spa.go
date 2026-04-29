@@ -22,9 +22,20 @@ func spaHandler(root string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		// Vite emits <script type="module" crossorigin>; the crossorigin
+		// attribute makes Chrome do a CORS fetch even for same-origin
+		// scripts. Without an ACAO header the script silently fails to
+		// execute (Chrome doesn't surface this as a console error in
+		// production builds). Set ACAO to the request's Origin so the
+		// browser is happy.
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		// If the requested file exists, serve it. Otherwise fall back
 		// to index.html so the SPA can render the route.
-		full := filepath.Join(root, clean)
 		if info, err := http.Dir(root).Open(clean); err == nil {
 			st, _ := info.Stat()
 			info.Close()
@@ -33,7 +44,6 @@ func spaHandler(root string) http.HandlerFunc {
 				return
 			}
 		}
-		_ = full
 		http.ServeFile(w, r, filepath.Join(root, "index.html"))
 	}
 }
