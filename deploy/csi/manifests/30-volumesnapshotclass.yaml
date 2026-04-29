@@ -1,0 +1,11 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: novanas-snapshots
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: csi.novanas.io
+# Delete: when the VolumeSnapshot/Content is deleted, the underlying ZFS
+# snapshot is destroyed too. Switch to Retain if you want manual GC.
+deletionPolicy: Delete
+parameters: {}

@@ -1,4 +1,4 @@
-.PHONY: build all-binaries deploy-bin deploy-package test test-integration test-e2e lint fmt gen gen-sqlc gen-openapi verify-openapi gen-ts run clean migrate-up migrate-down migrate-status
+.PHONY: build all-binaries deploy-bin deploy-package test test-integration test-e2e lint fmt gen gen-sqlc gen-openapi verify-openapi gen-ts run clean migrate-up migrate-down migrate-status csi-build csi-image csi-deploy csi-undeploy
 
 GO ?= go
 BIN := bin/nova-api
@@ -80,3 +80,25 @@ migrate-down:
 
 migrate-status:
 	goose -dir internal/store/migrations postgres "$(DB_URL)" status
+
+# ---------------------------------------------------------------------------
+# CSI driver
+# ---------------------------------------------------------------------------
+
+# csi-build builds the nova-csi binary into bin/ for local testing.
+csi-build:
+	mkdir -p bin
+	$(GO) build -trimpath -ldflags '-s -w' -o bin/nova-csi ./cmd/nova-csi
+
+# csi-image builds the container image. Set IMPORT_K3S=1 to also import
+# the image into the local k3s containerd.
+csi-image:
+	./deploy/csi/build-image.sh
+
+# csi-deploy applies the manifests to the current kubeconfig context.
+csi-deploy:
+	./deploy/csi/install.sh
+
+# csi-undeploy removes the driver but preserves PVs (orphan warning).
+csi-undeploy:
+	./deploy/csi/uninstall.sh

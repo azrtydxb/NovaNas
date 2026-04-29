@@ -1,0 +1,16 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: novanas-block
+provisioner: csi.novanas.io
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  pool: tank
+  parent: tank/csi
+  compression: lz4
+  volblocksize: "16K"
+  # Default fs for filesystem-volume-on-zvol consumers. Pods requesting
+  # `volumeMode: Block` get the raw device and ignore this.
+  fsType: ext4

@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nova-csi-node
+  namespace: nova-csi
+  labels:
+    app.kubernetes.io/name: nova-csi
+    app.kubernetes.io/component: node
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nova-csi
+      app.kubernetes.io/component: node
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nova-csi
+        app.kubernetes.io/component: node
+    spec:
+      serviceAccountName: nova-csi-node
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      tolerations:
+      - operator: Exists
+      nodeSelector:
+        kubernetes.io/hostname: novanas
+      containers:
+      - name: nova-csi
+        image: novanas/csi:dev
+        imagePullPolicy: Never
+        args:
+        - --endpoint=unix:///csi/csi.sock
+        - --node-id=$(NODE_NAME)
+        - --novanas-url=$(NOVANAS_URL)
+        - --novanas-token-file=/etc/nova-csi/token
+        - --novanas-ca-cert=/etc/nova-csi/ca.crt
+        - --default-pool=tank
+        - --default-parent=tank/csi
+        - --log-level=info
+        - --host-root-prefix=/host
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: NOVANAS_URL
+          value: https://192.168.10.204:8444
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: plugin-dir
+          mountPath: /csi
+        - name: kubelet-dir
+          mountPath: /var/lib/kubelet
+          mountPropagation: Bidirectional
+        - name: device-dir
+          mountPath: /dev
+        - name: host-zvol
+          mountPath: /dev/zvol
+          mountPropagation: HostToContainer
+        - name: nova-csi-secrets
+          mountPath: /etc/nova-csi
+          readOnly: true
+        - name: host-root
+          mountPath: /host
+          mountPropagation: HostToContainer
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      - name: csi-node-driver-registrar
+        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+        args:
+        - --csi-address=/csi/csi.sock
+        - --kubelet-registration-path=/var/lib/kubelet/plugins/csi.novanas.io/csi.sock
+        - --v=2
+        volumeMounts:
+        - name: plugin-dir
+          mountPath: /csi
+        - name: registration-dir
+          mountPath: /registration
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+      volumes:
+      - name: plugin-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins/csi.novanas.io
+          type: DirectoryOrCreate
+      - name: kubelet-dir
+        hostPath:
+          path: /var/lib/kubelet
+          type: Directory
+      - name: registration-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins_registry
+          type: Directory
+      - name: device-dir
+        hostPath:
+          path: /dev
+          type: Directory
+      - name: host-zvol
+        hostPath:
+          path: /dev/zvol
+          type: DirectoryOrCreate
+      - name: nova-csi-secrets
+        secret:
+          secretName: nova-csi-auth
+          defaultMode: 256
+          items:
+          - key: token
+            path: token
+          - key: ca.crt
+            path: ca.crt
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory

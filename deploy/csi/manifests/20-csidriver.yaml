@@ -1,0 +1,17 @@
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: csi.novanas.io
+spec:
+  # We don't use the kubelet's attach phase: filesystem volumes are bind-
+  # mounted and block volumes are exposed via /dev/zvol/<pool>/<dataset>
+  # directly. Skipping VolumeAttachment objects keeps the control plane
+  # quieter on a single-node cluster.
+  attachRequired: false
+  podInfoOnMount: false
+  volumeLifecycleModes:
+    - Persistent
+  # File policy: the CSI driver chowns the volume root to fsGroup before
+  # mount when a Pod requests one. Sufficient for both ZFS datasets and
+  # formatted zvols.
+  fsGroupPolicy: File
