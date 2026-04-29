@@ -1,14 +1,16 @@
 import { useRef, type ReactNode } from "react";
 import { useWM } from "./store";
+import { Icon, type IconName } from "../components/Icon";
 import type { WindowState } from "./types";
 
 type Props = {
   state: WindowState;
   title: string;
+  icon: IconName;
   children: ReactNode;
 };
 
-export function Window({ state, title, children }: Props) {
+export function Window({ state, title, icon, children }: Props) {
   const { focus, close, toggleMinimize, toggleMaximize, move, resize } = useWM();
   const isActive = useWM((s) => s.activeId === state.id);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
@@ -87,20 +89,21 @@ export function Window({ state, title, children }: Props) {
         onPointerUp={onBarPointerUp}
         onDoubleClick={() => toggleMaximize(state.id)}
       >
+        <Icon name={icon} size={11} style={{ marginRight: 6, color: "var(--fg-2)" }} />
         <span className="win__title">{title}</span>
         <span className="win__btns">
           <button className="win-btn" onClick={() => toggleMinimize(state.id)} aria-label="Minimize">
-            <span className="win-btn__glyph">−</span>
+            <Icon name="min" size={11} />
           </button>
           <button className="win-btn" onClick={() => toggleMaximize(state.id)} aria-label="Maximize">
-            <span className="win-btn__glyph">▢</span>
+            <Icon name="max" size={10} />
           </button>
           <button
             className="win-btn win-btn--close"
             onClick={() => close(state.id)}
             aria-label="Close"
           >
-            <span className="win-btn__glyph">×</span>
+            <Icon name="x" size={11} />
           </button>
         </span>
       </div>

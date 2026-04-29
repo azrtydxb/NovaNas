@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { IconName } from "../components/Icon";
 
 export type AppId =
   | "package-center"
@@ -22,7 +23,7 @@ export type AppId =
 export type AppDef = {
   id: AppId;
   title: string;
-  icon: string;
+  icon: IconName;
   defaultSize: { w: number; h: number };
   Component: ComponentType;
 };

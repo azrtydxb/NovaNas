@@ -7,6 +7,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 
 import "./styles/base.css";
 import "./styles/aurora.css";
+import "./styles/graphite.css";
+import "./styles/aether.css";
 import "./styles/app.css";
 
 const qc = new QueryClient({

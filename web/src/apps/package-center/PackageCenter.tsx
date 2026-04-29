@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Discover } from "./Discover";
+import { Installed } from "./Installed";
 import { Marketplaces } from "./Marketplaces";
 
 type Tab = "discover" | "installed" | "marketplaces";
@@ -17,9 +18,7 @@ export function PackageCenter() {
       </div>
       <div className="app-pkg__body">
         {tab === "discover" && <Discover />}
-        {tab === "installed" && (
-          <div className="app-pkg__placeholder">Installed plugins — wiring up next.</div>
-        )}
+        {tab === "installed" && <Installed />}
         {tab === "marketplaces" && <Marketplaces />}
       </div>
     </div>

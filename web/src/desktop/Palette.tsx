@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_LIST } from "../wm/registry";
 import { useWM } from "../wm/store";
+import { Icon } from "../components/Icon";
 
 export function Palette({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
@@ -60,7 +61,9 @@ export function Palette({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
             >
-              <span className="palette__icon">{a.title.charAt(0)}</span>
+              <span className="palette__icon">
+                <Icon name={a.icon} size={14} />
+              </span>
               <span className="palette__lbl">{a.title}</span>
               <span className="palette__hint">app</span>
             </li>
