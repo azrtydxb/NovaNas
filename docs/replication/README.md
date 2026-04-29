@@ -151,6 +151,40 @@ curl -X PATCH -H 'Content-Type: application/json' \
 curl -X DELETE https://nova.local/api/v1/replication-jobs/${ID}
 ```
 
+## Operator note: deprecation of the scheduler-driven replication path
+
+The endpoints under `/api/v1/replication-jobs` are the supported way to
+configure replication going forward. The previous, narrower path that
+combined `replication_targets` + `replication_schedules` (managed by
+`internal/host/scheduler` and exposed under
+`/api/v1/scheduler/replication-schedules`) is **deprecated** and no
+longer the target of new development.
+
+- Existing rows in `replication_targets` / `replication_schedules` are
+  left in place; the old scheduler tick loop continues to fire them so
+  ZFS-only deployments that already configured them keep working.
+- The new general subsystem does **not** auto-migrate those rows. There
+  is no shared state between the two paths; running both simultaneously
+  is fine but configuration must be duplicated by hand.
+- If demand exists we will ship a `nova-api migrate-replication` helper
+  that translates the legacy rows into `replication_jobs`. Until then,
+  operators with existing replication_schedules should rebuild them
+  through the new API at their own cadence.
+
+## Operator setup: per-job credentials in OpenBao
+
+The new subsystem reads per-job credentials from the secrets manager
+(`internal/host/secrets`, file or OpenBao backend) at run time. Keys
+live under `nova/replication/<job-id>/`:
+
+- `nova/replication/<id>/s3-access-key`  — S3 access key id
+- `nova/replication/<id>/s3-secret-key`  — S3 secret key
+- `nova/replication/<id>/ssh-key`        — SSH private key (PEM)
+
+Values are written by the operator before the first run; the API will
+not accept credentials in request bodies. On `DELETE` of a job, all
+secrets under the job's prefix are removed best-effort.
+
 ## Troubleshooting
 
 - A run stuck in `running` past its lock TTL (default 6 hours) means

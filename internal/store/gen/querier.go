@@ -13,6 +13,10 @@ import (
 type Querier interface {
 	CancelJob(ctx context.Context, id pgtype.UUID) error
 	// =====================================================================
+	// Replication jobs + runs (internal/replication subsystem)
+	// =====================================================================
+	CreateReplicationJob(ctx context.Context, arg CreateReplicationJobParams) (ReplicationJob, error)
+	// =====================================================================
 	// Replication schedules
 	// =====================================================================
 	CreateReplicationSchedule(ctx context.Context, arg CreateReplicationScheduleParams) (ReplicationSchedule, error)
@@ -28,12 +32,14 @@ type Querier interface {
 	// Snapshot schedules
 	// =====================================================================
 	CreateSnapshotSchedule(ctx context.Context, arg CreateSnapshotScheduleParams) (SnapshotSchedule, error)
+	DeleteReplicationJob(ctx context.Context, id pgtype.UUID) error
 	DeleteReplicationSchedule(ctx context.Context, id pgtype.UUID) error
 	DeleteReplicationTarget(ctx context.Context, id pgtype.UUID) error
 	DeleteResourceMetadata(ctx context.Context, arg DeleteResourceMetadataParams) error
 	DeleteScrubPolicy(ctx context.Context, id pgtype.UUID) error
 	DeleteSnapshotSchedule(ctx context.Context, id pgtype.UUID) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetReplicationJob(ctx context.Context, id pgtype.UUID) (ReplicationJob, error)
 	GetReplicationSchedule(ctx context.Context, id pgtype.UUID) (ReplicationSchedule, error)
 	GetReplicationTarget(ctx context.Context, id pgtype.UUID) (ReplicationTarget, error)
 	GetResourceMetadata(ctx context.Context, arg GetResourceMetadataParams) (ResourceMetadatum, error)
@@ -42,11 +48,16 @@ type Querier interface {
 	GetSnapshotSchedule(ctx context.Context, id pgtype.UUID) (SnapshotSchedule, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertJob(ctx context.Context, arg InsertJobParams) (Job, error)
+	InsertReplicationRun(ctx context.Context, arg InsertReplicationRunParams) (ReplicationRun, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListEnabledReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
 	ListEnabledReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
 	ListEnabledScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListEnabledSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
+	ListReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
+	ListReplicationRuns(ctx context.Context, arg ListReplicationRunsParams) ([]ReplicationRun, error)
+	ListReplicationRunsAfter(ctx context.Context, arg ListReplicationRunsAfterParams) ([]ReplicationRun, error)
 	ListReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
 	ListReplicationTargets(ctx context.Context) ([]ReplicationTarget, error)
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
@@ -58,6 +69,7 @@ type Querier interface {
 	// though the host effect can't be unwound.
 	MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error
 	MarkJobRunning(ctx context.Context, id pgtype.UUID) error
+	MarkReplicationJobFired(ctx context.Context, arg MarkReplicationJobFiredParams) error
 	MarkReplicationScheduleFired(ctx context.Context, arg MarkReplicationScheduleFiredParams) error
 	MarkReplicationScheduleResult(ctx context.Context, arg MarkReplicationScheduleResultParams) error
 	MarkRunningInterrupted(ctx context.Context) error
@@ -71,6 +83,8 @@ type Querier interface {
 	// Aggregate counts grouped by (actor, action, result) within an optional
 	// time window. Used by the /audit/summary endpoint.
 	SummaryAudit(ctx context.Context, arg SummaryAuditParams) ([]SummaryAuditRow, error)
+	UpdateReplicationJob(ctx context.Context, arg UpdateReplicationJobParams) (ReplicationJob, error)
+	UpdateReplicationRun(ctx context.Context, arg UpdateReplicationRunParams) (ReplicationRun, error)
 	UpdateReplicationSchedule(ctx context.Context, arg UpdateReplicationScheduleParams) (ReplicationSchedule, error)
 	UpdateReplicationTarget(ctx context.Context, arg UpdateReplicationTargetParams) (ReplicationTarget, error)
 	UpdateScrubPolicy(ctx context.Context, arg UpdateScrubPolicyParams) (ScrubPolicy, error)

@@ -224,6 +224,34 @@ func (m *Manager) Run(ctx context.Context, jobID uuid.UUID) (Run, error) {
 	return run, execErr
 }
 
+// SecretsManager is the secret-storage facade [New] uses to construct
+// per-run backends. It is intentionally a tiny interface so tests can
+// pass a fake without depending on internal/host/secrets.
+type SecretsManager interface {
+	Get(ctx context.Context, key string) ([]byte, error)
+	Delete(ctx context.Context, key string) error
+	List(ctx context.Context, prefix string) ([]string, error)
+}
+
+// AsynqClient is the slice of *asynq.Client this package needs. Callers
+// can pass *asynq.Client directly. The interface keeps internal/replication
+// from importing the concrete asynq dependency at top level.
+type AsynqClient interface{}
+
+// New is a convenience constructor that wires Manager with the
+// production dependencies. Backends are still passed explicitly because
+// their concrete construction (e.g. zfs vs s3 vs rsync) varies per run
+// and is not the manager's concern. The asynq client and secrets
+// manager are accepted but not used by the manager itself — they are
+// here for symmetry with the rest of the codebase's "constructor takes
+// every dep" idiom; the worker is the place that resolves secrets and
+// builds backends per run (see internal/jobs/replication_task.go).
+//
+// Tests should keep using NewManager + NewMemStore + NewMemLocker.
+func New(store Store, locker Locker, backends []Backend, opts ManagerOptions, _ SecretsManager, _ AsynqClient) *Manager {
+	return NewManager(store, locker, backends, opts)
+}
+
 // ----- in-memory implementations for tests / dev -----
 
 // MemStore is a Store implementation that holds everything in memory.

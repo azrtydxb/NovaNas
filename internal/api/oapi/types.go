@@ -400,6 +400,111 @@ func (e Protocol) Valid() bool {
 	}
 }
 
+// Defines values for ReplicationJobBackend.
+const (
+	ReplicationJobBackendRsync ReplicationJobBackend = "rsync"
+	ReplicationJobBackendS3    ReplicationJobBackend = "s3"
+	ReplicationJobBackendZfs   ReplicationJobBackend = "zfs"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationJobBackend enum.
+func (e ReplicationJobBackend) Valid() bool {
+	switch e {
+	case ReplicationJobBackendRsync:
+		return true
+	case ReplicationJobBackendS3:
+		return true
+	case ReplicationJobBackendZfs:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReplicationJobDirection.
+const (
+	ReplicationJobDirectionPull ReplicationJobDirection = "pull"
+	ReplicationJobDirectionPush ReplicationJobDirection = "push"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationJobDirection enum.
+func (e ReplicationJobDirection) Valid() bool {
+	switch e {
+	case ReplicationJobDirectionPull:
+		return true
+	case ReplicationJobDirectionPush:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReplicationJobDetailBackend.
+const (
+	ReplicationJobDetailBackendRsync ReplicationJobDetailBackend = "rsync"
+	ReplicationJobDetailBackendS3    ReplicationJobDetailBackend = "s3"
+	ReplicationJobDetailBackendZfs   ReplicationJobDetailBackend = "zfs"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationJobDetailBackend enum.
+func (e ReplicationJobDetailBackend) Valid() bool {
+	switch e {
+	case ReplicationJobDetailBackendRsync:
+		return true
+	case ReplicationJobDetailBackendS3:
+		return true
+	case ReplicationJobDetailBackendZfs:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReplicationJobDetailDirection.
+const (
+	ReplicationJobDetailDirectionPull ReplicationJobDetailDirection = "pull"
+	ReplicationJobDetailDirectionPush ReplicationJobDetailDirection = "push"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationJobDetailDirection enum.
+func (e ReplicationJobDetailDirection) Valid() bool {
+	switch e {
+	case ReplicationJobDetailDirectionPull:
+		return true
+	case ReplicationJobDetailDirectionPush:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReplicationRunOutcome.
+const (
+	ReplicationRunOutcomeCancelled ReplicationRunOutcome = "cancelled"
+	ReplicationRunOutcomeFailed    ReplicationRunOutcome = "failed"
+	ReplicationRunOutcomePending   ReplicationRunOutcome = "pending"
+	ReplicationRunOutcomeRunning   ReplicationRunOutcome = "running"
+	ReplicationRunOutcomeSucceeded ReplicationRunOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationRunOutcome enum.
+func (e ReplicationRunOutcome) Valid() bool {
+	switch e {
+	case ReplicationRunOutcomeCancelled:
+		return true
+	case ReplicationRunOutcomeFailed:
+		return true
+	case ReplicationRunOutcomePending:
+		return true
+	case ReplicationRunOutcomeRunning:
+		return true
+	case ReplicationRunOutcomeSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SMTPConfigTlsMode.
 const (
 	None     SMTPConfigTlsMode = "none"
@@ -564,28 +669,28 @@ func (e ExportAuditParamsOutcome) Valid() bool {
 
 // Defines values for ListJobsParamsState.
 const (
-	Cancelled   ListJobsParamsState = "cancelled"
-	Failed      ListJobsParamsState = "failed"
-	Interrupted ListJobsParamsState = "interrupted"
-	Queued      ListJobsParamsState = "queued"
-	Running     ListJobsParamsState = "running"
-	Succeeded   ListJobsParamsState = "succeeded"
+	ListJobsParamsStateCancelled   ListJobsParamsState = "cancelled"
+	ListJobsParamsStateFailed      ListJobsParamsState = "failed"
+	ListJobsParamsStateInterrupted ListJobsParamsState = "interrupted"
+	ListJobsParamsStateQueued      ListJobsParamsState = "queued"
+	ListJobsParamsStateRunning     ListJobsParamsState = "running"
+	ListJobsParamsStateSucceeded   ListJobsParamsState = "succeeded"
 )
 
 // Valid indicates whether the value is a known member of the ListJobsParamsState enum.
 func (e ListJobsParamsState) Valid() bool {
 	switch e {
-	case Cancelled:
+	case ListJobsParamsStateCancelled:
 		return true
-	case Failed:
+	case ListJobsParamsStateFailed:
 		return true
-	case Interrupted:
+	case ListJobsParamsStateInterrupted:
 		return true
-	case Queued:
+	case ListJobsParamsStateQueued:
 		return true
-	case Running:
+	case ListJobsParamsStateRunning:
 		return true
-	case Succeeded:
+	case ListJobsParamsStateSucceeded:
 		return true
 	default:
 		return false
@@ -1242,6 +1347,99 @@ type RdmaAdapterPort struct {
 	State string `json:"state"`
 }
 
+// ReplicationJob defines model for ReplicationJob.
+type ReplicationJob struct {
+	Backend   ReplicationJobBackend `json:"backend"`
+	CreatedAt *time.Time            `json:"createdAt,omitempty"`
+
+	// Destination Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.
+	Destination *ReplicationSpec        `json:"destination,omitempty"`
+	Direction   ReplicationJobDirection `json:"direction"`
+	Enabled     *bool                   `json:"enabled,omitempty"`
+	Id          *openapi_types.UUID     `json:"id,omitempty"`
+
+	// LastSnapshot Last replicated snapshot (zfs only).
+	LastSnapshot *string `json:"lastSnapshot,omitempty"`
+	Name         string  `json:"name"`
+
+	// Retention Run retention policy. Zero values mean "no limit" for that bucket.
+	Retention *RetentionPolicy `json:"retention,omitempty"`
+
+	// Schedule 5-field cron expression. Empty = manual-only.
+	Schedule *string `json:"schedule,omitempty"`
+
+	// SecretRef OpenBao key prefix for credentials, e.g. nova/replication/<id>.
+	SecretRef *string `json:"secretRef,omitempty"`
+
+	// Source Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.
+	Source    *ReplicationSpec `json:"source,omitempty"`
+	UpdatedAt *time.Time       `json:"updatedAt,omitempty"`
+}
+
+// ReplicationJobBackend defines model for ReplicationJob.Backend.
+type ReplicationJobBackend string
+
+// ReplicationJobDirection defines model for ReplicationJob.Direction.
+type ReplicationJobDirection string
+
+// ReplicationJobDetail defines model for ReplicationJobDetail.
+type ReplicationJobDetail struct {
+	Backend   ReplicationJobDetailBackend `json:"backend"`
+	CreatedAt *time.Time                  `json:"createdAt,omitempty"`
+
+	// Destination Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.
+	Destination *ReplicationSpec              `json:"destination,omitempty"`
+	Direction   ReplicationJobDetailDirection `json:"direction"`
+	Enabled     *bool                         `json:"enabled,omitempty"`
+	Id          *openapi_types.UUID           `json:"id,omitempty"`
+
+	// LastSnapshot Last replicated snapshot (zfs only).
+	LastSnapshot *string `json:"lastSnapshot,omitempty"`
+	Name         string  `json:"name"`
+
+	// Retention Run retention policy. Zero values mean "no limit" for that bucket.
+	Retention *RetentionPolicy  `json:"retention,omitempty"`
+	Runs      *[]ReplicationRun `json:"runs,omitempty"`
+
+	// Schedule 5-field cron expression. Empty = manual-only.
+	Schedule *string `json:"schedule,omitempty"`
+
+	// SecretRef OpenBao key prefix for credentials, e.g. nova/replication/<id>.
+	SecretRef *string `json:"secretRef,omitempty"`
+
+	// Source Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.
+	Source    *ReplicationSpec `json:"source,omitempty"`
+	UpdatedAt *time.Time       `json:"updatedAt,omitempty"`
+}
+
+// ReplicationJobDetailBackend defines model for ReplicationJobDetail.Backend.
+type ReplicationJobDetailBackend string
+
+// ReplicationJobDetailDirection defines model for ReplicationJobDetail.Direction.
+type ReplicationJobDetailDirection string
+
+// ReplicationRun defines model for ReplicationRun.
+type ReplicationRun struct {
+	BytesTransferred int64                 `json:"bytesTransferred"`
+	Error            *string               `json:"error,omitempty"`
+	FinishedAt       *time.Time            `json:"finishedAt,omitempty"`
+	Id               openapi_types.UUID    `json:"id"`
+	JobId            openapi_types.UUID    `json:"jobId"`
+	Outcome          ReplicationRunOutcome `json:"outcome"`
+	Snapshot         *string               `json:"snapshot,omitempty"`
+	StartedAt        time.Time             `json:"startedAt"`
+}
+
+// ReplicationRunOutcome defines model for ReplicationRun.Outcome.
+type ReplicationRunOutcome string
+
+// ReplicationRunsPage defines model for ReplicationRunsPage.
+type ReplicationRunsPage struct {
+	// NextCursor Opaque cursor; absent on the last page.
+	NextCursor *string          `json:"nextCursor,omitempty"`
+	Runs       []ReplicationRun `json:"runs"`
+}
+
 // ReplicationSchedule defines model for ReplicationSchedule.
 type ReplicationSchedule struct {
 	Cron            *string             `json:"cron,omitempty"`
@@ -1251,6 +1449,31 @@ type ReplicationSchedule struct {
 	SnapshotPrefix  *string             `json:"snapshotPrefix,omitempty"`
 	SrcDataset      *string             `json:"srcDataset,omitempty"`
 	TargetId        *openapi_types.UUID `json:"targetId,omitempty"`
+}
+
+// ReplicationSpec Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.
+type ReplicationSpec struct {
+	// Bucket S3 bucket — s3 only.
+	Bucket *string `json:"bucket,omitempty"`
+
+	// Dataset ZFS dataset (e.g. tank/data) — zfs/rsync.
+	Dataset *string `json:"dataset,omitempty"`
+
+	// Endpoint S3 endpoint URL (RustFS/MinIO/...).
+	Endpoint *string `json:"endpoint,omitempty"`
+
+	// Host Remote host — zfs/rsync.
+	Host *string `json:"host,omitempty"`
+
+	// Path Local filesystem path — rsync/s3-push.
+	Path *string `json:"path,omitempty"`
+
+	// Prefix S3 key prefix — s3 only.
+	Prefix *string `json:"prefix,omitempty"`
+
+	// Region S3 region.
+	Region  *string `json:"region,omitempty"`
+	SshUser *string `json:"sshUser,omitempty"`
 }
 
 // ReplicationTarget defines model for ReplicationTarget.
@@ -1272,6 +1495,15 @@ type ResourceMetadata struct {
 	Kind        *string            `json:"kind,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
 	ZfsName     *string            `json:"zfsName,omitempty"`
+}
+
+// RetentionPolicy Run retention policy. Zero values mean "no limit" for that bucket.
+type RetentionPolicy struct {
+	KeepDaily   *int `json:"keepDaily,omitempty"`
+	KeepLastN   *int `json:"keepLastN,omitempty"`
+	KeepMonthly *int `json:"keepMonthly,omitempty"`
+	KeepWeekly  *int `json:"keepWeekly,omitempty"`
+	KeepYearly  *int `json:"keepYearly,omitempty"`
 }
 
 // SMTPConfig Outbound SMTP relay configuration. The `password` field is
@@ -1726,6 +1958,18 @@ type GetProtocolShareParams struct {
 	Dataset string `form:"dataset" json:"dataset"`
 }
 
+// GetReplicationJobParams defines parameters for GetReplicationJob.
+type GetReplicationJobParams struct {
+	// Runs Number of recent runs to embed in the response (default 10).
+	Runs *int `form:"runs,omitempty" json:"runs,omitempty"`
+}
+
+// ListReplicationRunsParams defines parameters for ListReplicationRuns.
+type ListReplicationRunsParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListSnapshotsParams defines parameters for ListSnapshots.
 type ListSnapshotsParams struct {
 	Dataset *string `form:"dataset,omitempty" json:"dataset,omitempty"`
@@ -1874,6 +2118,12 @@ type CreateProtocolShareJSONRequestBody = ProtocolShare
 
 // UpdateProtocolShareJSONRequestBody defines body for UpdateProtocolShare for application/json ContentType.
 type UpdateProtocolShareJSONRequestBody = ProtocolShare
+
+// CreateReplicationJobJSONRequestBody defines body for CreateReplicationJob for application/json ContentType.
+type CreateReplicationJobJSONRequestBody = ReplicationJob
+
+// UpdateReplicationJobJSONRequestBody defines body for UpdateReplicationJob for application/json ContentType.
+type UpdateReplicationJobJSONRequestBody = ReplicationJob
 
 // SetSambaGlobalsJSONRequestBody defines body for SetSambaGlobals for application/json ContentType.
 type SetSambaGlobalsJSONRequestBody = SambaGlobalsOpts

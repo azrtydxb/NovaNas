@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api"
@@ -39,6 +40,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
 	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/logging"
+	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/scrubpolicy"
 	"github.com/novanas/nova-nas/internal/store"
 )
@@ -195,6 +197,22 @@ func main() {
 		logger.Error("recovery", "err", err)
 	}
 
+	// Replication subsystem (general, supersedes the scheduler-driven
+	// path for new jobs). Backends with no concrete deps wired today
+	// validate jobs and reject runs at execute-time; the worker handler
+	// resolves credentials per run via the secrets manager.
+	replStore := replication.NewPgxStore(st.Queries)
+	replMgr := replication.NewManager(
+		replStore,
+		replication.NewMemLocker(),
+		[]replication.Backend{
+			&replication.ZFSBackend{},
+			&replication.S3Backend{},
+			&replication.RsyncBackend{},
+		},
+		replication.ManagerOptions{Logger: logger},
+	)
+
 	asyncSrv := asynq.NewServer(asynqRedisOpt, asynq.Config{
 		Concurrency: 4,
 		Logger:      asynqSlogAdapter{l: logger},
@@ -219,6 +237,11 @@ func main() {
 		ProtocolShareMgr: psMgr,
 		Metrics:          metricsReg.Jobs,
 	})
+	// Register the new general replication-run handler. Coexists with
+	// the older scheduler.replication.fire kind in NewServeMux for
+	// backward compat.
+	mux.Handle(string(jobs.KindReplicationRun), jobs.HandleReplicationRun(replMgr))
+
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
 			// Mirror the HTTP listener: a dead worker is a hard failure.
@@ -264,6 +287,14 @@ func main() {
 		}
 	}()
 
+	// Start the cron-tick loop for replication jobs. We re-use the same
+	// cron parser the snapshot scheduler uses (internal/host/scheduler)
+	// and dispatch via the existing jobs.Dispatcher so /jobs metadata
+	// stays uniform across kinds.
+	replCtx, replCancel := context.WithCancel(context.Background())
+	defer replCancel()
+	go runReplicationScheduler(replCtx, logger, replStore, dispatcher)
+
 	srv := api.New(api.Deps{
 		Logger:     logger,
 		Store:      st,
@@ -290,6 +321,7 @@ func main() {
 		ProtocolShareMgr: psMgr,
 		SMTPMgr:          smtpMgr,
 		EncryptionMgr:    buildEncryptionMgr(logger, datasetMgr, secretsMgr),
+		ReplicationMgr:   replMgr,
 
 		Verifier:     verifier,
 		RoleMap:      auth.DefaultRoleMap,
@@ -398,6 +430,66 @@ func buildEncryptionMgr(logger *slog.Logger, dsMgr *dataset.Manager, secretsMgr 
 		ZFSBin:  zfsBin,
 		Sealer:  sealer,
 		Secrets: secretsMgr,
+	}
+}
+
+// runReplicationScheduler is the cron tick loop for replication jobs.
+// On every tick it lists enabled jobs, evaluates each job's cron
+// expression against (last_fired_at, now] using the existing scheduler
+// cron parser, and dispatches an Asynq replication.run task per match.
+//
+// It runs entirely off the database so the cron registration is
+// idempotent across restarts: the act of having a row with a non-empty
+// schedule is the registration. There is no in-memory cron table to
+// drift from disk.
+func runReplicationScheduler(ctx context.Context, logger *slog.Logger, store *replication.PgxStore, d *jobs.Dispatcher) {
+	tick := time.NewTicker(60 * time.Second)
+	defer tick.Stop()
+	loop := func() {
+		now := time.Now().UTC()
+		js, err := store.ListEnabledJobs(ctx)
+		if err != nil {
+			logger.Error("replication scheduler: list enabled", "err", err)
+			return
+		}
+		for _, j := range js {
+			if j.Schedule == "" {
+				continue
+			}
+			expr, err := scheduler.ParseCron(j.Schedule)
+			if err != nil {
+				logger.Warn("replication scheduler: bad cron, skipping", "id", j.ID.String(), "cron", j.Schedule, "err", err)
+				continue
+			}
+			// We don't have last_fired_at on replication.Job today; use
+			// updated_at as the lower bound. This means a freshly-edited
+			// job won't double-fire on the minute it was edited; that
+			// trade-off is acceptable for v1.
+			prev := j.UpdatedAt
+			if !expr.ShouldFireBetween(prev, now, time.UTC) {
+				continue
+			}
+			if _, derr := jobs.DispatchReplication(ctx, d, j.ID, "scheduler:tick", "replication-scheduler"); derr != nil {
+				if errors.Is(derr, jobs.ErrDuplicate) {
+					continue
+				}
+				logger.Error("replication scheduler: dispatch failed", "id", j.ID.String(), "err", derr)
+				continue
+			}
+			pgts := pgtype.Timestamptz{Time: now, Valid: true}
+			if err := store.MarkFired(ctx, j.ID, pgts); err != nil {
+				logger.Warn("replication scheduler: mark fired", "id", j.ID.String(), "err", err)
+			}
+		}
+	}
+	loop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			loop()
+		}
 	}
 }
 

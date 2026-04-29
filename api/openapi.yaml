@@ -2195,6 +2195,116 @@ paths:
       responses:
         '204': { description: Deleted }
 
+  /replication-jobs:
+    get:
+      operationId: listReplicationJobs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReplicationJob' }
+    post:
+      operationId: createReplicationJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplicationJob' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /replication-jobs/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getReplicationJob
+      parameters:
+        - in: query
+          name: runs
+          schema: { type: integer, minimum: 0, maximum: 100 }
+          description: 'Number of recent runs to embed in the response (default 10).'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationJobDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateReplicationJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplicationJob' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteReplicationJob
+      responses:
+        '204': { description: Deleted }
+
+  /replication-jobs/{id}/run:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: runReplicationJob
+      summary: Trigger an ad-hoc replication run, bypassing the schedule.
+      responses:
+        '202':
+          description: Enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId]
+                properties:
+                  jobId: { type: string, format: uuid }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Another run is already in flight for this job. }
+
+  /replication-jobs/{id}/runs:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listReplicationRuns
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200 }
+        - in: query
+          name: cursor
+          schema: { type: string, description: 'Opaque pagination cursor; pass the previous response''s nextCursor.' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationRunsPage' }
+
   /scheduler/replication-schedules/{id}:
     parameters:
       - in: path
@@ -3203,6 +3313,73 @@ components:
         snapshotPrefix:  { type: string }
         retentionRemote: { type: integer }
         enabled:         { type: boolean }
+
+    ReplicationSpec:
+      description: 'Per-backend connection details. Only the fields meaningful to the chosen backend + direction need to be set.'
+      type: object
+      properties:
+        dataset:  { type: string, description: 'ZFS dataset (e.g. tank/data) — zfs/rsync.' }
+        path:     { type: string, description: 'Local filesystem path — rsync/s3-push.' }
+        host:     { type: string, description: 'Remote host — zfs/rsync.' }
+        sshUser:  { type: string }
+        bucket:   { type: string, description: 'S3 bucket — s3 only.' }
+        prefix:   { type: string, description: 'S3 key prefix — s3 only.' }
+        endpoint: { type: string, description: 'S3 endpoint URL (RustFS/MinIO/...).' }
+        region:   { type: string, description: 'S3 region.' }
+    RetentionPolicy:
+      description: 'Run retention policy. Zero values mean "no limit" for that bucket.'
+      type: object
+      properties:
+        keepLastN:   { type: integer, minimum: 0 }
+        keepDaily:   { type: integer, minimum: 0 }
+        keepWeekly:  { type: integer, minimum: 0 }
+        keepMonthly: { type: integer, minimum: 0 }
+        keepYearly:  { type: integer, minimum: 0 }
+    ReplicationJob:
+      type: object
+      required: [name, backend, direction]
+      properties:
+        id:           { type: string, format: uuid, readOnly: true }
+        name:         { type: string }
+        backend:      { type: string, enum: [zfs, s3, rsync] }
+        direction:    { type: string, enum: [push, pull] }
+        source:       { $ref: '#/components/schemas/ReplicationSpec' }
+        destination:  { $ref: '#/components/schemas/ReplicationSpec' }
+        schedule:     { type: string, description: '5-field cron expression. Empty = manual-only.' }
+        retention:    { $ref: '#/components/schemas/RetentionPolicy' }
+        enabled:      { type: boolean }
+        secretRef:    { type: string, description: 'OpenBao key prefix for credentials, e.g. nova/replication/<id>.' }
+        lastSnapshot: { type: string, description: 'Last replicated snapshot (zfs only).', readOnly: true }
+        createdAt:    { type: string, format: date-time, readOnly: true }
+        updatedAt:    { type: string, format: date-time, readOnly: true }
+    ReplicationRun:
+      type: object
+      required: [id, jobId, startedAt, outcome, bytesTransferred]
+      properties:
+        id:               { type: string, format: uuid }
+        jobId:            { type: string, format: uuid }
+        startedAt:        { type: string, format: date-time }
+        finishedAt:       { type: string, format: date-time }
+        outcome:          { type: string, enum: [pending, running, succeeded, failed, cancelled] }
+        bytesTransferred: { type: integer, format: int64 }
+        snapshot:         { type: string }
+        error:            { type: string }
+    ReplicationJobDetail:
+      allOf:
+        - $ref: '#/components/schemas/ReplicationJob'
+        - type: object
+          properties:
+            runs:
+              type: array
+              items: { $ref: '#/components/schemas/ReplicationRun' }
+    ReplicationRunsPage:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: '#/components/schemas/ReplicationRun' }
+        nextCursor: { type: string, description: 'Opaque cursor; absent on the last page.' }
 
     ScrubPolicy:
       type: object

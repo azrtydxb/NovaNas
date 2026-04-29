@@ -35,6 +35,34 @@ type Job struct {
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
 }
 
+type ReplicationJob struct {
+	ID              pgtype.UUID        `json:"id"`
+	Name            string             `json:"name"`
+	Backend         string             `json:"backend"`
+	Direction       string             `json:"direction"`
+	SourceJson      []byte             `json:"source_json"`
+	DestinationJson []byte             `json:"destination_json"`
+	Schedule        string             `json:"schedule"`
+	RetentionJson   []byte             `json:"retention_json"`
+	Enabled         bool               `json:"enabled"`
+	SecretRef       string             `json:"secret_ref"`
+	LastSnapshot    string             `json:"last_snapshot"`
+	LastFiredAt     pgtype.Timestamptz `json:"last_fired_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ReplicationRun struct {
+	ID               pgtype.UUID        `json:"id"`
+	JobID            pgtype.UUID        `json:"job_id"`
+	StartedAt        pgtype.Timestamptz `json:"started_at"`
+	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
+	Outcome          string             `json:"outcome"`
+	BytesTransferred int64              `json:"bytes_transferred"`
+	Snapshot         string             `json:"snapshot"`
+	Error            string             `json:"error"`
+}
+
 type ReplicationSchedule struct {
 	ID               pgtype.UUID        `json:"id"`
 	SrcDataset       string             `json:"src_dataset"`

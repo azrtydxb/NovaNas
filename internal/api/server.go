@@ -2,9 +2,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
@@ -29,6 +32,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
+	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
@@ -60,6 +64,10 @@ type Deps struct {
 	// EncryptionMgr is the TPM-sealed ZFS native-encryption manager.
 	// When nil, the /encryption* endpoints return 503.
 	EncryptionMgr *dataset.EncryptionManager
+
+	// ReplicationMgr is the general-replication subsystem manager. When
+	// nil the /replication-jobs endpoints are not mounted.
+	ReplicationMgr *replication.Manager
 
 	// Auth wiring. If Verifier is nil OR AuthDisabled is true, the
 	// /api/v1 group does not enforce authentication or per-route
@@ -573,6 +581,35 @@ func New(d Deps) *Server {
 				r.Delete("/scrub-policies/{id}", scrubH.Delete)
 			})
 
+			// Replication jobs. Read endpoints are gated on
+			// PermReplicationRead; create/update/delete and the ad-hoc
+			// /run trigger require PermReplicationWrite. The handler is
+			// only mounted when ReplicationMgr is wired (production path).
+			if d.ReplicationMgr != nil {
+				replH := &handlers.ReplicationHandler{
+					Logger:     d.Logger,
+					Mgr:        d.ReplicationMgr,
+					Dispatcher: d.Dispatcher,
+					Secrets:    nil,
+				}
+				if d.Secrets != nil {
+					replH.Secrets = &replicationSecretsCleaner{m: d.Secrets}
+				}
+				r.Group(func(r chi.Router) {
+					r.Use(require(auth.PermReplicationRead))
+					r.Get("/replication-jobs", replH.List)
+					r.Get("/replication-jobs/{id}", replH.Get)
+					r.Get("/replication-jobs/{id}/runs", replH.Runs)
+				})
+				r.Group(func(r chi.Router) {
+					r.Use(require(auth.PermReplicationWrite))
+					r.Post("/replication-jobs", replH.Create)
+					r.Patch("/replication-jobs/{id}", replH.Update)
+					r.Delete("/replication-jobs/{id}", replH.Delete)
+					r.Post("/replication-jobs/{id}/run", replH.Run)
+				})
+			}
+
 			// Audit read & export. Gated on PermAuditRead — operator+
 			// only. nova-viewer intentionally lacks this permission so
 			// reading the audit log doesn't itself become a stealthy
@@ -591,6 +628,18 @@ func New(d Deps) *Server {
 }
 
 func (s *Server) Handler() http.Handler { return s.router }
+
+// replicationSecretsCleaner adapts secrets.Manager to the
+// handlers.ReplicationSecretsCleaner interface so the handler can
+// purge per-job secrets on DELETE without a direct dep on the secrets
+// package.
+type replicationSecretsCleaner struct {
+	m secrets.Manager
+}
+
+func (c *replicationSecretsCleaner) DeleteJobSecrets(ctx context.Context, id uuid.UUID) error {
+	return replication.DeleteJobSecrets(ctx, c.m, id)
+}
 
 // authMeHandler returns the authenticated identity attached to the
 // request context by the auth middleware. When auth is disabled it
