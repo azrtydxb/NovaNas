@@ -142,6 +142,11 @@ type Deps struct {
 	// main listener does NOT also expose the endpoint.
 	Metrics        *metrics.Metrics
 	MetricsHandler http.Handler
+
+	// WebRoot, when non-empty, serves the V2 console SPA out of this
+	// directory. Non-/api requests that don't hit a file fall through
+	// to index.html so the SPA's client-side router can take over.
+	WebRoot string
 }
 
 type Server struct {
@@ -176,9 +181,13 @@ func New(d Deps) *Server {
 	if d.MetricsHandler != nil {
 		r.Method(http.MethodGet, "/metrics", d.MetricsHandler)
 	}
-	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-		mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
-	})
+	if d.WebRoot != "" {
+		r.NotFound(spaHandler(d.WebRoot))
+	} else {
+		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+			mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
+		})
+	}
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		mw.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed for this route")
 	})

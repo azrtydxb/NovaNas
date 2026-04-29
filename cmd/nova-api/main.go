@@ -511,6 +511,8 @@ func main() {
 
 		Metrics:        metricsReg,
 		MetricsHandler: metricsHandlerFor(cfg.MetricsAddr, metricsReg),
+
+		WebRoot: os.Getenv("WEB_ROOT"),
 	})
 
 	// Optional dedicated listener for /metrics. When METRICS_ADDR is set
