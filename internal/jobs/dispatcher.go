@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/novanas/nova-nas/internal/api/metrics"
 	storedb "github.com/novanas/nova-nas/internal/store/gen"
 )
 
@@ -35,6 +36,12 @@ type Dispatcher struct {
 	Client  *asynq.Client
 	Queries *storedb.Queries
 	Pool    PoolBeginner
+
+	// Metrics is optional; nil disables Prometheus instrumentation. The
+	// dispatcher only increments the dispatched counter on a successful
+	// enqueue + commit (i.e. just before returning a non-error
+	// DispatchOutput).
+	Metrics *metrics.JobMetrics
 }
 
 type DispatchInput struct {
@@ -115,5 +122,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, in DispatchInput) (DispatchOu
 	if err := tx.Commit(ctx); err != nil {
 		return DispatchOutput{}, err
 	}
+	d.Metrics.Dispatched(string(in.Kind))
 	return DispatchOutput{JobID: jobID}, nil
 }

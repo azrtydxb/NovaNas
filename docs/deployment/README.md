@@ -467,6 +467,97 @@ spec:
 EOF
 ```
 
+## Step 5: Observability Stack
+
+Deploy monitoring, alerting, and logging infrastructure:
+
+### Prerequisites
+
+1. **ZFS datasets** (create before setup):
+   ```bash
+   sudo zfs create tank/system/prometheus
+   sudo zfs create tank/system/alertmanager
+   sudo zfs create tank/system/grafana
+   sudo zfs create tank/system/loki
+   sudo zfs create tank/system/promtail
+   ```
+
+2. **Grafana Labs apt repository** (for Loki/Promtail):
+   ```bash
+   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 12D524F46EE5156B
+   echo "deb https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+   ```
+
+### Installation
+
+From the NovaNAS repo root:
+
+```bash
+# Run automated installation
+sudo bash deploy/observability/setup.sh
+```
+
+This installs:
+- Prometheus (metrics collection on :9090)
+- Alertmanager (alert routing on :9093)
+- Grafana (dashboards on :3000)
+- Loki (log aggregation on :3100)
+- Promtail (log shipper from journald/k3s)
+
+All components:
+- Run as dedicated system users
+- Use ZFS-backed storage at `/var/lib/<component>`
+- Use TLS certs signed by the local CA
+- Listen on localhost only
+
+### Boot Order
+
+Start services in dependency order:
+
+```bash
+sudo systemctl start prometheus alertmanager loki promtail grafana
+```
+
+### Verification
+
+Check component health:
+
+```bash
+# Prometheus
+curl -sk https://127.0.0.1:9090/api/v1/status/config
+
+# Alertmanager
+curl -sk https://127.0.0.1:9093/-/healthy
+
+# Grafana
+curl -sk https://127.0.0.1:3000/api/health
+
+# Loki
+curl -s http://127.0.0.1:3100/ready
+
+# Check logs
+sudo journalctl -u prometheus -u alertmanager -u grafana -u loki -u promtail -n 20
+```
+
+### Dashboards
+
+Pre-built Grafana dashboards are automatically loaded:
+- **NovaNAS Storage**: ZFS pool metrics
+- **NovaNAS API**: HTTP traffic, latency, error rates
+- **NovaNAS Jobs**: Async job dispatch and execution
+- **NovaNAS Logs**: Service logs from Loki
+
+Access Grafana at `https://novanas.local:3000` (admin/admin by default)
+
+### Next Steps
+
+See `/docs/observability/README.md` for:
+- Configuration and customization
+- Adding custom dashboards and alert rules
+- Keycloak OIDC integration for SSO
+- Operational procedures and troubleshooting
+- Backup and disaster recovery
+
 ## Troubleshooting
 
 ### OpenBao stuck unsealed

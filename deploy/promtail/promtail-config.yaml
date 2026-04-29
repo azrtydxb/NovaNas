@@ -1,0 +1,53 @@
+clients:
+  - url: http://127.0.0.1:3100/loki/api/v1/push
+
+scrape_configs:
+  # Journald: host services
+  - job_name: journal
+    journal:
+      path: /var/log/journal
+      max_age: 12h
+      labels:
+        job: journald
+    relabel_configs:
+      - source_labels: ['__journal_systemd_unit']
+        target_label: 'unit'
+      - source_labels: ['__journal_priority']
+        target_label: 'level'
+        map:
+          '0': 'emerg'
+          '1': 'alert'
+          '2': 'crit'
+          '3': 'err'
+          '4': 'warning'
+          '5': 'notice'
+          '6': 'info'
+          '7': 'debug'
+      # Extract service name from unit
+      - source_labels: ['unit']
+        regex: '(postgresql|openbao|keycloak|nova-api|prometheus|alertmanager|grafana|loki|promtail|redis|nfs-server|smbd|nvmet|k3s|kubelet).*'
+        target_label: 'service'
+        action: replace
+      # Skip non-NovaNAS units if desired (comment out to log everything)
+      - source_labels: ['service']
+        regex: '^(postgresql|openbao|keycloak|nova-api|prometheus|alertmanager|grafana|loki|promtail|redis|nfs-server|smbd|nvmet|k3s|kubelet)$'
+        action: keep
+
+  # k3s container logs
+  - job_name: kubernetes
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: kubernetes
+          __path__: /var/lib/rancher/k3s/agent/containerd/io.containerd.runtime.v2.task/k8s.io/*/log.json
+    json_config:
+      time_key: time
+      time_format: 2006-01-02T15:04:05.999999999Z07:00
+    relabel_configs:
+      - source_labels: ['__path__']
+        regex: '.*/([^/]+)/log\.json'
+        target_label: 'pod_uid'
+      - source_labels: ['__path__']
+        regex: '.*/([^/]+)/([^/]+)/log\.json'
+        target_label: 'container_name'

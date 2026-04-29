@@ -1,0 +1,23 @@
+[Unit]
+Description=Loki log aggregation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=loki
+Group=loki
+EnvironmentFile=/etc/loki/loki.env
+ExecStart=/usr/bin/loki -config.file=/etc/loki/loki-config.yaml
+Restart=on-failure
+RestartSec=10s
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/loki /var/log/loki
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

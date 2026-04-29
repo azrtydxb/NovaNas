@@ -1,0 +1,27 @@
+[Unit]
+Description=Promtail log shipper
+After=network-online.target loki.service
+Wants=network-online.target
+Requires=loki.service
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/promtail/promtail.env
+ExecStart=/usr/bin/promtail -config.file=/etc/promtail/promtail-config.yaml
+Restart=on-failure
+RestartSec=10s
+# Hardening (but needs journald + container log read access)
+ProtectSystem=strict
+ReadWritePaths=/var/lib/promtail
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=no
+LimitNOFILE=65536
+# Needed for journald
+ProtectKernelTunables=no
+ProtectKernelModules=no
+ProtectControlGroups=no
+
+[Install]
+WantedBy=multi-user.target

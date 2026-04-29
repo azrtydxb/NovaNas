@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/novanas/nova-nas/internal/api/metrics"
 	"github.com/novanas/nova-nas/internal/host/exec"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
 	"github.com/novanas/nova-nas/internal/host/krb5"
@@ -53,10 +54,46 @@ type WorkerDeps struct {
 	// production wiring sets it via cmd/nova-api so handlers/jobs can
 	// read or write secrets without a global.
 	Secrets secrets.Manager
+
+	// Metrics is optional; nil disables Prometheus instrumentation. The
+	// worker bumps in_flight on entry to each handler and records
+	// finished + duration on exit, deriving "state" from the handler's
+	// error return (nil → "succeeded", non-nil → "failed"). This mirrors
+	// the state written by finish() into the jobs table.
+	Metrics *metrics.JobMetrics
+}
+
+// metricsMiddleware wraps every asynq handler so Prometheus sees a job's
+// kind, terminal state, and wall-clock duration.
+//
+// The semantics intentionally match WorkerDeps.markRunning / finish: an
+// in-flight gauge is incremented on entry and decremented on exit, and
+// "state" is derived from the handler's error return (nil → succeeded,
+// non-nil → failed). Doing this as middleware avoids editing every
+// per-kind handler — the handler's call to finish() still owns the DB
+// row's terminal state, while the middleware owns the metric.
+func metricsMiddleware(m *metrics.JobMetrics) asynq.MiddlewareFunc {
+	return func(next asynq.Handler) asynq.Handler {
+		return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+			kind := t.Type()
+			start := time.Now()
+			m.MarkRunning(kind)
+			err := next.ProcessTask(ctx, t)
+			state := "succeeded"
+			if err != nil {
+				state = "failed"
+			}
+			m.MarkFinished(kind, state, time.Since(start).Seconds())
+			return err
+		})
+	}
 }
 
 func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
+	if d.Metrics != nil {
+		mux.Use(metricsMiddleware(d.Metrics))
+	}
 	mux.HandleFunc(string(KindPoolCreate), d.handlePoolCreate)
 	mux.HandleFunc(string(KindPoolDestroy), d.handlePoolDestroy)
 	mux.HandleFunc(string(KindPoolScrub), d.handlePoolScrub)

@@ -1,0 +1,25 @@
+[Unit]
+Description=Grafana visualization
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grafana
+Group=grafana
+EnvironmentFile=/etc/grafana/grafana.env
+ExecStart=/usr/sbin/grafana-server \
+  --config=/etc/grafana/grafana.ini \
+  --homepath=/usr/share/grafana
+Restart=on-failure
+RestartSec=10s
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/grafana /var/log/grafana /etc/grafana
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -28,6 +28,35 @@ paths:
                 type: object
                 properties: { status: { type: string } }
 
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: |
+        Prometheus text exposition of nova-api metrics: HTTP request
+        counters and durations, job dispatch/finish counters and
+        durations, ZFS pool/dataset/vdev gauges, and standard Go-runtime
+        and process collectors.
+
+        Public endpoint (no bearer required) — operators must restrict
+        access via network policy or by setting `METRICS_ADDR` so this
+        path is bound on a separate listener (typically a management
+        VLAN) instead of the public API listener.
+
+        Note: this path is mounted at the host root, not under the
+        `/api/v1` prefix that the rest of this spec uses, to match the
+        Prometheus convention.
+      operationId: getMetrics
+      servers:
+        - url: /
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+
   /auth/me:
     get:
       summary: Current identity

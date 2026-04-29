@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/novanas/nova-nas/internal/api/metrics"
 	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -64,6 +65,7 @@ func (f *fakeDisk) List(_ context.Context) ([]disks.Disk, error) { return f.rows
 
 func newE2EServer(t *testing.T, disp *fakeDispatcher) http.Handler {
 	t.Helper()
+	m := metrics.New()
 	srv := New(Deps{
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Disks:      &fakeDisk{rows: []disks.Disk{{Name: "sda"}}},
@@ -74,7 +76,9 @@ func newE2EServer(t *testing.T, disp *fakeDispatcher) http.Handler {
 		// E2E exercises route wiring; auth is bypassed so no real
 		// Keycloak (or mock Verifier) is needed. Production wiring lives
 		// in cmd/nova-api/main.go.
-		AuthDisabled: true,
+		AuthDisabled:   true,
+		Metrics:        m,
+		MetricsHandler: m.Handler(),
 	})
 	return srv.Handler()
 }
@@ -233,6 +237,34 @@ func TestE2E_WriteDispatchesJobs(t *testing.T) {
 				t.Errorf("target=%q want %q", got.Target, c.wantTarget)
 			}
 		})
+	}
+}
+
+// TestE2E_MetricsEndpoint asserts /metrics is mounted at the root, is
+// public (no auth), and serves the Prometheus text exposition format.
+func TestE2E_MetricsEndpoint(t *testing.T) {
+	h := newE2EServer(t, &fakeDispatcher{})
+	// Make a couple of requests first so the HTTP middleware records
+	// some samples that the scrape will then return.
+	_ = do(t, h, http.MethodGet, "/api/v1/pools", "")
+	_ = do(t, h, http.MethodGet, "/healthz", "")
+
+	rr := do(t, h, http.MethodGet, "/metrics", "")
+	if rr.Code != 200 {
+		t.Fatalf("/metrics: code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/plain") {
+		t.Errorf("/metrics Content-Type=%q want text/plain*", ct)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{
+		"nova_http_requests_total",
+		"nova_http_request_duration_seconds",
+		"go_goroutines",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics body missing %q", want)
+		}
 	}
 }
 

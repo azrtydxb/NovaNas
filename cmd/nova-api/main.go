@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api"
+	"github.com/novanas/nova-nas/internal/api/metrics"
 	"github.com/novanas/nova-nas/internal/auth"
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/host/disks"
@@ -134,10 +135,18 @@ func main() {
 	redisClient := redis.NewClient(redisOpts)
 	defer redisClient.Close()
 
+	// Metrics registry. Owned by main so the same handle can be wired
+	// into the dispatcher, worker, and HTTP server, plus the optional
+	// separate listener for /metrics.
+	metricsReg := metrics.New()
+	zfsCollector := metrics.NewZFSCollector(logger, poolMgr, datasetMgr)
+	zfsCollector.MustRegister(metricsReg.Registry)
+
 	dispatcher := &jobs.Dispatcher{
 		Client:  asyncClient,
 		Queries: st.Queries,
 		Pool:    st.Pool,
+		Metrics: metricsReg.Jobs,
 	}
 
 	// Crash recovery: mark any running/queued rows as interrupted before
@@ -168,6 +177,7 @@ func main() {
 		NetworkMgr:       networkMgr,
 		SystemMgr:        systemMgr,
 		ProtocolShareMgr: psMgr,
+		Metrics:          metricsReg.Jobs,
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
@@ -179,6 +189,12 @@ func main() {
 		}
 	}()
 	defer asyncSrv.Stop()
+
+	// ZFS metrics poll loop. Cancelled alongside the HTTP server on
+	// shutdown via metricsCtx.
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	defer metricsCancel()
+	go zfsCollector.Run(metricsCtx)
 
 	// Scheduler tick loop. Cancelled alongside the HTTP server on
 	// shutdown via schedCtx. Errors from Run are only ctx.Err() once
@@ -219,7 +235,38 @@ func main() {
 		RoleMap:      auth.DefaultRoleMap,
 		AuthDisabled: cfg.Auth.Disabled,
 		Secrets:      secretsMgr,
+
+		Metrics:        metricsReg,
+		MetricsHandler: metricsHandlerFor(cfg.MetricsAddr, metricsReg),
 	})
+
+	// Optional dedicated listener for /metrics. When METRICS_ADDR is set
+	// the main API listener does NOT expose /metrics (MetricsHandler is
+	// nil there); a small mux is bound on the separate address instead so
+	// Prometheus can scrape it from the management network.
+	if cfg.MetricsAddr != "" {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", metricsReg.Handler())
+		metricsSrv := &http.Server{
+			Addr:              cfg.MetricsAddr,
+			Handler:           metricsMux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		logger.Info("metrics listener", "addr", cfg.MetricsAddr)
+		go func() {
+			if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("metrics listen", "err", err)
+			}
+		}()
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = metricsSrv.Shutdown(ctx)
+		}()
+	}
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
@@ -255,6 +302,18 @@ func main() {
 	defer cancel()
 	_ = httpSrv.Shutdown(ctx)
 	logger.Info("stopped")
+}
+
+// metricsHandlerFor returns the handler that the main API server should
+// mount at /metrics. When METRICS_ADDR is set we deliberately return nil
+// so the main listener does NOT serve /metrics — the dedicated listener
+// owns the endpoint exclusively (separate-listener model). Otherwise the
+// promhttp handler is mounted on the main listener.
+func metricsHandlerFor(metricsAddr string, m *metrics.Metrics) http.Handler {
+	if metricsAddr != "" {
+		return nil
+	}
+	return m.Handler()
 }
 
 type asynqSlogAdapter struct{ l *slog.Logger }

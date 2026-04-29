@@ -1,0 +1,47 @@
+global:
+  resolve_timeout: 5m
+  # SMTP configuration (operators customize from OpenBao secrets)
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_auth_username: '{{ SECRET:alertmanager/smtp_user }}'
+  # smtp_auth_password: '{{ SECRET:alertmanager/smtp_pass }}'
+  # smtp_from: 'alerts@novanas.local'
+
+# Inhibition rules
+inhibit_rules:
+  # Suppress warning alerts if critical is firing for the same instance
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+# Default receiver (null — operators add real routing)
+route:
+  receiver: 'null'
+  group_by: ['alertname', 'instance']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  routes:
+    # Storage alerts
+    - match_re:
+        alertname: 'NovaNAS.*'
+      receiver: 'null'
+    # API alerts
+    - match_re:
+        job: 'nova-api'
+      receiver: 'null'
+
+receivers:
+  - name: 'null'
+    # Null receiver intentionally does nothing; operators configure webhook_configs, email_configs, etc.
+
+  # Example webhook receiver (commented out)
+  # - name: 'slack'
+  #   slack_configs:
+  #     - api_url: '{{ SECRET:alertmanager/slack_webhook }}'
+  #       channel: '#alerts'
+  #       send_resolved: true
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl

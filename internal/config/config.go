@@ -16,6 +16,13 @@ type Config struct {
 	LsblkBin    string `envconfig:"LSBLK_BIN" default:"/usr/bin/lsblk"`
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
 
+	// MetricsAddr, when set, binds the Prometheus /metrics endpoint to a
+	// separate listener (e.g. ":9100") so the public API listener does
+	// not expose it. Empty (the default) keeps /metrics on the main
+	// listener at the root path. The endpoint is always public — operators
+	// must use METRICS_ADDR or network-level controls to restrict access.
+	MetricsAddr string `envconfig:"METRICS_ADDR"`
+
 	TLS  TLSConfig
 	Auth AuthConfig
 }

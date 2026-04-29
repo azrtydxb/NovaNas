@@ -1,0 +1,28 @@
+[Unit]
+Description=Prometheus metrics collection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+EnvironmentFile=/etc/prometheus/prometheus.env
+ExecStart=/usr/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --storage.tsdb.retention.time=30d \
+  --web.listen-address=127.0.0.1:9090 \
+  --web.enable-lifecycle
+Restart=on-failure
+RestartSec=10s
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus /var/log/prometheus
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

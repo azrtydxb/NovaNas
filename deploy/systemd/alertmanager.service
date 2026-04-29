@@ -1,0 +1,26 @@
+[Unit]
+Description=Alertmanager alert routing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alertmanager
+Group=alertmanager
+EnvironmentFile=/etc/alertmanager/alertmanager.env
+ExecStart=/usr/bin/alertmanager \
+  --config.file=/etc/alertmanager/alertmanager.yml \
+  --storage.path=/var/lib/alertmanager \
+  --web.listen-address=127.0.0.1:9093
+Restart=on-failure
+RestartSec=10s
+# Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/alertmanager /var/log/alertmanager
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

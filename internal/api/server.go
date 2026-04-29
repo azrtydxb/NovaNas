@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api/handlers"
+	"github.com/novanas/nova-nas/internal/api/metrics"
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
 	"github.com/novanas/nova-nas/internal/auth"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
@@ -65,6 +66,17 @@ type Deps struct {
 	// here so future handlers/jobs can read/write secrets without
 	// reaching into globals.
 	Secrets secrets.Manager
+
+	// Metrics, when non-nil, installs a request-instrumentation middleware
+	// and mounts /metrics on the main router. The same Metrics handle is
+	// also wired through to the dispatcher and worker so the three
+	// collector groups (HTTP, jobs, ZFS) share a single registry.
+	//
+	// MetricsHandler overrides the served handler — set it to nil when
+	// /metrics is exposed on a separate listener (see METRICS_ADDR) so the
+	// main listener does NOT also expose the endpoint.
+	Metrics        *metrics.Metrics
+	MetricsHandler http.Handler
 }
 
 type Server struct {
@@ -85,6 +97,20 @@ func New(d Deps) *Server {
 	}
 	r.Use(mw.Recoverer(d.Logger))
 	r.Use(mw.Logging(d.Logger))
+	// Prometheus instrumentation. Wired before the per-domain RBAC groups
+	// so 401/403 short-circuits are still observed in the request counter.
+	// The middleware itself excludes /metrics, so a scrape doesn't bump
+	// its own counter.
+	if d.Metrics != nil {
+		r.Use(d.Metrics.HTTP.Middleware)
+	}
+	// /metrics is mounted at the root (Prometheus convention) and is
+	// public. Operators that don't want it on the main API listener
+	// should set METRICS_ADDR to bind it to a separate listener — in
+	// which case Deps.MetricsHandler is set to nil.
+	if d.MetricsHandler != nil {
+		r.Method(http.MethodGet, "/metrics", d.MetricsHandler)
+	}
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		mw.WriteError(w, http.StatusNotFound, "not_found", "no such route")
 	})
