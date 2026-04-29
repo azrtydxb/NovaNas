@@ -2,11 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,71 +17,9 @@ import (
 	"github.com/novanas/nova-nas/internal/host/tpm"
 )
 
-// File format on disk:
-//   2 bytes:  sealed-DEK length (uint16, big-endian)
-//   N bytes:  TPM-sealed 32-byte AES-256 key
-//   12 bytes: AES-GCM nonce
-//   M bytes:  AES-GCM ciphertext+tag of the JSON unseal-keys array
-//
-// The TPM only seals up to 128 bytes per object; we seal a 32-byte DEK
-// instead and use AES-GCM for the variable-size plaintext.
-func wrap(plaintext []byte, sealer *tpm.Sealer) ([]byte, error) {
-	dek := make([]byte, 32)
-	if _, err := rand.Read(dek); err != nil {
-		return nil, fmt.Errorf("rand: %w", err)
-	}
-	sealedDEK, err := sealer.Seal(dek)
-	if err != nil {
-		return nil, fmt.Errorf("tpm.Seal(DEK): %w", err)
-	}
-	block, err := aes.NewCipher(dek)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
-	}
-	ct := gcm.Seal(nil, nonce, plaintext, nil)
-	out := make([]byte, 0, 2+len(sealedDEK)+len(nonce)+len(ct))
-	hdr := make([]byte, 2)
-	binary.BigEndian.PutUint16(hdr, uint16(len(sealedDEK)))
-	out = append(out, hdr...)
-	out = append(out, sealedDEK...)
-	out = append(out, nonce...)
-	out = append(out, ct...)
-	return out, nil
-}
-
-func unwrap(blob []byte, sealer *tpm.Sealer) ([]byte, error) {
-	if len(blob) < 2 {
-		return nil, fmt.Errorf("blob too short")
-	}
-	dekLen := int(binary.BigEndian.Uint16(blob[:2]))
-	if len(blob) < 2+dekLen+12 {
-		return nil, fmt.Errorf("blob truncated")
-	}
-	sealedDEK := blob[2 : 2+dekLen]
-	dek, err := sealer.Unseal(sealedDEK)
-	if err != nil {
-		return nil, err
-	}
-	block, err := aes.NewCipher(dek)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := blob[2+dekLen : 2+dekLen+12]
-	ct := blob[2+dekLen+12:]
-	return gcm.Open(nil, nonce, ct, nil)
-}
+// File format on disk: see internal/host/tpm.WrapAEAD/UnwrapAEAD. The
+// implementation is shared with nova-kdc-unseal so the two binaries
+// stay byte-compatible.
 
 func main() {
 	var (
@@ -159,7 +93,7 @@ func runInit(logger *slog.Logger, configPath string) error {
 	logger.Info("read unseal keys", "count", len(keys))
 
 	// Wrap: TPM-seal a fresh AES-DEK, AES-GCM encrypt plaintext with it.
-	sealed, err := wrap(plaintext, sealer)
+	sealed, err := tpm.WrapAEAD(plaintext, sealer)
 	if err != nil {
 		return fmt.Errorf("wrap: %w", err)
 	}
@@ -203,7 +137,7 @@ func runUnseal(logger *slog.Logger, configPath, baoAddr string, maxRetries int, 
 	defer sealer.Close()
 
 	// Unwrap: TPM-unseal the DEK, AES-GCM decrypt the payload.
-	plaintext, err := unwrap(sealed, sealer)
+	plaintext, err := tpm.UnwrapAEAD(sealed, sealer)
 	if err != nil {
 		if tpm.ErrPCRMismatch == err {
 			logger.Error("PCR mismatch: boot state may have changed since seal", "err", err)
