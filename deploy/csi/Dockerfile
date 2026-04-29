@@ -52,6 +52,11 @@ FROM debian:bookworm-slim
 #   mount, umount, blkid    -> util-linux (mount package depends on it)
 #   mkfs.ext4, resize2fs    -> e2fsprogs
 #   mkfs.xfs, xfs_growfs    -> xfsprogs
+#   mount.nfs, mount.nfs4   -> nfs-common — required for NFS-mode StorageClass.
+#                              The kernel calls these helpers during the NFS
+#                              mount syscall and rpc.gssd on the host handles
+#                              Kerberos (sec=krb5p) using the host keytab
+#                              that's bind-mounted in (see manifests/60-node.yaml).
 #   zfs, zpool (debug only) -> zfsutils-linux (the host owns the pool;
 #                              these are kept for diagnostics)
 #   ca-certificates         -> required for any TLS to a public endpoint;
@@ -63,6 +68,7 @@ RUN apt-get update \
         util-linux \
         e2fsprogs \
         xfsprogs \
+        nfs-common \
         zfsutils-linux \
  && rm -rf /var/lib/apt/lists/*
 
