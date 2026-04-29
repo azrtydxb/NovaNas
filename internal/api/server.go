@@ -12,9 +12,14 @@ import (
 	mw "github.com/novanas/nova-nas/internal/api/middleware"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
 	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
+	"github.com/novanas/nova-nas/internal/host/samba"
+	"github.com/novanas/nova-nas/internal/host/scheduler"
+	"github.com/novanas/nova-nas/internal/host/smart"
+	"github.com/novanas/nova-nas/internal/host/system"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -38,6 +43,11 @@ type Deps struct {
 	NfsMgr        *nfs.Manager
 	Krb5Mgr       *krb5.Manager
 	RdmaLister    *rdma.Lister
+	SambaMgr      *samba.Manager
+	SmartMgr      *smart.Manager
+	SchedulerMgr  *scheduler.Manager
+	NetworkMgr    *network.Manager
+	SystemMgr     *system.Manager
 }
 
 type Server struct {
@@ -101,6 +111,25 @@ func New(d Deps) *Server {
 	}
 	krb5W := &handlers.Krb5WriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	rdmaH := &handlers.RDMAHandler{Logger: d.Logger, Lister: d.RdmaLister}
+	var sambaH *handlers.SambaHandler
+	if d.SambaMgr != nil {
+		sambaH = &handlers.SambaHandler{Logger: d.Logger, Mgr: d.SambaMgr}
+	}
+	sambaW := &handlers.SambaWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var smartH *handlers.SmartHandler
+	if d.SmartMgr != nil {
+		smartH = &handlers.SmartHandler{Logger: d.Logger, Mgr: d.SmartMgr, Dispatcher: d.Dispatcher}
+	}
+	var networkH *handlers.NetworkHandler
+	var networkW *handlers.NetworkWriteHandler
+	if d.NetworkMgr != nil {
+		networkH = &handlers.NetworkHandler{Logger: d.Logger, Mgr: d.NetworkMgr}
+		networkW = &handlers.NetworkWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher, Mgr: d.NetworkMgr}
+	}
+	var systemH *handlers.SystemHandler
+	if d.SystemMgr != nil {
+		systemH = &handlers.SystemHandler{Logger: d.Logger, Mgr: d.SystemMgr, Dispatcher: d.Dispatcher}
+	}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
 		r.Get("/pools", poolsH.List)
@@ -212,6 +241,53 @@ func New(d Deps) *Server {
 		// RDMA
 		r.Get("/network/rdma", rdmaH.List)
 
+		// Samba
+		if sambaH != nil {
+			r.Get("/samba/shares", sambaH.ListShares)
+			r.Get("/samba/shares/{name}", sambaH.GetShare)
+			r.Get("/samba/users", sambaH.ListUsers)
+		}
+		r.Post("/samba/shares", sambaW.CreateShare)
+		r.Patch("/samba/shares/{name}", sambaW.UpdateShare)
+		r.Delete("/samba/shares/{name}", sambaW.DeleteShare)
+		r.Post("/samba/reload", sambaW.Reload)
+		r.Post("/samba/users", sambaW.AddUser)
+		r.Delete("/samba/users/{username}", sambaW.DeleteUser)
+		r.Put("/samba/users/{username}/password", sambaW.SetUserPassword)
+
+		// SMART
+		if smartH != nil {
+			r.Get("/disks/{name}/smart", smartH.Get)
+			r.Post("/disks/{name}/smart/test", smartH.RunSelfTest)
+			r.Post("/disks/{name}/smart/enable", smartH.Enable)
+		}
+
+		// Network (configs + live + write)
+		if networkH != nil {
+			r.Get("/network/interfaces", networkH.ListInterfaces)
+			r.Get("/network/configs", networkH.ListConfigs)
+			r.Get("/network/configs/{name}", networkH.GetConfig)
+		}
+		if networkW != nil {
+			r.Post("/network/configs", networkW.ApplyInterface)
+			r.Delete("/network/configs/{name}", networkW.DeleteInterface)
+			r.Post("/network/vlans", networkW.ApplyVLAN)
+			r.Post("/network/bonds", networkW.ApplyBond)
+			r.Post("/network/reload", networkW.Reload)
+		}
+
+		// System
+		if systemH != nil {
+			r.Get("/system/info", systemH.GetInfo)
+			r.Get("/system/time", systemH.GetTime)
+			r.Put("/system/hostname", systemH.SetHostname)
+			r.Put("/system/timezone", systemH.SetTimezone)
+			r.Put("/system/ntp", systemH.SetNTP)
+			r.Post("/system/reboot", systemH.Reboot)
+			r.Post("/system/shutdown", systemH.Shutdown)
+			r.Post("/system/cancel-shutdown", systemH.CancelShutdown)
+		}
+
 		// Jobs routes need the store; construct only when available so
 		// tests that build a server without one (e.g. /healthz) still work.
 		if d.Store != nil {
@@ -224,6 +300,22 @@ func New(d Deps) *Server {
 				sseH := &handlers.SSEJobsHandler{Logger: d.Logger, Redis: d.Redis, Q: d.Store.Queries}
 				r.Get("/jobs/{id}/stream", sseH.Stream)
 			}
+
+			schedH := &handlers.SchedulerHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Get("/scheduler/snapshot-schedules", schedH.ListSnapshotSchedules)
+			r.Post("/scheduler/snapshot-schedules", schedH.CreateSnapshotSchedule)
+			r.Get("/scheduler/snapshot-schedules/{id}", schedH.GetSnapshotSchedule)
+			r.Patch("/scheduler/snapshot-schedules/{id}", schedH.UpdateSnapshotSchedule)
+			r.Delete("/scheduler/snapshot-schedules/{id}", schedH.DeleteSnapshotSchedule)
+			r.Get("/scheduler/replication-targets", schedH.ListReplicationTargets)
+			r.Post("/scheduler/replication-targets", schedH.CreateReplicationTarget)
+			r.Get("/scheduler/replication-targets/{id}", schedH.GetReplicationTarget)
+			r.Delete("/scheduler/replication-targets/{id}", schedH.DeleteReplicationTarget)
+			r.Get("/scheduler/replication-schedules", schedH.ListReplicationSchedules)
+			r.Post("/scheduler/replication-schedules", schedH.CreateReplicationSchedule)
+			r.Get("/scheduler/replication-schedules/{id}", schedH.GetReplicationSchedule)
+			r.Patch("/scheduler/replication-schedules/{id}", schedH.UpdateReplicationSchedule)
+			r.Delete("/scheduler/replication-schedules/{id}", schedH.DeleteReplicationSchedule)
 
 			metaH := &handlers.MetadataHandler{Logger: d.Logger, Q: d.Store.Queries}
 			r.Patch("/pools/{name}/metadata", metaH.PoolPatch)

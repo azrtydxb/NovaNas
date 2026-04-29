@@ -49,6 +49,41 @@ func RunStream(ctx context.Context, bin string, stdin io.Reader, stdout io.Write
 // per-Manager basis.
 type Runner func(ctx context.Context, bin string, args ...string) ([]byte, error)
 
+// StdinRunner is the function signature for executing a host command
+// with a fixed stdin payload. It mirrors Runner's stdout/error shape but
+// writes the supplied stdin bytes to the process and closes the pipe.
+// Used by tools like smbpasswd that read secrets from stdin.
+type StdinRunner func(ctx context.Context, bin string, stdin []byte, args ...string) ([]byte, error)
+
+// RunStdin executes bin with the given args, writing stdin to the
+// child's stdin and closing the pipe. stdout is captured and returned;
+// stderr is captured and surfaced via *HostError on non-zero exit.
+func RunStdin(ctx context.Context, bin string, stdin []byte, args ...string) ([]byte, error) {
+	cmd := osexec.CommandContext(ctx, bin, args...)
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		exitCode := 0
+		var ee *osexec.ExitError
+		if errors.As(err, &ee) {
+			exitCode = ee.ExitCode()
+		}
+		return stdout.Bytes(), &HostError{
+			Bin:      bin,
+			Args:     args,
+			ExitCode: exitCode,
+			Stderr:   stderr.String(),
+			Cause:    err,
+		}
+	}
+	return stdout.Bytes(), nil
+}
+
 func Run(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	cmd := osexec.CommandContext(ctx, bin, args...)
 	var stdout, stderr bytes.Buffer

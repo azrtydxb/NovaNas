@@ -2,10 +2,14 @@
 package jobs
 
 import (
+	"github.com/google/uuid"
+
 	"github.com/novanas/nova-nas/internal/host/iscsi"
 	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 )
@@ -86,6 +90,38 @@ const (
 	KindKrb5SetIdmapd     Kind = "krb5.idmapd.set"
 	KindKrb5UploadKeytab  Kind = "krb5.keytab.upload"
 	KindKrb5DeleteKeytab  Kind = "krb5.keytab.delete"
+
+	// Samba
+	KindSambaShareCreate     Kind = "samba.share.create"
+	KindSambaShareUpdate     Kind = "samba.share.update"
+	KindSambaShareDelete     Kind = "samba.share.delete"
+	KindSambaReload          Kind = "samba.reload"
+	KindSambaUserAdd         Kind = "samba.user.add"
+	KindSambaUserDelete      Kind = "samba.user.delete"
+	KindSambaUserSetPassword Kind = "samba.user.set_password"
+
+	// SMART
+	KindSmartRunSelfTest Kind = "smart.selftest.run"
+	KindSmartEnable      Kind = "smart.enable"
+
+	// Scheduler (dispatched by the tick loop, not HTTP)
+	KindSchedSnapshotFire    Kind = "scheduler.snapshot.fire"
+	KindSchedReplicationFire Kind = "scheduler.replication.fire"
+
+	// Network
+	KindNetworkInterfaceApply  Kind = "network.interface.apply"
+	KindNetworkInterfaceDelete Kind = "network.interface.delete"
+	KindNetworkVLANApply       Kind = "network.vlan.apply"
+	KindNetworkBondApply       Kind = "network.bond.apply"
+	KindNetworkReload          Kind = "network.reload"
+
+	// System
+	KindSystemSetHostname    Kind = "system.hostname.set"
+	KindSystemSetTimezone    Kind = "system.timezone.set"
+	KindSystemSetNTP         Kind = "system.ntp.set"
+	KindSystemReboot         Kind = "system.reboot"
+	KindSystemShutdown       Kind = "system.shutdown"
+	KindSystemCancelShutdown Kind = "system.cancel_shutdown"
 )
 
 // ---------- iSCSI payloads ----------
@@ -400,3 +436,103 @@ type Krb5UploadKeytabPayload struct {
 }
 
 type Krb5DeleteKeytabPayload struct{}
+
+// ---------- Samba payloads ----------
+
+type SambaShareCreatePayload struct {
+	Share samba.Share `json:"share"`
+}
+
+type SambaShareUpdatePayload struct {
+	Share samba.Share `json:"share"`
+}
+
+type SambaShareDeletePayload struct {
+	Name string `json:"name"`
+}
+
+type SambaReloadPayload struct{}
+
+type SambaUserAddPayload struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type SambaUserDeletePayload struct {
+	Username string `json:"username"`
+}
+
+type SambaUserSetPasswordPayload struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// ---------- SMART payloads ----------
+
+type SmartRunSelfTestPayload struct {
+	DevicePath string `json:"devicePath"`
+	TestType   string `json:"testType"`
+}
+
+type SmartEnablePayload struct {
+	DevicePath string `json:"devicePath"`
+}
+
+// ---------- Scheduler payloads ----------
+
+// SchedSnapshotFirePayload identifies a single snapshot schedule to fire.
+// The handler re-fetches by ID so the latest config is used.
+type SchedSnapshotFirePayload struct {
+	ScheduleID uuid.UUID `json:"scheduleId"`
+}
+
+// SchedReplicationFirePayload identifies a single replication schedule.
+type SchedReplicationFirePayload struct {
+	ScheduleID uuid.UUID `json:"scheduleId"`
+}
+
+// ---------- Network payloads ----------
+
+type NetworkInterfaceApplyPayload struct {
+	Config network.InterfaceConfig `json:"config"`
+}
+
+type NetworkInterfaceDeletePayload struct {
+	Name   string `json:"name"`
+	DryRun bool   `json:"dryRun,omitempty"`
+}
+
+type NetworkVLANApplyPayload struct {
+	VLAN network.VLAN `json:"vlan"`
+}
+
+type NetworkBondApplyPayload struct {
+	Bond network.Bond `json:"bond"`
+}
+
+type NetworkReloadPayload struct{}
+
+// ---------- System payloads ----------
+
+type SystemSetHostnamePayload struct {
+	Hostname string `json:"hostname"`
+}
+
+type SystemSetTimezonePayload struct {
+	Timezone string `json:"timezone"`
+}
+
+type SystemSetNTPPayload struct {
+	Enabled bool     `json:"enabled"`
+	Servers []string `json:"servers,omitempty"`
+}
+
+type SystemRebootPayload struct {
+	DelaySeconds int `json:"delaySeconds"`
+}
+
+type SystemShutdownPayload struct {
+	DelaySeconds int `json:"delaySeconds"`
+}
+
+type SystemCancelShutdownPayload struct{}

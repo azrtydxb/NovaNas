@@ -1,0 +1,21 @@
+[Unit]
+# Restore LIO/iSCSI target config at boot. On Debian, the targetcli
+# package ships targetclid.service which auto-restores from
+# /etc/rtslib-fb-target/saveconfig.json — if that unit is enabled, this
+# unit's ExecStart is effectively a no-op (a second restore of the same
+# config). On distros where targetclid isn't shipped, this is the unit
+# that brings iSCSI back after reboot.
+Description=Restore NovaNAS iSCSI target configuration
+After=local-fs.target sys-kernel-config.mount
+Requires=sys-kernel-config.mount
+Before=nova-api.service
+
+[Service]
+Type=oneshot
+ExecStartPre=-/sbin/modprobe target_core_mod
+ExecStartPre=-/sbin/modprobe iscsi_target_mod
+ExecStart=/usr/local/bin/nova-iscsi-restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -45,6 +45,17 @@ dpkg-buildpackage -us -uc -b
 
 The package installs `/usr/bin/nova-api`, the systemd unit, tmpfiles entries, and writes a sensible default `/etc/nova-api/env`. Postinst enables and starts the service.
 
+Two additional oneshot units handle target-config persistence across reboots:
+
+- `nova-nvmet-restore.service` — replays the saved NVMe-oF configfs tree from `/etc/nova-nas/nvmet-config.json` after `sys-kernel-config.mount` and before `nova-api.service`.
+- `nova-iscsi-restore.service` — invokes `targetctl restore` to reapply the saved LIO/iSCSI target. On Debian this is effectively a redundant safety net for `targetclid.service`; on distros without `targetclid` it is the only thing that brings iSCSI back after reboot.
+
+Enable both alongside `nova-api`:
+
+```
+sudo systemctl enable nova-nvmet-restore.service nova-iscsi-restore.service
+```
+
 Bootstrap the database:
 
 ```

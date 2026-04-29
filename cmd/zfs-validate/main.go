@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,9 +29,14 @@ import (
 	disksPkg "github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
 	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
+	"github.com/novanas/nova-nas/internal/host/samba"
+	"github.com/novanas/nova-nas/internal/host/scheduler"
+	"github.com/novanas/nova-nas/internal/host/smart"
+	"github.com/novanas/nova-nas/internal/host/system"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -2833,8 +2839,10 @@ func main() {
 		defer func() {
 			// NFS server can briefly hold the path even after umount/
 			// DeleteExport. Drop all kernel-side exports first, then
-			// destroy.
+			// force-unmount the dataset's mountpoint so the kernel
+			// releases any lingering reference before pool destroy.
 			_, _ = runCmd(ctx, "/usr/sbin/exportfs", "-ua")
+			_, _ = runCmd(ctx, "umount", "-f", "/validate/nfs-share")
 			if err := pm.Destroy(ctx, poolName); err != nil {
 				fmt.Printf("  WARN scenario 55 pool destroy: %v\n", err)
 			}
@@ -3249,6 +3257,334 @@ func main() {
 		mounted = false
 
 		// Step 18: tear-down handled by deferred cleanup above.
+		return nil
+	})
+
+	// ---- Real-host scenarios for new managers (57-62) -----------------------
+
+	step("57. SMART get health for the management disk", func() error {
+		if !which("smartctl") {
+			fmt.Printf("  SKIP: smartctl not available\n")
+			return nil
+		}
+		sm := &smart.Manager{}
+		h, err := sm.Get(ctx, disks[0])
+		if err != nil {
+			return fmt.Errorf("smart.Get(%s): %w", disks[0], err)
+		}
+		if h.Model == "" {
+			return fmt.Errorf("expected non-empty Model")
+		}
+		if h.SerialNumber == "" {
+			return fmt.Errorf("expected non-empty SerialNumber")
+		}
+		if !h.OverallPassed {
+			return fmt.Errorf("expected OverallPassed=true (drive should be healthy)")
+		}
+		if len(h.Attributes) == 0 {
+			return fmt.Errorf("expected at least one SMART attribute")
+		}
+		if h.HasErrors {
+			return fmt.Errorf("expected HasErrors=false, summary=%v", h.ErrorSummary)
+		}
+		tempStr := "n/a"
+		if h.Temperature != nil {
+			tempStr = fmt.Sprintf("%dC", *h.Temperature)
+		}
+		pohStr := "n/a"
+		if h.PowerOnHours != nil {
+			pohStr = fmt.Sprintf("%dh", *h.PowerOnHours)
+		}
+		fmt.Printf("  model=%s serial=%s temp=%s poh=%s attrs=%d\n",
+			h.Model, h.SerialNumber, tempStr, pohStr, len(h.Attributes))
+		return nil
+	})
+
+	step("58. Samba share lifecycle", func() error {
+		if !which("smbcontrol") || !which("testparm") {
+			fmt.Printf("  SKIP: smbcontrol or testparm not available\n")
+			return nil
+		}
+		// Verify smb.conf wires up conf.d. The Manager writes drop-in
+		// files there; without an `include = ...` (or `config file`)
+		// glob in smb.conf, smbd will never load them. Operator setup,
+		// not something we configure automatically.
+		smbConfPath := "/etc/samba/smb.conf"
+		smbConf, err := os.ReadFile(smbConfPath)
+		if err != nil {
+			fmt.Printf("  SKIP: cannot read %s: %v\n", smbConfPath, err)
+			return nil
+		}
+		if !strings.Contains(string(smbConf), "smb.conf.d") {
+			fmt.Printf("  SKIP: %s does not reference smb.conf.d (operator setup needed)\n", smbConfPath)
+			return nil
+		}
+		// Belt-and-suspenders: ensure the conf.d exists. The osFileWriter
+		// MkdirAll's the parent on Write, but creating it up front means
+		// testparm reads the dir cleanly even on first run.
+		if err := os.MkdirAll("/etc/samba/smb.conf.d", 0o755); err != nil {
+			return fmt.Errorf("mkdir smb.conf.d: %w", err)
+		}
+
+		// Belt-and-suspenders cleanup: previous NFS scenario may have
+		// left an unmounted-but-still-in-use dataset; force-clean.
+		_, _ = runCmd(ctx, "umount", "-f", "/validate/nfs-share")
+		_, _ = runCmd(ctx, "/usr/sbin/exportfs", "-ua")
+		_ = pm.Destroy(ctx, poolName)
+		wipeDisks(disks[:1])
+		if err := pm.Create(ctx, pool.CreateSpec{
+			Name:  poolName,
+			Vdevs: []pool.VdevSpec{{Type: "stripe", Disks: disks[:1]}},
+		}); err != nil {
+			return err
+		}
+		defer func() {
+			_, _ = runCmd(ctx, "umount", "-f", "/validate/smb-share")
+			if err := pm.Destroy(ctx, poolName); err != nil {
+				fmt.Printf("  WARN scenario 58 pool destroy: %v\n", err)
+			}
+		}()
+
+		dsName := "smb-share"
+		full := poolName + "/" + dsName
+		mp := "/validate/smb-share"
+		if err := os.MkdirAll("/validate", 0o755); err != nil {
+			return err
+		}
+		if err := dm.Create(ctx, dataset.CreateSpec{
+			Parent: poolName, Name: dsName, Type: "filesystem",
+			Properties: map[string]string{"mountpoint": mp},
+		}); err != nil {
+			return err
+		}
+		defer func() { _ = dm.Destroy(ctx, full, false) }()
+
+		markerPath := filepath.Join(mp, "marker.txt")
+		if err := os.WriteFile(markerPath, []byte("samba marker\n"), 0o644); err != nil {
+			return fmt.Errorf("write marker: %w", err)
+		}
+
+		nm := &samba.Manager{}
+		share := samba.Share{
+			Name:       "validate",
+			Path:       mp,
+			Comment:    "validation share",
+			Browseable: true,
+			Writable:   true,
+			GuestOK:    true,
+		}
+		if err := nm.CreateShare(ctx, share); err != nil {
+			return fmt.Errorf("CreateShare: %w", err)
+		}
+		deleted := false
+		defer func() {
+			if !deleted {
+				_ = nm.DeleteShare(ctx, "validate")
+			}
+		}()
+
+		// smbclient listing — best-effort.
+		if which("smbclient") {
+			if out, err := runCmd(ctx, "smbclient", "-L", "//127.0.0.1", "-N"); err == nil {
+				if !strings.Contains(string(out), "validate") {
+					fmt.Printf("  WARN smbclient -L did not list 'validate' share\n")
+				} else {
+					fmt.Printf("  smbclient -L lists 'validate'\n")
+				}
+			} else {
+				fmt.Printf("  WARN smbclient -L failed: %v\n", err)
+			}
+			if out, err := runCmd(ctx, "smbclient", "//127.0.0.1/validate", "-N", "-c", "ls"); err == nil {
+				if !strings.Contains(string(out), "marker.txt") {
+					fmt.Printf("  WARN marker.txt not visible via smbclient ls\n")
+				} else {
+					fmt.Printf("  smbclient ls shows marker.txt\n")
+				}
+			} else {
+				fmt.Printf("  WARN smbclient ls failed (best-effort): %v\n", err)
+			}
+		} else {
+			fmt.Printf("  smbclient not present; skipping client connect checks\n")
+		}
+
+		if err := nm.DeleteShare(ctx, "validate"); err != nil {
+			return fmt.Errorf("DeleteShare: %w", err)
+		}
+		deleted = true
+		if _, err := nm.GetShare(ctx, "validate"); !errors.Is(err, samba.ErrNotFound) {
+			return fmt.Errorf("expected ErrNotFound after delete, got %v", err)
+		}
+		return nil
+	})
+
+	step("59. Samba user lifecycle", func() error {
+		if !which("smbpasswd") || !which("pdbedit") {
+			fmt.Printf("  SKIP: smbpasswd or pdbedit not available\n")
+			return nil
+		}
+		useradd, err := exec.LookPath("useradd")
+		if err != nil {
+			fmt.Printf("  SKIP: useradd not available\n")
+			return nil
+		}
+		userdel, _ := exec.LookPath("userdel")
+		// Idempotent useradd — ignore "already exists" (exit 9).
+		if out, err := exec.CommandContext(ctx, useradd, "-m", "-s", "/usr/sbin/nologin", "smbtest").CombinedOutput(); err != nil {
+			if !strings.Contains(string(out), "already exists") {
+				fmt.Printf("  useradd output: %s\n", strings.TrimSpace(string(out)))
+				return fmt.Errorf("useradd smbtest: %w", err)
+			}
+		}
+		defer func() {
+			if userdel != "" {
+				_, _ = exec.CommandContext(ctx, userdel, "-r", "smbtest").CombinedOutput()
+			}
+		}()
+
+		nm := &samba.Manager{}
+		if err := nm.AddUser(ctx, "smbtest", "TestPass!23"); err != nil {
+			return fmt.Errorf("AddUser: %w", err)
+		}
+		deleted := false
+		defer func() {
+			if !deleted {
+				_ = nm.DeleteUser(ctx, "smbtest")
+			}
+		}()
+
+		users, err := nm.ListUsers(ctx)
+		if err != nil {
+			return fmt.Errorf("ListUsers: %w", err)
+		}
+		found := false
+		for _, u := range users {
+			if u.Username == "smbtest" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("smbtest not in ListUsers output (got %d users)", len(users))
+		}
+		if err := nm.SetUserPassword(ctx, "smbtest", "NewPass!45"); err != nil {
+			return fmt.Errorf("SetUserPassword: %w", err)
+		}
+		if err := nm.DeleteUser(ctx, "smbtest"); err != nil {
+			return fmt.Errorf("DeleteUser: %w", err)
+		}
+		deleted = true
+		fmt.Printf("  add/list/set-password/delete cycle ok\n")
+		return nil
+	})
+
+	step("60. System info read", func() error {
+		s := &system.Manager{}
+		info, err := s.GetInfo(ctx)
+		if err != nil {
+			return fmt.Errorf("GetInfo: %w", err)
+		}
+		if info.Hostname == "" {
+			return fmt.Errorf("expected non-empty Hostname")
+		}
+		if info.OSPretty == "" {
+			return fmt.Errorf("expected non-empty OSPretty")
+		}
+		if time.Duration(info.Uptime) <= 0 {
+			return fmt.Errorf("expected positive Uptime, got %v", time.Duration(info.Uptime))
+		}
+		if info.Memory.TotalKB == 0 {
+			return fmt.Errorf("expected Memory.TotalKB > 0")
+		}
+		tc, err := s.GetTimeConfig(ctx)
+		if err != nil {
+			return fmt.Errorf("GetTimeConfig: %w", err)
+		}
+		if tc.Timezone == "" {
+			return fmt.Errorf("expected non-empty Timezone")
+		}
+		fmt.Printf("  hostname=%s os=%q kernel=%s uptime=%s mem=%dMiB tz=%s ntp=%v\n",
+			info.Hostname, info.OSPretty, info.KernelRelease,
+			time.Duration(info.Uptime).Round(time.Second), info.Memory.TotalKB/1024,
+			tc.Timezone, tc.NTP)
+		return nil
+	})
+
+	step("61. Network read-only", func() error {
+		n := &network.Manager{}
+		live, err := n.ListInterfaces(ctx)
+		if err != nil {
+			return fmt.Errorf("ListInterfaces: %w", err)
+		}
+		if len(live) == 0 {
+			return fmt.Errorf("expected at least one interface")
+		}
+		for _, li := range live {
+			if li.Name == "" {
+				return fmt.Errorf("interface with empty Name: %+v", li)
+			}
+			if li.State == "" {
+				return fmt.Errorf("interface %s: empty State", li.Name)
+			}
+			// MAC may legitimately be empty for loopback; require it
+			// for non-lo only.
+			if li.Name != "lo" && li.MAC == "" {
+				return fmt.Errorf("interface %s: empty MAC", li.Name)
+			}
+		}
+		fmt.Printf("  %d interfaces\n", len(live))
+
+		// Try to identify the management iface from SSH_CONNECTION
+		// (server-side dest IP is the 3rd whitespace field). If we
+		// can't extract one, skip — never guess.
+		ssh := os.Getenv("SSH_CONNECTION")
+		var localIP net.IP
+		if ssh != "" {
+			parts := strings.Fields(ssh)
+			if len(parts) >= 3 {
+				localIP = net.ParseIP(parts[2])
+			}
+		}
+		if localIP == nil {
+			fmt.Printf("  SKIP IdentifyManagementIface: no usable SSH_CONNECTION dest IP\n")
+			return nil
+		}
+		name, err := n.IdentifyManagementIface(localIP)
+		if err != nil {
+			fmt.Printf("  SKIP IdentifyManagementIface: %v\n", err)
+			return nil
+		}
+		fmt.Printf("  management iface for %s = %s\n", localIP, name)
+		return nil
+	})
+
+	step("62. Scheduler cron next-fire (pure unit, no DB)", func() error {
+		c, err := scheduler.ParseCron("*/5 * * * *")
+		if err != nil {
+			return fmt.Errorf("ParseCron */5: %w", err)
+		}
+		now := time.Now()
+		next := c.NextAfter(now, time.Local)
+		if !next.After(now) {
+			return fmt.Errorf("*/5 next %v not after now %v", next, now)
+		}
+		if next.Sub(now) > 5*time.Minute+time.Second {
+			return fmt.Errorf("*/5 next %v is more than 5m from now %v", next, now)
+		}
+
+		c2, err := scheduler.ParseCron("0 3 * * *")
+		if err != nil {
+			return fmt.Errorf("ParseCron 0 3: %w", err)
+		}
+		next2 := c2.NextAfter(now, time.Local)
+		if !next2.After(now) {
+			return fmt.Errorf("0 3 next %v not after now %v", next2, now)
+		}
+		if next2.Sub(now) >= 24*time.Hour {
+			return fmt.Errorf("0 3 next %v is >= 24h from now %v", next2, now)
+		}
+		fmt.Printf("  */5 next=%s (in %s); 0 3 next=%s (in %s)\n",
+			next.Format(time.RFC3339), next.Sub(now).Round(time.Second),
+			next2.Format(time.RFC3339), next2.Sub(now).Round(time.Second))
 		return nil
 	})
 

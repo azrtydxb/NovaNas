@@ -87,6 +87,87 @@ func (e IscsiPortalTransport) Valid() bool {
 	}
 }
 
+// Defines values for NetworkBondMode.
+const (
+	ActiveBackup NetworkBondMode = "active-backup"
+	BalanceAlb   NetworkBondMode = "balance-alb"
+	BalanceRr    NetworkBondMode = "balance-rr"
+	BalanceTlb   NetworkBondMode = "balance-tlb"
+	BalanceXor   NetworkBondMode = "balance-xor"
+	Broadcast    NetworkBondMode = "broadcast"
+	N8023ad      NetworkBondMode = "802.3ad"
+)
+
+// Valid indicates whether the value is a known member of the NetworkBondMode enum.
+func (e NetworkBondMode) Valid() bool {
+	switch e {
+	case ActiveBackup:
+		return true
+	case BalanceAlb:
+		return true
+	case BalanceRr:
+		return true
+	case BalanceTlb:
+		return true
+	case BalanceXor:
+		return true
+	case Broadcast:
+		return true
+	case N8023ad:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NetworkInterfaceKind.
+const (
+	Bond      NetworkInterfaceKind = "bond"
+	Interface NetworkInterfaceKind = "interface"
+	Vlan      NetworkInterfaceKind = "vlan"
+)
+
+// Valid indicates whether the value is a known member of the NetworkInterfaceKind enum.
+func (e NetworkInterfaceKind) Valid() bool {
+	switch e {
+	case Bond:
+		return true
+	case Interface:
+		return true
+	case Vlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NetworkInterfaceConfigDhcp.
+const (
+	Empty NetworkInterfaceConfigDhcp = ""
+	Ipv4  NetworkInterfaceConfigDhcp = "ipv4"
+	Ipv6  NetworkInterfaceConfigDhcp = "ipv6"
+	No    NetworkInterfaceConfigDhcp = "no"
+	Yes   NetworkInterfaceConfigDhcp = "yes"
+)
+
+// Valid indicates whether the value is a known member of the NetworkInterfaceConfigDhcp enum.
+func (e NetworkInterfaceConfigDhcp) Valid() bool {
+	switch e {
+	case Empty:
+		return true
+	case Ipv4:
+		return true
+	case Ipv6:
+		return true
+	case No:
+		return true
+	case Yes:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NvmeofDHChapConfigDhgroup.
 const (
 	Ffdhe2048   NvmeofDHChapConfigDhgroup = "ffdhe2048"
@@ -414,6 +495,18 @@ type Krb5Realm struct {
 	Kdc           []string `json:"kdc"`
 }
 
+// LiveInterface defines model for LiveInterface.
+type LiveInterface struct {
+	Addresses *[]string `json:"addresses,omitempty"`
+	Gateway   *string   `json:"gateway,omitempty"`
+	Mac       *string   `json:"mac,omitempty"`
+	Name      *string   `json:"name,omitempty"`
+	State     *string   `json:"state,omitempty"`
+
+	// Type ether|vlan|bond|bridge
+	Type *string `json:"type,omitempty"`
+}
+
 // LoadKeyRequest defines model for LoadKeyRequest.
 type LoadKeyRequest struct {
 	Keylocation *string `json:"keylocation,omitempty"`
@@ -425,6 +518,60 @@ type MetadataPatch struct {
 	Description *string            `json:"description,omitempty"`
 	DisplayName *string            `json:"display_name,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
+}
+
+// NetworkBond defines model for NetworkBond.
+type NetworkBond struct {
+	Address   *string         `json:"address,omitempty"`
+	DryRun    *bool           `json:"dryRun,omitempty"`
+	Members   []string        `json:"members"`
+	MiiMonSec *int            `json:"miiMonSec,omitempty"`
+	Mode      NetworkBondMode `json:"mode"`
+	Name      string          `json:"name"`
+}
+
+// NetworkBondMode defines model for NetworkBond.Mode.
+type NetworkBondMode string
+
+// NetworkInterface Envelope used by ListConfigs/GetConfig.
+type NetworkInterface struct {
+	Bond      *NetworkBond            `json:"bond,omitempty"`
+	Interface *NetworkInterfaceConfig `json:"interface,omitempty"`
+	Kind      NetworkInterfaceKind    `json:"kind"`
+	Name      string                  `json:"name"`
+	Vlan      *NetworkVLAN            `json:"vlan,omitempty"`
+}
+
+// NetworkInterfaceKind defines model for NetworkInterface.Kind.
+type NetworkInterfaceKind string
+
+// NetworkInterfaceConfig defines model for NetworkInterfaceConfig.
+type NetworkInterfaceConfig struct {
+	Addresses *[]string                   `json:"addresses,omitempty"`
+	Dhcp      *NetworkInterfaceConfigDhcp `json:"dhcp,omitempty"`
+	Dns       *[]string                   `json:"dns,omitempty"`
+	Domains   *[]string                   `json:"domains,omitempty"`
+	DryRun    *bool                       `json:"dryRun,omitempty"`
+	Gateway   *string                     `json:"gateway,omitempty"`
+	LinkLocal *string                     `json:"linkLocal,omitempty"`
+
+	// MatchName [Match] Name= glob (supports * and ?)
+	MatchName string `json:"matchName"`
+	Mtu       *int   `json:"mtu,omitempty"`
+	Name      string `json:"name"`
+}
+
+// NetworkInterfaceConfigDhcp defines model for NetworkInterfaceConfig.Dhcp.
+type NetworkInterfaceConfigDhcp string
+
+// NetworkVLAN defines model for NetworkVLAN.
+type NetworkVLAN struct {
+	// Address CIDR
+	Address *string `json:"address,omitempty"`
+	DryRun  *bool   `json:"dryRun,omitempty"`
+	Id      int     `json:"id"`
+	Name    string  `json:"name"`
+	Parent  string  `json:"parent"`
 }
 
 // NfsActiveExport defines model for NfsActiveExport.
@@ -588,6 +735,28 @@ type RdmaAdapterPort struct {
 	State string `json:"state"`
 }
 
+// ReplicationSchedule defines model for ReplicationSchedule.
+type ReplicationSchedule struct {
+	Cron            *string             `json:"cron,omitempty"`
+	Enabled         *bool               `json:"enabled,omitempty"`
+	Id              *openapi_types.UUID `json:"id,omitempty"`
+	RetentionRemote *int                `json:"retentionRemote,omitempty"`
+	SnapshotPrefix  *string             `json:"snapshotPrefix,omitempty"`
+	SrcDataset      *string             `json:"srcDataset,omitempty"`
+	TargetId        *openapi_types.UUID `json:"targetId,omitempty"`
+}
+
+// ReplicationTarget defines model for ReplicationTarget.
+type ReplicationTarget struct {
+	DatasetPrefix *string             `json:"datasetPrefix,omitempty"`
+	Host          *string             `json:"host,omitempty"`
+	Id            *openapi_types.UUID `json:"id,omitempty"`
+	Name          *string             `json:"name,omitempty"`
+	Port          *int                `json:"port,omitempty"`
+	SshKeyPath    *string             `json:"sshKeyPath,omitempty"`
+	SshUser       *string             `json:"sshUser,omitempty"`
+}
+
 // ResourceMetadata defines model for ResourceMetadata.
 type ResourceMetadata struct {
 	Description *string            `json:"description,omitempty"`
@@ -596,6 +765,74 @@ type ResourceMetadata struct {
 	Kind        *string            `json:"kind,omitempty"`
 	Tags        *map[string]string `json:"tags,omitempty"`
 	ZfsName     *string            `json:"zfsName,omitempty"`
+}
+
+// SambaShare defines model for SambaShare.
+type SambaShare struct {
+	AdminUsers    *[]string `json:"adminUsers,omitempty"`
+	Browseable    *bool     `json:"browseable,omitempty"`
+	Comment       *string   `json:"comment,omitempty"`
+	CreateMask    *string   `json:"createMask,omitempty"`
+	DirectoryMask *string   `json:"directoryMask,omitempty"`
+	GuestOk       *bool     `json:"guestOk,omitempty"`
+	Name          string    `json:"name"`
+
+	// Path Absolute path on the host
+	Path       string    `json:"path"`
+	ReadOnly   *bool     `json:"readOnly,omitempty"`
+	ValidUsers *[]string `json:"validUsers,omitempty"`
+	Veto       *[]string `json:"veto,omitempty"`
+	Writable   *bool     `json:"writable,omitempty"`
+	WriteList  *[]string `json:"writeList,omitempty"`
+}
+
+// SambaUser defines model for SambaUser.
+type SambaUser struct {
+	Username string `json:"username"`
+}
+
+// SambaUserCredentials defines model for SambaUserCredentials.
+type SambaUserCredentials struct {
+	Password string `json:"password"`
+
+	// Username Required on POST /samba/users; ignored on PUT password.
+	Username *string `json:"username,omitempty"`
+}
+
+// SmartAttribute defines model for SmartAttribute.
+type SmartAttribute struct {
+	Id         *int    `json:"id,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	RawValue   *string `json:"rawValue,omitempty"`
+	Threshold  *int    `json:"threshold,omitempty"`
+	Value      *int    `json:"value,omitempty"`
+	WhenFailed *string `json:"whenFailed,omitempty"`
+	Worst      *int    `json:"worst,omitempty"`
+}
+
+// SmartHealth defines model for SmartHealth.
+type SmartHealth struct {
+	Attributes    *[]SmartAttribute `json:"attributes,omitempty"`
+	CapacityBytes *int64            `json:"capacityBytes,omitempty"`
+	DeviceName    *string           `json:"deviceName,omitempty"`
+	ErrorSummary  *[]string         `json:"errorSummary,omitempty"`
+	Firmware      *string           `json:"firmware,omitempty"`
+	HasErrors     *bool             `json:"hasErrors,omitempty"`
+	LastTest      *SmartSelfTest    `json:"lastTest,omitempty"`
+	Model         *string           `json:"model,omitempty"`
+	OverallPassed *bool             `json:"overallPassed,omitempty"`
+	PowerCycles   *int              `json:"powerCycles,omitempty"`
+	PowerOnHours  *int              `json:"powerOnHours,omitempty"`
+	SerialNumber  *string           `json:"serialNumber,omitempty"`
+	TemperatureC  *int              `json:"temperatureC,omitempty"`
+}
+
+// SmartSelfTest defines model for SmartSelfTest.
+type SmartSelfTest struct {
+	LbaOfFirstError *int64  `json:"lbaOfFirstError,omitempty"`
+	LifetimeHours   *int    `json:"lifetimeHours,omitempty"`
+	Status          *string `json:"status,omitempty"`
+	Type            *string `json:"type,omitempty"`
 }
 
 // Snapshot defines model for Snapshot.
@@ -618,6 +855,79 @@ type SnapshotHoldRequest struct {
 type SnapshotReleaseRequest struct {
 	Recursive *bool  `json:"recursive,omitempty"`
 	Tag       string `json:"tag"`
+}
+
+// SnapshotSchedule defines model for SnapshotSchedule.
+type SnapshotSchedule struct {
+	// Cron Standard 5-field cron expression
+	Cron             *string             `json:"cron,omitempty"`
+	Dataset          *string             `json:"dataset,omitempty"`
+	Enabled          *bool               `json:"enabled,omitempty"`
+	Id               *openapi_types.UUID `json:"id,omitempty"`
+	Name             *string             `json:"name,omitempty"`
+	Recursive        *bool               `json:"recursive,omitempty"`
+	RetentionDaily   *int                `json:"retentionDaily,omitempty"`
+	RetentionHourly  *int                `json:"retentionHourly,omitempty"`
+	RetentionMonthly *int                `json:"retentionMonthly,omitempty"`
+	RetentionWeekly  *int                `json:"retentionWeekly,omitempty"`
+	RetentionYearly  *int                `json:"retentionYearly,omitempty"`
+	SnapshotPrefix   *string             `json:"snapshotPrefix,omitempty"`
+}
+
+// SystemCPUInfo defines model for SystemCPUInfo.
+type SystemCPUInfo struct {
+	Cores   *int    `json:"cores,omitempty"`
+	Model   *string `json:"model,omitempty"`
+	Sockets *int    `json:"sockets,omitempty"`
+	Threads *int    `json:"threads,omitempty"`
+}
+
+// SystemHostnameRequest defines model for SystemHostnameRequest.
+type SystemHostnameRequest struct {
+	Hostname string `json:"hostname"`
+}
+
+// SystemInfo defines model for SystemInfo.
+type SystemInfo struct {
+	Architecture  *string            `json:"architecture,omitempty"`
+	Cpu           *SystemCPUInfo     `json:"cpu,omitempty"`
+	Hostname      *string            `json:"hostname,omitempty"`
+	KernelRelease *string            `json:"kernelRelease,omitempty"`
+	LoadAvg       *[]float32         `json:"loadAvg,omitempty"`
+	Memory        *SystemMemoryStats `json:"memory,omitempty"`
+	OsPretty      *string            `json:"osPretty,omitempty"`
+
+	// Uptime Go duration string (e.g. 1h2m3s)
+	Uptime     *string `json:"uptime,omitempty"`
+	ZfsVersion *string `json:"zfsVersion,omitempty"`
+}
+
+// SystemMemoryStats defines model for SystemMemoryStats.
+type SystemMemoryStats struct {
+	AvailableKB *int64 `json:"availableKB,omitempty"`
+	SwapFreeKB  *int64 `json:"swapFreeKB,omitempty"`
+	SwapTotalKB *int64 `json:"swapTotalKB,omitempty"`
+	TotalKB     *int64 `json:"totalKB,omitempty"`
+}
+
+// SystemNTPRequest defines model for SystemNTPRequest.
+type SystemNTPRequest struct {
+	Enabled bool      `json:"enabled"`
+	Servers *[]string `json:"servers,omitempty"`
+}
+
+// SystemTimeConfig defines model for SystemTimeConfig.
+type SystemTimeConfig struct {
+	Ntp          *bool     `json:"ntp,omitempty"`
+	NtpServers   *[]string `json:"ntpServers,omitempty"`
+	Synchronized *bool     `json:"synchronized,omitempty"`
+	Timezone     *string   `json:"timezone,omitempty"`
+}
+
+// SystemTimezoneRequest defines model for SystemTimezoneRequest.
+type SystemTimezoneRequest struct {
+	// Timezone IANA zoneinfo name (e.g. Europe/Brussels)
+	Timezone string `json:"timezone"`
 }
 
 // Vdev defines model for Vdev.
@@ -698,6 +1008,11 @@ type UnloadDatasetKeyJSONBody struct {
 	Recursive *bool `json:"recursive,omitempty"`
 }
 
+// RunDiskSmartTestParams defines parameters for RunDiskSmartTest.
+type RunDiskSmartTestParams struct {
+	Type string `form:"type" json:"type"`
+}
+
 // CreateIscsiTargetJSONBody defines parameters for CreateIscsiTarget.
 type CreateIscsiTargetJSONBody struct {
 	Iqn string `json:"iqn"`
@@ -712,6 +1027,33 @@ type ListJobsParams struct {
 
 // ListJobsParamsState defines parameters for ListJobs.
 type ListJobsParamsState string
+
+// ApplyNetworkBondParams defines parameters for ApplyNetworkBond.
+type ApplyNetworkBondParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// ApplyNetworkInterfaceConfigParams defines parameters for ApplyNetworkInterfaceConfig.
+type ApplyNetworkInterfaceConfigParams struct {
+	// Force Bypass the management-interface guard. Required when the request would touch the iface owning the request's source IP, or when the source IP cannot be verified.
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// DeleteNetworkConfigParams defines parameters for DeleteNetworkConfig.
+type DeleteNetworkConfigParams struct {
+	// Force Bypass management-interface guard.
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// NetworkReloadParams defines parameters for NetworkReload.
+type NetworkReloadParams struct {
+	Force bool `form:"force" json:"force"`
+}
+
+// ApplyNetworkVLANParams defines parameters for ApplyNetworkVLAN.
+type ApplyNetworkVLANParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
 
 // LinkNvmeofSubsystemJSONBody defines parameters for LinkNvmeofSubsystem.
 type LinkNvmeofSubsystemJSONBody struct {
@@ -750,6 +1092,17 @@ type CreateSnapshotJSONBody struct {
 	Dataset   string `json:"dataset"`
 	Name      string `json:"name"`
 	Recursive *bool  `json:"recursive,omitempty"`
+}
+
+// SystemRebootParams defines parameters for SystemReboot.
+type SystemRebootParams struct {
+	// DelaySec Delay in seconds before reboot. 0 (default) means immediate (--no-block); >0 schedules `shutdown -r +<min>` rounded up.
+	DelaySec *int `form:"delaySec,omitempty" json:"delaySec,omitempty"`
+}
+
+// SystemShutdownParams defines parameters for SystemShutdown.
+type SystemShutdownParams struct {
+	DelaySec *int `form:"delaySec,omitempty" json:"delaySec,omitempty"`
 }
 
 // CreateDatasetJSONRequestBody defines body for CreateDataset for application/json ContentType.
@@ -806,6 +1159,15 @@ type SetKrb5IdmapdJSONRequestBody = Krb5IdmapdConfig
 // UploadKrb5KeytabJSONRequestBody defines body for UploadKrb5Keytab for application/json ContentType.
 type UploadKrb5KeytabJSONRequestBody = Krb5KeytabUpload
 
+// ApplyNetworkBondJSONRequestBody defines body for ApplyNetworkBond for application/json ContentType.
+type ApplyNetworkBondJSONRequestBody = NetworkBond
+
+// ApplyNetworkInterfaceConfigJSONRequestBody defines body for ApplyNetworkInterfaceConfig for application/json ContentType.
+type ApplyNetworkInterfaceConfigJSONRequestBody = NetworkInterfaceConfig
+
+// ApplyNetworkVLANJSONRequestBody defines body for ApplyNetworkVLAN for application/json ContentType.
+type ApplyNetworkVLANJSONRequestBody = NetworkVLAN
+
 // CreateNfsExportJSONRequestBody defines body for CreateNfsExport for application/json ContentType.
 type CreateNfsExportJSONRequestBody = NfsExport
 
@@ -845,6 +1207,33 @@ type PatchPoolPropertiesJSONRequestBody = PoolPropertiesPatch
 // TrimPoolJSONRequestBody defines body for TrimPool for application/json ContentType.
 type TrimPoolJSONRequestBody = PoolTrimRequest
 
+// CreateSambaShareJSONRequestBody defines body for CreateSambaShare for application/json ContentType.
+type CreateSambaShareJSONRequestBody = SambaShare
+
+// UpdateSambaShareJSONRequestBody defines body for UpdateSambaShare for application/json ContentType.
+type UpdateSambaShareJSONRequestBody = SambaShare
+
+// AddSambaUserJSONRequestBody defines body for AddSambaUser for application/json ContentType.
+type AddSambaUserJSONRequestBody = SambaUserCredentials
+
+// SetSambaUserPasswordJSONRequestBody defines body for SetSambaUserPassword for application/json ContentType.
+type SetSambaUserPasswordJSONRequestBody = SambaUserCredentials
+
+// CreateReplicationScheduleJSONRequestBody defines body for CreateReplicationSchedule for application/json ContentType.
+type CreateReplicationScheduleJSONRequestBody = ReplicationSchedule
+
+// UpdateReplicationScheduleJSONRequestBody defines body for UpdateReplicationSchedule for application/json ContentType.
+type UpdateReplicationScheduleJSONRequestBody = ReplicationSchedule
+
+// CreateReplicationTargetJSONRequestBody defines body for CreateReplicationTarget for application/json ContentType.
+type CreateReplicationTargetJSONRequestBody = ReplicationTarget
+
+// CreateSnapshotScheduleJSONRequestBody defines body for CreateSnapshotSchedule for application/json ContentType.
+type CreateSnapshotScheduleJSONRequestBody = SnapshotSchedule
+
+// UpdateSnapshotScheduleJSONRequestBody defines body for UpdateSnapshotSchedule for application/json ContentType.
+type UpdateSnapshotScheduleJSONRequestBody = SnapshotSchedule
+
 // CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
 type CreateSnapshotJSONRequestBody CreateSnapshotJSONBody
 
@@ -856,3 +1245,12 @@ type PatchSnapshotMetadataJSONRequestBody = MetadataPatch
 
 // ReleaseSnapshotJSONRequestBody defines body for ReleaseSnapshot for application/json ContentType.
 type ReleaseSnapshotJSONRequestBody = SnapshotReleaseRequest
+
+// SetSystemHostnameJSONRequestBody defines body for SetSystemHostname for application/json ContentType.
+type SetSystemHostnameJSONRequestBody = SystemHostnameRequest
+
+// SetSystemNTPJSONRequestBody defines body for SetSystemNTP for application/json ContentType.
+type SetSystemNTPJSONRequestBody = SystemNTPRequest
+
+// SetSystemTimezoneJSONRequestBody defines body for SetSystemTimezone for application/json ContentType.
+type SetSystemTimezoneJSONRequestBody = SystemTimezoneRequest

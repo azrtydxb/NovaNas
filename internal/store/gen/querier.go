@@ -12,21 +12,50 @@ import (
 
 type Querier interface {
 	CancelJob(ctx context.Context, id pgtype.UUID) error
+	// =====================================================================
+	// Replication schedules
+	// =====================================================================
+	CreateReplicationSchedule(ctx context.Context, arg CreateReplicationScheduleParams) (ReplicationSchedule, error)
+	// =====================================================================
+	// Replication targets
+	// =====================================================================
+	CreateReplicationTarget(ctx context.Context, arg CreateReplicationTargetParams) (ReplicationTarget, error)
+	// =====================================================================
+	// Snapshot schedules
+	// =====================================================================
+	CreateSnapshotSchedule(ctx context.Context, arg CreateSnapshotScheduleParams) (SnapshotSchedule, error)
+	DeleteReplicationSchedule(ctx context.Context, id pgtype.UUID) error
+	DeleteReplicationTarget(ctx context.Context, id pgtype.UUID) error
 	DeleteResourceMetadata(ctx context.Context, arg DeleteResourceMetadataParams) error
+	DeleteSnapshotSchedule(ctx context.Context, id pgtype.UUID) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetReplicationSchedule(ctx context.Context, id pgtype.UUID) (ReplicationSchedule, error)
+	GetReplicationTarget(ctx context.Context, id pgtype.UUID) (ReplicationTarget, error)
 	GetResourceMetadata(ctx context.Context, arg GetResourceMetadataParams) (ResourceMetadatum, error)
+	GetSnapshotSchedule(ctx context.Context, id pgtype.UUID) (SnapshotSchedule, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertJob(ctx context.Context, arg InsertJobParams) (Job, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListEnabledReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
+	ListEnabledSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
+	ListReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
+	ListReplicationTargets(ctx context.Context) ([]ReplicationTarget, error)
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
+	ListSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	// Only writes if the row is still 'running'. A user CancelJob between
 	// markRunning and finish flips state to 'cancelled' and the host op is
 	// already underway — we honor the user's cancel intent in the row even
 	// though the host effect can't be unwound.
 	MarkJobFinished(ctx context.Context, arg MarkJobFinishedParams) error
 	MarkJobRunning(ctx context.Context, id pgtype.UUID) error
+	MarkReplicationScheduleFired(ctx context.Context, arg MarkReplicationScheduleFiredParams) error
+	MarkReplicationScheduleResult(ctx context.Context, arg MarkReplicationScheduleResultParams) error
 	MarkRunningInterrupted(ctx context.Context) error
+	MarkSnapshotScheduleFired(ctx context.Context, arg MarkSnapshotScheduleFiredParams) error
+	UpdateReplicationSchedule(ctx context.Context, arg UpdateReplicationScheduleParams) (ReplicationSchedule, error)
+	UpdateReplicationTarget(ctx context.Context, arg UpdateReplicationTargetParams) (ReplicationTarget, error)
+	UpdateSnapshotSchedule(ctx context.Context, arg UpdateSnapshotScheduleParams) (SnapshotSchedule, error)
 	UpsertResourceMetadata(ctx context.Context, arg UpsertResourceMetadataParams) (ResourceMetadatum, error)
 }
 

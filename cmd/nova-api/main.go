@@ -20,9 +20,14 @@ import (
 	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
 	"github.com/novanas/nova-nas/internal/host/krb5"
+	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/rdma"
+	"github.com/novanas/nova-nas/internal/host/samba"
+	"github.com/novanas/nova-nas/internal/host/scheduler"
+	"github.com/novanas/nova-nas/internal/host/smart"
+	"github.com/novanas/nova-nas/internal/host/system"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -60,6 +65,15 @@ func main() {
 	nfsMgr := &nfs.Manager{}
 	krb5Mgr := &krb5.Manager{}
 	rdmaLister := &rdma.Lister{}
+	sambaMgr := &samba.Manager{}
+	smartMgr := &smart.Manager{}
+	networkMgr := &network.Manager{}
+	if _, err := os.Stat("/usr/sbin/ip"); err != nil {
+		logger.Warn("network: /usr/sbin/ip not found; live interface listing will fail",
+			"err", err)
+	}
+	systemMgr := &system.Manager{}
+	schedulerMgr := scheduler.New(logger, st.Queries, snapMgr, datasetMgr, nil)
 
 	// Asynq client (dispatcher uses this)
 	asynqRedisOpt, err := asynq.ParseRedisURI(cfg.RedisURL)
@@ -96,16 +110,21 @@ func main() {
 		Logger:      asynqSlogAdapter{l: logger},
 	})
 	mux := jobs.NewServeMux(jobs.WorkerDeps{
-		Logger:    logger,
-		Queries:   st.Queries,
-		Redis:     redisClient,
-		Pools:     poolMgr,
-		Datasets:  datasetMgr,
-		Snapshots: snapMgr,
-		IscsiMgr:  iscsiMgr,
-		NvmeofMgr: nvmeofMgr,
-		NfsMgr:    nfsMgr,
-		Krb5Mgr:   krb5Mgr,
+		Logger:       logger,
+		Queries:      st.Queries,
+		Redis:        redisClient,
+		Pools:        poolMgr,
+		Datasets:     datasetMgr,
+		Snapshots:    snapMgr,
+		IscsiMgr:     iscsiMgr,
+		NvmeofMgr:    nvmeofMgr,
+		NfsMgr:       nfsMgr,
+		Krb5Mgr:      krb5Mgr,
+		SambaMgr:     sambaMgr,
+		SmartMgr:     smartMgr,
+		SchedulerMgr: schedulerMgr,
+		NetworkMgr:   networkMgr,
+		SystemMgr:    systemMgr,
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
@@ -117,6 +136,17 @@ func main() {
 		}
 	}()
 	defer asyncSrv.Stop()
+
+	// Scheduler tick loop. Cancelled alongside the HTTP server on
+	// shutdown via schedCtx. Errors from Run are only ctx.Err() once
+	// shutdown begins; logged at debug.
+	schedCtx, schedCancel := context.WithCancel(context.Background())
+	defer schedCancel()
+	go func() {
+		if err := schedulerMgr.Run(schedCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("scheduler run", "err", err)
+		}
+	}()
 
 	srv := api.New(api.Deps{
 		Logger:     logger,
@@ -135,6 +165,11 @@ func main() {
 		NfsMgr:      nfsMgr,
 		Krb5Mgr:     krb5Mgr,
 		RdmaLister:  rdmaLister,
+		SambaMgr:     sambaMgr,
+		SmartMgr:     smartMgr,
+		SchedulerMgr: schedulerMgr,
+		NetworkMgr:   networkMgr,
+		SystemMgr:    systemMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

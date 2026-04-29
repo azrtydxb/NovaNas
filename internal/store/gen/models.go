@@ -35,6 +35,32 @@ type Job struct {
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
 }
 
+type ReplicationSchedule struct {
+	ID               pgtype.UUID        `json:"id"`
+	SrcDataset       string             `json:"src_dataset"`
+	TargetID         pgtype.UUID        `json:"target_id"`
+	Cron             string             `json:"cron"`
+	SnapshotPrefix   string             `json:"snapshot_prefix"`
+	RetentionRemote  int32              `json:"retention_remote"`
+	Enabled          bool               `json:"enabled"`
+	LastFiredAt      pgtype.Timestamptz `json:"last_fired_at"`
+	LastSyncSnapshot *string            `json:"last_sync_snapshot"`
+	LastError        *string            `json:"last_error"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ReplicationTarget struct {
+	ID            pgtype.UUID        `json:"id"`
+	Name          string             `json:"name"`
+	Host          string             `json:"host"`
+	Port          int32              `json:"port"`
+	SshUser       string             `json:"ssh_user"`
+	SshKeyPath    string             `json:"ssh_key_path"`
+	DatasetPrefix string             `json:"dataset_prefix"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type ResourceMetadatum struct {
 	ID          int64   `json:"id"`
 	Kind        string  `json:"kind"`
@@ -42,4 +68,22 @@ type ResourceMetadatum struct {
 	DisplayName *string `json:"display_name"`
 	Description *string `json:"description"`
 	Tags        []byte  `json:"tags"`
+}
+
+type SnapshotSchedule struct {
+	ID               pgtype.UUID        `json:"id"`
+	Dataset          string             `json:"dataset"`
+	Name             string             `json:"name"`
+	Cron             string             `json:"cron"`
+	Recursive        bool               `json:"recursive"`
+	SnapshotPrefix   string             `json:"snapshot_prefix"`
+	RetentionHourly  int32              `json:"retention_hourly"`
+	RetentionDaily   int32              `json:"retention_daily"`
+	RetentionWeekly  int32              `json:"retention_weekly"`
+	RetentionMonthly int32              `json:"retention_monthly"`
+	RetentionYearly  int32              `json:"retention_yearly"`
+	Enabled          bool               `json:"enabled"`
+	LastFiredAt      pgtype.Timestamptz `json:"last_fired_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }

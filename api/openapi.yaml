@@ -1321,6 +1321,541 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/RdmaAdapter' }
 
+  /samba/shares:
+    get:
+      operationId: listSambaShares
+      summary: List managed Samba shares
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SambaShare' }
+    post:
+      operationId: createSambaShare
+      summary: Create a Samba share
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SambaShare' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /samba/shares/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getSambaShare
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SambaShare' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateSambaShare
+      summary: Replace an existing Samba share (full body)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SambaShare' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteSambaShare
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /samba/reload:
+    post:
+      operationId: sambaReload
+      summary: Reload smbd via smbcontrol
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /samba/users:
+    get:
+      operationId: listSambaUsers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SambaUser' }
+    post:
+      operationId: addSambaUser
+      summary: Add a Samba user. Requires the underlying Linux user to exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SambaUserCredentials' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /samba/users/{username}:
+    parameters:
+      - in: path
+        name: username
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteSambaUser
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /samba/users/{username}/password:
+    parameters:
+      - in: path
+        name: username
+        required: true
+        schema: { type: string }
+    put:
+      operationId: setSambaUserPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SambaUserCredentials' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /disks/{name}/smart:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        description: 'Bare device name (e.g. sda, nvme0n1). Must be alphanumeric. Handler resolves to /dev/<name>.'
+        schema: { type: string }
+    get:
+      operationId: getDiskSmart
+      summary: Read the SMART health summary for a disk (synchronous)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmartHealth' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /disks/{name}/smart/test:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: query
+        name: type
+        required: true
+        schema:
+          type: string
+          enum: [short, long, conveyance, abort]
+    post:
+      operationId: runDiskSmartTest
+      summary: Run a SMART self-test (async)
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /disks/{name}/smart/enable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      operationId: enableDiskSmart
+      summary: Enable SMART for a disk that ships with it disabled
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scheduler/snapshot-schedules:
+    get:
+      operationId: listSnapshotSchedules
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SnapshotSchedule' }
+    post:
+      operationId: createSnapshotSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotSchedule' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scheduler/snapshot-schedules/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getSnapshotSchedule
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotSchedule' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateSnapshotSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotSchedule' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteSnapshotSchedule
+      responses:
+        '204': { description: Deleted }
+
+  /scheduler/replication-targets:
+    get:
+      operationId: listReplicationTargets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReplicationTarget' }
+    post:
+      operationId: createReplicationTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplicationTarget' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationTarget' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scheduler/replication-targets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getReplicationTarget
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationTarget' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteReplicationTarget
+      responses:
+        '204': { description: Deleted }
+
+  /scheduler/replication-schedules:
+    get:
+      operationId: listReplicationSchedules
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReplicationSchedule' }
+    post:
+      operationId: createReplicationSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplicationSchedule' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scheduler/replication-schedules/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getReplicationSchedule
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationSchedule' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateReplicationSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplicationSchedule' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplicationSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteReplicationSchedule
+      responses:
+        '204': { description: Deleted }
+
+  /network/interfaces:
+    get:
+      operationId: listNetworkInterfaces
+      summary: List live kernel interfaces (parsed from `ip -j addr show`)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LiveInterface' }
+
+  /network/configs:
+    get:
+      operationId: listNetworkConfigs
+      summary: List managed systemd-networkd configs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NetworkInterface' }
+    post:
+      operationId: applyNetworkInterfaceConfig
+      summary: Apply a plain (non-VLAN/bond) interface config
+      parameters:
+        - in: query
+          name: force
+          required: false
+          description: 'Bypass the management-interface guard. Required when the request would touch the iface owning the request''s source IP, or when the source IP cannot be verified.'
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NetworkInterfaceConfig' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /network/configs/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getNetworkConfig
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NetworkInterface' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteNetworkConfig
+      parameters:
+        - in: query
+          name: force
+          required: false
+          description: 'Bypass management-interface guard.'
+          schema: { type: boolean }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /network/vlans:
+    post:
+      operationId: applyNetworkVLAN
+      parameters:
+        - in: query
+          name: force
+          required: false
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NetworkVLAN' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /network/bonds:
+    post:
+      operationId: applyNetworkBond
+      parameters:
+        - in: query
+          name: force
+          required: false
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NetworkBond' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /network/reload:
+    post:
+      operationId: networkReload
+      summary: 'Run `networkctl reload`. ALWAYS requires force=true since reload itself can drop the management interface.'
+      parameters:
+        - in: query
+          name: force
+          required: true
+          schema: { type: boolean }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/info:
+    get:
+      operationId: getSystemInfo
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemInfo' }
+
+  /system/time:
+    get:
+      operationId: getSystemTime
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemTimeConfig' }
+
+  /system/hostname:
+    put:
+      operationId: setSystemHostname
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemHostnameRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/timezone:
+    put:
+      operationId: setSystemTimezone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemTimezoneRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/ntp:
+    put:
+      operationId: setSystemNTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemNTPRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/reboot:
+    post:
+      operationId: systemReboot
+      parameters:
+        - in: query
+          name: delaySec
+          required: false
+          description: 'Delay in seconds before reboot. 0 (default) means immediate (--no-block); >0 schedules `shutdown -r +<min>` rounded up.'
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/shutdown:
+    post:
+      operationId: systemShutdown
+      parameters:
+        - in: query
+          name: delaySec
+          required: false
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /system/cancel-shutdown:
+    post:
+      operationId: systemCancelShutdown
+      summary: Cancel a scheduled reboot/shutdown (`shutdown -c`)
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
   /jobs/{id}/stream:
     parameters:
       - in: path
@@ -1761,3 +2296,213 @@ components:
         gids:
           type: array
           items: { type: string }
+
+    SambaShare:
+      type: object
+      required: [name, path]
+      properties:
+        name:          { type: string }
+        path:          { type: string, description: 'Absolute path on the host' }
+        comment:       { type: string }
+        browseable:    { type: boolean }
+        writable:      { type: boolean }
+        guestOk:       { type: boolean }
+        readOnly:      { type: boolean }
+        validUsers:    { type: array, items: { type: string } }
+        writeList:     { type: array, items: { type: string } }
+        adminUsers:    { type: array, items: { type: string } }
+        createMask:    { type: string }
+        directoryMask: { type: string }
+        veto:          { type: array, items: { type: string } }
+    SambaUser:
+      type: object
+      required: [username]
+      properties:
+        username: { type: string }
+    SambaUserCredentials:
+      type: object
+      required: [password]
+      properties:
+        username: { type: string, description: 'Required on POST /samba/users; ignored on PUT password.' }
+        password: { type: string }
+
+    SmartHealth:
+      type: object
+      properties:
+        deviceName:    { type: string }
+        model:         { type: string }
+        serialNumber:  { type: string }
+        firmware:      { type: string }
+        capacityBytes: { type: integer, format: int64 }
+        overallPassed: { type: boolean }
+        temperatureC:  { type: integer }
+        powerOnHours:  { type: integer }
+        powerCycles:   { type: integer }
+        attributes:
+          type: array
+          items: { $ref: '#/components/schemas/SmartAttribute' }
+        lastTest: { $ref: '#/components/schemas/SmartSelfTest' }
+        hasErrors: { type: boolean }
+        errorSummary:
+          type: array
+          items: { type: string }
+    SmartAttribute:
+      type: object
+      properties:
+        id:         { type: integer }
+        name:       { type: string }
+        value:      { type: integer }
+        worst:      { type: integer }
+        threshold:  { type: integer }
+        rawValue:   { type: string }
+        whenFailed: { type: string }
+    SmartSelfTest:
+      type: object
+      properties:
+        type:            { type: string }
+        status:          { type: string }
+        lifetimeHours:   { type: integer }
+        lbaOfFirstError: { type: integer, format: int64 }
+
+    SnapshotSchedule:
+      type: object
+      properties:
+        id:               { type: string, format: uuid, readOnly: true }
+        dataset:          { type: string }
+        name:             { type: string }
+        cron:             { type: string, description: 'Standard 5-field cron expression' }
+        recursive:        { type: boolean }
+        snapshotPrefix:   { type: string }
+        retentionHourly:  { type: integer }
+        retentionDaily:   { type: integer }
+        retentionWeekly:  { type: integer }
+        retentionMonthly: { type: integer }
+        retentionYearly:  { type: integer }
+        enabled:          { type: boolean }
+    ReplicationTarget:
+      type: object
+      properties:
+        id:            { type: string, format: uuid, readOnly: true }
+        name:          { type: string }
+        host:          { type: string }
+        port:          { type: integer, default: 22 }
+        sshUser:       { type: string }
+        sshKeyPath:    { type: string }
+        datasetPrefix: { type: string }
+    ReplicationSchedule:
+      type: object
+      properties:
+        id:              { type: string, format: uuid, readOnly: true }
+        srcDataset:      { type: string }
+        targetId:        { type: string, format: uuid }
+        cron:            { type: string }
+        snapshotPrefix:  { type: string }
+        retentionRemote: { type: integer }
+        enabled:         { type: boolean }
+
+    LiveInterface:
+      type: object
+      properties:
+        name:      { type: string }
+        state:     { type: string }
+        mac:       { type: string }
+        addresses: { type: array, items: { type: string, description: 'CIDR' } }
+        gateway:   { type: string }
+        type:      { type: string, description: 'ether|vlan|bond|bridge' }
+    NetworkInterfaceConfig:
+      type: object
+      required: [name, matchName]
+      properties:
+        name:      { type: string }
+        matchName: { type: string, description: '[Match] Name= glob (supports * and ?)' }
+        dhcp:      { type: string, enum: ['', yes, no, ipv4, ipv6] }
+        addresses: { type: array, items: { type: string, description: 'CIDR' } }
+        gateway:   { type: string }
+        dns:       { type: array, items: { type: string } }
+        domains:   { type: array, items: { type: string } }
+        mtu:       { type: integer }
+        linkLocal: { type: string }
+        dryRun:    { type: boolean }
+    NetworkVLAN:
+      type: object
+      required: [name, parent, id]
+      properties:
+        name:    { type: string }
+        parent:  { type: string }
+        id:      { type: integer, minimum: 1, maximum: 4094 }
+        address: { type: string, description: 'CIDR' }
+        dryRun:  { type: boolean }
+    NetworkBond:
+      type: object
+      required: [name, mode, members]
+      properties:
+        name:    { type: string }
+        mode:    { type: string, enum: [balance-rr, active-backup, balance-xor, broadcast, '802.3ad', balance-tlb, balance-alb] }
+        members: { type: array, items: { type: string } }
+        address: { type: string }
+        miiMonSec: { type: integer }
+        dryRun:  { type: boolean }
+    NetworkInterface:
+      description: 'Envelope used by ListConfigs/GetConfig.'
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [interface, vlan, bond] }
+        interface: { $ref: '#/components/schemas/NetworkInterfaceConfig' }
+        vlan:      { $ref: '#/components/schemas/NetworkVLAN' }
+        bond:      { $ref: '#/components/schemas/NetworkBond' }
+
+    SystemMemoryStats:
+      type: object
+      properties:
+        totalKB:     { type: integer, format: int64 }
+        availableKB: { type: integer, format: int64 }
+        swapTotalKB: { type: integer, format: int64 }
+        swapFreeKB:  { type: integer, format: int64 }
+    SystemCPUInfo:
+      type: object
+      properties:
+        model:   { type: string }
+        sockets: { type: integer }
+        cores:   { type: integer }
+        threads: { type: integer }
+    SystemInfo:
+      type: object
+      properties:
+        hostname:      { type: string }
+        osPretty:      { type: string }
+        kernelRelease: { type: string }
+        architecture:  { type: string }
+        uptime:        { type: string, description: 'Go duration string (e.g. 1h2m3s)' }
+        loadAvg:
+          type: array
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        memory: { $ref: '#/components/schemas/SystemMemoryStats' }
+        cpu:    { $ref: '#/components/schemas/SystemCPUInfo' }
+        zfsVersion: { type: string }
+    SystemTimeConfig:
+      type: object
+      properties:
+        timezone:     { type: string }
+        ntp:          { type: boolean }
+        ntpServers:   { type: array, items: { type: string } }
+        synchronized: { type: boolean }
+    SystemHostnameRequest:
+      type: object
+      required: [hostname]
+      properties:
+        hostname: { type: string }
+    SystemTimezoneRequest:
+      type: object
+      required: [timezone]
+      properties:
+        timezone: { type: string, description: 'IANA zoneinfo name (e.g. Europe/Brussels)' }
+    SystemNTPRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        servers: { type: array, items: { type: string } }
