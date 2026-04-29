@@ -48,6 +48,14 @@ spec:
         - --default-parent=tank/csi
         - --log-level=info
         - --host-root-prefix=/host
+        # Enables NFS-mode StorageClasses (novanas-nfs). Pods receive this
+        # value in VolumeContext.nfsServer and the kernel NFS client mounts
+        # against it via mount.nfs4 in this container.
+        - --nfs-server=192.168.10.204
+        # Default per-export client allowlist when the StorageClass omits
+        # 'nfsClients'. Owned export options (sec=krb5p) live in the host's
+        # /etc/exports.d defaults, not here.
+        - --default-nfs-clients=10.0.0.0/8
         env:
         - name: NODE_NAME
           valueFrom:
@@ -74,6 +82,16 @@ spec:
         - name: host-root
           mountPath: /host
           mountPropagation: HostToContainer
+        # Read-only kerberos materials so mount.nfs4 inside this container
+        # can negotiate sec=krb5p via the kernel using the host's machine
+        # credentials. The KDC and keytab are owned by Agent A / Agent C;
+        # this container only consumes them.
+        - name: host-krb5-conf
+          mountPath: /etc/krb5.conf
+          readOnly: true
+        - name: host-krb5-keytab
+          mountPath: /etc/krb5.keytab
+          readOnly: true
         resources:
           requests:
             cpu: 50m
@@ -135,3 +153,14 @@ spec:
         hostPath:
           path: /
           type: Directory
+      # Host-side krb5 materials. The container image must ship mount.nfs4
+      # (nfs-utils / nfs-common) so the kernel can call it during NFS
+      # mount negotiation.
+      - name: host-krb5-conf
+        hostPath:
+          path: /etc/krb5.conf
+          type: File
+      - name: host-krb5-keytab
+        hostPath:
+          path: /etc/krb5.keytab
+          type: File

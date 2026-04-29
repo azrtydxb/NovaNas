@@ -640,3 +640,148 @@ func TestSetToken_Concurrent(t *testing.T) {
 // silence unused-import warning in case io.Reader stops being referenced
 // by future edits.
 var _ io.Reader = (*strings.Reader)(nil)
+
+// ---- ProtocolShares --------------------------------------------------------
+
+func TestCreateProtocolShare(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/protocol-shares" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		var body ProtocolShare
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Name != "share1" || body.Pool != "tank" || body.DatasetName != "csi-nfs/share1" {
+			t.Errorf("body %+v", body)
+		}
+		if len(body.Protocols) != 1 || body.Protocols[0] != ProtocolNFS {
+			t.Errorf("protocols %+v", body.Protocols)
+		}
+		if body.NFS == nil || len(body.NFS.Clients) != 1 || body.NFS.Clients[0].Spec != "10.0.0.0/8" {
+			t.Errorf("nfs opts %+v", body.NFS)
+		}
+		writeJSON(t, w, 202, map[string]string{"jobId": "ps-1"})
+	}))
+	defer srv.Close()
+
+	share := ProtocolShare{
+		Name:        "share1",
+		Pool:        "tank",
+		DatasetName: "csi-nfs/share1",
+		Protocols:   []Protocol{ProtocolNFS},
+		Acls:        []DatasetACE{},
+		NFS: &ProtocolNFSOpts{
+			Clients: []NfsClientRule{{Spec: "10.0.0.0/8", Options: "rw,sync"}},
+		},
+	}
+	job, err := newTestClient(t, srv).CreateProtocolShare(context.Background(), share)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.ID != "ps-1" || job.State != JobStateQueued {
+		t.Errorf("job %+v", job)
+	}
+}
+
+func TestCreateProtocolShareValidation(t *testing.T) {
+	c := &Client{BaseURL: "http://x", HTTPClient: http.DefaultClient}
+	if _, err := c.CreateProtocolShare(context.Background(), ProtocolShare{}); err == nil {
+		t.Fatal("expected validation error for empty share")
+	}
+	if _, err := c.CreateProtocolShare(context.Background(), ProtocolShare{
+		Name: "x", Pool: "tank", DatasetName: "d",
+	}); err == nil {
+		t.Fatal("expected validation error for empty protocols")
+	}
+}
+
+func TestGetProtocolShare(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/protocol-shares/share1" {
+			t.Errorf("path %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("pool") != "tank" || r.URL.Query().Get("dataset") != "csi-nfs/share1" {
+			t.Errorf("query %v", r.URL.Query())
+		}
+		writeJSON(t, w, 200, ProtocolShareDetail{
+			Share: ProtocolShare{
+				Name: "share1", Pool: "tank", DatasetName: "csi-nfs/share1",
+				Protocols: []Protocol{ProtocolNFS},
+			},
+			Path: "/tank/csi-nfs/share1",
+			ProtocolsStatus: []ProtocolStatus{
+				{Protocol: ProtocolNFS, Active: true},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	got, err := newTestClient(t, srv).GetProtocolShare(context.Background(), "share1", "tank", "csi-nfs/share1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Share.Name != "share1" || got.Path != "/tank/csi-nfs/share1" {
+		t.Errorf("got %+v", got)
+	}
+	if len(got.ProtocolsStatus) != 1 || !got.ProtocolsStatus[0].Active {
+		t.Errorf("status %+v", got.ProtocolsStatus)
+	}
+}
+
+func TestGetProtocolShareValidation(t *testing.T) {
+	c := &Client{BaseURL: "http://x", HTTPClient: http.DefaultClient}
+	if _, err := c.GetProtocolShare(context.Background(), "", "tank", "d"); err == nil {
+		t.Fatal("expected error for empty name")
+	}
+	if _, err := c.GetProtocolShare(context.Background(), "n", "", "d"); err == nil {
+		t.Fatal("expected error for empty pool")
+	}
+}
+
+func TestDeleteProtocolShare(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/protocol-shares/share1" {
+			t.Errorf("path %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("pool") != "tank" || r.URL.Query().Get("dataset") != "csi-nfs/share1" {
+			t.Errorf("query %v", r.URL.Query())
+		}
+		writeJSON(t, w, 202, map[string]string{"jobId": "ps-d"})
+	}))
+	defer srv.Close()
+
+	job, err := newTestClient(t, srv).DeleteProtocolShare(context.Background(), "share1", "tank", "csi-nfs/share1")
+	if err != nil || job.ID != "ps-d" {
+		t.Fatalf("err=%v job=%+v", err, job)
+	}
+}
+
+func TestDeleteProtocolShareSurfacesOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			t.Errorf("expected no query, got %q", r.URL.RawQuery)
+		}
+		writeJSON(t, w, 202, map[string]string{"jobId": "ps-d2"})
+	}))
+	defer srv.Close()
+
+	job, err := newTestClient(t, srv).DeleteProtocolShare(context.Background(), "share1", "", "")
+	if err != nil || job.ID != "ps-d2" {
+		t.Fatalf("err=%v job=%+v", err, job)
+	}
+}
+
+func TestDeleteProtocolShareValidation(t *testing.T) {
+	c := &Client{BaseURL: "http://x", HTTPClient: http.DefaultClient}
+	if _, err := c.DeleteProtocolShare(context.Background(), "", "", ""); err == nil {
+		t.Fatal("expected error for empty name")
+	}
+	if _, err := c.DeleteProtocolShare(context.Background(), "n", "tank", ""); err == nil {
+		t.Fatal("expected error for partial pool/dataset")
+	}
+}

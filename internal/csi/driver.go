@@ -42,6 +42,18 @@ type Config struct {
 	// "/host/tank/csi/foo" — propagation makes the host's auto-mounted
 	// child datasets visible.
 	HostRootPrefix string
+
+	// NFSServer is the FQDN or IP that pods (and this DaemonSet's
+	// mount.nfs4 invocation) use to reach the NovaNAS NFS server. It is
+	// embedded in the VolumeContext for kind=nfs volumes so the Node
+	// service can mount without re-resolving.
+	NFSServer string
+
+	// DefaultNFSClients is the comma-separated client allowlist applied to
+	// new NFS exports when the StorageClass does not override
+	// "nfsClients". Each entry follows the NFS export rule format (CIDR,
+	// IP, "*", or hostname/wildcard).
+	DefaultNFSClients string
 }
 
 // Driver is the shared state between the three CSI services.

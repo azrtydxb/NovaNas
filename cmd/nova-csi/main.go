@@ -39,6 +39,8 @@ func main() {
 	defaultPool := flag.String("default-pool", "", "Fallback ZFS pool when the StorageClass omits 'pool'")
 	defaultParent := flag.String("default-parent", "", "Default parent dataset (defaults to '<pool>/csi')")
 	hostRootPrefix := flag.String("host-root-prefix", "", "When running in a container, prefix prepended to host-namespace paths (e.g. /host) so they resolve under a HostToContainer-propagated bind-mount of host root")
+	nfsServer := flag.String("nfs-server", "", "FQDN or IP that pods reach to mount NFS exports created by kind=nfs StorageClasses")
+	defaultNFSClients := flag.String("default-nfs-clients", "", "Comma-separated CIDR/IP/wildcard allowlist applied to new NFS exports when the StorageClass omits 'nfsClients'")
 	driverName := flag.String("driver-name", csi.DefaultName, "CSI driver name")
 	driverVersion := flag.String("driver-version", csi.DefaultVersion, "CSI driver version")
 	logLevel := flag.String("log-level", "info", "log level: debug|info|warn|error")
@@ -82,13 +84,15 @@ func main() {
 	}
 
 	driver := csi.NewDriver(csi.Config{
-		Name:          *driverName,
-		Version:       *driverVersion,
-		NodeID:        *nodeID,
-		DefaultPool:   *defaultPool,
-		DefaultParent:  *defaultParent,
-		HostRootPrefix: *hostRootPrefix,
-		Logger:        logger,
+		Name:              *driverName,
+		Version:           *driverVersion,
+		NodeID:            *nodeID,
+		DefaultPool:       *defaultPool,
+		DefaultParent:     *defaultParent,
+		HostRootPrefix:    *hostRootPrefix,
+		NFSServer:         *nfsServer,
+		DefaultNFSClients: *defaultNFSClients,
+		Logger:            logger,
 	}, client, csi.NewShellMounter())
 
 	if err := driver.Run(ctx, *endpoint); err != nil && !errors.Is(err, context.Canceled) {
@@ -265,6 +269,60 @@ func (a *sdkAdapter) CloneSnapshot(ctx context.Context, snapshot, target string,
 func (a *sdkAdapter) WaitJob(ctx context.Context, id string, pollInterval time.Duration) (*csi.Job, error) {
 	j, err := a.c.WaitJob(ctx, id, pollInterval)
 	return jobOrErr(j, err)
+}
+
+func (a *sdkAdapter) CreateProtocolShare(ctx context.Context, share csi.ProtocolShareSpec) (*csi.Job, error) {
+	protos := make([]novanas.Protocol, 0, len(share.Protocols))
+	for _, p := range share.Protocols {
+		protos = append(protos, novanas.Protocol(p))
+	}
+	clients := make([]novanas.NfsClientRule, 0, len(share.NFSClients))
+	for _, c := range share.NFSClients {
+		clients = append(clients, novanas.NfsClientRule{Spec: c.Spec, Options: c.Options})
+	}
+	body := novanas.ProtocolShare{
+		Name:        share.Name,
+		Pool:        share.Pool,
+		DatasetName: share.DatasetName,
+		Protocols:   protos,
+		Acls:        []novanas.DatasetACE{},
+	}
+	if share.QuotaBytes > 0 {
+		q := share.QuotaBytes
+		body.QuotaBytes = &q
+	}
+	if len(clients) > 0 || containsString(share.Protocols, "nfs") {
+		body.NFS = &novanas.ProtocolNFSOpts{Clients: clients}
+	}
+	j, err := a.c.CreateProtocolShare(ctx, body)
+	return jobOrErr(j, err)
+}
+
+func (a *sdkAdapter) GetProtocolShare(ctx context.Context, name, pool, dataset string) (*csi.ProtocolShareDetail, error) {
+	d, err := a.c.GetProtocolShare(ctx, name, pool, dataset)
+	if err != nil {
+		return nil, err
+	}
+	return &csi.ProtocolShareDetail{
+		Name:        d.Share.Name,
+		Pool:        d.Share.Pool,
+		DatasetName: d.Share.DatasetName,
+		Path:        d.Path,
+	}, nil
+}
+
+func (a *sdkAdapter) DeleteProtocolShare(ctx context.Context, name, pool, dataset string) (*csi.Job, error) {
+	j, err := a.c.DeleteProtocolShare(ctx, name, pool, dataset)
+	return jobOrErr(j, err)
+}
+
+func containsString(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *sdkAdapter) IsNotFound(err error) bool { return novanas.IsNotFound(err) }

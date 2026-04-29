@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	csipb "github.com/container-storage-interface/spec/lib/go/csi"
 )
@@ -22,15 +23,25 @@ const oneMiB int64 = 1 << 20
 
 // Parameter keys accepted on the StorageClass.
 const (
-	paramPool         = "pool"
-	paramParent       = "parent"
-	paramCompression  = "compression"
-	paramRecordsize   = "recordsize"
-	paramVolblocksize = "volblocksize"
-	paramFsType       = "fsType"
+	paramPool           = "pool"
+	paramParent         = "parent"
+	paramCompression    = "compression"
+	paramRecordsize     = "recordsize"
+	paramVolblocksize   = "volblocksize"
+	paramFsType         = "fsType"
+	paramAccessProtocol = "accessProtocol" // "" (default = bind-mount) | "nfs"
+	paramMountOptions   = "mountOptions"   // optional NFS mount options override
+	paramNFSClients     = "nfsClients"     // comma-separated client allowlist for new NFS exports
+	paramNFSSec         = "sec"            // export sec= flavor (informational; Agent C enforces krb5p in /etc/exports)
 	// VolumeContext keys we set on the returned Volume.
-	ctxFsType     = "fsType"
-	ctxVolumeKind = "volumeKind" // "filesystem" or "volume"
+	ctxFsType       = "fsType"
+	ctxVolumeKind   = "volumeKind" // "filesystem" | "volume" | "nfs"
+	ctxNFSServer    = "nfsServer"
+	ctxNFSPath      = "nfsPath"
+	ctxMountOptions = "mountOptions"
+
+	// volumeKindNFS is the ctxVolumeKind value used for NFS-mode volumes.
+	volumeKindNFS = "nfs"
 )
 
 // ControllerGetCapabilities advertises the operations we implement.
@@ -59,10 +70,13 @@ const (
 	kindUnknown volumeKind = iota
 	kindFilesystem
 	kindBlock
+	kindNFS
 )
 
-// classify inspects the capability list. All caps must agree on access type.
-func classify(caps []*csipb.VolumeCapability) (volumeKind, error) {
+// classify inspects the capability list and StorageClass parameters. All
+// caps must agree on access type. When parameters request the NFS protocol
+// (accessProtocol=nfs), Mount caps are reclassified as kindNFS.
+func classify(caps []*csipb.VolumeCapability, params map[string]string) (volumeKind, error) {
 	if len(caps) == 0 {
 		return kindUnknown, errInvalid("VolumeCapabilities is required")
 	}
@@ -85,6 +99,14 @@ func classify(caps []*csipb.VolumeCapability) (volumeKind, error) {
 			return kindUnknown, errInvalid("mixed Block and Mount capabilities are not supported")
 		}
 	}
+	// accessProtocol=nfs only applies to Mount-typed caps. Block volumes
+	// cannot be served over NFS.
+	if strings.EqualFold(params[paramAccessProtocol], "nfs") {
+		if kind != kindFilesystem {
+			return kindUnknown, errInvalid("accessProtocol=nfs requires Mount access type")
+		}
+		kind = kindNFS
+	}
 	return kind, nil
 }
 
@@ -93,12 +115,11 @@ func (s *ControllerService) CreateVolume(ctx context.Context, req *csipb.CreateV
 	if req.GetName() == "" {
 		return nil, errInvalid("Name is required")
 	}
-	kind, err := classify(req.GetVolumeCapabilities())
+	params := req.GetParameters()
+	kind, err := classify(req.GetVolumeCapabilities(), params)
 	if err != nil {
 		return nil, err
 	}
-
-	params := req.GetParameters()
 	pool := firstNonEmpty(params[paramPool], s.d.cfg.DefaultPool)
 	if pool == "" {
 		return nil, errInvalid("StorageClass parameter 'pool' is required (no default-pool configured)")
@@ -108,9 +129,16 @@ func (s *ControllerService) CreateVolume(ctx context.Context, req *csipb.CreateV
 	full := EncodeVolumeID(parent, leaf)
 
 	capacity := requestedCapacity(req.GetCapacityRange())
-	// Round filesystem datasets to a MiB; zvols must align to volblocksize.
-	if kind == kindFilesystem {
+	// Round filesystem-style datasets to a MiB; zvols must align to volblocksize.
+	if kind == kindFilesystem || kind == kindNFS {
 		capacity = roundUp(capacity, oneMiB)
+	}
+
+	// kind=nfs has its own controller path: it creates a ProtocolShare
+	// (dataset + NFS export) via the NovaNAS API rather than provisioning a
+	// bare dataset. Idempotent on the share name (== leaf).
+	if kind == kindNFS {
+		return s.createNFSVolume(ctx, params, pool, parent, leaf, full, capacity)
 	}
 
 	// Build ZFS properties.
@@ -188,12 +216,144 @@ func (s *ControllerService) buildVolume(volumeID string, capacity int64, kind vo
 	}
 }
 
-// DeleteVolume destroys the dataset. NotFound is success (idempotent).
+// createNFSVolume provisions an NFS-mode volume by creating a ProtocolShare
+// on the NovaNAS server. It is idempotent: an existing share with the same
+// dataset is returned as-is.
+//
+// volumeID encoding stays "<pool>/<parent-after-pool>/<leaf>" so it remains
+// addressable by the same ParseVolumeID path used for filesystem/block kinds.
+func (s *ControllerService) createNFSVolume(ctx context.Context, params map[string]string, pool, parent, leaf, full string, capacity int64) (*csipb.CreateVolumeResponse, error) {
+	// dataset within the pool, e.g. "csi-nfs/pvc-abc". The pool prefix is
+	// stripped so ProtocolShareSpec.DatasetName matches the API contract.
+	dsName := datasetSubpath(pool, full)
+	if dsName == "" {
+		return nil, errInvalid("derived empty dataset name from %q under pool %q", full, pool)
+	}
+
+	// Idempotency: GET first.
+	existing, getErr := s.d.client.GetProtocolShare(ctx, leaf, pool, dsName)
+	if getErr != nil && !s.d.client.IsNotFound(getErr) {
+		return nil, errInternal("get protocol-share %s: %v", leaf, getErr)
+	}
+	if existing != nil {
+		return &csipb.CreateVolumeResponse{Volume: s.buildNFSVolume(full, capacity, params, dsName)}, nil
+	}
+
+	// Build per-client export rules. StorageClass parameter "nfsClients"
+	// (CSV) wins; otherwise the driver's --default-nfs-clients applies.
+	clientCSV := firstNonEmpty(params[paramNFSClients], s.d.cfg.DefaultNFSClients)
+	rules := buildNFSClientRules(clientCSV)
+	// Empty rules are fine; the server may default to its global allowlist.
+
+	spec := ProtocolShareSpec{
+		Name:        leaf,
+		Pool:        pool,
+		DatasetName: dsName,
+		Protocols:   []string{"nfs"},
+		QuotaBytes:  capacity,
+		NFSClients:  rules,
+	}
+	job, err := s.d.client.CreateProtocolShare(ctx, spec)
+	if err != nil {
+		return nil, errInternal("create protocol-share %s: %v", leaf, err)
+	}
+	if _, err := s.d.client.WaitJob(ctx, job.ID, JobPollInterval); err != nil {
+		return nil, errInternal("wait create-protocol-share job: %v", err)
+	}
+	_ = parent // retained for symmetry with non-NFS path; not needed by the API.
+	return &csipb.CreateVolumeResponse{Volume: s.buildNFSVolume(full, capacity, params, dsName)}, nil
+}
+
+// buildNFSVolume produces the CSI Volume returned for an NFS-mode volume.
+// Pods receive nfsServer/nfsPath/mountOptions in VolumeContext so the Node
+// service can mount.nfs4 without re-querying the API.
+func (s *ControllerService) buildNFSVolume(volumeID string, capacity int64, params map[string]string, dsName string) *csipb.Volume {
+	mountOpts := firstNonEmpty(params[paramMountOptions], DefaultNFSMountOptions)
+	// The server-side export path is the dataset's filesystem mountpoint.
+	// By convention, ProtocolShare.path = "/<pool>/<datasetName>" which
+	// matches the dataset's default mountpoint.
+	exportPath := "/" + extractPool(volumeID) + "/" + dsName
+	return &csipb.Volume{
+		VolumeId:      volumeID,
+		CapacityBytes: capacity,
+		VolumeContext: map[string]string{
+			ctxVolumeKind:   volumeKindNFS,
+			ctxNFSServer:    s.d.cfg.NFSServer,
+			ctxNFSPath:      exportPath,
+			ctxMountOptions: mountOpts,
+		},
+	}
+}
+
+// datasetSubpath strips the leading "<pool>/" prefix from a full ZFS name.
+// Returns "" when full does not start with the pool.
+func datasetSubpath(pool, full string) string {
+	prefix := pool + "/"
+	if !strings.HasPrefix(full, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(full, prefix)
+}
+
+// extractPool returns the first segment of a "/"-separated ZFS path.
+func extractPool(full string) string {
+	if i := strings.Index(full, "/"); i > 0 {
+		return full[:i]
+	}
+	return full
+}
+
+// buildNFSClientRules turns a comma-separated allowlist into per-spec rules
+// with empty options. Options are owned by Agent C's host-side NFS layer
+// (sec=krb5p is enforced in /etc/exports.d defaults), so the CSI driver
+// passes only the spec.
+func buildNFSClientRules(csv string) []NFSClientRule {
+	if strings.TrimSpace(csv) == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]NFSClientRule, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, NFSClientRule{Spec: p})
+	}
+	return out
+}
+
+// DeleteVolume destroys the volume. NotFound is success (idempotent).
+//
+// We don't carry kind=nfs in the VolumeID, so detection is done via
+// GetProtocolShare: if a share exists for this leaf, full teardown goes
+// through DeleteProtocolShare (samba+nfs+dataset). Otherwise we fall back
+// to plain DestroyDataset for filesystem/block volumes.
 func (s *ControllerService) DeleteVolume(ctx context.Context, req *csipb.DeleteVolumeRequest) (*csipb.DeleteVolumeResponse, error) {
 	id, err := ParseVolumeID(req.GetVolumeId())
 	if err != nil {
 		return nil, errInvalid("VolumeId: %v", err)
 	}
+	dsName := datasetSubpath(id.Pool, id.Full)
+	if dsName != "" {
+		share, getErr := s.d.client.GetProtocolShare(ctx, id.Leaf, id.Pool, dsName)
+		if getErr == nil && share != nil {
+			job, derr := s.d.client.DeleteProtocolShare(ctx, id.Leaf, id.Pool, dsName)
+			if derr != nil {
+				if s.d.client.IsNotFound(derr) {
+					return &csipb.DeleteVolumeResponse{}, nil
+				}
+				return nil, errInternal("delete protocol-share %s: %v", id.Leaf, derr)
+			}
+			if _, err := s.d.client.WaitJob(ctx, job.ID, JobPollInterval); err != nil {
+				return nil, errInternal("wait delete-protocol-share job: %v", err)
+			}
+			return &csipb.DeleteVolumeResponse{}, nil
+		}
+		// getErr != nil and not NotFound: fall through to DestroyDataset
+		// rather than failing — the share path is best-effort detection.
+	}
+
 	job, err := s.d.client.DestroyDataset(ctx, id.Full, false)
 	if err != nil {
 		if s.d.client.IsNotFound(err) {
@@ -338,7 +498,7 @@ func (s *ControllerService) ValidateVolumeCapabilities(ctx context.Context, req 
 	if len(req.GetVolumeCapabilities()) == 0 {
 		return nil, errInvalid("VolumeCapabilities is required")
 	}
-	kind, err := classify(req.GetVolumeCapabilities())
+	kind, err := classify(req.GetVolumeCapabilities(), req.GetParameters())
 	if err != nil {
 		return &csipb.ValidateVolumeCapabilitiesResponse{Message: err.Error()}, nil
 	}
@@ -358,13 +518,14 @@ func (s *ControllerService) ValidateVolumeCapabilities(ctx context.Context, req 
 }
 
 // accessModeSupported: zvols are RWO only; filesystem datasets accept RWO and
-// RWX (single-node only — kubelet enforces node affinity).
+// RWX (single-node only — kubelet enforces node affinity); NFS-mode volumes
+// support every mode including true cross-node RWX (the whole point).
 func accessModeSupported(kind volumeKind, mode csipb.VolumeCapability_AccessMode_Mode) bool {
 	switch kind {
 	case kindBlock:
 		return mode == csipb.VolumeCapability_AccessMode_SINGLE_NODE_WRITER ||
 			mode == csipb.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER
-	case kindFilesystem:
+	case kindFilesystem, kindNFS:
 		switch mode {
 		case csipb.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
 			csipb.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
@@ -388,10 +549,16 @@ func (s *ControllerService) ListSnapshots(ctx context.Context, req *csipb.ListSn
 // helpers
 
 func zfsType(k volumeKind) string {
-	if k == kindBlock {
+	switch k {
+	case kindBlock:
 		return "volume"
+	case kindNFS:
+		// NFS-mode volumes are backed by filesystem datasets; the node
+		// service distinguishes them via VolumeContext.volumeKind = "nfs".
+		return "filesystem"
+	default:
+		return "filesystem"
 	}
-	return "filesystem"
 }
 
 func requestedCapacity(r *csipb.CapacityRange) int64 {

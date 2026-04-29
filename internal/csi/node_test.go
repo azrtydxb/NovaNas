@@ -107,6 +107,52 @@ func TestNodeStage_FsOnZvol_FormatsAndMounts(t *testing.T) {
 	}
 }
 
+func TestNodePublish_NFS(t *testing.T) {
+	c := newFakeClient()
+	m := newFakeMounter()
+	d := newTestDriver(c, m)
+	ns := &NodeService{d: d}
+	_, err := ns.NodePublishVolume(context.Background(), &csipb.NodePublishVolumeRequest{
+		VolumeId:         "tank/csi-nfs/pvc-nfs",
+		TargetPath:       "/var/lib/kubelet/.../target",
+		VolumeCapability: mountCap(""),
+		VolumeContext: map[string]string{
+			ctxVolumeKind:   volumeKindNFS,
+			ctxNFSServer:    "nas",
+			ctxNFSPath:      "/tank/csi-nfs/pvc-nfs",
+			ctxMountOptions: DefaultNFSMountOptions,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.NFSCalls) != 1 {
+		t.Fatalf("expected 1 NFS mount, got %d (%v)", len(m.NFSCalls), m.NFSCalls)
+	}
+	if !strings.Contains(m.NFSCalls[0], "nas:/tank/csi-nfs/pvc-nfs->") {
+		t.Fatalf("unexpected NFS call: %s", m.NFSCalls[0])
+	}
+	if !strings.Contains(m.NFSCalls[0], "sec=krb5p") {
+		t.Fatalf("expected sec=krb5p in mount opts, got %s", m.NFSCalls[0])
+	}
+	if len(m.BindCalls) != 0 {
+		t.Fatalf("NFS publish should not bind-mount, got %v", m.BindCalls)
+	}
+}
+
+func TestNodeStage_NFS_NoOp(t *testing.T) {
+	d := newTestDriver(newFakeClient(), newFakeMounter())
+	ns := &NodeService{d: d}
+	if _, err := ns.NodeStageVolume(context.Background(), &csipb.NodeStageVolumeRequest{
+		VolumeId:          "tank/csi-nfs/pvc-nfs",
+		StagingTargetPath: "/staging",
+		VolumeCapability:  mountCap(""),
+		VolumeContext:     map[string]string{ctxVolumeKind: volumeKindNFS},
+	}); err != nil {
+		t.Fatalf("NFS stage should be no-op: %v", err)
+	}
+}
+
 func TestNodeUnpublish(t *testing.T) {
 	m := newFakeMounter()
 	m.mounted["/target"] = true

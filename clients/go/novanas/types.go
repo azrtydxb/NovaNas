@@ -123,3 +123,73 @@ func (j *Job) IsTerminal() bool {
 
 // Succeeded reports whether the job ended in the succeeded state.
 func (j *Job) Succeeded() bool { return j.State == JobStateSucceeded }
+
+// ---- ProtocolShare ---------------------------------------------------------
+
+// Protocol identifies a sharing protocol exposed by a ProtocolShare.
+type Protocol string
+
+// Protocol constants. Keep in sync with internal/host/protocolshare.Protocol.
+const (
+	ProtocolNFS Protocol = "nfs"
+	ProtocolSMB Protocol = "smb"
+)
+
+// DatasetACE mirrors the DatasetACE schema. It is the wire shape used by
+// ProtocolShare.Acls.
+type DatasetACE struct {
+	Inheritance []string `json:"inheritance,omitempty"`
+	Permissions []string `json:"permissions"`
+	Principal   string   `json:"principal"`
+	Type        string   `json:"type"` // "allow" | "deny"
+}
+
+// NfsClientRule mirrors the NfsClientRule schema.
+type NfsClientRule struct {
+	// Spec is a CIDR, IP, "*", or hostname/wildcard pattern.
+	Spec string `json:"spec"`
+	// Options is a comma-separated NFS export options string
+	// (e.g. "rw,sync,sec=krb5p").
+	Options string `json:"options"`
+}
+
+// ProtocolNFSOpts mirrors the ProtocolNFSOpts schema.
+type ProtocolNFSOpts struct {
+	Clients []NfsClientRule `json:"clients"`
+}
+
+// ProtocolSMBOpts mirrors the ProtocolSMBOpts schema.
+type ProtocolSMBOpts struct {
+	Comment    *string  `json:"comment,omitempty"`
+	Browseable *bool    `json:"browseable,omitempty"`
+	GuestOK    *bool    `json:"guestOk,omitempty"`
+	ValidUsers []string `json:"validUsers,omitempty"`
+	WriteList  []string `json:"writeList,omitempty"`
+}
+
+// ProtocolShare mirrors the ProtocolShare schema.
+type ProtocolShare struct {
+	Name        string           `json:"name"`
+	Pool        string           `json:"pool"`
+	DatasetName string           `json:"datasetName"`
+	Protocols   []Protocol       `json:"protocols"`
+	Acls        []DatasetACE     `json:"acls"`
+	QuotaBytes  *int64           `json:"quotaBytes,omitempty"`
+	NFS         *ProtocolNFSOpts `json:"nfs,omitempty"`
+	SMB         *ProtocolSMBOpts `json:"smb,omitempty"`
+}
+
+// ProtocolStatus mirrors the ProtocolStatus schema.
+type ProtocolStatus struct {
+	Protocol Protocol `json:"protocol"`
+	Active   bool     `json:"active"`
+	Detail   string   `json:"detail,omitempty"`
+}
+
+// ProtocolShareDetail mirrors the ProtocolShareDetail schema returned by GET.
+type ProtocolShareDetail struct {
+	Share           ProtocolShare    `json:"share"`
+	Path            string           `json:"path"`
+	Acl             []DatasetACE     `json:"acl"`
+	ProtocolsStatus []ProtocolStatus `json:"protocolsStatus"`
+}

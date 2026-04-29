@@ -1,0 +1,28 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: novanas-nfs
+provisioner: csi.novanas.io
+reclaimPolicy: Delete
+# NFS volumes are network-attached: any node can mount them, so no need to
+# wait for a consumer's topology before binding.
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  # Triggers the kind=nfs controller path. Without this parameter the driver
+  # falls back to the default bind-mount (filesystem-dataset) behavior.
+  accessProtocol: nfs
+  pool: tank
+  # Dedicated parent dataset for NFS-backed PVCs to keep them organized
+  # separately from RWO bind-mount volumes under tank/csi.
+  parent: tank/csi-nfs
+  compression: lz4
+  # Informational: the host /etc/exports.d entries enforce sec=krb5p (owned
+  # by Agent C). Operators that want a different flavor must change the host
+  # exports defaults too — overriding this parameter alone is not enough.
+  sec: krb5p
+mountOptions:
+  - vers=4.2
+  - sec=krb5p
+  - hard
+# allowed accessModes: ReadWriteOnce, ReadWriteMany, ReadOnlyMany.

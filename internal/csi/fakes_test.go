@@ -20,6 +20,7 @@ type fakeClient struct {
 	mu        sync.Mutex
 	datasets  map[string]*Dataset
 	snapshots map[string]struct{}
+	shares    map[string]*ProtocolShareDetail // key = "<pool>/<datasetName>"
 
 	// Captured spec for the last CreateDataset call.
 	LastCreate     CreateDatasetSpec
@@ -30,6 +31,9 @@ type fakeClient struct {
 	LastSnapShort  string
 	LastDestroyDS  string
 	LastDestroySn  string
+	LastShareSpec  ProtocolShareSpec
+	ShareCreateCnt int
+	ShareDeleteCnt int
 	NextJobID      int
 	WaitJobCalls   int
 	GetDatasetErrs map[string]error
@@ -39,8 +43,59 @@ func newFakeClient() *fakeClient {
 	return &fakeClient{
 		datasets:       map[string]*Dataset{},
 		snapshots:      map[string]struct{}{},
+		shares:         map[string]*ProtocolShareDetail{},
 		GetDatasetErrs: map[string]error{},
 	}
+}
+
+func (f *fakeClient) shareKey(pool, dataset string) string {
+	return pool + "/" + dataset
+}
+
+func (f *fakeClient) CreateProtocolShare(ctx context.Context, share ProtocolShareSpec) (*Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.LastShareSpec = share
+	f.ShareCreateCnt++
+	key := f.shareKey(share.Pool, share.DatasetName)
+	if _, exists := f.shares[key]; exists {
+		return nil, fmt.Errorf("already exists: %s", key)
+	}
+	f.shares[key] = &ProtocolShareDetail{
+		Name:        share.Name,
+		Pool:        share.Pool,
+		DatasetName: share.DatasetName,
+		Path:        "/" + share.Pool + "/" + share.DatasetName,
+	}
+	// Mirror as a dataset so DeleteVolume's fallback logic also works.
+	full := share.Pool + "/" + share.DatasetName
+	f.datasets[full] = &Dataset{Name: full, Type: "filesystem", Mountpoint: "/" + full}
+	return f.newJob(), nil
+}
+
+func (f *fakeClient) GetProtocolShare(ctx context.Context, name, pool, dataset string) (*ProtocolShareDetail, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := f.shareKey(pool, dataset)
+	d, ok := f.shares[key]
+	if !ok {
+		return nil, notFoundErr{key}
+	}
+	cp := *d
+	return &cp, nil
+}
+
+func (f *fakeClient) DeleteProtocolShare(ctx context.Context, name, pool, dataset string) (*Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ShareDeleteCnt++
+	key := f.shareKey(pool, dataset)
+	if _, ok := f.shares[key]; !ok {
+		return nil, notFoundErr{key}
+	}
+	delete(f.shares, key)
+	delete(f.datasets, key)
+	return f.newJob(), nil
 }
 
 func (f *fakeClient) IsNotFound(err error) bool {
@@ -154,14 +209,15 @@ func (f *fakeClient) newJob() *Job {
 
 // fakeMounter records mount/unmount/format calls.
 type fakeMounter struct {
-	BindCalls   []string // "src->tgt[,ro]"
+	BindCalls    []string // "src->tgt[,ro]"
 	UnmountCalls []string
-	MkfsCalls   []string // "fsType:device"
-	GrowCalls   []string // "fsType:target:device"
-	mounted     map[string]bool
-	formatted   map[string]string // device -> fstype
-	dirs        map[string]bool
-	files       map[string]bool
+	MkfsCalls    []string // "fsType:device"
+	GrowCalls    []string // "fsType:target:device"
+	NFSCalls     []string // "server:export->target|opts"
+	mounted      map[string]bool
+	formatted    map[string]string // device -> fstype
+	dirs         map[string]bool
+	files        map[string]bool
 }
 
 func newFakeMounter() *fakeMounter {
@@ -205,3 +261,15 @@ func (f *fakeMounter) GrowFS(target, device, fsType string) error {
 }
 func (f *fakeMounter) EnsureDir(p string) error  { f.dirs[p] = true; return nil }
 func (f *fakeMounter) EnsureFile(p string) error { f.files[p] = true; return nil }
+func (f *fakeMounter) NFSMount(server, exportPath, target string, opts NFSMountOpts) error {
+	options := opts.Options
+	if options == "" {
+		options = DefaultNFSMountOptions
+	}
+	if opts.ReadOnly {
+		options += ",ro"
+	}
+	f.NFSCalls = append(f.NFSCalls, fmt.Sprintf("%s:%s->%s|%s", server, exportPath, target, options))
+	f.mounted[target] = true
+	return nil
+}

@@ -195,6 +195,66 @@ func (c *Client) DestroySnapshot(ctx context.Context, fullname string) (*Job, er
 	return finishJobFromAccepted(resp)
 }
 
+// ---- ProtocolShares --------------------------------------------------------
+
+// CreateProtocolShare provisions a new ProtocolShare (POST /protocol-shares).
+// Returns a Job stub; use WaitJob to block until it terminates.
+func (c *Client) CreateProtocolShare(ctx context.Context, share ProtocolShare) (*Job, error) {
+	if share.Name == "" {
+		return nil, errors.New("novanas: ProtocolShare.Name is required")
+	}
+	if share.Pool == "" || share.DatasetName == "" {
+		return nil, errors.New("novanas: ProtocolShare requires Pool and DatasetName")
+	}
+	if len(share.Protocols) == 0 {
+		return nil, errors.New("novanas: ProtocolShare requires at least one protocol")
+	}
+	resp, err := c.do(ctx, http.MethodPost, "/protocol-shares", nil, share, nil)
+	if err != nil {
+		return nil, err
+	}
+	return finishJobFromAccepted(resp)
+}
+
+// GetProtocolShare fetches the read-side detail for a share. The server
+// requires both pool and dataset query params alongside the URL name.
+func (c *Client) GetProtocolShare(ctx context.Context, name, pool, dataset string) (*ProtocolShareDetail, error) {
+	if name == "" {
+		return nil, errors.New("novanas: ProtocolShare name is required")
+	}
+	if pool == "" || dataset == "" {
+		return nil, errors.New("novanas: pool and dataset are required to GET a ProtocolShare")
+	}
+	q := url.Values{"pool": {pool}, "dataset": {dataset}}
+	var out ProtocolShareDetail
+	if _, err := c.do(ctx, http.MethodGet, "/protocol-shares/"+url.PathEscape(name), q, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteProtocolShare tears down a share. When pool and dataset are both
+// provided, the server performs a full teardown (samba + nfs + dataset
+// destroy); when both are empty, only the export/share surfaces are removed
+// and the dataset is preserved.
+func (c *Client) DeleteProtocolShare(ctx context.Context, name, pool, dataset string) (*Job, error) {
+	if name == "" {
+		return nil, errors.New("novanas: ProtocolShare name is required")
+	}
+	if (pool == "") != (dataset == "") {
+		return nil, errors.New("novanas: pool and dataset must be supplied together")
+	}
+	var q url.Values
+	if pool != "" {
+		q = url.Values{"pool": {pool}, "dataset": {dataset}}
+	}
+	resp, err := c.do(ctx, http.MethodDelete, "/protocol-shares/"+url.PathEscape(name), q, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return finishJobFromAccepted(resp)
+}
+
 // ---- Jobs -------------------------------------------------------------------
 
 // GetJob fetches a single job by ID.
@@ -242,4 +302,3 @@ func (c *Client) WaitJob(ctx context.Context, id string, pollInterval time.Durat
 		t.Reset(pollInterval)
 	}
 }
-

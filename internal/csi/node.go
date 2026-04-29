@@ -60,6 +60,11 @@ func (s *NodeService) NodeStageVolume(ctx context.Context, req *csipb.NodeStageV
 		return &csipb.NodeStageVolumeResponse{}, nil
 	}
 
+	// NFS volumes: kubelet calls NodePublish directly; staging is a no-op.
+	if kind == volumeKindNFS {
+		return &csipb.NodeStageVolumeResponse{}, nil
+	}
+
 	// fs-on-zvol: mkfs (if needed) and mount to staging path.
 	device := ZvolDevicePath(id)
 	staging := req.GetStagingTargetPath()
@@ -103,7 +108,10 @@ func (s *NodeService) NodeUnstageVolume(ctx context.Context, req *csipb.NodeUnst
 	return &csipb.NodeUnstageVolumeResponse{}, nil
 }
 
-// NodePublishVolume bind-mounts the volume to the target path.
+// NodePublishVolume bind-mounts the volume to the target path. For
+// kind=nfs volumes it performs a mount.nfs4 instead of a bind, so the
+// kernel NFS client (with kerberos via host krb5.keytab) backs the mount
+// and NFSv4 ACLs are enforced server-side.
 func (s *NodeService) NodePublishVolume(ctx context.Context, req *csipb.NodePublishVolumeRequest) (*csipb.NodePublishVolumeResponse, error) {
 	id, err := ParseVolumeID(req.GetVolumeId())
 	if err != nil {
@@ -119,6 +127,11 @@ func (s *NodeService) NodePublishVolume(ctx context.Context, req *csipb.NodePubl
 	}
 	readonly := req.GetReadonly()
 	kind := s.kindFromContext(req.GetVolumeContext())
+
+	// kind=nfs has its own publish path (mount.nfs4).
+	if kind == volumeKindNFS {
+		return s.publishNFS(req, target, readonly)
+	}
 
 	var source string
 	isBlock := false
@@ -180,12 +193,16 @@ func (s *NodeService) NodeUnpublishVolume(ctx context.Context, req *csipb.NodeUn
 }
 
 // NodeExpandVolume grows the filesystem on a zvol after the controller has
-// resized volsize.
+// resized volsize. For kind=nfs the controller-side dataset quota change
+// is visible to clients automatically; this is a no-op.
 func (s *NodeService) NodeExpandVolume(ctx context.Context, req *csipb.NodeExpandVolumeRequest) (*csipb.NodeExpandVolumeResponse, error) {
 	id, err := ParseVolumeID(req.GetVolumeId())
 	if err != nil {
 		return nil, errInvalid("VolumeId: %v", err)
 	}
+	// kind=nfs has no underlying block device. The existing IsFormatted-
+	// returns-empty path below handles this gracefully (CapacityBytes is
+	// echoed back without growfs); no NFS-specific shortcut is needed.
 	device := ZvolDevicePath(id)
 	target := req.GetVolumePath()
 	if target == "" {
@@ -208,6 +225,38 @@ func (s *NodeService) NodeExpandVolume(ctx context.Context, req *csipb.NodeExpan
 	return &csipb.NodeExpandVolumeResponse{
 		CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
 	}, nil
+}
+
+// publishNFS handles the NodePublishVolume path for NFS-mode volumes. It
+// reads the server / export path / mount options from VolumeContext (the
+// controller stamped them at CreateVolume time) and shells out to
+// mount.nfs4. The kernel does the krb5p negotiation via the host's
+// /etc/krb5.keytab, which the DaemonSet mounts read-only.
+func (s *NodeService) publishNFS(req *csipb.NodePublishVolumeRequest, target string, readonly bool) (*csipb.NodePublishVolumeResponse, error) {
+	vc := req.GetVolumeContext()
+	server := vc[ctxNFSServer]
+	exportPath := vc[ctxNFSPath]
+	mountOpts := vc[ctxMountOptions]
+	if server == "" || exportPath == "" {
+		return nil, errInvalid("VolumeContext is missing nfsServer or nfsPath for NFS volume")
+	}
+	if err := s.d.mounter.EnsureDir(target); err != nil {
+		return nil, errInternal("ensure target dir: %v", err)
+	}
+	mounted, err := s.d.mounter.IsMounted(target)
+	if err != nil {
+		return nil, errInternal("check target mount: %v", err)
+	}
+	if mounted {
+		return &csipb.NodePublishVolumeResponse{}, nil
+	}
+	if err := s.d.mounter.NFSMount(server, exportPath, target, NFSMountOpts{
+		Options:  mountOpts,
+		ReadOnly: readonly,
+	}); err != nil {
+		return nil, errInternal("mount.nfs4 %s:%s -> %s: %v", server, exportPath, target, err)
+	}
+	return &csipb.NodePublishVolumeResponse{}, nil
 }
 
 // kindFromContext reads ctxVolumeKind out of VolumeContext, defaulting to

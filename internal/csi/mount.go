@@ -20,7 +20,20 @@ type Mounter interface {
 	GrowFS(target, device, fsType string) error
 	EnsureDir(path string) error
 	EnsureFile(path string) error
+	NFSMount(server, exportPath, target string, opts NFSMountOpts) error
 }
+
+// NFSMountOpts is the per-call configuration for NFSMount. Empty Options
+// defaults to "vers=4.2,sec=krb5p,hard". When ReadOnly is true, "ro" is
+// appended to the options string.
+type NFSMountOpts struct {
+	Options  string
+	ReadOnly bool
+}
+
+// DefaultNFSMountOptions is the conservative sec=krb5p NFSv4.2 default
+// applied when the StorageClass does not override mountOptions.
+const DefaultNFSMountOptions = "vers=4.2,sec=krb5p,hard"
 
 // shellMounter is the production Mounter. It assumes a Linux host with the
 // usual util-linux + e2fsprogs/xfsprogs binaries on PATH.
@@ -124,6 +137,27 @@ func (shellMounter) GrowFS(target, device, fsType string) error {
 	default:
 		return fmt.Errorf("unsupported fsType %q", fsType)
 	}
+}
+
+// NFSMount calls mount.nfs4 with the given options. server may be a hostname
+// or IP; exportPath is the server-side path (e.g. "/tank/csi-nfs/share1");
+// target is the local mount point (already created by the caller).
+func (shellMounter) NFSMount(server, exportPath, target string, opts NFSMountOpts) error {
+	if server == "" {
+		return fmt.Errorf("NFSMount: server is required")
+	}
+	if exportPath == "" {
+		return fmt.Errorf("NFSMount: exportPath is required")
+	}
+	options := opts.Options
+	if options == "" {
+		options = DefaultNFSMountOptions
+	}
+	if opts.ReadOnly {
+		options = options + ",ro"
+	}
+	src := server + ":" + exportPath
+	return run("mount.nfs4", "-o", options, src, target)
 }
 
 func run(name string, args ...string) error {

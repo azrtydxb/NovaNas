@@ -20,8 +20,40 @@ type NovaNASClient interface {
 	CreateSnapshot(ctx context.Context, dataset, shortName string, recursive bool) (*Job, error)
 	DestroySnapshot(ctx context.Context, fullname string) (*Job, error)
 	CloneSnapshot(ctx context.Context, snapshot, target string, properties map[string]string) (*Job, error)
+	CreateProtocolShare(ctx context.Context, share ProtocolShareSpec) (*Job, error)
+	GetProtocolShare(ctx context.Context, name, pool, dataset string) (*ProtocolShareDetail, error)
+	DeleteProtocolShare(ctx context.Context, name, pool, dataset string) (*Job, error)
 	WaitJob(ctx context.Context, id string, pollInterval time.Duration) (*Job, error)
 	IsNotFound(err error) bool
+}
+
+// NFSClientRule mirrors the SDK's NfsClientRule. Duplicated here so the CSI
+// package's NovaNASClient interface stays SDK-free.
+type NFSClientRule struct {
+	Spec    string
+	Options string
+}
+
+// ProtocolShareSpec is the CSI-side request shape used to create a
+// ProtocolShare via the NovaNAS API. Only the NFS-bearing subset is wired in
+// today; SMB is a server-side concern when a future kind=smb is added.
+type ProtocolShareSpec struct {
+	Name        string
+	Pool        string
+	DatasetName string
+	Protocols   []string // typically ["nfs"]
+	QuotaBytes  int64
+	NFSClients  []NFSClientRule
+}
+
+// ProtocolShareDetail is the read-side projection of the API's
+// ProtocolShareDetail used by the CSI driver. Only the fields the driver
+// actually inspects are projected here.
+type ProtocolShareDetail struct {
+	Name        string
+	Pool        string
+	DatasetName string
+	Path        string
 }
 
 // Dataset is a minimal projection of a ZFS dataset/zvol.

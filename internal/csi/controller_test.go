@@ -218,6 +218,116 @@ func TestSnapshot_CreateAndDelete(t *testing.T) {
 	}
 }
 
+func TestCreateVolume_NFS(t *testing.T) {
+	c := newFakeClient()
+	d := newTestDriver(c, newFakeMounter())
+	d.cfg.NFSServer = "nas.example.com"
+	d.cfg.DefaultNFSClients = "10.0.0.0/8"
+	cs := &ControllerService{d: d}
+	resp, err := cs.CreateVolume(context.Background(), &csipb.CreateVolumeRequest{
+		Name:          "pvc-nfs",
+		CapacityRange: &csipb.CapacityRange{RequiredBytes: 8 << 20},
+		VolumeCapabilities: []*csipb.VolumeCapability{{
+			AccessMode: &csipb.VolumeCapability_AccessMode{
+				Mode: csipb.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+			},
+			AccessType: &csipb.VolumeCapability_Mount{Mount: &csipb.VolumeCapability_MountVolume{}},
+		}},
+		Parameters: map[string]string{
+			"pool": "tank", "parent": "tank/csi-nfs",
+			"accessProtocol": "nfs",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Volume.VolumeId != "tank/csi-nfs/pvc-nfs" {
+		t.Fatalf("VolumeId %q", resp.Volume.VolumeId)
+	}
+	if c.ShareCreateCnt != 1 {
+		t.Fatalf("expected 1 CreateProtocolShare call, got %d", c.ShareCreateCnt)
+	}
+	if c.LastShareSpec.DatasetName != "csi-nfs/pvc-nfs" {
+		t.Fatalf("dataset name %q", c.LastShareSpec.DatasetName)
+	}
+	if len(c.LastShareSpec.NFSClients) != 1 || c.LastShareSpec.NFSClients[0].Spec != "10.0.0.0/8" {
+		t.Fatalf("nfs clients %+v", c.LastShareSpec.NFSClients)
+	}
+	vc := resp.Volume.VolumeContext
+	if vc[ctxVolumeKind] != volumeKindNFS {
+		t.Fatalf("volumeKind %q", vc[ctxVolumeKind])
+	}
+	if vc[ctxNFSServer] != "nas.example.com" {
+		t.Fatalf("nfsServer %q", vc[ctxNFSServer])
+	}
+	if vc[ctxNFSPath] != "/tank/csi-nfs/pvc-nfs" {
+		t.Fatalf("nfsPath %q", vc[ctxNFSPath])
+	}
+	if vc[ctxMountOptions] != DefaultNFSMountOptions {
+		t.Fatalf("mountOptions %q", vc[ctxMountOptions])
+	}
+}
+
+func TestCreateVolume_NFS_Idempotent(t *testing.T) {
+	c := newFakeClient()
+	d := newTestDriver(c, newFakeMounter())
+	d.cfg.NFSServer = "nas"
+	cs := &ControllerService{d: d}
+	req := &csipb.CreateVolumeRequest{
+		Name:               "pvc-nfs2",
+		CapacityRange:      &csipb.CapacityRange{RequiredBytes: 4 << 20},
+		VolumeCapabilities: []*csipb.VolumeCapability{mountCap("")},
+		Parameters: map[string]string{
+			"pool": "tank", "parent": "tank/csi-nfs",
+			"accessProtocol": "nfs",
+		},
+	}
+	if _, err := cs.CreateVolume(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cs.CreateVolume(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if c.ShareCreateCnt != 1 {
+		t.Fatalf("expected 1 CreateProtocolShare call, got %d", c.ShareCreateCnt)
+	}
+}
+
+func TestDeleteVolume_NFS_TearsDownShare(t *testing.T) {
+	c := newFakeClient()
+	d := newTestDriver(c, newFakeMounter())
+	d.cfg.NFSServer = "nas"
+	cs := &ControllerService{d: d}
+	if _, err := cs.CreateVolume(context.Background(), &csipb.CreateVolumeRequest{
+		Name:               "pvc-nfs3",
+		CapacityRange:      &csipb.CapacityRange{RequiredBytes: 4 << 20},
+		VolumeCapabilities: []*csipb.VolumeCapability{mountCap("")},
+		Parameters: map[string]string{
+			"pool": "tank", "parent": "tank/csi-nfs",
+			"accessProtocol": "nfs",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cs.DeleteVolume(context.Background(), &csipb.DeleteVolumeRequest{
+		VolumeId: "tank/csi-nfs/pvc-nfs3",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c.ShareDeleteCnt != 1 {
+		t.Fatalf("expected 1 DeleteProtocolShare call, got %d", c.ShareDeleteCnt)
+	}
+}
+
+func TestAccessModes_NFS_AllowsMultiNodeRWX(t *testing.T) {
+	if !accessModeSupported(kindNFS, csipb.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER) {
+		t.Fatal("kindNFS must support MULTI_NODE_MULTI_WRITER")
+	}
+	if !accessModeSupported(kindNFS, csipb.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY) {
+		t.Fatal("kindNFS must support MULTI_NODE_READER_ONLY")
+	}
+}
+
 func TestValidateVolumeCapabilities(t *testing.T) {
 	d := newTestDriver(newFakeClient(), newFakeMounter())
 	cs := &ControllerService{d: d}
