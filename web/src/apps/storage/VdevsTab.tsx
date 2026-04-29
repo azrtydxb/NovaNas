@@ -220,6 +220,40 @@ export function VdevsTab({ pool, setPool }: Props) {
 
             <div className="sect">
               <div className="sect__head">
+                <div className="sect__title">I/O</div>
+              </div>
+              <div className="sect__body">
+                <div className="row gap-12" style={{ flexWrap: "wrap" }}>
+                  <div className="kpi">
+                    <div className="kpi__lbl">Read</div>
+                    <div className="kpi__val mono">
+                      {cur.throughput?.r ?? 0} <span className="muted">MB/s</span>
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi__lbl">Write</div>
+                    <div className="kpi__val mono">
+                      {cur.throughput?.w ?? 0} <span className="muted">MB/s</span>
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi__lbl">Read IOPS</div>
+                    <div className="kpi__val mono">
+                      {((cur.iops?.r ?? 0) / 1000).toFixed(1)}k
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi__lbl">Write IOPS</div>
+                    <div className="kpi__val mono">
+                      {((cur.iops?.w ?? 0) / 1000).toFixed(1)}k
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sect">
+              <div className="sect__head">
                 <div className="sect__title">Per-disk actions</div>
               </div>
               <div className="sect__body">
@@ -289,40 +323,6 @@ export function VdevsTab({ pool, setPool }: Props) {
                     </tbody>
                   </table>
                 )}
-              </div>
-            </div>
-
-            <div className="sect">
-              <div className="sect__head">
-                <div className="sect__title">I/O</div>
-              </div>
-              <div className="sect__body">
-                <div className="row gap-12" style={{ flexWrap: "wrap" }}>
-                  <div className="kpi">
-                    <div className="kpi__lbl">Read</div>
-                    <div className="kpi__val mono">
-                      {cur.throughput?.r ?? 0} <span className="muted">MB/s</span>
-                    </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi__lbl">Write</div>
-                    <div className="kpi__val mono">
-                      {cur.throughput?.w ?? 0} <span className="muted">MB/s</span>
-                    </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi__lbl">Read IOPS</div>
-                    <div className="kpi__val mono">
-                      {((cur.iops?.r ?? 0) / 1000).toFixed(1)}k
-                    </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi__lbl">Write IOPS</div>
-                    <div className="kpi__val mono">
-                      {((cur.iops?.w ?? 0) / 1000).toFixed(1)}k
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </>

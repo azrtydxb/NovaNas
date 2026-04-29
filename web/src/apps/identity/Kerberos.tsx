@@ -72,6 +72,16 @@ function PrincipalModal({
     },
   });
 
+  const del = useMutation({
+    meta: { label: "Delete principal failed" },
+    mutationFn: () => identity.krb5DeletePrincipal(initial!.name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["krb5", "principals"] });
+      toastSuccess("Principal deleted");
+      onClose();
+    },
+  });
+
   const valid = mode === "edit" || (name.trim().length > 0);
 
   return (
@@ -132,12 +142,25 @@ function PrincipalModal({
               autoFocus={mode === "edit"}
             />
           </Field>
-          {mut.isError && (
-            <div className="modal__err">Failed: {(mut.error as Error).message}</div>
+          {(mut.isError || del.isError) && (
+            <div className="modal__err">
+              Failed: {((mut.error || del.error) as Error).message}
+            </div>
           )}
         </div>
         <div className="modal__foot">
-          <button className="btn" onClick={onClose} disabled={mut.isPending}>
+          {mode === "edit" && (
+            <button
+              className="btn btn--danger"
+              disabled={del.isPending}
+              onClick={() => {
+                if (window.confirm(`Delete principal ${initial?.name}?`)) del.mutate();
+              }}
+            >
+              {del.isPending ? "Deleting…" : "Delete"}
+            </button>
+          )}
+          <button className="btn" onClick={onClose} disabled={mut.isPending} style={{ marginLeft: "auto" }}>
             Cancel
           </button>
           <button
@@ -237,7 +260,6 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Kerberos() {
-  const qc = useQueryClient();
   const [editing, setEditing] = useState<{ mode: "create" | "edit"; principal?: Krb5Principal } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
@@ -266,14 +288,6 @@ export function Kerberos() {
     mutationFn: (name: string) => identity.krb5RefreshKeytab(name),
     onSuccess: () => toastSuccess("Keytab refreshed"),
   });
-  const del = useMutation({
-    meta: { label: "Delete principal failed" },
-    mutationFn: (name: string) => identity.krb5DeletePrincipal(name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["krb5", "principals"] });
-      toastSuccess("Principal deleted");
-    },
-  });
 
   const online = status.data?.online ?? status.data?.status === "online";
   const pillClass = status.isError ? "pill pill--err" : online ? "pill pill--ok" : "pill pill--warn";
@@ -281,23 +295,6 @@ export function Kerberos() {
 
   return (
     <div style={{ padding: 14 }}>
-      {status.data?.message && (
-        <div
-          className="row gap-8"
-          style={{
-            padding: "8px 12px",
-            marginBottom: 10,
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r-sm)",
-            background: "var(--bg-1)",
-            fontSize: 11,
-          }}
-        >
-          <Icon name="info" size={12} />
-          <span className="muted">{status.data.message}</span>
-        </div>
-      )}
-
       <Sect
         title="Realm"
         action={
@@ -306,9 +303,8 @@ export function Kerberos() {
               <span className="dot" />
               {pillText}
             </span>
-            <button className="btn btn--sm" onClick={() => setShowConfig(true)}>
+            <button className="btn btn--sm" onClick={() => setShowConfig(true)} title="Edit krb5.conf">
               <Icon name="edit" size={10} />
-              Edit krb5.conf
             </button>
           </div>
         }
@@ -320,31 +316,21 @@ export function Kerberos() {
           <dd>{config.data?.kdc ?? status.data?.kdc ?? "—"}</dd>
           <dt>Admin server</dt>
           <dd>{config.data?.adminServer ?? status.data?.adminServer ?? "—"}</dd>
-          <dt>Idmap domain</dt>
-          <dd>{idmap.data?.domain ?? "—"}</dd>
+          <dt>Idmap</dt>
+          <dd>{idmap.data?.domain ?? "cfg loaded"}</dd>
         </dl>
       </Sect>
 
       <Sect
         title="Principals"
         action={
-          <div className="row gap-8">
-            <button
-              className="btn btn--sm"
-              onClick={() => principals.refetch()}
-              disabled={principals.isFetching}
-            >
-              <Icon name="refresh" size={10} />
-              Refresh
-            </button>
-            <button
-              className="btn btn--sm btn--primary"
-              onClick={() => setEditing({ mode: "create" })}
-            >
-              <Icon name="plus" size={9} />
-              New
-            </button>
-          </div>
+          <button
+            className="btn btn--sm btn--primary"
+            onClick={() => setEditing({ mode: "create" })}
+          >
+            <Icon name="plus" size={9} />
+            New
+          </button>
         }
       >
         {principals.isLoading && <div className="muted">Loading principals…</div>}
@@ -370,7 +356,11 @@ export function Kerberos() {
             </thead>
             <tbody>
               {principals.data.map((p) => (
-                <tr key={p.name}>
+                <tr
+                  key={p.name}
+                  onClick={() => setEditing({ mode: "edit", principal: p })}
+                  style={{ cursor: "pointer" }}
+                >
                   <td className="mono" style={{ fontSize: 11 }}>{p.name}</td>
                   <td>
                     <span className="pill">{p.type ?? "—"}</span>
@@ -379,34 +369,16 @@ export function Kerberos() {
                   <td className="muted">{p.created ?? p.createdAt ?? "—"}</td>
                   <td className="muted">{p.expires ?? p.expiresAt ?? "—"}</td>
                   <td className="num">
-                    <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-                      <button
-                        className="btn btn--sm"
-                        disabled={refreshKeytab.isPending}
-                        onClick={() => refreshKeytab.mutate(p.name)}
-                        title="Refresh keytab"
-                      >
-                        <Icon name="key" size={10} />
-                        Keytab
-                      </button>
-                      <button
-                        className="btn btn--sm"
-                        onClick={() => setEditing({ mode: "edit", principal: p })}
-                        title="Edit"
-                      >
-                        <Icon name="edit" size={10} />
-                      </button>
-                      <button
-                        className="btn btn--sm btn--danger"
-                        disabled={del.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete principal ${p.name}?`)) del.mutate(p.name);
-                        }}
-                        title="Delete"
-                      >
-                        <Icon name="trash" size={10} />
-                      </button>
-                    </div>
+                    <button
+                      className="btn btn--sm"
+                      disabled={refreshKeytab.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        refreshKeytab.mutate(p.name);
+                      }}
+                    >
+                      Keytab
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { shares } from "../../api/shares";
+import { Modal } from "./Modal";
 
 export function Unified() {
   const [sel, setSel] = useState<string | null>(null);
+  const [showNew, setShowNew] = useState(false);
   const q = useQuery({
     queryKey: ["protocol-shares"],
     queryFn: () => shares.listProtocolShares(),
@@ -22,9 +24,10 @@ export function Unified() {
     >
       <div style={{ padding: 14, overflow: "auto" }}>
         <div className="tbar">
-          <div className="muted small" style={{ marginLeft: "auto" }}>
-            Create per-protocol shares from the SMB / NFS / iSCSI / NVMe-oF tabs.
-          </div>
+          <button className="btn btn--primary" onClick={() => setShowNew(true)}>
+            <Icon name="plus" size={11} />
+            New share
+          </button>
         </div>
         {q.isLoading && <div className="empty-hint">Loading shares…</div>}
         {q.isError && (
@@ -97,6 +100,20 @@ export function Unified() {
             </div>
           </div>
         </div>
+      )}
+      {showNew && (
+        <Modal
+          title="New share"
+          sub="Create per-protocol shares from the SMB / NFS / iSCSI / NVMe-oF tabs"
+          onClose={() => setShowNew(false)}
+          footer={<button className="btn" onClick={() => setShowNew(false)}>Close</button>}
+        >
+          <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
+            The unified view aggregates all protocol exports. Pick a protocol tab
+            (<strong>SMB</strong>, <strong>NFS</strong>, <strong>iSCSI</strong>, or <strong>NVMe-oF</strong>)
+            to create a new share. The result will appear here once published.
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -36,6 +36,16 @@ function alertName(a: Alert): string {
   return a.labels?.alertname ?? a.fingerprint.slice(0, 8);
 }
 
+function parseDuration(s: string): number {
+  const m = s.trim().match(/^(\d+)\s*([smhd])$/i);
+  if (!m) return 2 * 3600 * 1000;
+  const n = Number(m[1]);
+  const unit = m[2].toLowerCase();
+  const mult =
+    unit === "s" ? 1000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
+  return n * mult;
+}
+
 type SilenceModalProps = {
   alert: Alert;
   onClose: () => void;
@@ -196,16 +206,6 @@ function SilenceModal({ alert, onClose }: SilenceModalProps) {
   );
 }
 
-function parseDuration(s: string): number {
-  const m = s.trim().match(/^(\d+)\s*([smhd])$/i);
-  if (!m) return 2 * 3600 * 1000;
-  const n = Number(m[1]);
-  const unit = m[2].toLowerCase();
-  const mult =
-    unit === "s" ? 1000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
-  return n * mult;
-}
-
 export default function Active() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -214,7 +214,7 @@ export default function Active() {
     refetchInterval: 5000,
   });
   const list: Alert[] = q.data ?? [];
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>(list[0]?.fingerprint ?? null);
   const [silenceFor, setSilenceFor] = useState<Alert | null>(null);
   const cur = list.find((a) => a.fingerprint === sel) ?? list[0];
 
@@ -233,75 +233,51 @@ export default function Active() {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100%" }}>
       <div style={{ padding: 14, overflow: "auto" }}>
         <div className="tbar">
-          <span className="pill pill--err">
-            <span className="dot" /> {counts.critical} critical
-          </span>
-          <span className="pill pill--warn">
-            <span className="dot" /> {counts.warning} warning
-          </span>
-          <span className="pill pill--info">
-            <span className="dot" /> {counts.info} info
-          </span>
+          <span className="pill pill--err"><span className="dot" />{counts.critical} critical</span>
+          <span className="pill pill--warn"><span className="dot" />{counts.warning} warning</span>
+          <span className="pill pill--info"><span className="dot" />{counts.info} info</span>
           <button
             className="btn btn--sm"
             style={{ marginLeft: "auto" }}
             onClick={() => qc.invalidateQueries({ queryKey: ["alerts", "list"] })}
           >
-            <Icon name="refresh" size={11} /> Refresh
+            <Icon name="refresh" size={11} />Refresh
           </button>
         </div>
-
-        {q.isLoading && <div className="muted">Loading alerts…</div>}
+        <table className="tbl">
+          <thead><tr><th>Alert</th><th>Severity</th><th>Since</th><th>Labels</th></tr></thead>
+          <tbody>
+            {list.map((a) => {
+              const sev = severityOf(a);
+              const isOn = cur?.fingerprint === a.fingerprint;
+              return (
+                <tr
+                  key={a.fingerprint}
+                  className={isOn ? "is-on" : ""}
+                  onClick={() => setSel(a.fingerprint)}
+                >
+                  <td>{alertName(a)}</td>
+                  <td><span className={pillClass(sev)}><span className="dot" />{sev}</span></td>
+                  <td className="muted">{fmtSince(a.startsAt)}</td>
+                  <td className="mono muted" style={{ fontSize: 10 }}>
+                    {Object.entries(a.labels ?? {})
+                      .filter(([k]) => k !== "alertname" && k !== "severity")
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(" ")}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {q.isLoading && <div className="muted" style={{ padding: 8 }}>Loading alerts…</div>}
         {q.isError && (
-          <div className="muted" style={{ color: "var(--err)" }}>
+          <div className="muted" style={{ padding: 8, color: "var(--err)" }}>
             Failed to load: {(q.error as Error).message}
           </div>
         )}
         {q.data && list.length === 0 && (
-          <div className="muted" style={{ padding: "20px 0" }}>
-            No active alerts.
-          </div>
-        )}
-
-        {list.length > 0 && (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Alert</th>
-                <th>Severity</th>
-                <th>Since</th>
-                <th>Labels</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((a) => {
-                const sev = severityOf(a);
-                const isOn = (cur && cur.fingerprint === a.fingerprint) || false;
-                return (
-                  <tr
-                    key={a.fingerprint}
-                    className={isOn ? "is-on" : ""}
-                    onClick={() => setSel(a.fingerprint)}
-                  >
-                    <td>{alertName(a)}</td>
-                    <td>
-                      <span className={pillClass(sev)}>
-                        <span className="dot" /> {sev}
-                      </span>
-                    </td>
-                    <td className="muted">{fmtSince(a.startsAt)}</td>
-                    <td className="mono muted" style={{ fontSize: 10 }}>
-                      {Object.entries(a.labels ?? {})
-                        .filter(([k]) => k !== "alertname" && k !== "severity")
-                        .slice(0, 4)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(" ")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="muted" style={{ padding: 20 }}>No active alerts.</div>
         )}
       </div>
 
@@ -309,98 +285,42 @@ export default function Active() {
         <div className="side-detail">
           <div className="side-detail__head">
             <div>
-              <div className="muted mono" style={{ fontSize: 10 }}>
-                ALERT · {cur.fingerprint.slice(0, 12)}
-              </div>
+              <div className="muted mono" style={{ fontSize: 10 }}>ALERT · {cur.fingerprint.slice(0, 12)}</div>
               <div className="side-detail__title">{alertName(cur)}</div>
             </div>
           </div>
-
           <div className="sect">
-            <div className="sect__head">
-              <div className="sect__title">Summary</div>
-            </div>
+            <div className="sect__head"><div className="sect__title">Summary</div></div>
             <div className="sect__body" style={{ fontSize: 12 }}>
-              {cur.annotations?.summary ??
-                cur.annotations?.description ??
-                "No summary."}
+              {cur.annotations?.summary ?? cur.annotations?.description ?? "No summary."}
             </div>
           </div>
-
           <div className="sect">
-            <div className="sect__head">
-              <div className="sect__title">Labels</div>
-            </div>
-            <div className="sect__body chip-row">
-              {Object.entries(cur.labels ?? {}).map(([k, v]) => (
-                <span key={k} className="chip">
-                  {k}={v}
-                </span>
-              ))}
-            </div>
+            <div className="sect__head"><div className="sect__title">Labels</div></div>
+            <table className="tbl tbl--compact">
+              <tbody>
+                {Object.entries(cur.labels ?? {}).map(([k, v]) => (
+                  <tr key={k}><td className="mono">{k}</td><td className="mono">{v}</td></tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {cur.annotations && Object.keys(cur.annotations).length > 0 && (
-            <div className="sect">
-              <div className="sect__head">
-                <div className="sect__title">Annotations</div>
-              </div>
-              <table className="tbl tbl--compact">
-                <tbody>
-                  {Object.entries(cur.annotations).map(([k, v]) => (
-                    <tr key={k}>
-                      <td className="mono">{k}</td>
-                      <td className="mono">{v}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
           <div className="sect">
-            <div className="sect__head">
-              <div className="sect__title">State</div>
-            </div>
+            <div className="sect__head"><div className="sect__title">State</div></div>
             <dl className="kv">
-              <dt>Severity</dt>
-              <dd>{severityOf(cur)}</dd>
-              <dt>State</dt>
-              <dd>{cur.status?.state ?? "—"}</dd>
-              <dt>Since</dt>
-              <dd>{fmtSince(cur.startsAt)}</dd>
+              <dt>Severity</dt><dd>{severityOf(cur)}</dd>
+              <dt>State</dt><dd>{cur.status?.state ?? "—"}</dd>
+              <dt>Since</dt><dd>{fmtSince(cur.startsAt)}</dd>
             </dl>
           </div>
-
-          <div
-            className="row gap-8"
-            style={{ padding: "10px 12px", borderTop: "1px solid var(--line)" }}
-          >
-            <button
-              className="btn btn--sm btn--primary"
-              onClick={() => setSilenceFor(cur)}
-            >
-              Silence…
-            </button>
-            {runbook && (
-              <a
-                className="btn btn--sm"
-                href={runbook}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Icon name="external" size={10} /> Runbook
+          <div className="row gap-8" style={{ padding: "10px 12px", borderTop: "1px solid var(--line)" }}>
+            <button className="btn btn--sm" onClick={() => setSilenceFor(cur)}>Silence…</button>
+            {runbook ? (
+              <a className="btn btn--sm" href={runbook} target="_blank" rel="noreferrer">
+                View runbook
               </a>
-            )}
-            {cur.generatorURL && (
-              <a
-                className="btn btn--sm"
-                href={cur.generatorURL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Source
-              </a>
+            ) : (
+              <button className="btn btn--sm" disabled>View runbook</button>
             )}
           </div>
         </div>

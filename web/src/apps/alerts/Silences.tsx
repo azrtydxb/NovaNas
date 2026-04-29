@@ -74,18 +74,12 @@ function CreateModal({ onClose }: CreateModalProps) {
     <div className="modal-bg" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal__head">
-          <div className="modal__icon">
-            <Icon name="alert" size={18} />
-          </div>
+          <div className="modal__icon"><Icon name="alert" size={18} /></div>
           <div className="modal__head-meta">
             <div className="modal__title">New silence</div>
-            <div className="modal__sub muted">
-              Suppress matching alerts for a time window
-            </div>
+            <div className="modal__sub muted">Suppress matching alerts for a time window</div>
           </div>
-          <button className="modal__close" onClick={onClose}>
-            <Icon name="x" size={14} />
-          </button>
+          <button className="modal__close" onClick={onClose}><Icon name="x" size={14} /></button>
         </div>
         <div className="modal__body">
           <div className="field">
@@ -112,11 +106,7 @@ function CreateModal({ onClose }: CreateModalProps) {
           <div className="field">
             <label className="field__label">Matchers</label>
             {matchers.map((m, i) => (
-              <div
-                key={i}
-                className="row gap-4"
-                style={{ marginBottom: 4, alignItems: "center" }}
-              >
+              <div key={i} className="row gap-4" style={{ marginBottom: 4, alignItems: "center" }}>
                 <input
                   className="input input--mono"
                   placeholder="name"
@@ -171,9 +161,7 @@ function CreateModal({ onClose }: CreateModalProps) {
           )}
         </div>
         <div className="modal__foot">
-          <button className="btn btn--sm" onClick={onClose}>
-            Cancel
-          </button>
+          <button className="btn btn--sm" onClick={onClose}>Cancel</button>
           <button
             className="btn btn--sm btn--primary"
             disabled={!valid || create.isPending}
@@ -209,88 +197,56 @@ export default function Silences() {
   return (
     <div style={{ padding: 14 }}>
       <div className="tbar">
-        <button
-          className="btn btn--primary"
-          onClick={() => setShowCreate(true)}
-        >
-          <Icon name="plus" size={11} /> New silence
-        </button>
-        <span className="muted" style={{ marginLeft: "auto" }}>
-          {list.length} silences
-        </span>
-        <button
-          className="btn btn--sm"
-          onClick={() => qc.invalidateQueries({ queryKey: ["alerts", "silences"] })}
-        >
-          <Icon name="refresh" size={11} /> Refresh
+        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+          <Icon name="plus" size={11} />New silence
         </button>
       </div>
-
-      {q.isLoading && <div className="muted">Loading silences…</div>}
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Matchers</th>
+            <th>Comment</th>
+            <th>Creator</th>
+            <th>Ends</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((s) => (
+            <tr key={s.id}>
+              <td className="mono" style={{ fontSize: 11 }}>{s.id.slice(0, 8)}</td>
+              <td className="mono" style={{ fontSize: 11 }}>
+                {(s.matchers ?? []).map(fmtMatcher).join(" ")}
+              </td>
+              <td className="muted">{s.comment ?? "—"}</td>
+              <td>{s.createdBy ?? "—"}</td>
+              <td className="muted">{fmtTime(s.endsAt)}</td>
+              <td className="num">
+                <button
+                  className="btn btn--sm btn--danger"
+                  disabled={expire.isPending}
+                  onClick={() => {
+                    if (confirm(`Expire silence ${s.id.slice(0, 8)}?`)) {
+                      expire.mutate(s.id);
+                    }
+                  }}
+                >
+                  Expire
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {q.isLoading && <div className="muted" style={{ padding: 8 }}>Loading silences…</div>}
       {q.isError && (
-        <div className="muted" style={{ color: "var(--err)" }}>
+        <div className="muted" style={{ padding: 8, color: "var(--err)" }}>
           Failed to load: {(q.error as Error).message}
         </div>
       )}
       {q.data && list.length === 0 && (
-        <div className="muted" style={{ padding: "20px 0" }}>
-          No silences configured.
-        </div>
-      )}
-
-      {list.length > 0 && (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Matchers</th>
-              <th>Comment</th>
-              <th>Creator</th>
-              <th>Starts</th>
-              <th>Ends</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((s) => (
-              <tr key={s.id}>
-                <td className="mono" style={{ fontSize: 11 }}>
-                  {s.id.slice(0, 8)}
-                </td>
-                <td>
-                  <div className="chip-row">
-                    {(s.matchers ?? []).map((m, i) => (
-                      <span key={i} className="chip">
-                        {fmtMatcher(m)}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="muted">{s.comment ?? "—"}</td>
-                <td>{s.createdBy ?? "—"}</td>
-                <td className="muted mono" style={{ fontSize: 11 }}>
-                  {fmtTime(s.startsAt)}
-                </td>
-                <td className="muted mono" style={{ fontSize: 11 }}>
-                  {fmtTime(s.endsAt)}
-                </td>
-                <td className="num">
-                  <button
-                    className="btn btn--sm btn--danger"
-                    disabled={expire.isPending}
-                    onClick={() => {
-                      if (confirm(`Expire silence ${s.id.slice(0, 8)}?`)) {
-                        expire.mutate(s.id);
-                      }
-                    }}
-                  >
-                    Expire
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="muted" style={{ padding: 20 }}>No silences configured.</div>
       )}
 
       {showCreate && <CreateModal onClose={() => setShowCreate(false)} />}

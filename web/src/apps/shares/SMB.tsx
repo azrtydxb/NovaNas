@@ -5,27 +5,8 @@ import { shares, type SmbShare, type SmbUser } from "../../api/shares";
 import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
-type View = "shares" | "users" | "globals";
-
 export function SMB() {
-  const [view, setView] = useState<View>("shares");
-
-  return (
-    <div className="app-storage">
-      <div className="win-tabs">
-        {(["shares", "users", "globals"] as const).map((v) => (
-          <button key={v} className={view === v ? "is-on" : ""} onClick={() => setView(v)}>
-            {v}
-          </button>
-        ))}
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-        {view === "shares" && <SharesView />}
-        {view === "users" && <UsersView />}
-        {view === "globals" && <GlobalsView />}
-      </div>
-    </div>
-  );
+  return <SharesView />;
 }
 
 function SharesView() {
@@ -34,6 +15,8 @@ function SharesView() {
   const list = q.data ?? [];
 
   const [edit, setEdit] = useState<SmbShare | "new" | null>(null);
+  const [showGlobals, setShowGlobals] = useState(false);
+  const [showUsers, setShowUsers] = useState(false);
 
   const inval = () => qc.invalidateQueries({ queryKey: ["smb-shares"] });
   const delMut = useMutation({
@@ -54,10 +37,13 @@ function SharesView() {
           <Icon name="plus" size={11} />
           New SMB share
         </button>
+        <button className="btn" onClick={() => setShowGlobals(true)}>Globals…</button>
+        <button className="btn" onClick={() => setShowUsers(true)}>Users…</button>
         <button
           className="btn"
           disabled={reloadMut.isPending}
           onClick={() => reloadMut.mutate()}
+          style={{ marginLeft: "auto" }}
         >
           <Icon name="refresh" size={11} />
           Reload
@@ -116,6 +102,24 @@ function SharesView() {
           onClose={() => setEdit(null)}
           onDone={inval}
         />
+      )}
+      {showGlobals && (
+        <Modal
+          title="Samba global settings"
+          onClose={() => setShowGlobals(false)}
+          footer={<button className="btn" onClick={() => setShowGlobals(false)}>Close</button>}
+        >
+          <GlobalsView />
+        </Modal>
+      )}
+      {showUsers && (
+        <Modal
+          title="SMB users"
+          onClose={() => setShowUsers(false)}
+          footer={<button className="btn" onClick={() => setShowUsers(false)}>Close</button>}
+        >
+          <UsersView />
+        </Modal>
       )}
     </div>
   );

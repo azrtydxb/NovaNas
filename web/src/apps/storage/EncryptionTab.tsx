@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { storage, type Dataset } from "../../api/storage";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { storage, type Dataset, type EncryptionStatus } from "../../api/storage";
 import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
@@ -26,6 +26,17 @@ export function EncryptionTab() {
   const encrypted = (q.data ?? []).filter(
     (d) => d.enc || d.encrypted || (d.encryption && d.encryption !== "off")
   );
+
+  const encQs = useQueries({
+    queries: encrypted.map((d) => ({
+      queryKey: ["encryption", dsKey(d)],
+      queryFn: () => storage.getEncryption(dsKey(d)),
+    })),
+  });
+  const encByKey: Record<string, EncryptionStatus | undefined> = {};
+  encrypted.forEach((d, i) => {
+    encByKey[dsKey(d)] = encQs[i]?.data;
+  });
 
   return (
     <div style={{ padding: 14 }}>
@@ -59,45 +70,46 @@ export function EncryptionTab() {
             <tr>
               <th>Dataset</th>
               <th>Status</th>
-              <th>Encryption</th>
+              <th>Format</th>
+              <th>Key location</th>
+              <th>Last rotated</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {encrypted.map((d) => {
               const k = dsKey(d);
+              const enc = encByKey[k];
+              const status = enc?.keystatus ?? enc?.status ?? "available";
+              const isLoaded = status === "available" || status === "loaded";
               return (
                 <tr key={k}>
                   <td>{d.name}</td>
                   <td>
-                    <span className="pill pill--ok">
+                    <span className={`pill pill--${isLoaded ? "ok" : "warn"}`}>
                       <span className="dot" />
-                      available
+                      {status}
                     </span>
                   </td>
-                  <td className="mono" style={{ fontSize: 11 }}>{d.encryption ?? "—"}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>{enc?.keyformat ?? d.encryption ?? "—"}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>{enc?.keylocation ?? "—"}</td>
+                  <td className="muted">{enc?.rotated ?? "—"}</td>
                   <td className="num">
                     <button
                       className="btn btn--sm"
-                      onClick={() => setAction({ kind: "load", full: k })}
-                    >
-                      Load key
-                    </button>{" "}
-                    <button
-                      className="btn btn--sm"
+                      onClick={() => isLoaded ? unloadMut.mutate(k) : setAction({ kind: "load", full: k })}
                       disabled={unloadMut.isPending}
-                      onClick={() => unloadMut.mutate(k)}
                     >
-                      Unload
+                      {isLoaded ? "Unload" : "Load"}
                     </button>{" "}
                     <button
                       className="btn btn--sm"
                       onClick={() => setAction({ kind: "rotate", full: k })}
                     >
-                      Rotate key
+                      Rotate
                     </button>{" "}
                     <button
-                      className="btn btn--sm"
+                      className="btn btn--sm btn--danger"
                       onClick={() => setAction({ kind: "recover", full: k })}
                       title="Recover via TPM-sealed escrow"
                     >

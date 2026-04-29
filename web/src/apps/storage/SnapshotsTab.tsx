@@ -27,6 +27,16 @@ export function SnapshotsTab() {
     onSuccess: (_d, full) => { inval(); toastSuccess("Snapshot deleted", full); },
   });
 
+  const rollbackMut = useMutation({
+    meta: { label: "Rollback failed" },
+    mutationFn: (full: string) => {
+      const ds = full.includes("@") ? full.slice(0, full.indexOf("@")) : full;
+      const snap = full.includes("@") ? full.slice(full.indexOf("@") + 1) : undefined;
+      return storage.rollbackDataset(ds, snap);
+    },
+    onSuccess: (_d, full) => { inval(); toastSuccess("Rolled back to snapshot", full); },
+  });
+
   const toggleDiff = (k: string) => {
     setDiffSel((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k].slice(-2));
   };
@@ -40,7 +50,7 @@ export function SnapshotsTab() {
       <div className="tbar">
         <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
           <Icon name="plus" size={11} />
-          Take snapshot
+          New snapshot
         </button>
         <button
           className="btn"
@@ -104,6 +114,15 @@ export function SnapshotsTab() {
                     />
                   </td>
                   <td className="num">
+                    <button
+                      className="btn btn--sm"
+                      disabled={rollbackMut.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Rollback to ${k}? This destroys newer snapshots.`)) rollbackMut.mutate(k);
+                      }}
+                    >
+                      Rollback
+                    </button>{" "}
                     <button className="btn btn--sm" onClick={() => setHoldFor(k)}>
                       Holds
                     </button>{" "}

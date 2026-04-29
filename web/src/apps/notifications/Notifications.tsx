@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   notifications,
@@ -6,8 +6,6 @@ import {
 } from "../../api/observability";
 import { Icon } from "../../components/Icon";
 import { toastSuccess } from "../../store/toast";
-
-type FilterMode = "all" | "unread" | "snoozed";
 
 function sevDot(sev?: string): string {
   if (sev === "error" || sev === "critical") return "sdot sdot--err";
@@ -48,24 +46,14 @@ type SnoozeModalProps = {
 function SnoozeModal({ event, onClose, onPick, pending }: SnoozeModalProps) {
   return (
     <div className="modal-bg" onMouseDown={onClose}>
-      <div
-        className="modal"
-        style={{ width: 380 }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="modal" style={{ width: 380 }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal__head">
-          <div className="modal__icon">
-            <Icon name="bell" size={18} />
-          </div>
+          <div className="modal__icon"><Icon name="bell" size={18} /></div>
           <div className="modal__head-meta">
             <div className="modal__title">Snooze notification</div>
-            <div className="modal__sub muted">
-              {event.title ?? event.message ?? event.id}
-            </div>
+            <div className="modal__sub muted">{event.title ?? event.message ?? event.id}</div>
           </div>
-          <button className="modal__close" onClick={onClose}>
-            <Icon name="x" size={14} />
-          </button>
+          <button className="modal__close" onClick={onClose}><Icon name="x" size={14} /></button>
         </div>
         <div className="modal__body" style={{ padding: 12 }}>
           <div className="row gap-8" style={{ flexWrap: "wrap" }}>
@@ -83,9 +71,7 @@ function SnoozeModal({ event, onClose, onPick, pending }: SnoozeModalProps) {
           </div>
         </div>
         <div className="modal__foot">
-          <button className="btn btn--sm" onClick={onClose}>
-            Cancel
-          </button>
+          <button className="btn btn--sm" onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>
@@ -94,16 +80,12 @@ function SnoozeModal({ event, onClose, onPick, pending }: SnoozeModalProps) {
 
 export default function Notifications() {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<FilterMode>("all");
   const [snoozeFor, setSnoozeFor] = useState<NotificationEvent | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const q = useQuery({
-    queryKey: ["notifications", "events", filter],
-    queryFn: () =>
-      notifications.list({
-        unread: filter === "unread" ? true : undefined,
-        limit: 200,
-      }),
+    queryKey: ["notifications", "events"],
+    queryFn: () => notifications.list({ limit: 200 }),
     refetchInterval: 10_000,
   });
 
@@ -113,19 +95,6 @@ export default function Notifications() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
       toastSuccess("All notifications marked read");
-    },
-  });
-  const markRead = useMutation({
-    meta: { label: "Mark read failed" },
-    mutationFn: (id: string) => notifications.markRead(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
-  });
-  const dismiss = useMutation({
-    meta: { label: "Dismiss failed" },
-    mutationFn: (id: string) => notifications.dismiss(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      toastSuccess("Notification dismissed");
     },
   });
   const snooze = useMutation({
@@ -139,144 +108,63 @@ export default function Notifications() {
     },
   });
 
-  const all: NotificationEvent[] = q.data ?? [];
-
-  const list = useMemo(() => {
-    if (filter === "snoozed") {
-      return all.filter((n) => {
-        const r = n as NotificationEvent & { snoozedUntil?: string };
-        return !!r.snoozedUntil;
-      });
-    }
-    return all;
-  }, [all, filter]);
-
-  const unread = all.filter((n) => !n.read).length;
+  const list: NotificationEvent[] = q.data ?? [];
+  const unread = list.filter((n) => !n.read).length;
 
   return (
     <div className="app-storage">
       <div className="win-body" style={{ padding: 14, overflow: "auto" }}>
         <div className="tbar">
-          <div className="row gap-4">
-            {(["all", "unread", "snoozed"] as const).map((f) => (
-              <button
-                key={f}
-                className={`btn btn--sm ${filter === f ? "btn--primary" : ""}`}
-                onClick={() => setFilter(f)}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <span className="muted" style={{ fontSize: 11 }}>
-            {unread} unread · {all.length} total
-          </span>
+          <span className="muted" style={{ fontSize: 11 }}>{unread} unread</span>
           <button
             className="btn btn--sm"
             disabled={readAll.isPending || unread === 0}
             onClick={() => readAll.mutate()}
           >
-            <Icon name="check" size={11} /> Mark all read
+            Mark all read
           </button>
           <button
             className="btn btn--sm"
             style={{ marginLeft: "auto" }}
-            onClick={() => qc.invalidateQueries({ queryKey: ["notifications"] })}
+            onClick={() => setShowSettings(true)}
           >
-            <Icon name="refresh" size={11} /> Refresh
+            Settings
           </button>
         </div>
-
-        {q.isLoading && <div className="muted">Loading notifications…</div>}
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Time</th>
+              <th>Source</th>
+              <th>Message</th>
+              <th>Actor</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((n) => (
+              <tr key={n.id} style={{ opacity: n.read ? 0.55 : 1 }}>
+                <td><span className={sevDot(n.severity)} /></td>
+                <td className="muted">{fmtAgo(n.at)}</td>
+                <td><span className="pill" style={{ fontSize: 9 }}>{n.source ?? "system"}</span></td>
+                <td>{n.title ?? n.message ?? "(no title)"}</td>
+                <td className="muted">{n.actor ?? ""}</td>
+                <td className="num">
+                  <button className="btn btn--sm" onClick={() => setSnoozeFor(n)}>Snooze</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {q.isLoading && <div className="muted" style={{ padding: 8 }}>Loading notifications…</div>}
         {q.isError && (
-          <div className="muted" style={{ color: "var(--err)" }}>
+          <div className="muted" style={{ padding: 8, color: "var(--err)" }}>
             Failed to load: {(q.error as Error).message}
           </div>
         )}
         {q.data && list.length === 0 && (
-          <div className="muted" style={{ padding: "20px 0" }}>
-            {filter === "unread"
-              ? "No unread notifications."
-              : filter === "snoozed"
-                ? "No snoozed notifications."
-                : "No notifications."}
-          </div>
-        )}
-
-        {list.length > 0 && (
-          <div className="notif-list">
-            {list.map((n) => (
-              <div
-                key={n.id}
-                className={`notif-item ${n.read ? "" : "is-unread"}`}
-                onClick={() => {
-                  if (!n.read) markRead.mutate(n.id);
-                }}
-              >
-                <span
-                  className={sevDot(n.severity)}
-                  style={{ marginTop: 4 }}
-                />
-                <div className="notif-item__body">
-                  <div className="notif-item__head">
-                    <div className="notif-item__title">
-                      {n.title ?? n.message ?? "(no title)"}
-                    </div>
-                    <span className="notif-item__time">{fmtAgo(n.at)}</span>
-                  </div>
-                  {n.title && n.message && n.title !== n.message && (
-                    <div className="notif-item__sub muted">{n.message}</div>
-                  )}
-                  <div className="notif-item__meta muted">
-                    <span>{n.source ?? "system"}</span>
-                    {n.actor && <span> · {n.actor}</span>}
-                  </div>
-                  <div className="notif-item__actions">
-                    {!n.read && (
-                      <button
-                        className="btn btn--sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          markRead.mutate(n.id);
-                        }}
-                      >
-                        <Icon name="check" size={10} /> Read
-                      </button>
-                    )}
-                    <button
-                      className="btn btn--sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSnoozeFor(n);
-                      }}
-                    >
-                      <Icon name="pause" size={10} /> Snooze
-                    </button>
-                    <button
-                      className="btn btn--sm btn--danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dismiss.mutate(n.id);
-                      }}
-                    >
-                      <Icon name="x" size={10} /> Dismiss
-                    </button>
-                    {n.url && (
-                      <a
-                        className="btn btn--sm"
-                        href={n.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Icon name="external" size={10} /> Open
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="muted" style={{ padding: 20 }}>No notifications.</div>
         )}
       </div>
 
@@ -285,10 +173,32 @@ export default function Notifications() {
           event={snoozeFor}
           onClose={() => setSnoozeFor(null)}
           pending={snooze.isPending}
-          onPick={(minutes) =>
-            snooze.mutate({ id: snoozeFor.id, minutes })
-          }
+          onPick={(minutes) => snooze.mutate({ id: snoozeFor.id, minutes })}
         />
+      )}
+      {showSettings && (
+        <div className="modal-bg" onMouseDown={() => setShowSettings(false)}>
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal__head">
+              <div className="modal__icon"><Icon name="bell" size={18} /></div>
+              <div className="modal__head-meta">
+                <div className="modal__title">Notification settings</div>
+                <div className="modal__sub muted">Configured in System · SMTP and channels.</div>
+              </div>
+              <button className="modal__close" onClick={() => setShowSettings(false)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <div className="modal__body">
+              <div className="muted" style={{ padding: 16, fontSize: 11 }}>
+                Open the System app to configure SMTP relay and notification channels.
+              </div>
+            </div>
+            <div className="modal__foot">
+              <button className="btn btn--sm" onClick={() => setShowSettings(false)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

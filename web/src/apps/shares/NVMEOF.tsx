@@ -6,43 +6,15 @@ import { formatBytes } from "../../lib/format";
 import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
-type View = "subsystems" | "ports";
-
 export function NVMEOF() {
-  const [view, setView] = useState<View>("subsystems");
-  const saveMut = useMutation({
-    meta: { label: "Save config failed" },
-    mutationFn: () => shares.nvmeofSaveConfig(),
-    onSuccess: () => toastSuccess("NVMe-oF config saved"),
-  });
-
-  return (
-    <div className="app-storage">
-      <div className="win-tabs">
-        {(["subsystems", "ports"] as const).map((v) => (
-          <button key={v} className={view === v ? "is-on" : ""} onClick={() => setView(v)}>
-            {v}
-          </button>
-        ))}
-        <div style={{ marginLeft: "auto", padding: "4px 8px" }}>
-          <button className="btn btn--sm" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-            <Icon name="download" size={10} />
-            Save config
-          </button>
-        </div>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-        {view === "subsystems" && <SubsystemsView />}
-        {view === "ports" && <PortsView />}
-      </div>
-    </div>
-  );
+  return <SubsystemsView />;
 }
 
 function SubsystemsView() {
   const qc = useQueryClient();
   const [sel, setSel] = useState<string | null>(null);
   const [edit, setEdit] = useState<NvmeofSubsystem | "new" | null>(null);
+  const [showPorts, setShowPorts] = useState(false);
   const subQ = useQuery({
     queryKey: ["nvmeof-subsystems"],
     queryFn: () => shares.listNvmeofSubsystems(),
@@ -55,6 +27,11 @@ function SubsystemsView() {
     meta: { label: "Delete subsystem failed" },
     mutationFn: (nqn: string) => shares.deleteNvmeofSubsystem(nqn),
     onSuccess: (_d, nqn) => { inval(); toastSuccess("Subsystem deleted", nqn); },
+  });
+  const saveMut = useMutation({
+    meta: { label: "Save config failed" },
+    mutationFn: () => shares.nvmeofSaveConfig(),
+    onSuccess: () => toastSuccess("NVMe-oF config saved"),
   });
 
   return (
@@ -70,6 +47,16 @@ function SubsystemsView() {
           <button className="btn btn--primary" onClick={() => setEdit("new")}>
             <Icon name="plus" size={11} />
             New subsystem
+          </button>
+          <button className="btn" onClick={() => setShowPorts(true)}>Ports…</button>
+          <button
+            className="btn"
+            disabled={saveMut.isPending}
+            onClick={() => saveMut.mutate()}
+            style={{ marginLeft: "auto" }}
+          >
+            <Icon name="download" size={11} />
+            Save config
           </button>
         </div>
         {subQ.isLoading && <div className="empty-hint">Loading subsystems…</div>}
@@ -138,6 +125,15 @@ function SubsystemsView() {
           onClose={() => setEdit(null)}
           onDone={inval}
         />
+      )}
+      {showPorts && (
+        <Modal
+          title="NVMe-oF ports"
+          onClose={() => setShowPorts(false)}
+          footer={<button className="btn" onClick={() => setShowPorts(false)}>Close</button>}
+        >
+          <PortsView />
+        </Modal>
       )}
     </div>
   );

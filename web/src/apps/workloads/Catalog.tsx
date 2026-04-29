@@ -201,8 +201,7 @@ export function Catalog() {
           onClick={() => reload.mutate()}
           disabled={reload.isPending}
         >
-          <Icon name="refresh" size={11} />
-          {reload.isPending ? "Reloading…" : "Reload index"}
+          {reload.isPending ? "Refreshing…" : "Refresh"}
         </button>
       </div>
       {reload.isError && (

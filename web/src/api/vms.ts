@@ -83,6 +83,8 @@ export const vms = {
     api<unknown>("/api/v1/vms", { method: "POST", body: JSON.stringify(body) }),
 
   snapshots: () => api<VMSnapshot[]>("/api/v1/vm-snapshots"),
+  createSnapshot: (body: { name: string; vmName: string; namespace?: string }) =>
+    api<unknown>("/api/v1/vm-snapshots", { method: "POST", body: JSON.stringify(body) }),
   deleteSnapshot: (ns: string, name: string) =>
     api<void>(
       `/api/v1/vm-snapshots/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`,

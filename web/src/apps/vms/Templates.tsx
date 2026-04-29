@@ -155,14 +155,13 @@ export function Templates() {
       <div className="tbar">
         <button
           className="btn btn--primary"
-          disabled={items.length === 0}
           onClick={() => setCreating({})}
         >
           <Icon name="plus" size={11} />
-          Create VM from template
+          New template
         </button>
         <button
-          className="btn btn--sm"
+          className="btn"
           onClick={() => q.refetch()}
           disabled={q.isFetching}
           style={{ marginLeft: "auto" }}
@@ -187,12 +186,16 @@ export function Templates() {
               <th className="num">RAM</th>
               <th className="num">Disk</th>
               <th>Source</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {items.map((t) => (
-              <tr key={`${t.namespace ?? "default"}/${t.name}`}>
+              <tr
+                key={`${t.namespace ?? "default"}/${t.name}`}
+                onClick={() => setCreating({ initial: t })}
+                style={{ cursor: "pointer" }}
+                title="Click to create a VM from this template"
+              >
                 <td>{t.name}</td>
                 <td className="muted">{t.os ?? "—"}</td>
                 <td className="num mono">{t.cpu ?? "—"}</td>
@@ -202,15 +205,6 @@ export function Templates() {
                 <td className="num mono">{t.disk ? `${t.disk} GiB` : "—"}</td>
                 <td>
                   <span className="pill">{t.source ?? "—"}</span>
-                </td>
-                <td className="num">
-                  <button
-                    className="btn btn--sm"
-                    onClick={() => setCreating({ initial: t })}
-                  >
-                    <Icon name="plus" size={10} />
-                    Use
-                  </button>
                 </td>
               </tr>
             ))}

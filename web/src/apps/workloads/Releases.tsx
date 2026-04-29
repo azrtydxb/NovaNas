@@ -474,10 +474,9 @@ export function Releases() {
             Install chart
           </button>
           <button
-            className="btn btn--sm"
+            className="btn"
             onClick={() => list.refetch()}
             disabled={list.isFetching}
-            style={{ marginLeft: "auto" }}
           >
             <Icon name="refresh" size={11} />
             Refresh
@@ -608,6 +607,12 @@ export function Releases() {
               onClick={() => setShowUpgrade(true)}
             >
               Upgrade
+            </button>
+            <button
+              className="btn btn--sm"
+              onClick={() => setShowUpgrade(true)}
+            >
+              Edit values
             </button>
             <button
               className="btn btn--sm"

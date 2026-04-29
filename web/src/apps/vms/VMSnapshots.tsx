@@ -56,20 +56,6 @@ export function VMSnapshots() {
 
   return (
     <div style={{ padding: 14 }}>
-      <div className="tbar">
-        <span className="muted" style={{ fontSize: 11 }}>
-          {items.length} snapshot{items.length === 1 ? "" : "s"}
-        </span>
-        <button
-          className="btn btn--sm"
-          onClick={() => q.refetch()}
-          disabled={q.isFetching}
-          style={{ marginLeft: "auto" }}
-        >
-          <Icon name="refresh" size={11} />
-          Refresh
-        </button>
-      </div>
       {q.isLoading && <div className="muted">Loading snapshots…</div>}
       {!q.isLoading && items.length === 0 && (
         <div className="muted" style={{ padding: 12 }}>
@@ -82,7 +68,6 @@ export function VMSnapshots() {
             <tr>
               <th>Snapshot</th>
               <th>VM</th>
-              <th>Namespace</th>
               <th className="num">Size</th>
               <th>Created</th>
               <th></th>
@@ -93,9 +78,6 @@ export function VMSnapshots() {
               <tr key={`${s.namespace ?? "default"}/${s.name}`}>
                 <td className="mono" style={{ fontSize: 11 }}>{s.name}</td>
                 <td>{s.vm ?? s.vmName ?? "—"}</td>
-                <td className="muted mono" style={{ fontSize: 11 }}>
-                  {s.namespace ?? "default"}
-                </td>
                 <td className="num mono">{s.size ?? "—"}</td>
                 <td className="muted">{s.t ?? s.created ?? s.createdAt ?? "—"}</td>
                 <td className="num">
@@ -113,12 +95,12 @@ export function VMSnapshots() {
                         }
                       }}
                     >
-                      <Icon name="refresh" size={10} />
                       Restore
                     </button>
                     <button
                       className="btn btn--sm btn--danger"
                       disabled={del.isPending}
+                      title="Delete snapshot"
                       onClick={() => {
                         if (window.confirm(`Delete snapshot ${s.name}?`)) del.mutate(s);
                       }}
