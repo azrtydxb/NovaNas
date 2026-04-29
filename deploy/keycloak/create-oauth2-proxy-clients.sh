@@ -78,7 +78,11 @@ command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl required" >&2; exit
 
 CFGDIR="$(mktemp -d)"
 trap 'rm -rf "$CFGDIR"' EXIT
-KC="$KCADM --config $CFGDIR/kcadm.config"
+# kcadm.sh on recent Keycloak only accepts --config AFTER the subcommand,
+# so we isolate per-invocation state via HOME instead. CFGDIR is a tmpdir
+# the trap above cleans up.
+export HOME="$CFGDIR"
+KC="$KCADM"
 
 $KC config credentials \
     --server "$KC_URL" \
@@ -101,7 +105,7 @@ create_or_update_client() {
     local redirect_uri="${public_url}/oauth2/callback"
 
     local existing_id
-    existing_id="$($KC get clients -r "$KC_REALM" -q "clientId=$client_id" --fields id --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1 || true)"
+    existing_id="$($KC get clients -r "$KC_REALM" -q "clientId=$client_id" --fields id --format csv --noquotes 2>/dev/null | head -n1 || true)"
 
     local payload
     payload=$(cat <<JSON
@@ -134,7 +138,8 @@ JSON
 
     if [[ -z "$existing_id" ]]; then
         echo "Creating client '$client_id'" >&2
-        existing_id="$($KC create clients -r "$KC_REALM" -f - <<<"$payload" -i)"
+        $KC create clients -r "$KC_REALM" -f - <<<"$payload" >/dev/null
+        existing_id="$($KC get clients -r "$KC_REALM" -q "clientId=$client_id" --fields id --format csv --noquotes 2>/dev/null | head -n1)"
     else
         echo "Updating existing client '$client_id' (id=$existing_id)" >&2
         $KC update "clients/$existing_id" -r "$KC_REALM" -f - <<<"$payload"
@@ -164,7 +169,7 @@ JSON
     # Rotate secret.
     $KC create "clients/$existing_id/client-secret" -r "$KC_REALM" >/dev/null 2>&1 || true
     local secret
-    secret="$($KC get "clients/$existing_id/client-secret" -r "$KC_REALM" --fields value --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1)"
+    secret="$($KC get "clients/$existing_id/client-secret" -r "$KC_REALM" --fields value --format csv --noquotes 2>/dev/null | head -n1)"
     if [[ -z "$secret" || "$secret" == "null" ]]; then
         echo "ERROR: failed to read client secret for $client_id" >&2
         return 1

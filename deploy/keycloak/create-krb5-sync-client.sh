@@ -69,7 +69,11 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 2; }
 
 CFGDIR="$(mktemp -d)"
 trap 'rm -rf "$CFGDIR"' EXIT
-KC="$KCADM --config $CFGDIR/kcadm.config"
+# kcadm.sh on recent Keycloak only accepts --config AFTER the subcommand,
+# so we isolate per-invocation state via HOME instead. CFGDIR is a tmpdir
+# the trap above cleans up.
+export HOME="$CFGDIR"
+KC="$KCADM"
 
 if [[ "$TLS_INSECURE" == "true" ]]; then
     : # kcadm respects --truststore via env if needed; left to operator
@@ -81,7 +85,7 @@ $KC config credentials \
     --user "$KC_ADMIN_USER" \
     --password "$KC_ADMIN_PASS" >/dev/null
 
-EXISTING_ID="$($KC get clients -r "$KC_REALM" -q "clientId=$CLIENT_ID" --fields id --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1 || true)"
+EXISTING_ID="$($KC get clients -r "$KC_REALM" -q "clientId=$CLIENT_ID" --fields id --format csv --noquotes 2>/dev/null | head -n1 || true)"
 
 CLIENT_PAYLOAD=$(cat <<JSON
 {
@@ -107,14 +111,15 @@ JSON
 
 if [[ -z "$EXISTING_ID" ]]; then
     echo "Creating client '$CLIENT_ID' in realm '$KC_REALM'" >&2
-    EXISTING_ID="$($KC create clients -r "$KC_REALM" -f - <<<"$CLIENT_PAYLOAD" -i)"
+    $KC create clients -r "$KC_REALM" -f - <<<"$CLIENT_PAYLOAD" >/dev/null && \
+        EXISTING_ID="$($KC get clients -r "$KC_REALM" -q "clientId=$CLIENT_ID" --fields id --format csv --noquotes 2>/dev/null | head -n1)"
 else
     echo "Updating existing client '$CLIENT_ID' (id=$EXISTING_ID)" >&2
     $KC update "clients/$EXISTING_ID" -r "$KC_REALM" -f - <<<"$CLIENT_PAYLOAD"
 fi
 
 # Grant realm role nova-operator to the service account.
-SVC_USER_ID="$($KC get "clients/$EXISTING_ID/service-account-user" -r "$KC_REALM" --fields id --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1)"
+SVC_USER_ID="$($KC get "clients/$EXISTING_ID/service-account-user" -r "$KC_REALM" --fields id --format csv --noquotes 2>/dev/null | head -n1)"
 if [[ -z "$SVC_USER_ID" ]]; then
     echo "ERROR: could not resolve service-account user for client $CLIENT_ID" >&2
     exit 1
@@ -125,7 +130,7 @@ $KC add-roles -r "$KC_REALM" --uusername "service-account-${CLIENT_ID}" --rolena
 
 # Grant realm-management client roles: view-users, view-events. These are
 # what gates the Keycloak admin REST API endpoints we hit.
-RM_CLIENT_ID="$($KC get clients -r "$KC_REALM" -q clientId=realm-management --fields id --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1)"
+RM_CLIENT_ID="$($KC get clients -r "$KC_REALM" -q clientId=realm-management --fields id --format csv --noquotes 2>/dev/null | head -n1)"
 if [[ -z "$RM_CLIENT_ID" ]]; then
     echo "ERROR: realm-management client not found in realm $KC_REALM" >&2
     exit 1
@@ -140,7 +145,7 @@ done
 
 # Rotate the secret to guarantee the operator gets a known value.
 _=$($KC create "clients/$EXISTING_ID/client-secret" -r "$KC_REALM" -i 2>/dev/null || true)
-SECRET="$($KC get "clients/$EXISTING_ID/client-secret" -r "$KC_REALM" --fields value --format csv --noquotes 2>/dev/null | tail -n +2 | head -n1)"
+SECRET="$($KC get "clients/$EXISTING_ID/client-secret" -r "$KC_REALM" --fields value --format csv --noquotes 2>/dev/null | head -n1)"
 if [[ -z "$SECRET" || "$SECRET" == "null" ]]; then
     echo "ERROR: failed to read client secret for $CLIENT_ID" >&2
     exit 1
