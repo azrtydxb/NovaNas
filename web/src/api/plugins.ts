@@ -127,6 +127,16 @@ export const plugins = {
     ),
 
   listInstalled: () => api<PluginManifest[]>(`/api/v1/plugins`),
+
+  listDependencies: (name: string) =>
+    api<{ name: string; version: string }[]>(
+      `/api/v1/plugins/${encodeURIComponent(name)}/dependencies`
+    ),
+
+  listDependents: (name: string) =>
+    api<{ name: string; version: string }[]>(
+      `/api/v1/plugins/${encodeURIComponent(name)}/dependents`
+    ),
 };
 
 export const marketplaces = {

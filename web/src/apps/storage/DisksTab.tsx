@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { storage, type Disk } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
 
@@ -8,10 +8,28 @@ function diskCap(d: Disk): number {
 }
 
 export function DisksTab() {
+  const qc = useQueryClient();
   const [sel, setSel] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["disks"], queryFn: () => storage.listDisks() });
   const disks = q.data ?? [];
   const selected = disks.find((d) => d.name === sel) ?? disks[0];
+
+  const smartQ = useQuery({
+    queryKey: ["smart", selected?.name],
+    queryFn: () => storage.getSmart(selected!.name),
+    enabled: !!selected && selected.state !== "EMPTY",
+  });
+
+  const enableMut = useMutation({
+    mutationFn: (n: string) => storage.enableSmart(n),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["smart", selected?.name] }),
+  });
+
+  const testMut = useMutation({
+    mutationFn: ({ n, type }: { n: string; type: "short" | "long" | "conveyance" | "offline" }) =>
+      storage.startSmartTest(n, type),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["smart", selected?.name] }),
+  });
 
   return (
     <div className="disks-split">
@@ -23,9 +41,7 @@ export function DisksTab() {
             Failed: {(q.error as Error).message}
           </div>
         )}
-        {q.data && disks.length === 0 && (
-          <div className="empty-hint">No disks.</div>
-        )}
+        {q.data && disks.length === 0 && <div className="empty-hint">No disks.</div>}
         {disks.length > 0 && (
           <div className="encl-grid">
             {disks.map((d, i) => {
@@ -43,31 +59,18 @@ export function DisksTab() {
                   style={{ cursor: "pointer" }}
                 >
                   <div className="encl-slot__top">
-                    <span className="mono num">
-                      {String(slot).padStart(2, "0")}
-                    </span>
+                    <span className="mono num">{String(slot).padStart(2, "0")}</span>
                     <span className="led" />
                   </div>
                   <div className="encl-slot__bot">
                     {empty ? (
-                      <span
-                        className="muted mono"
-                        style={{ fontSize: 9 }}
-                      >
-                        empty
-                      </span>
+                      <span className="muted mono" style={{ fontSize: 9 }}>empty</span>
                     ) : (
                       <>
-                        <span
-                          className="mono"
-                          style={{ fontSize: 10, color: "var(--fg-2)" }}
-                        >
+                        <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
                           {modelTail || d.name}
                         </span>
-                        <span
-                          className="mono"
-                          style={{ fontSize: 10, color: "var(--fg-0)" }}
-                        >
+                        <span className="mono" style={{ fontSize: 10, color: "var(--fg-0)" }}>
                           {cap > 0 ? formatBytes(cap) : "—"}
                         </span>
                       </>
@@ -88,16 +91,11 @@ export function DisksTab() {
           <>
             <div className="disk-detail__head">
               <div>
-                <div
-                  className="muted mono"
-                  style={{ fontSize: 11 }}
-                >
+                <div className="muted mono" style={{ fontSize: 11 }}>
                   SLOT {String(selected.slot ?? "—").padStart(2, "0")} ·{" "}
                   {selected.class ?? "—"}
                 </div>
-                <div className="disk-detail__title">
-                  {selected.model ?? selected.name}
-                </div>
+                <div className="disk-detail__title">{selected.model ?? selected.name}</div>
               </div>
               <span
                 className={`pill pill--${
@@ -113,14 +111,10 @@ export function DisksTab() {
               </span>
             </div>
             <dl className="kv">
-              <dt>Name</dt>
-              <dd className="mono">{selected.name}</dd>
-              <dt>Serial</dt>
-              <dd>{selected.serial ?? "—"}</dd>
-              <dt>Capacity</dt>
-              <dd>{formatBytes(diskCap(selected))}</dd>
-              <dt>Pool</dt>
-              <dd>{selected.pool ?? "—"}</dd>
+              <dt>Name</dt><dd className="mono">{selected.name}</dd>
+              <dt>Serial</dt><dd>{selected.serial ?? "—"}</dd>
+              <dt>Capacity</dt><dd>{formatBytes(diskCap(selected))}</dd>
+              <dt>Pool</dt><dd>{selected.pool ?? "—"}</dd>
               <dt>Temperature</dt>
               <dd>
                 {selected.temperature ?? selected.temp ?? "—"}
@@ -133,10 +127,7 @@ export function DisksTab() {
               <dt>Reallocated</dt>
               <dd
                 style={{
-                  color:
-                    (selected.smart?.reallocated ?? 0) > 0
-                      ? "var(--warn)"
-                      : undefined,
+                  color: (selected.smart?.reallocated ?? 0) > 0 ? "var(--warn)" : undefined,
                 }}
               >
                 {selected.smart?.reallocated ?? 0}
@@ -144,12 +135,67 @@ export function DisksTab() {
               <dt>Pending</dt>
               <dd>{selected.smart?.pending ?? 0}</dd>
             </dl>
-            <div className="row gap-8" style={{ flexWrap: "wrap" }}>
-              {/* TODO: phase 3 — wire SMART tests, locate, eject */}
-              <button className="btn btn--sm">Run SMART · short</button>
-              <button className="btn btn--sm">Run SMART · long</button>
-              <button className="btn btn--sm">Locate</button>
-              <button className="btn btn--sm btn--danger">Eject</button>
+
+            <div className="row gap-8" style={{ flexWrap: "wrap", marginTop: 10 }}>
+              <button
+                className="btn btn--sm"
+                disabled={testMut.isPending}
+                onClick={() => testMut.mutate({ n: selected.name, type: "short" })}
+              >
+                SMART · short
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={testMut.isPending}
+                onClick={() => testMut.mutate({ n: selected.name, type: "long" })}
+              >
+                SMART · long
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={testMut.isPending}
+                onClick={() => testMut.mutate({ n: selected.name, type: "conveyance" })}
+              >
+                Conveyance
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={enableMut.isPending}
+                onClick={() => enableMut.mutate(selected.name)}
+              >
+                Enable SMART
+              </button>
+            </div>
+
+            <div className="sect" style={{ marginTop: 10 }}>
+              <div className="sect__title">SMART data</div>
+              <div className="sect__body">
+                {smartQ.isLoading && <div className="muted">Loading SMART…</div>}
+                {smartQ.isError && (
+                  <div className="muted" style={{ color: "var(--err)" }}>
+                    {(smartQ.error as Error).message}
+                  </div>
+                )}
+                {smartQ.data && (
+                  <>
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      Overall: {smartQ.data.passed ? "PASSED" : "FAILED / unknown"}
+                    </div>
+                    {smartQ.data.attributes && (
+                      <table className="tbl tbl--compact">
+                        <tbody>
+                          {Object.entries(smartQ.data.attributes).slice(0, 20).map(([k, v]) => (
+                            <tr key={k}>
+                              <td className="mono" style={{ fontSize: 11 }}>{k}</td>
+                              <td className="mono muted" style={{ fontSize: 11 }}>{String(v)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </>
         )}

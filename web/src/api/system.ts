@@ -74,7 +74,14 @@ export const system = {
     }),
   time: () => api<SystemTime>(`/api/v1/system/time`),
   ntp: () => api<NtpConfig>(`/api/v1/system/ntp`),
+  setNtp: (cfg: NtpConfig) =>
+    api<unknown>(`/api/v1/system/ntp`, {
+      method: "PUT",
+      body: JSON.stringify(cfg),
+    }),
   updates: () => api<SystemUpdate>(`/api/v1/system/updates`),
+  applyUpdate: () =>
+    api<unknown>(`/api/v1/system/updates`, { method: "POST" }),
   reboot: (reason: string) =>
     api<unknown>(`/api/v1/system/reboot`, {
       method: "POST",

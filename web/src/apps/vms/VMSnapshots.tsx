@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
-import { vms } from "../../api/vms";
+import { vms, type VMSnapshot } from "../../api/vms";
+import { Icon } from "../../components/Icon";
 
 export function VMSnapshots() {
   const qc = useQueryClient();
@@ -11,7 +12,12 @@ export function VMSnapshots() {
   });
   const restore = useMutation({
     mutationFn: (s: { name: string; namespace?: string }) => vms.restore(s.name, s.namespace),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms", "list"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms"] }),
+  });
+  const del = useMutation({
+    mutationFn: (s: VMSnapshot) =>
+      vms.deleteSnapshot(s.namespace ?? "default", s.name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms", "snapshots"] }),
   });
 
   if (q.isError) {
@@ -19,8 +25,14 @@ export function VMSnapshots() {
     const status = err instanceof ApiError ? err.status : 0;
     if (status === 503) {
       return (
-        <div style={{ padding: 14 }} className="muted">
-          Snapshots unavailable; KubeClient not yet wired.
+        <div style={{ padding: 24 }}>
+          <div className="discover__msg muted">
+            Snapshots unavailable; KubeVirt is not yet ready.
+          </div>
+          <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => q.refetch()}>
+            <Icon name="refresh" size={11} />
+            Retry
+          </button>
         </div>
       );
     }
@@ -35,6 +47,20 @@ export function VMSnapshots() {
 
   return (
     <div style={{ padding: 14 }}>
+      <div className="tbar">
+        <span className="muted" style={{ fontSize: 11 }}>
+          {items.length} snapshot{items.length === 1 ? "" : "s"}
+        </span>
+        <button
+          className="btn btn--sm"
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+          style={{ marginLeft: "auto" }}
+        >
+          <Icon name="refresh" size={11} />
+          Refresh
+        </button>
+      </div>
       {q.isLoading && <div className="muted">Loading snapshots…</div>}
       {!q.isLoading && items.length === 0 && (
         <div className="muted" style={{ padding: 12 }}>
@@ -47,6 +73,7 @@ export function VMSnapshots() {
             <tr>
               <th>Snapshot</th>
               <th>VM</th>
+              <th>Namespace</th>
               <th className="num">Size</th>
               <th>Created</th>
               <th></th>
@@ -55,25 +82,51 @@ export function VMSnapshots() {
           <tbody>
             {items.map((s) => (
               <tr key={`${s.namespace ?? "default"}/${s.name}`}>
-                <td className="mono" style={{ fontSize: 11 }}>
-                  {s.name}
-                </td>
+                <td className="mono" style={{ fontSize: 11 }}>{s.name}</td>
                 <td>{s.vm ?? s.vmName ?? "—"}</td>
+                <td className="muted mono" style={{ fontSize: 11 }}>
+                  {s.namespace ?? "default"}
+                </td>
                 <td className="num mono">{s.size ?? "—"}</td>
                 <td className="muted">{s.t ?? s.created ?? s.createdAt ?? "—"}</td>
                 <td className="num">
-                  <button
-                    className="btn btn--sm"
-                    disabled={restore.isPending}
-                    onClick={() => restore.mutate({ name: s.name, namespace: s.namespace })}
-                  >
-                    Restore
-                  </button>
+                  <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+                    <button
+                      className="btn btn--sm"
+                      disabled={restore.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Restore VM from snapshot ${s.name}? This will create a restore object.`,
+                          )
+                        ) {
+                          restore.mutate({ name: s.name, namespace: s.namespace });
+                        }
+                      }}
+                    >
+                      <Icon name="refresh" size={10} />
+                      Restore
+                    </button>
+                    <button
+                      className="btn btn--sm btn--danger"
+                      disabled={del.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Delete snapshot ${s.name}?`)) del.mutate(s);
+                      }}
+                    >
+                      <Icon name="trash" size={10} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {(restore.isError || del.isError) && (
+        <div className="muted" style={{ color: "var(--err)", fontSize: 11, padding: 8 }}>
+          {((restore.error || del.error) as Error)?.message}
+        </div>
       )}
     </div>
   );

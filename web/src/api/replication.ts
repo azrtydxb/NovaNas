@@ -33,6 +33,7 @@ export type ReplicationTarget = {
   port?: number;
   ssh_user?: string;
   region?: string;
+  bucket?: string;
 };
 
 export type ReplicationSchedule = {
@@ -61,7 +62,17 @@ export type ScrubPolicy = {
   builtin?: boolean;
 };
 
+const j = (b: unknown): RequestInit => ({
+  method: "POST",
+  body: JSON.stringify(b ?? {}),
+});
+const put = (b: unknown): RequestInit => ({
+  method: "PUT",
+  body: JSON.stringify(b ?? {}),
+});
+
 export const replication = {
+  // Jobs (read-only via this surface; create/delete via schedules?)
   listJobs: () => api<ReplicationJob[]>(`/api/v1/replication-jobs`),
   getJob: (id: string) =>
     api<ReplicationJob>(`/api/v1/replication-jobs/${encodeURIComponent(id)}`),
@@ -71,12 +82,77 @@ export const replication = {
     }),
   listRuns: (id: string) =>
     api<ReplicationRun[]>(`/api/v1/replication-jobs/${encodeURIComponent(id)}/runs`),
+  // TODO: backend missing — POST /replication-jobs (create), PUT /replication-jobs/{id},
+  // DELETE /replication-jobs/{id}. Jobs are derived from replication-schedules.
 
+  // Targets
   listTargets: () =>
     api<ReplicationTarget[]>(`/api/v1/scheduler/replication-targets`),
+  getTarget: (id: string) =>
+    api<ReplicationTarget>(
+      `/api/v1/scheduler/replication-targets/${encodeURIComponent(id)}`
+    ),
+  createTarget: (body: Partial<ReplicationTarget>) =>
+    api<ReplicationTarget>(`/api/v1/scheduler/replication-targets`, j(body)),
+  updateTarget: (id: string, body: Partial<ReplicationTarget>) =>
+    api<ReplicationTarget>(
+      `/api/v1/scheduler/replication-targets/${encodeURIComponent(id)}`,
+      put(body)
+    ),
+  deleteTarget: (id: string) =>
+    api<unknown>(`/api/v1/scheduler/replication-targets/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  // Replication schedules
   listReplicationSchedules: () =>
     api<ReplicationSchedule[]>(`/api/v1/scheduler/replication-schedules`),
+  getReplicationSchedule: (id: string) =>
+    api<ReplicationSchedule>(
+      `/api/v1/scheduler/replication-schedules/${encodeURIComponent(id)}`
+    ),
+  createReplicationSchedule: (body: Partial<ReplicationSchedule>) =>
+    api<ReplicationSchedule>(`/api/v1/scheduler/replication-schedules`, j(body)),
+  updateReplicationSchedule: (id: string, body: Partial<ReplicationSchedule>) =>
+    api<ReplicationSchedule>(
+      `/api/v1/scheduler/replication-schedules/${encodeURIComponent(id)}`,
+      put(body)
+    ),
+  deleteReplicationSchedule: (id: string) =>
+    api<unknown>(
+      `/api/v1/scheduler/replication-schedules/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    ),
+
+  // Snapshot schedules
   listSnapshotSchedules: () =>
     api<SnapshotSchedule[]>(`/api/v1/scheduler/snapshot-schedules`),
+  getSnapshotSchedule: (id: string) =>
+    api<SnapshotSchedule>(
+      `/api/v1/scheduler/snapshot-schedules/${encodeURIComponent(id)}`
+    ),
+  createSnapshotSchedule: (body: Partial<SnapshotSchedule>) =>
+    api<SnapshotSchedule>(`/api/v1/scheduler/snapshot-schedules`, j(body)),
+  updateSnapshotSchedule: (id: string, body: Partial<SnapshotSchedule>) =>
+    api<SnapshotSchedule>(
+      `/api/v1/scheduler/snapshot-schedules/${encodeURIComponent(id)}`,
+      put(body)
+    ),
+  deleteSnapshotSchedule: (id: string) =>
+    api<unknown>(`/api/v1/scheduler/snapshot-schedules/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  // Scrub policies
   listScrubPolicies: () => api<ScrubPolicy[]>(`/api/v1/scrub-policies`),
+  getScrubPolicy: (id: string) =>
+    api<ScrubPolicy>(`/api/v1/scrub-policies/${encodeURIComponent(id)}`),
+  createScrubPolicy: (body: Partial<ScrubPolicy>) =>
+    api<ScrubPolicy>(`/api/v1/scrub-policies`, j(body)),
+  updateScrubPolicy: (id: string, body: Partial<ScrubPolicy>) =>
+    api<ScrubPolicy>(`/api/v1/scrub-policies/${encodeURIComponent(id)}`, put(body)),
+  deleteScrubPolicy: (id: string) =>
+    api<unknown>(`/api/v1/scrub-policies/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };

@@ -7,6 +7,9 @@ import { Icon } from "../../components/Icon";
 function vmKey(v: VM) {
   return `${v.namespace ?? v.ns ?? "default"}/${v.name}`;
 }
+function vmNs(v: VM) {
+  return v.namespace ?? v.ns ?? "default";
+}
 
 function stateDot(state?: string) {
   const s = (state ?? "").toLowerCase();
@@ -21,9 +24,99 @@ function statePill(state?: string) {
   return "pill";
 }
 
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="field">
+      <label className="field__label">{label}</label>
+      {children}
+      {hint && <div className="field__hint muted">{hint}</div>}
+    </div>
+  );
+}
+
+function MigrateModal({
+  vm,
+  onClose,
+}: {
+  vm: VM;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [target, setTarget] = useState("");
+  const mut = useMutation({
+    mutationFn: () => vms.migrate(vmNs(vm), vm.name, target || undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vms", "list"] });
+      onClose();
+    },
+  });
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal__head">
+          <div className="modal__icon">
+            <Icon name="vm" size={16} />
+          </div>
+          <div className="modal__head-meta">
+            <div className="modal__title">Migrate {vm.name}</div>
+            <div className="muted modal__sub">
+              Live-migrate this VM to another node in the cluster.
+            </div>
+          </div>
+          <button className="modal__close" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+        <div className="modal__body">
+          <Field
+            label="Target node"
+            hint="Leave blank to let the scheduler pick a node."
+          >
+            <input
+              className="input"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="nas2.lan"
+              autoFocus
+            />
+          </Field>
+          <div className="muted" style={{ padding: "0 16px 12px", fontSize: 11 }}>
+            Current node: <span className="mono">{vm.node ?? "—"}</span>
+          </div>
+          {mut.isError && (
+            <div className="modal__err">Failed: {(mut.error as Error).message}</div>
+          )}
+        </div>
+        <div className="modal__foot">
+          <button className="btn" onClick={onClose} disabled={mut.isPending}>
+            Cancel
+          </button>
+          <button
+            className="btn btn--primary"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate()}
+          >
+            {mut.isPending ? "Migrating…" : "Migrate"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VMs() {
   const qc = useQueryClient();
   const [sel, setSel] = useState<string | null>(null);
+  const [showMigrate, setShowMigrate] = useState(false);
 
   const list = useQuery({
     queryKey: ["vms", "list"],
@@ -32,13 +125,22 @@ export function VMs() {
   });
 
   const action = useMutation({
-    mutationFn: async (a: { ns: string; name: string; verb: "start" | "stop" | "restart" | "pause" | "unpause" }) => {
+    mutationFn: async (a: {
+      ns: string;
+      name: string;
+      verb: "start" | "stop" | "restart" | "pause" | "unpause";
+    }) => {
       switch (a.verb) {
-        case "start": return vms.start(a.ns, a.name);
-        case "stop": return vms.stop(a.ns, a.name);
-        case "restart": return vms.restart(a.ns, a.name);
-        case "pause": return vms.pause(a.ns, a.name);
-        case "unpause": return vms.unpause(a.ns, a.name);
+        case "start":
+          return vms.start(a.ns, a.name);
+        case "stop":
+          return vms.stop(a.ns, a.name);
+        case "restart":
+          return vms.restart(a.ns, a.name);
+        case "pause":
+          return vms.pause(a.ns, a.name);
+        case "unpause":
+          return vms.unpause(a.ns, a.name);
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vms", "list"] }),
@@ -54,9 +156,13 @@ export function VMs() {
             <Icon name="alert" size={14} />
             <strong>Virtualization service unavailable</strong>
           </div>
-          <div className="muted" style={{ fontSize: 12 }}>
-            KubeClient not yet wired. Once KubeVirt is online, your VMs will appear here.
+          <div className="discover__msg muted">
+            KubeVirt is not yet ready. VMs will appear here once the cluster is online.
           </div>
+          <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => list.refetch()}>
+            <Icon name="refresh" size={11} />
+            Retry
+          </button>
         </div>
       );
     }
@@ -69,6 +175,7 @@ export function VMs() {
 
   const items = list.data ?? [];
   const cur = items.find((v) => vmKey(v) === sel) ?? items[0];
+  const state = (cur?.state ?? cur?.status ?? "").toLowerCase();
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", height: "100%" }}>
@@ -84,7 +191,7 @@ export function VMs() {
         )}
         {items.map((v) => {
           const k = vmKey(v);
-          const isOn = (cur && vmKey(cur) === k) ? "is-on" : "";
+          const isOn = cur && vmKey(cur) === k ? "is-on" : "";
           return (
             <button
               key={k}
@@ -95,7 +202,7 @@ export function VMs() {
               <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                 <div style={{ color: "var(--fg-1)", fontSize: 11 }}>{v.name}</div>
                 <div className="muted mono" style={{ fontSize: 9 }}>
-                  {v.os ?? v.namespace ?? v.ns ?? "—"}
+                  {v.os ?? vmNs(v)}
                 </div>
               </div>
             </button>
@@ -128,42 +235,47 @@ export function VMs() {
                   {cur.ip}
                 </span>
               )}
+              <span className="muted mono" style={{ fontSize: 10 }}>
+                {vmNs(cur)}/{cur.name}
+              </span>
               <span className="muted" style={{ marginLeft: "auto", fontSize: 11 }}>
                 {cur.uptime ? `uptime ${cur.uptime}` : ""}
               </span>
             </div>
             <div className="vm-console" style={{ minHeight: 160 }}>
-              {(cur.state ?? cur.status) === "Running" ? (
+              {state === "running" ? (
                 <>
                   <div style={{ opacity: 0.6, fontSize: 10, marginBottom: 8 }}>
                     {cur.os ?? "vm"} · console
                   </div>
-                  <div>{cur.name} login: <span className="vm-console__cursor" /></div>
+                  <div>
+                    {cur.name} login: <span className="vm-console__cursor" />
+                  </div>
                 </>
               ) : (
                 <div style={{ opacity: 0.4, padding: 30, textAlign: "center" }}>
-                  ● Powered off
+                  ● {state === "paused" ? "Paused" : "Powered off"}
                 </div>
               )}
             </div>
             <div className="row gap-8" style={{ flexWrap: "wrap" }}>
-              {(cur.state ?? cur.status) === "Running" ? (
+              {state === "running" ? (
                 <button
                   className="btn btn--sm btn--primary"
                   disabled={action.isPending}
                   onClick={() =>
-                    action.mutate({ ns: cur.namespace ?? cur.ns ?? "default", name: cur.name, verb: "pause" })
+                    action.mutate({ ns: vmNs(cur), name: cur.name, verb: "pause" })
                   }
                 >
                   <Icon name="pause" size={11} />
                   Pause
                 </button>
-              ) : (cur.state ?? cur.status) === "Paused" ? (
+              ) : state === "paused" ? (
                 <button
                   className="btn btn--sm btn--primary"
                   disabled={action.isPending}
                   onClick={() =>
-                    action.mutate({ ns: cur.namespace ?? cur.ns ?? "default", name: cur.name, verb: "unpause" })
+                    action.mutate({ ns: vmNs(cur), name: cur.name, verb: "unpause" })
                   }
                 >
                   <Icon name="play" size={11} />
@@ -174,7 +286,7 @@ export function VMs() {
                   className="btn btn--sm btn--primary"
                   disabled={action.isPending}
                   onClick={() =>
-                    action.mutate({ ns: cur.namespace ?? cur.ns ?? "default", name: cur.name, verb: "start" })
+                    action.mutate({ ns: vmNs(cur), name: cur.name, verb: "start" })
                   }
                 >
                   <Icon name="play" size={11} />
@@ -183,26 +295,62 @@ export function VMs() {
               )}
               <button
                 className="btn btn--sm"
-                disabled={action.isPending}
-                onClick={() =>
-                  action.mutate({ ns: cur.namespace ?? cur.ns ?? "default", name: cur.name, verb: "stop" })
-                }
+                disabled={action.isPending || state !== "running"}
+                onClick={() => {
+                  if (window.confirm(`Shut down ${cur.name}?`)) {
+                    action.mutate({ ns: vmNs(cur), name: cur.name, verb: "stop" });
+                  }
+                }}
               >
                 <Icon name="stop" size={11} />
                 Shutdown
               </button>
               <button
                 className="btn btn--sm"
-                disabled={action.isPending}
-                onClick={() =>
-                  action.mutate({ ns: cur.namespace ?? cur.ns ?? "default", name: cur.name, verb: "restart" })
-                }
+                disabled={action.isPending || state !== "running"}
+                onClick={() => {
+                  if (window.confirm(`Restart ${cur.name}?`)) {
+                    action.mutate({ ns: vmNs(cur), name: cur.name, verb: "restart" });
+                  }
+                }}
               >
                 <Icon name="refresh" size={11} />
                 Restart
               </button>
-              <button className="btn btn--sm">Snapshot</button>
-              <button className="btn btn--sm" style={{ marginLeft: "auto" }}>
+              <button
+                className="btn btn--sm"
+                disabled={state !== "running"}
+                onClick={() => setShowMigrate(true)}
+              >
+                <Icon name="external" size={11} />
+                Migrate…
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={state !== "running"}
+                onClick={() =>
+                  window.open(
+                    vms.consoleUrl(vmNs(cur), cur.name),
+                    `vm-console-${cur.name}`,
+                    "width=900,height=600",
+                  )
+                }
+              >
+                <Icon name="monitor" size={11} />
+                Console
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={state !== "running"}
+                onClick={() =>
+                  window.open(
+                    vms.serialUrl(vmNs(cur), cur.name),
+                    `vm-serial-${cur.name}`,
+                    "width=900,height=600",
+                  )
+                }
+                style={{ marginLeft: "auto" }}
+              >
                 <Icon name="terminal" size={11} />
                 Serial console
               </button>
@@ -215,7 +363,11 @@ export function VMs() {
               <div className="kpi">
                 <div className="kpi__lbl">Memory</div>
                 <div className="kpi__val mono">
-                  {cur.ram ? `${(cur.ram / 1024).toFixed(0)} ` : cur.memory ? `${(cur.memory / 1024).toFixed(0)} ` : "—"}
+                  {cur.ram
+                    ? `${(cur.ram / 1024).toFixed(0)} `
+                    : cur.memory
+                      ? `${(cur.memory / 1024).toFixed(0)} `
+                      : "—"}
                   <span className="muted">GiB</span>
                 </div>
               </div>
@@ -224,15 +376,33 @@ export function VMs() {
                 <div className="kpi__val mono">{cur.disk ?? "—"}</div>
               </div>
               <div className="kpi">
+                <div className="kpi__lbl">IP</div>
+                <div className="kpi__val mono" style={{ fontSize: 11 }}>
+                  {cur.ip ?? "—"}
+                </div>
+              </div>
+              <div className="kpi">
                 <div className="kpi__lbl">MAC</div>
                 <div className="kpi__val mono" style={{ fontSize: 11 }}>
                   {cur.mac ?? "—"}
                 </div>
               </div>
+              <div className="kpi">
+                <div className="kpi__lbl">Node</div>
+                <div className="kpi__val mono" style={{ fontSize: 11 }}>
+                  {cur.node ?? "—"}
+                </div>
+              </div>
             </div>
+            {action.isError && (
+              <div className="muted" style={{ color: "var(--err)", fontSize: 11 }}>
+                Action failed: {(action.error as Error).message}
+              </div>
+            )}
           </>
         )}
       </div>
+      {showMigrate && cur && <MigrateModal vm={cur} onClose={() => setShowMigrate(false)} />}
     </div>
   );
 }

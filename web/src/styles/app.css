@@ -819,3 +819,73 @@ body {
 }
 .control-card__items li:hover { background: var(--bg-3); color: var(--fg-1); }
 
+/* ---------- Observability extras (alerts/logs/audit/jobs/notifications) ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg-3); color: var(--fg-1);
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.chip--accent { background: var(--accent-soft); color: var(--fg-0); border-color: transparent; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.log-line__t   { color: var(--fg-3); }
+.log-line__lvl { font-weight: 600; text-transform: uppercase; }
+.log-line__lvl--info  { color: var(--info); }
+.log-line__lvl--warn  { color: var(--warn); }
+.log-line__lvl--error { color: var(--err); }
+.log-line__lvl--debug { color: var(--fg-3); }
+.log-line__unit { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; }
+.log-line__msg  { color: var(--fg-1); white-space: pre-wrap; word-break: break-word; }
+
+.input--mono { font-family: var(--font-mono); }
+
+.notif-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.notif-item__head { display: flex; align-items: center; gap: 6px; }
+.notif-item__time { margin-left: auto; font-size: 10px; color: var(--fg-3); }
+.notif-item__actions {
+  display: flex; gap: 4px; margin-top: 6px; opacity: 0; transition: opacity 0.15s;
+}
+.notif-item:hover .notif-item__actions { opacity: 1; }
+
+.menu-pop {
+  position: absolute; z-index: 50;
+  background: var(--popover-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  padding: 4px;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
+  min-width: 120px;
+}
+.menu-pop button {
+  display: block; width: 100%; text-align: left;
+  padding: 6px 10px; font-size: 11px;
+  background: transparent; border: none; color: var(--fg-1);
+  cursor: pointer; border-radius: var(--r-xs);
+}
+.menu-pop button:hover { background: var(--bg-3); color: var(--fg-0); }
+
+
+/* ---------- Control Panel · category icon tile + item layout (appended) ---------- */
+.control-card__icon {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+  border-radius: var(--r-md);
+}
+.control-card__name { flex: 1; }
+.control-card__items li {
+  justify-content: space-between;
+}
+.control-card__items li:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+
+/* ---------- Storage / Replication / Shares additions ---------- */
+.side-detail .win-tabs { padding: 0 6px; }
+.side-detail .win-tabs button { padding: 6px 8px; font-size: 10px; }
+.pool-card { cursor: pointer; }
+.bar__fill { height: 100%; background: var(--accent); border-radius: 999px; }
+.field select.input { appearance: auto; }
+

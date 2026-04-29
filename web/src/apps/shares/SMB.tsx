@@ -1,30 +1,63 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
-import { shares } from "../../api/shares";
+import { shares, type SmbShare, type SmbUser } from "../../api/shares";
+import { Modal } from "./Modal";
+
+type View = "shares" | "users" | "globals";
 
 export function SMB() {
+  const [view, setView] = useState<View>("shares");
+
+  return (
+    <div className="app-storage">
+      <div className="win-tabs">
+        {(["shares", "users", "globals"] as const).map((v) => (
+          <button key={v} className={view === v ? "is-on" : ""} onClick={() => setView(v)}>
+            {v}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {view === "shares" && <SharesView />}
+        {view === "users" && <UsersView />}
+        {view === "globals" && <GlobalsView />}
+      </div>
+    </div>
+  );
+}
+
+function SharesView() {
   const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["smb-shares"],
-    queryFn: () => shares.listSmb(),
-  });
+  const q = useQuery({ queryKey: ["smb-shares"], queryFn: () => shares.listSmb() });
   const list = q.data ?? [];
 
+  const [edit, setEdit] = useState<SmbShare | "new" | null>(null);
+
+  const inval = () => qc.invalidateQueries({ queryKey: ["smb-shares"] });
   const delMut = useMutation({
-    mutationFn: (name: string) => shares.deleteSmb(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["smb-shares"] }),
+    mutationFn: (n: string) => shares.deleteSmb(n),
+    onSuccess: inval,
+  });
+  const reloadMut = useMutation({
+    mutationFn: () => shares.smbReload(),
   });
 
   return (
     <div style={{ padding: 14 }}>
       <div className="tbar">
-        <button className="btn btn--primary">
-          {/* TODO: phase 3 — open create-SMB dialog */}
+        <button className="btn btn--primary" onClick={() => setEdit("new")}>
           <Icon name="plus" size={11} />
           New SMB share
         </button>
-        <button className="btn">Globals…</button>
-        <button className="btn">Users…</button>
+        <button
+          className="btn"
+          disabled={reloadMut.isPending}
+          onClick={() => reloadMut.mutate()}
+        >
+          <Icon name="refresh" size={11} />
+          Reload
+        </button>
       </div>
       {q.isLoading && <div className="empty-hint">Loading SMB shares…</div>}
       {q.isError && (
@@ -32,9 +65,7 @@ export function SMB() {
           Failed: {(q.error as Error).message}
         </div>
       )}
-      {q.data && list.length === 0 && (
-        <div className="empty-hint">No SMB shares.</div>
-      )}
+      {q.data && list.length === 0 && <div className="empty-hint">No SMB shares.</div>}
       {list.length > 0 && (
         <table className="tbl">
           <thead>
@@ -52,32 +83,19 @@ export function SMB() {
             {list.map((s) => (
               <tr key={s.name}>
                 <td>{s.name}</td>
-                <td className="mono muted" style={{ fontSize: 11 }}>
-                  {s.path ?? "—"}
-                </td>
+                <td className="mono muted" style={{ fontSize: 11 }}>{s.path ?? "—"}</td>
                 <td className="mono">{s.users ?? "—"}</td>
-                <td>
-                  {s.guest ? (
-                    <Icon name="check" size={11} />
-                  ) : (
-                    <span className="muted">no</span>
-                  )}
-                </td>
-                <td>
-                  {s.recycle ? (
-                    <Icon name="check" size={11} />
-                  ) : (
-                    <span className="muted">no</span>
-                  )}
-                </td>
-                <td className="mono muted" style={{ fontSize: 11 }}>
-                  {s.vfs ?? "—"}
-                </td>
+                <td>{s.guest ? <Icon name="check" size={11} /> : <span className="muted">no</span>}</td>
+                <td>{s.recycle ? <Icon name="check" size={11} /> : <span className="muted">no</span>}</td>
+                <td className="mono muted" style={{ fontSize: 11 }}>{s.vfs ?? "—"}</td>
                 <td className="num">
+                  <button className="btn btn--sm" onClick={() => setEdit(s)}>Edit</button>{" "}
                   <button
                     className="btn btn--sm btn--danger"
                     disabled={delMut.isPending}
-                    onClick={() => delMut.mutate(s.name)}
+                    onClick={() => {
+                      if (window.confirm(`Delete SMB share ${s.name}?`)) delMut.mutate(s.name);
+                    }}
                   >
                     Delete
                   </button>
@@ -87,6 +105,308 @@ export function SMB() {
           </tbody>
         </table>
       )}
+
+      {edit && (
+        <SmbShareModal
+          init={edit === "new" ? null : edit}
+          onClose={() => setEdit(null)}
+          onDone={inval}
+        />
+      )}
+    </div>
+  );
+}
+
+function SmbShareModal({
+  init,
+  onClose,
+  onDone,
+}: {
+  init: SmbShare | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(init?.name ?? "");
+  const [path, setPath] = useState(init?.path ?? "");
+  const [users, setUsers] = useState(init?.users ?? "");
+  const [guest, setGuest] = useState(init?.guest ?? false);
+  const [recycle, setRecycle] = useState(init?.recycle ?? false);
+  const [vfs, setVfs] = useState(init?.vfs ?? "");
+  const [comment, setComment] = useState(init?.comment ?? "");
+  const [readOnly, setReadOnly] = useState(init?.readOnly ?? false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const body = (): Partial<SmbShare> => ({
+    name, path, users, guest, recycle, vfs, comment, readOnly,
+  });
+
+  const m = useMutation({
+    mutationFn: () => init
+      ? shares.updateSmb(init.name, body())
+      : shares.createSmb(body()),
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  return (
+    <Modal title={init ? `Edit SMB share · ${init.name}` : "New SMB share"} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !name || !path}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Name</label>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} disabled={!!init} />
+      </div>
+      <div className="field">
+        <label className="field__label">Path</label>
+        <input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/tank/share" />
+      </div>
+      <div className="field">
+        <label className="field__label">Users (comma list)</label>
+        <input className="input" value={users} onChange={(e) => setUsers(e.target.value)} placeholder="alice, bob" />
+      </div>
+      <div className="field">
+        <label className="field__label">Comment</label>
+        <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="field__label">VFS modules</label>
+        <input className="input" value={vfs} onChange={(e) => setVfs(e.target.value)} placeholder="catia,fruit,streams_xattr" />
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={guest} onChange={(e) => setGuest(e.target.checked)} />
+          Allow guest
+        </label>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={recycle} onChange={(e) => setRecycle(e.target.checked)} />
+          Recycle bin
+        </label>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} />
+          Read-only
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function UsersView() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["smb-users"], queryFn: () => shares.listSmbUsers() });
+  const list = q.data ?? [];
+  const [edit, setEdit] = useState<SmbUser | "new" | null>(null);
+  const [pwFor, setPwFor] = useState<string | null>(null);
+
+  const inval = () => qc.invalidateQueries({ queryKey: ["smb-users"] });
+  const delMut = useMutation({
+    mutationFn: (u: string) => shares.deleteSmbUser(u),
+    onSuccess: inval,
+  });
+
+  return (
+    <div style={{ padding: 14 }}>
+      <div className="tbar">
+        <button className="btn btn--primary" onClick={() => setEdit("new")}>
+          <Icon name="plus" size={11} />
+          New user
+        </button>
+      </div>
+      {q.isLoading && <div className="empty-hint">Loading users…</div>}
+      {q.data && list.length === 0 && <div className="empty-hint">No SMB users.</div>}
+      {list.length > 0 && (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Full name</th>
+              <th>Enabled</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((u) => (
+              <tr key={u.username}>
+                <td className="mono">{u.username}</td>
+                <td>{u.fullname ?? "—"}</td>
+                <td>{u.enabled ? <Icon name="check" size={11} /> : <span className="muted">no</span>}</td>
+                <td className="num">
+                  <button className="btn btn--sm" onClick={() => setEdit(u)}>Edit</button>{" "}
+                  <button className="btn btn--sm" onClick={() => setPwFor(u.username)}>Password</button>{" "}
+                  <button
+                    className="btn btn--sm btn--danger"
+                    disabled={delMut.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Delete user ${u.username}?`)) delMut.mutate(u.username);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {edit && (
+        <SmbUserModal
+          init={edit === "new" ? null : edit}
+          onClose={() => setEdit(null)}
+          onDone={inval}
+        />
+      )}
+      {pwFor && (
+        <SmbPasswordModal username={pwFor} onClose={() => setPwFor(null)} />
+      )}
+    </div>
+  );
+}
+
+function SmbUserModal({
+  init,
+  onClose,
+  onDone,
+}: {
+  init: SmbUser | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [username, setUsername] = useState(init?.username ?? "");
+  const [fullname, setFullname] = useState(init?.fullname ?? "");
+  const [enabled, setEnabled] = useState(init?.enabled ?? true);
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const m = useMutation({
+    mutationFn: () => init
+      ? shares.updateSmbUser(init.username, { fullname, enabled })
+      : shares.createSmbUser({ username, fullname, enabled, password: password || undefined }),
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  return (
+    <Modal title={init ? `Edit user · ${init.username}` : "New SMB user"} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !username}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Username</label>
+        <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} disabled={!!init} />
+      </div>
+      <div className="field">
+        <label className="field__label">Full name</label>
+        <input className="input" value={fullname} onChange={(e) => setFullname(e.target.value)} />
+      </div>
+      {!init && (
+        <div className="field">
+          <label className="field__label">Initial password</label>
+          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+      )}
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          Enabled
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function SmbPasswordModal({ username, onClose }: { username: string; onClose: () => void }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    mutationFn: () => shares.setSmbUserPassword(username, pw),
+    onSuccess: onClose,
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title={`Set password · ${username}`} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !pw}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Setting…" : "Set"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">New password</label>
+        <input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+      </div>
+    </Modal>
+  );
+}
+
+function GlobalsView() {
+  const q = useQuery({ queryKey: ["smb-globals"], queryFn: () => shares.getSmbGlobals() });
+  const data = q.data ?? {};
+  return (
+    <div style={{ padding: 14 }}>
+      <div className="sect">
+        <div className="sect__title">Samba global settings</div>
+        <div className="sect__body">
+          {q.isLoading && <div className="muted">Loading…</div>}
+          {q.isError && (
+            <div className="muted" style={{ color: "var(--err)" }}>
+              {(q.error as Error).message}
+            </div>
+          )}
+          {Object.keys(data).length === 0 && !q.isLoading && (
+            <div className="muted">No globals returned.</div>
+          )}
+          {Object.keys(data).length > 0 && (
+            <table className="tbl tbl--compact">
+              <tbody>
+                {Object.entries(data).map(([k, v]) => (
+                  <tr key={k}>
+                    <td className="mono" style={{ fontSize: 11 }}>{k}</td>
+                    <td className="mono muted" style={{ fontSize: 11 }}>{String(v)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div className="muted small" style={{ marginTop: 8 }}>
+            Editing globals is not yet exposed by the backend (TODO: backend missing PUT /samba/globals).
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,23 +1,29 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { alerts } from "../../api/observability";
 import { Icon } from "../../components/Icon";
 
 export default function Receivers() {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["alerts", "receivers"],
     queryFn: () => alerts.listReceivers(),
+    refetchInterval: 60_000,
   });
   const list = q.data ?? [];
 
   return (
     <div style={{ padding: 14 }}>
       <div className="tbar">
-        <button className="btn btn--primary">
-          <Icon name="plus" size={11} /> Add receiver
-        </button>
-        <span className="muted" style={{ marginLeft: "auto" }}>
-          {list.length} receivers
+        <span className="muted" style={{ fontSize: 11 }}>
+          Receivers are configured in Alertmanager. This view is read-only.
         </span>
+        <button
+          className="btn btn--sm"
+          style={{ marginLeft: "auto" }}
+          onClick={() => qc.invalidateQueries({ queryKey: ["alerts", "receivers"] })}
+        >
+          <Icon name="refresh" size={11} /> Refresh
+        </button>
       </div>
 
       {q.isLoading && <div className="muted">Loading receivers…</div>}
@@ -45,9 +51,9 @@ export default function Receivers() {
               <tr key={r.name}>
                 <td>{r.name}</td>
                 <td>
-                  <div className="row gap-4">
+                  <div className="chip-row">
                     {(r.integrations ?? []).map((i, idx) => (
-                      <span key={idx} className="pill pill--info">
+                      <span key={idx} className="chip chip--accent">
                         {i.type ?? i.name ?? "integration"}
                       </span>
                     ))}

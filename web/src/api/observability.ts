@@ -159,9 +159,22 @@ export type Job = {
   maxRetry?: number;
 };
 
+export type JobDetail = Job & {
+  logs?: string[];
+  log?: string;
+};
+
 export const jobs = {
   list: () => api<Job[]>(`/api/v1/jobs`),
-  get: (id: string) => api<Job>(`/api/v1/jobs/${encodeURIComponent(id)}`),
+  get: (id: string) => api<JobDetail>(`/api/v1/jobs/${encodeURIComponent(id)}`),
+  // Cancel — backend may not support DELETE yet (returns 405). UI tolerates failure.
+  cancel: (id: string) =>
+    api<unknown>(`/api/v1/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  // Retry — backend may not support yet; POST /retry is the intended endpoint.
+  retry: (id: string) =>
+    api<unknown>(`/api/v1/jobs/${encodeURIComponent(id)}/retry`, {
+      method: "POST",
+    }),
   // TODO(phase-3): replace polling with SSE on /api/v1/jobs/{id}/stream
 };
 

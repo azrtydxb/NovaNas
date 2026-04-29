@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
 import { workloads, type HelmRelease, type K8sEvent } from "../../api/workloads";
+import { Icon } from "../../components/Icon";
 
 function rel(w: HelmRelease) {
   return w.release ?? w.name ?? "";
@@ -20,20 +22,21 @@ function eventMsg(e: K8sEvent) {
 }
 
 export function Events() {
+  const [auto, setAuto] = useState(true);
+
   const list = useQuery({
     queryKey: ["workloads", "list"],
     queryFn: () => workloads.list(),
     retry: false,
   });
 
-  // Aggregate events across releases (or show only first release's events if many)
   const releaseNames: string[] = (list.data ?? []).map(rel).filter(Boolean);
 
   const events = useQuery({
     queryKey: ["workloads", "events", releaseNames],
     queryFn: async () => {
       const all: Array<K8sEvent & { release: string }> = [];
-      for (const r of releaseNames.slice(0, 5)) {
+      for (const r of releaseNames.slice(0, 10)) {
         try {
           const evs = await workloads.events(r);
           for (const e of evs) all.push({ ...e, release: r });
@@ -41,10 +44,15 @@ export function Events() {
           // ignore individual failures
         }
       }
-      return all;
+      return all.sort((a, b) => {
+        const ta = eventTime(a);
+        const tb = eventTime(b);
+        return tb.localeCompare(ta);
+      });
     },
     enabled: releaseNames.length > 0,
     retry: false,
+    refetchInterval: auto ? 5000 : false,
   });
 
   if (list.isError) {
@@ -52,8 +60,14 @@ export function Events() {
     const status = err instanceof ApiError ? err.status : 0;
     if (status === 503) {
       return (
-        <div style={{ padding: 14 }} className="muted">
-          Events unavailable while k3s initializes.
+        <div style={{ padding: 24 }}>
+          <div className="discover__msg muted">
+            Events unavailable while k3s initializes.
+          </div>
+          <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => list.refetch()}>
+            <Icon name="refresh" size={11} />
+            Retry
+          </button>
         </div>
       );
     }
@@ -68,6 +82,27 @@ export function Events() {
 
   return (
     <div style={{ padding: 14 }}>
+      <div className="tbar">
+        <span className="muted" style={{ fontSize: 11 }}>
+          Aggregated across {releaseNames.length} release{releaseNames.length === 1 ? "" : "s"}
+        </span>
+        <label className="row gap-8" style={{ marginLeft: "auto", fontSize: 11 }}>
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={(e) => setAuto(e.target.checked)}
+          />
+          Auto-refresh
+        </label>
+        <button
+          className="btn btn--sm"
+          onClick={() => events.refetch()}
+          disabled={events.isFetching}
+        >
+          <Icon name="refresh" size={11} />
+          Refresh
+        </button>
+      </div>
       {(list.isLoading || events.isLoading) && (
         <div className="muted">Loading events…</div>
       )}
@@ -88,6 +123,7 @@ export function Events() {
               <th>Time</th>
               <th>Kind</th>
               <th>Reason</th>
+              <th>Release</th>
               <th>Object</th>
               <th>Message</th>
             </tr>
@@ -97,9 +133,7 @@ export function Events() {
               const k = eventKind(e);
               return (
                 <tr key={i}>
-                  <td className="muted mono" style={{ fontSize: 11 }}>
-                    {eventTime(e)}
-                  </td>
+                  <td className="muted mono" style={{ fontSize: 11 }}>{eventTime(e)}</td>
                   <td>
                     {k === "Warning" ? (
                       <span className="pill pill--warn">
@@ -113,12 +147,9 @@ export function Events() {
                       </span>
                     )}
                   </td>
-                  <td className="mono" style={{ fontSize: 11 }}>
-                    {e.reason ?? "—"}
-                  </td>
-                  <td className="mono muted" style={{ fontSize: 11 }}>
-                    {eventObj(e)}
-                  </td>
+                  <td className="mono" style={{ fontSize: 11 }}>{e.reason ?? "—"}</td>
+                  <td className="mono muted" style={{ fontSize: 11 }}>{e.release}</td>
+                  <td className="mono muted" style={{ fontSize: 11 }}>{eventObj(e)}</td>
                   <td className="muted">{eventMsg(e)}</td>
                 </tr>
               );

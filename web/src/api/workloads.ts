@@ -50,6 +50,21 @@ export type ChartIndexEntry = {
   installed?: boolean;
 };
 
+export type InstallReleaseBody = {
+  chart: string;
+  release?: string;
+  name?: string;
+  namespace?: string;
+  version?: string;
+  values?: Record<string, unknown> | string;
+};
+
+export type UpgradeReleaseBody = {
+  chart?: string;
+  version?: string;
+  values?: Record<string, unknown> | string;
+};
+
 export const workloads = {
   list: () => api<HelmRelease[]>("/api/v1/workloads"),
   get: (name: string) =>
@@ -60,6 +75,18 @@ export const workloads = {
     const q = container ? `?container=${encodeURIComponent(container)}` : "";
     return api<string>(`/api/v1/workloads/${encodeURIComponent(name)}/logs${q}`);
   },
+  install: (body: InstallReleaseBody) =>
+    api<unknown>("/api/v1/workloads", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  upgrade: (name: string, body: UpgradeReleaseBody) =>
+    api<unknown>(`/api/v1/workloads/${encodeURIComponent(name)}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  uninstall: (name: string) =>
+    api<unknown>(`/api/v1/workloads/${encodeURIComponent(name)}`, { method: "DELETE" }),
   rollback: (name: string, revision?: number) =>
     api<unknown>(`/api/v1/workloads/${encodeURIComponent(name)}/rollback`, {
       method: "POST",
@@ -68,4 +95,6 @@ export const workloads = {
   index: () => api<ChartIndexEntry[]>("/api/v1/workloads/index"),
   indexEntry: (name: string) =>
     api<ChartIndexEntry>(`/api/v1/workloads/index/${encodeURIComponent(name)}`),
+  reloadIndex: () =>
+    api<unknown>("/api/v1/workloads/index/reload", { method: "POST" }),
 };

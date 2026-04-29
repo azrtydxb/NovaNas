@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { audit, type AuditEntry } from "../../api/observability";
 import { Icon } from "../../components/Icon";
@@ -11,34 +11,63 @@ function fmtAt(at?: string): string {
   return d.toLocaleString(undefined, { hour12: false });
 }
 
+type Filters = {
+  actor: string;
+  action: string;
+  since: string;
+  limit: number;
+};
+
 export default function Audit() {
-  const [search, setSearch] = useState("");
-  const [submitted, setSubmitted] = useState("");
+  const [draft, setDraft] = useState<Filters>({
+    actor: "",
+    action: "",
+    since: "",
+    limit: 100,
+  });
+  const [applied, setApplied] = useState<Filters>(draft);
 
   const summary = useQuery({
     queryKey: ["audit", "summary"],
     queryFn: () => audit.summary(),
     staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const list = useQuery({
-    queryKey: ["audit", "search", submitted],
-    queryFn: () => audit.search({ limit: 100, actor: submitted || undefined }),
+    queryKey: ["audit", "search", applied],
+    queryFn: () =>
+      audit.search({
+        limit: applied.limit,
+        actor: applied.actor || undefined,
+        action: applied.action || undefined,
+        since: applied.since
+          ? new Date(applied.since).toISOString()
+          : undefined,
+      }),
     refetchInterval: 30_000,
   });
 
   const rows: AuditEntry[] = list.data ?? [];
 
-  const filtered = submitted
-    ? rows.filter((r) => {
-        const s = submitted.toLowerCase();
-        return (
-          (r.actor ?? "").toLowerCase().includes(s) ||
-          (r.action ?? "").toLowerCase().includes(s) ||
-          (r.resource ?? "").toLowerCase().includes(s)
-        );
-      })
-    : rows;
+  const exportHref = useMemo(() => {
+    const u = new URLSearchParams();
+    u.set("format", "csv");
+    if (applied.actor) u.set("actor", applied.actor);
+    if (applied.action) u.set("action", applied.action);
+    if (applied.since) u.set("since", new Date(applied.since).toISOString());
+    u.set("limit", String(applied.limit));
+    return `${env.apiBase}/api/v1/audit/export?${u.toString()}`;
+  }, [applied]);
+
+  const topAction = summary.data?.topActions?.[0];
+
+  const apply = () => setApplied(draft);
+  const reset = () => {
+    const blank: Filters = { actor: "", action: "", since: "", limit: 100 };
+    setDraft(blank);
+    setApplied(blank);
+  };
 
   return (
     <div className="app-storage">
@@ -60,29 +89,72 @@ export default function Audit() {
             <div className="kpi__val mono">{summary.data?.failed ?? "—"}</div>
           </div>
           <div className="kpi">
-            <div className="kpi__lbl">Actors</div>
+            <div className="kpi__lbl">Unique actors</div>
             <div className="kpi__val mono">{summary.data?.actors ?? "—"}</div>
           </div>
+          {topAction && (
+            <div className="kpi">
+              <div className="kpi__lbl">Top action</div>
+              <div className="kpi__val mono" style={{ fontSize: 12 }}>
+                {topAction.action}{" "}
+                <span className="muted">×{topAction.count}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="tbar">
-          <div className="appcenter-search" style={{ width: 280 }}>
-            <Icon name="search" size={11} />
+        <div className="tbar" style={{ flexWrap: "wrap", gap: 6 }}>
+          <div className="appcenter-search" style={{ width: 180 }}>
+            <Icon name="user" size={11} />
             <input
-              placeholder="Search actor, action, resource…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Actor…"
+              value={draft.actor}
+              onChange={(e) => setDraft({ ...draft, actor: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key === "Enter") setSubmitted(search);
+                if (e.key === "Enter") apply();
               }}
             />
           </div>
-          <button className="btn btn--sm" onClick={() => setSubmitted(search)}>
-            Search
+          <div className="appcenter-search" style={{ width: 180 }}>
+            <Icon name="bolt" size={11} />
+            <input
+              placeholder="Action…"
+              value={draft.action}
+              onChange={(e) => setDraft({ ...draft, action: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") apply();
+              }}
+            />
+          </div>
+          <input
+            className="input"
+            type="datetime-local"
+            value={draft.since}
+            onChange={(e) => setDraft({ ...draft, since: e.target.value })}
+            style={{ width: 200 }}
+            title="Since"
+          />
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={1000}
+            value={draft.limit}
+            onChange={(e) =>
+              setDraft({ ...draft, limit: Number(e.target.value) || 100 })
+            }
+            style={{ width: 80 }}
+            title="Limit"
+          />
+          <button className="btn btn--sm btn--primary" onClick={apply}>
+            <Icon name="search" size={11} /> Search
+          </button>
+          <button className="btn btn--sm" onClick={reset}>
+            Reset
           </button>
           <a
             className="btn btn--sm"
-            href={`${env.apiBase}${audit.exportUrl("csv")}`}
+            href={exportHref}
             target="_blank"
             rel="noreferrer"
             style={{ marginLeft: "auto" }}
@@ -97,13 +169,13 @@ export default function Audit() {
             Failed to load: {(list.error as Error).message}
           </div>
         )}
-        {list.data && filtered.length === 0 && (
+        {list.data && rows.length === 0 && (
           <div className="muted" style={{ padding: "20px 0" }}>
             No audit entries.
           </div>
         )}
 
-        {filtered.length > 0 && (
+        {rows.length > 0 && (
           <table className="tbl">
             <thead>
               <tr>
@@ -116,7 +188,7 @@ export default function Audit() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a, i) => (
+              {rows.map((a, i) => (
                 <tr key={a.id ?? i}>
                   <td className="muted">{fmtAt(a.at)}</td>
                   <td>{a.actor ?? "—"}</td>
@@ -133,7 +205,7 @@ export default function Audit() {
                       </span>
                     ) : (
                       <span className="pill pill--err">
-                        <span className="dot" /> {a.result ?? "error"}
+                        <span className="dot" /> {a.result ?? "fail"}
                       </span>
                     )}
                   </td>

@@ -1,21 +1,24 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { storage, type Dataset } from "../../api/storage";
+import { Modal } from "./Modal";
 
 function dsKey(d: Dataset): string {
   return d.fullname ?? d.name;
 }
 
+type Action = { kind: "load" | "rotate"; full: string } | null;
+
 export function EncryptionTab() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["datasets"], queryFn: () => storage.listDatasets() });
+  const [action, setAction] = useState<Action>(null);
 
-  const loadMut = useMutation({
-    mutationFn: (full: string) => storage.loadKey(full),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
-  });
+  const inval = () => qc.invalidateQueries({ queryKey: ["datasets"] });
+
   const unloadMut = useMutation({
     mutationFn: (full: string) => storage.unloadKey(full),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+    onSuccess: inval,
   });
 
   const encrypted = (q.data ?? []).filter(
@@ -54,7 +57,6 @@ export function EncryptionTab() {
             <tr>
               <th>Dataset</th>
               <th>Status</th>
-              <th>Format</th>
               <th>Encryption</th>
               <th></th>
             </tr>
@@ -62,37 +64,35 @@ export function EncryptionTab() {
           <tbody>
             {encrypted.map((d) => {
               const k = dsKey(d);
-              const status = "available"; // dataset listing rarely conveys keystatus; assume available
               return (
                 <tr key={k}>
                   <td>{d.name}</td>
                   <td>
                     <span className="pill pill--ok">
                       <span className="dot" />
-                      {status}
+                      available
                     </span>
                   </td>
-                  <td className="mono" style={{ fontSize: 11 }}>
-                    {d.encryption ?? "—"}
-                  </td>
-                  <td className="mono" style={{ fontSize: 11 }}>
-                    {d.encryption ?? "—"}
-                  </td>
+                  <td className="mono" style={{ fontSize: 11 }}>{d.encryption ?? "—"}</td>
                   <td className="num">
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => setAction({ kind: "load", full: k })}
+                    >
+                      Load key
+                    </button>{" "}
                     <button
                       className="btn btn--sm"
                       disabled={unloadMut.isPending}
                       onClick={() => unloadMut.mutate(k)}
                     >
                       Unload
-                    </button>
+                    </button>{" "}
                     <button
                       className="btn btn--sm"
-                      style={{ marginLeft: 4 }}
-                      disabled={loadMut.isPending}
-                      onClick={() => loadMut.mutate(k)}
+                      onClick={() => setAction({ kind: "rotate", full: k })}
                     >
-                      Load
+                      Rotate key
                     </button>
                   </td>
                 </tr>
@@ -101,7 +101,86 @@ export function EncryptionTab() {
           </tbody>
         </table>
       )}
+
+      {action?.kind === "load" && (
+        <LoadKeyModal full={action.full} onClose={() => setAction(null)} onDone={inval} />
+      )}
+      {action?.kind === "rotate" && (
+        <RotateKeyModal full={action.full} onClose={() => setAction(null)} onDone={inval} />
+      )}
     </div>
+  );
+}
+
+function LoadKeyModal({
+  full,
+  onClose,
+  onDone,
+}: {
+  full: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [key, setKey] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    mutationFn: () => storage.loadKey(full, key || undefined),
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Load encryption key" sub={full} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary" disabled={m.isPending} onClick={() => { setErr(null); m.mutate(); }}>
+            {m.isPending ? "Loading…" : "Load"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Passphrase / key (leave blank to use TPM)</label>
+        <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} />
+      </div>
+    </Modal>
+  );
+}
+
+function RotateKeyModal({
+  full,
+  onClose,
+  onDone,
+}: {
+  full: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [key, setKey] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    mutationFn: () => storage.changeKey(full, key ? { key } : {}),
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Rotate encryption key" sub={full} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary" disabled={m.isPending} onClick={() => { setErr(null); m.mutate(); }}>
+            {m.isPending ? "Rotating…" : "Rotate"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">New passphrase (leave blank to re-seal to TPM)</label>
+        <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} />
+      </div>
+    </Modal>
   );
 }
 

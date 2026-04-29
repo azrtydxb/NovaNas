@@ -1,9 +1,121 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
-import { vms } from "../../api/vms";
+import { vms, type VMTemplate } from "../../api/vms";
 import { Icon } from "../../components/Icon";
 
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="field">
+      <label className="field__label">{label}</label>
+      {children}
+      {hint && <div className="field__hint muted">{hint}</div>}
+    </div>
+  );
+}
+
+function CreateFromTemplateModal({
+  templates,
+  initial,
+  onClose,
+}: {
+  templates: VMTemplate[];
+  initial?: VMTemplate;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [template, setTemplate] = useState(initial?.name ?? templates[0]?.name ?? "");
+  const [namespace, setNamespace] = useState(initial?.namespace ?? "default");
+  const mut = useMutation({
+    mutationFn: () =>
+      vms.createFromTemplate({ name, template, namespace: namespace || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vms", "list"] });
+      onClose();
+    },
+  });
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal__head">
+          <div className="modal__icon">
+            <Icon name="vm" size={16} />
+          </div>
+          <div className="modal__head-meta">
+            <div className="modal__title">Create VM from template</div>
+            <div className="muted modal__sub">
+              Provisions a new VM with the resources defined by the template.
+            </div>
+          </div>
+          <button className="modal__close" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+        <div className="modal__body">
+          <Field label="VM name" hint="Must be a valid DNS-1123 label.">
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="my-vm"
+              autoFocus
+            />
+          </Field>
+          <Field label="Template">
+            <select
+              className="input"
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+            >
+              {templates.map((t) => (
+                <option key={t.name} value={t.name}>
+                  {t.name} {t.os ? `· ${t.os}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Namespace">
+            <input
+              className="input"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              placeholder="default"
+            />
+          </Field>
+          {mut.isError && (
+            <div className="modal__err">Failed: {(mut.error as Error).message}</div>
+          )}
+        </div>
+        <div className="modal__foot">
+          <button className="btn" onClick={onClose} disabled={mut.isPending}>
+            Cancel
+          </button>
+          <button
+            className="btn btn--primary"
+            disabled={!name.trim() || !template || mut.isPending}
+            onClick={() => mut.mutate()}
+          >
+            {mut.isPending ? "Creating…" : "Create VM"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Templates() {
+  const [creating, setCreating] = useState<{ initial?: VMTemplate } | null>(null);
+
   const q = useQuery({
     queryKey: ["vms", "templates"],
     queryFn: () => vms.templates(),
@@ -15,8 +127,14 @@ export function Templates() {
     const status = err instanceof ApiError ? err.status : 0;
     if (status === 503) {
       return (
-        <div style={{ padding: 14 }} className="muted">
-          Templates unavailable; KubeClient not yet wired.
+        <div style={{ padding: 24 }}>
+          <div className="discover__msg muted">
+            Templates unavailable; KubeVirt is not yet ready.
+          </div>
+          <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => q.refetch()}>
+            <Icon name="refresh" size={11} />
+            Retry
+          </button>
         </div>
       );
     }
@@ -32,9 +150,22 @@ export function Templates() {
   return (
     <div style={{ padding: 14 }}>
       <div className="tbar">
-        <button className="btn btn--primary">
+        <button
+          className="btn btn--primary"
+          disabled={items.length === 0}
+          onClick={() => setCreating({})}
+        >
           <Icon name="plus" size={11} />
-          New template
+          Create VM from template
+        </button>
+        <button
+          className="btn btn--sm"
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+          style={{ marginLeft: "auto" }}
+        >
+          <Icon name="refresh" size={11} />
+          Refresh
         </button>
       </div>
       {q.isLoading && <div className="muted">Loading templates…</div>}
@@ -53,6 +184,7 @@ export function Templates() {
               <th className="num">RAM</th>
               <th className="num">Disk</th>
               <th>Source</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -68,10 +200,26 @@ export function Templates() {
                 <td>
                   <span className="pill">{t.source ?? "—"}</span>
                 </td>
+                <td className="num">
+                  <button
+                    className="btn btn--sm"
+                    onClick={() => setCreating({ initial: t })}
+                  >
+                    <Icon name="plus" size={10} />
+                    Use
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {creating && (
+        <CreateFromTemplateModal
+          templates={items}
+          initial={creating.initial}
+          onClose={() => setCreating(null)}
+        />
       )}
     </div>
   );

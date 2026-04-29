@@ -6,7 +6,7 @@
 
 import { Icon, type IconName } from "../../components/Icon";
 
-type Item = { label: string; appId?: string };
+type Item = { label: string; appId: string };
 type Section = { name: string; icon: IconName; items: Item[] };
 
 const SECTIONS: Section[] = [
@@ -17,7 +17,9 @@ const SECTIONS: Section[] = [
       { label: "Pools", appId: "storage" },
       { label: "Datasets", appId: "storage" },
       { label: "Snapshots", appId: "storage" },
-      { label: "Disks", appId: "storage" },
+      { label: "Encryption", appId: "storage" },
+      { label: "Replication", appId: "replication" },
+      { label: "Shares", appId: "shares" },
     ],
   },
   {
@@ -26,8 +28,6 @@ const SECTIONS: Section[] = [
     items: [
       { label: "Interfaces", appId: "network" },
       { label: "RDMA", appId: "network" },
-      { label: "Routes", appId: "network" },
-      { label: "DNS", appId: "network" },
     ],
   },
   {
@@ -35,45 +35,45 @@ const SECTIONS: Section[] = [
     icon: "user",
     items: [
       { label: "Users", appId: "identity" },
-      { label: "Groups", appId: "identity" },
-      { label: "SSO", appId: "identity" },
-      { label: "API tokens", appId: "identity" },
+      { label: "Sessions", appId: "identity" },
+      { label: "Kerberos", appId: "identity" },
     ],
   },
   {
     name: "System",
-    icon: "control",
+    icon: "settings",
     items: [
       { label: "Overview", appId: "system" },
-      { label: "Updates", appId: "system" },
+      { label: "Update", appId: "system" },
       { label: "SMTP", appId: "system" },
     ],
   },
   {
-    name: "Workloads",
-    icon: "workload",
+    name: "Apps",
+    icon: "package",
     items: [
-      { label: "Apps", appId: "package-center" },
-      { label: "Containers", appId: "workloads" },
-      { label: "VMs", appId: "vm" },
+      { label: "Package Center", appId: "package-center" },
+      { label: "Workloads", appId: "workloads" },
+      { label: "Virtualization", appId: "vms" },
     ],
   },
   {
     name: "Tools",
-    icon: "terminal",
+    icon: "control",
     items: [
-      { label: "Terminal", appId: "terminal" },
+      { label: "Alerts", appId: "alerts" },
+      { label: "Logs", appId: "logs" },
+      { label: "Audit", appId: "audit" },
+      { label: "Jobs", appId: "jobs" },
+      { label: "Notifications", appId: "notifications" },
       { label: "File Station", appId: "files" },
-      { label: "Monitor", appId: "monitor" },
+      { label: "Terminal", appId: "terminal" },
     ],
   },
 ];
 
-function openApp(appId: string | undefined) {
-  if (!appId) return;
-  window.dispatchEvent(
-    new CustomEvent("nova:open-app", { detail: appId })
-  );
+function openApp(appId: string) {
+  window.dispatchEvent(new CustomEvent("nova:open-app", { detail: appId }));
 }
 
 export function ControlPanel() {

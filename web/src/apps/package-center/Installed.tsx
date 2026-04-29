@@ -13,6 +13,18 @@ export function Installed() {
   const [pickedName, setPickedName] = useState<string | null>(null);
 
   const cur = (q.data ?? []).find((p) => p.metadata.name === pickedName) ?? (q.data ?? [])[0];
+  const curName = cur?.metadata.name;
+
+  const deps = useQuery({
+    queryKey: ["plugin-deps", curName],
+    enabled: !!curName,
+    queryFn: () => plugins.listDependencies(curName!),
+  });
+  const dependents = useQuery({
+    queryKey: ["plugin-dependents", curName],
+    enabled: !!curName,
+    queryFn: () => plugins.listDependents(curName!),
+  });
 
   const uninstall = useMutation({
     mutationFn: (name: string) =>
@@ -78,6 +90,28 @@ export function Installed() {
               </Sect>
             ) : null;
           })()}
+          {deps.data && deps.data.length > 0 && (
+            <Sect title="Depends on">
+              {deps.data.map((d) => (
+                <div key={d.name} className="perm-row">
+                  <Icon name="package" size={11} />
+                  <span className="perm-row__name">{d.name}</span>
+                  <span className="perm-row__desc mono">{d.version}</span>
+                </div>
+              ))}
+            </Sect>
+          )}
+          {dependents.data && dependents.data.length > 0 && (
+            <Sect title="Required by">
+              {dependents.data.map((d) => (
+                <div key={d.name} className="perm-row">
+                  <Icon name="package" size={11} />
+                  <span className="perm-row__name">{d.name}</span>
+                  <span className="perm-row__desc mono">{d.version}</span>
+                </div>
+              ))}
+            </Sect>
+          )}
           <div className="installed__actions">
             <button className="btn">
               <Icon name="refresh" size={11} /> Restart

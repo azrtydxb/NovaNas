@@ -26,6 +26,7 @@ export function RDMA() {
               <th>Port</th>
               <th>State</th>
               <th>Speed</th>
+              <th>LID</th>
               <th>GID</th>
             </tr>
           </thead>
@@ -44,6 +45,9 @@ export function RDMA() {
                   </td>
                   <td className="mono" style={{ fontSize: 11 }}>
                     {r.speed ?? "—"}
+                  </td>
+                  <td className="mono" style={{ fontSize: 11 }}>
+                    {r.lid ?? "—"}
                   </td>
                   <td className="mono muted" style={{ fontSize: 11 }}>
                     {r.gid ?? "—"}

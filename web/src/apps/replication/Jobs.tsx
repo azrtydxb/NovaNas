@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { replication, type ReplicationJob } from "../../api/replication";
 import { formatBytes } from "../../lib/format";
+import { Modal } from "./Modal";
 
 function statePill(state: string | undefined): string {
   if (!state) return "";
@@ -15,6 +16,7 @@ function statePill(state: string | undefined): string {
 
 export function Jobs() {
   const [sel, setSel] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["replication-jobs"],
@@ -38,8 +40,7 @@ export function Jobs() {
     >
       <div style={{ padding: 14, overflow: "auto" }}>
         <div className="tbar">
-          <button className="btn btn--primary">
-            {/* TODO: phase 3 — open create-job dialog */}
+          <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
             <Icon name="plus" size={11} />
             New job
           </button>
@@ -101,7 +102,23 @@ export function Jobs() {
         )}
       </div>
       {cur && <JobDetail job={cur} runPending={runMut.isPending} onRun={(id) => runMut.mutate(id)} />}
+      {showCreate && <CreateJobStubModal onClose={() => setShowCreate(false)} />}
     </div>
+  );
+}
+
+function CreateJobStubModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="New replication job" onClose={onClose}
+      footer={<button className="btn" onClick={onClose}>Close</button>}
+    >
+      <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
+        Replication jobs are derived from <strong>replication-schedules</strong>.
+        Create a schedule in the <strong>Schedules</strong> tab — its job IDs
+        appear here once the engine materialises them. The backend exposes no
+        direct <code>POST /replication-jobs</code> endpoint yet (TODO: backend missing).
+      </div>
+    </Modal>
   );
 }
 
@@ -215,11 +232,14 @@ function JobDetail({
         >
           Run now
         </button>
-        {/* TODO: phase 3 — wire edit/delete */}
-        <button className="btn btn--sm">Edit</button>
+        <button className="btn btn--sm" disabled title="Edit via Schedules tab — backend has no PUT /replication-jobs/{id}">
+          Edit
+        </button>
         <button
           className="btn btn--sm btn--danger"
           style={{ marginLeft: "auto" }}
+          disabled
+          title="Delete via Schedules tab — backend has no DELETE /replication-jobs/{id}"
         >
           Delete
         </button>

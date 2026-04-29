@@ -1,11 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { system } from "../../api/system";
 import { Icon } from "../../components/Icon";
 
 export function Update() {
+  const qc = useQueryClient();
   const upd = useQuery({
     queryKey: ["system", "updates"],
     queryFn: () => system.updates(),
+  });
+
+  const apply = useMutation({
+    mutationFn: () => system.applyUpdate(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["system", "updates"] }),
   });
 
   if (upd.isLoading) return <div className="muted">Checking for updates…</div>;
@@ -44,6 +50,22 @@ export function Update() {
         </div>
       </div>
 
+      {next && (
+        <div
+          className="sect"
+          style={{
+            background: "var(--accent-soft)",
+            borderLeft: "3px solid var(--accent)",
+          }}
+        >
+          <div className="sect__body">
+            <div style={{ color: "var(--fg-0)", fontSize: 12 }}>
+              Update <span className="mono">{next}</span> is available.
+            </div>
+          </div>
+        </div>
+      )}
+
       {notes.length > 0 && (
         <div className="sect">
           <div className="sect__head">
@@ -67,10 +89,39 @@ export function Update() {
         </div>
       )}
 
-      <div className="row gap-8" style={{ marginTop: 8 }}>
-        <button className="btn btn--primary" disabled={!next}>
+      {apply.isError && (
+        <div className="modal__err" style={{ marginTop: 8 }}>
+          Failed to apply: {(apply.error as Error).message}
+        </div>
+      )}
+      {apply.isSuccess && (
+        <div
+          className="muted"
+          style={{ marginTop: 8, color: "var(--ok)", fontSize: 11 }}
+        >
+          Update started. The system will reboot once installation completes.
+        </div>
+      )}
+
+      <div className="row gap-8" style={{ marginTop: 8, padding: "0 16px 14px" }}>
+        <button
+          className="btn btn--primary"
+          disabled={!next || apply.isPending}
+          onClick={() => {
+            if (
+              confirm(
+                `Apply update ${next}? The system may reboot once installation completes.`
+              )
+            )
+              apply.mutate();
+          }}
+        >
           <Icon name="download" size={11} />
-          {next ? `Install ${next}` : "Install"}
+          {apply.isPending
+            ? "Applying…"
+            : next
+              ? `Install ${next}`
+              : "Install"}
         </button>
         <button className="btn" onClick={() => void upd.refetch()}>
           <Icon name="refresh" size={11} /> Check for updates

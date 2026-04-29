@@ -40,6 +40,7 @@ export type RdmaDevice = {
   port?: number | string;
   state?: string;
   speed?: string;
+  lid?: string | number;
   gid?: string;
 };
 
@@ -53,8 +54,27 @@ export const network = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  updateConfig: (name: string, body: NetConfig) =>
+    api<NetConfig>(`/api/v1/network/configs/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteConfig: (name: string) =>
+    api<unknown>(`/api/v1/network/configs/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
   listBonds: () => api<NetBond[]>(`/api/v1/network/bonds`),
+  createBond: (body: NetBond) =>
+    api<NetBond>(`/api/v1/network/bonds`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   listVlans: () => api<NetVlan[]>(`/api/v1/network/vlans`),
+  createVlan: (body: NetVlan) =>
+    api<NetVlan>(`/api/v1/network/vlans`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   listRdma: () => api<RdmaDevice[]>(`/api/v1/network/rdma`),
   reload: () => api<unknown>(`/api/v1/network/reload`, { method: "POST" }),
 };
