@@ -43,6 +43,25 @@ type Config struct {
 	TLS  TLSConfig
 	Auth AuthConfig
 	SMTP SMTPConfig
+
+	// AlertmanagerURL is the upstream Alertmanager API base URL used by
+	// the /api/v1/alerts* pass-through endpoints. Defaults to the
+	// loopback-bound AM that ships with the appliance.
+	AlertmanagerURL string `envconfig:"ALERTMANAGER_URL" default:"http://127.0.0.1:9093"`
+
+	// LokiURL is the upstream Loki API base URL used by the
+	// /api/v1/logs* pass-through endpoints.
+	LokiURL string `envconfig:"LOKI_URL" default:"http://127.0.0.1:3100"`
+
+	// Keycloak admin API. KeycloakAdminURL defaults to deriving from
+	// OIDC_ISSUER_URL (issuer is .../realms/<realm>; admin is
+	// .../admin/realms/<realm>). KeycloakAdminClientID +
+	// KeycloakAdminClientSecretFile authenticate via client_credentials.
+	// Empty client id/secret disables the /auth/sessions and
+	// /auth/login-history endpoints.
+	KeycloakAdminURL              string `envconfig:"KEYCLOAK_ADMIN_URL"`
+	KeycloakAdminClientID         string `envconfig:"KEYCLOAK_ADMIN_CLIENT_ID"`
+	KeycloakAdminClientSecretFile string `envconfig:"KEYCLOAK_ADMIN_CLIENT_SECRET_FILE"`
 }
 
 // SMTPConfig configures the outbound SMTP relay used by transactional

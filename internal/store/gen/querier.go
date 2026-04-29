@@ -39,6 +39,7 @@ type Querier interface {
 	DeleteScrubPolicy(ctx context.Context, id pgtype.UUID) error
 	DeleteSnapshotSchedule(ctx context.Context, id pgtype.UUID) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetNotification(ctx context.Context, id pgtype.UUID) (Notification, error)
 	GetReplicationJob(ctx context.Context, id pgtype.UUID) (ReplicationJob, error)
 	GetReplicationSchedule(ctx context.Context, id pgtype.UUID) (ReplicationSchedule, error)
 	GetReplicationTarget(ctx context.Context, id pgtype.UUID) (ReplicationTarget, error)
@@ -46,8 +47,16 @@ type Querier interface {
 	GetScrubPolicy(ctx context.Context, id pgtype.UUID) (ScrubPolicy, error)
 	GetScrubPolicyByName(ctx context.Context, name string) (ScrubPolicy, error)
 	GetSnapshotSchedule(ctx context.Context, id pgtype.UUID) (SnapshotSchedule, error)
+	GetUserState(ctx context.Context, arg GetUserStateParams) (NotificationState, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertJob(ctx context.Context, arg InsertJobParams) (Job, error)
+	// =====================================================================
+	// Unified Notification Center (internal/notifycenter)
+	// =====================================================================
+	// Idempotent insert: if (source, source_id) already exists, the existing
+	// row is returned untouched. The aggregator relies on this so its
+	// polling loop never produces duplicates even across restarts.
+	InsertNotification(ctx context.Context, arg InsertNotificationParams) (Notification, error)
 	InsertReplicationRun(ctx context.Context, arg InsertReplicationRunParams) (ReplicationRun, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	ListEnabledReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
@@ -55,6 +64,10 @@ type Querier interface {
 	ListEnabledScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListEnabledSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
+	// Filter columns are nullable; NULL means "don't filter". Cursor predicate
+	// (created_at, id) yields a stable DESC ordering even under concurrent
+	// inserts.
+	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
 	ListReplicationRuns(ctx context.Context, arg ListReplicationRunsParams) ([]ReplicationRun, error)
 	ListReplicationRunsAfter(ctx context.Context, arg ListReplicationRunsAfterParams) ([]ReplicationRun, error)
@@ -63,6 +76,14 @@ type Querier interface {
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
 	ListScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
+	// Returns the per-user state rows for a batch of notifications. Used by
+	// the list endpoint to enrich each event with the calling user's state
+	// without an N+1 round-trip.
+	ListUserStatesForNotifications(ctx context.Context, arg ListUserStatesForNotificationsParams) ([]NotificationState, error)
+	// Bulk "mark read" — inserts state rows for every undismissed notification
+	// the user hasn't already touched, and bumps existing rows that lack a
+	// read_at. Dismissed rows are left alone (already counted as read).
+	MarkAllReadForUser(ctx context.Context, userSubject string) error
 	// Only writes if the row is still 'running'. A user CancelJob between
 	// markRunning and finish flips state to 'cancelled' and the host op is
 	// already underway — we honor the user's cancel intent in the row even
@@ -83,6 +104,9 @@ type Querier interface {
 	// Aggregate counts grouped by (actor, action, result) within an optional
 	// time window. Used by the /audit/summary endpoint.
 	SummaryAudit(ctx context.Context, arg SummaryAuditParams) ([]SummaryAuditRow, error)
+	// Counts notifications the user hasn't read or dismissed, and that aren't
+	// currently snoozed. Used to populate the bell badge.
+	UnreadCountForUser(ctx context.Context, userSubject string) (int64, error)
 	UpdateReplicationJob(ctx context.Context, arg UpdateReplicationJobParams) (ReplicationJob, error)
 	UpdateReplicationRun(ctx context.Context, arg UpdateReplicationRunParams) (ReplicationRun, error)
 	UpdateReplicationSchedule(ctx context.Context, arg UpdateReplicationScheduleParams) (ReplicationSchedule, error)
@@ -90,6 +114,9 @@ type Querier interface {
 	UpdateScrubPolicy(ctx context.Context, arg UpdateScrubPolicyParams) (ScrubPolicy, error)
 	UpdateSnapshotSchedule(ctx context.Context, arg UpdateSnapshotScheduleParams) (SnapshotSchedule, error)
 	UpsertResourceMetadata(ctx context.Context, arg UpsertResourceMetadataParams) (ResourceMetadatum, error)
+	UpsertUserStateDismiss(ctx context.Context, arg UpsertUserStateDismissParams) (NotificationState, error)
+	UpsertUserStateRead(ctx context.Context, arg UpsertUserStateReadParams) (NotificationState, error)
+	UpsertUserStateSnooze(ctx context.Context, arg UpsertUserStateSnoozeParams) (NotificationState, error)
 }
 
 var _ Querier = (*Queries)(nil)

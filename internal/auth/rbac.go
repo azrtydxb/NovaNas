@@ -26,6 +26,13 @@ const (
 	// to phish (the operator chooses the From address).
 	PermNotificationsRead  Permission = "nova:notifications:read"
 	PermNotificationsWrite Permission = "nova:notifications:write"
+	// Notification Center event stream (the bell). Read covers list /
+	// unread-count / SSE subscribe; Write covers per-user state mutations
+	// (mark-read, dismiss, snooze) on the caller's OWN events. The
+	// underlying notifications themselves are never user-mutable; only
+	// per-user state is — granted broadly (viewer+).
+	PermNotificationsEventsRead  Permission = "nova:notifications.events:read"
+	PermNotificationsEventsWrite Permission = "nova:notifications.events:write"
 	// Pool/dataset native-encryption management. Read covers status
 	// (is encrypted? algorithm?). Write covers initialize / load-key /
 	// unload-key. Recover is the break-glass capability that exposes
@@ -45,6 +52,37 @@ const (
 	// engineers can kick a scrub without admin rights).
 	PermScrubRead  Permission = "nova:scrub:read"
 	PermScrubWrite Permission = "nova:scrub:write"
+
+	// Alerts: pass-through to Alertmanager. Read covers alert + silence
+	// listing; Write covers silence create/expire.
+	PermAlertsRead  Permission = "nova:alerts:read"
+	PermAlertsWrite Permission = "nova:alerts:write"
+
+	// Logs: pass-through to Loki. LogQL queries can disclose sensitive
+	// payloads, so this is read-only and operator+ by default (viewer
+	// is intentionally excluded).
+	PermLogsRead Permission = "nova:logs:read"
+
+	// Sessions / login history. Reading the caller's OWN sessions and
+	// login history is granted to viewer+; reading or revoking ANOTHER
+	// user's sessions requires SessionsAdmin (admin-only).
+	PermSessionsRead  Permission = "nova:sessions:read"
+	PermSessionsAdmin Permission = "nova:sessions:admin"
+
+	// KubeVirt VM management. Read covers list/get plus console-session
+	// minting (the WebSocket URL is a credential — admin+operator+viewer
+	// all need a way to view a VM's screen). Write covers CRUD plus
+	// lifecycle (start/stop/restart/pause/migrate) and snapshot/restore.
+	PermVMRead  Permission = "nova:vm:read"
+	PermVMWrite Permission = "nova:vm:write"
+
+	// Workloads (Apps) subsystem. Read covers the curated chart catalog
+	// and listing installed apps (Helm releases on the embedded k3s).
+	// Write covers install/upgrade/uninstall/rollback. Granted to
+	// viewer+ for read, operator+ for write — consistent with other
+	// domains.
+	PermWorkloadsRead  Permission = "nova:workloads:read"
+	PermWorkloadsWrite Permission = "nova:workloads:write"
 )
 
 // RoleMap maps Keycloak role names to a set of Permissions. Operators
@@ -62,9 +100,15 @@ var DefaultRoleMap = RoleMap{
 		PermSchedulerRead, PermSchedulerWrite,
 		PermKrb5Read, PermKrb5Write,
 		PermNotificationsRead, PermNotificationsWrite,
+		PermNotificationsEventsRead, PermNotificationsEventsWrite,
 		PermPoolEncryptionRead, PermPoolEncryptionWrite, PermPoolEncryptionRecover,
 		PermReplicationRead, PermReplicationWrite,
 		PermScrubRead, PermScrubWrite,
+		PermAlertsRead, PermAlertsWrite,
+		PermLogsRead,
+		PermSessionsRead, PermSessionsAdmin,
+		PermVMRead, PermVMWrite,
+		PermWorkloadsRead, PermWorkloadsWrite,
 	},
 	"nova-operator": {
 		PermStorageRead, PermStorageWrite,
@@ -73,9 +117,15 @@ var DefaultRoleMap = RoleMap{
 		PermAuditRead,
 		PermSchedulerRead, PermSchedulerWrite,
 		PermNotificationsRead,
+		PermNotificationsEventsRead, PermNotificationsEventsWrite,
 		PermPoolEncryptionRead, PermPoolEncryptionWrite,
 		PermReplicationRead, PermReplicationWrite,
 		PermScrubRead, PermScrubWrite,
+		PermAlertsRead, PermAlertsWrite,
+		PermLogsRead,
+		PermSessionsRead,
+		PermVMRead, PermVMWrite,
+		PermWorkloadsRead, PermWorkloadsWrite,
 	},
 	// Viewers intentionally do NOT receive PermAuditRead. The audit log
 	// reveals who has accessed which resources; granting it to read-only
@@ -87,6 +137,11 @@ var DefaultRoleMap = RoleMap{
 		PermSchedulerRead,
 		PermReplicationRead,
 		PermScrubRead,
+		PermAlertsRead,
+		PermSessionsRead,
+		PermVMRead,
+		PermWorkloadsRead,
+		PermNotificationsEventsRead, PermNotificationsEventsWrite,
 	},
 	"nova-system-admin": {
 		PermStorageRead,

@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api"
+	"github.com/novanas/nova-nas/internal/api/handlers"
 	"github.com/novanas/nova-nas/internal/api/metrics"
 	"github.com/novanas/nova-nas/internal/auth"
 	"github.com/novanas/nova-nas/internal/config"
@@ -40,9 +41,22 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
 	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/logging"
+	"github.com/novanas/nova-nas/internal/notifycenter"
 	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/scrubpolicy"
 	"github.com/novanas/nova-nas/internal/store"
+	"github.com/novanas/nova-nas/internal/vms"
+	"github.com/novanas/nova-nas/internal/workloads"
+)
+
+// Build metadata stamped via -ldflags in CI:
+//
+//	-ldflags "-X main.buildCommit=$(git rev-parse HEAD) -X main.buildTime=$(date -u +%FT%TZ)"
+//
+// When unset, /system/version falls back to runtime/debug.ReadBuildInfo().
+var (
+	buildCommit string
+	buildTime   string
 )
 
 func main() {
@@ -218,20 +232,20 @@ func main() {
 		Logger:      asynqSlogAdapter{l: logger},
 	})
 	mux := jobs.NewServeMux(jobs.WorkerDeps{
-		Logger:       logger,
-		Queries:      st.Queries,
-		Redis:        redisClient,
-		Secrets:      secretsMgr,
-		Pools:        poolMgr,
-		Datasets:     datasetMgr,
-		Snapshots:    snapMgr,
-		IscsiMgr:     iscsiMgr,
-		NvmeofMgr:    nvmeofMgr,
-		NfsMgr:       nfsMgr,
-		Krb5Mgr:      krb5Mgr,
-		SambaMgr:     sambaMgr,
-		SmartMgr:     smartMgr,
-		SchedulerMgr: schedulerMgr,
+		Logger:           logger,
+		Queries:          st.Queries,
+		Redis:            redisClient,
+		Secrets:          secretsMgr,
+		Pools:            poolMgr,
+		Datasets:         datasetMgr,
+		Snapshots:        snapMgr,
+		IscsiMgr:         iscsiMgr,
+		NvmeofMgr:        nvmeofMgr,
+		NfsMgr:           nfsMgr,
+		Krb5Mgr:          krb5Mgr,
+		SambaMgr:         sambaMgr,
+		SmartMgr:         smartMgr,
+		SchedulerMgr:     schedulerMgr,
 		NetworkMgr:       networkMgr,
 		SystemMgr:        systemMgr,
 		ProtocolShareMgr: psMgr,
@@ -295,38 +309,142 @@ func main() {
 	defer replCancel()
 	go runReplicationScheduler(replCtx, logger, replStore, dispatcher)
 
+	// Notification Center (the bell). The manager owns the SSE bus
+	// and the per-user state DAO; the aggregator goroutine polls
+	// Alertmanager, jobs, and the audit log every 30s and pushes new
+	// rows into the manager. RecordEvent is idempotent on
+	// (source, source_id) so the cursor reset on restart is safe.
+	notifyMgr := notifycenter.NewManager(st.Queries, logger)
+	notifyAgg := notifycenter.NewAggregator(notifyMgr, st.Queries, notifycenter.AggregatorConfig{
+		AlertmanagerURL: cfg.AlertmanagerURL,
+	}, logger)
+	notifyCtx, notifyCancel := context.WithCancel(context.Background())
+	defer notifyCancel()
+	go func() {
+		if err := notifyAgg.Run(notifyCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("notifycenter aggregator", "err", err)
+		}
+	}()
+
+	// Pass-through handlers for Alertmanager, Loki, and the Keycloak
+	// admin API. Each is opt-in via env: AlertmanagerURL/LokiURL default
+	// to loopback addresses; the Keycloak admin client only mounts when
+	// KEYCLOAK_ADMIN_CLIENT_ID + a readable secret file are configured.
+	alertsHandler := &handlers.AlertsHandler{Logger: logger, UpstreamURL: cfg.AlertmanagerURL}
+	logsHandler := &handlers.LogsHandler{Logger: logger, UpstreamURL: cfg.LokiURL}
+	systemMetaHandler := &handlers.SystemMetaHandler{Logger: logger, BuildCommit: buildCommit, BuildTime: buildTime}
+
+	var sessionsHandler *handlers.SessionsHandler
+	if cfg.KeycloakAdminClientID != "" && cfg.KeycloakAdminClientSecretFile != "" {
+		secretBytes, err := os.ReadFile(cfg.KeycloakAdminClientSecretFile)
+		if err != nil {
+			logger.Warn("keycloak admin secret unreadable; sessions endpoints disabled",
+				"path", cfg.KeycloakAdminClientSecretFile, "err", err)
+		} else {
+			secret := string(secretBytes)
+			for len(secret) > 0 && (secret[len(secret)-1] == '\n' || secret[len(secret)-1] == '\r') {
+				secret = secret[:len(secret)-1]
+			}
+			adminURL := cfg.KeycloakAdminURL
+			tokenURL := ""
+			// Derive admin and token URLs from OIDC_ISSUER_URL when not set.
+			// Issuer:  https://kc/realms/<realm>
+			// Admin:   https://kc/admin/realms/<realm>
+			// Token:   https://kc/realms/<realm>/protocol/openid-connect/token
+			issuer := cfg.Auth.IssuerURL
+			if adminURL == "" && issuer != "" {
+				if i := stringIndex(issuer, "/realms/"); i > 0 {
+					base := issuer[:i]
+					realm := issuer[i+len("/realms/"):]
+					adminURL = base + "/admin/realms/" + realm
+				}
+			}
+			if issuer != "" {
+				tokenURL = issuer + "/protocol/openid-connect/token"
+			}
+			if adminURL != "" && tokenURL != "" {
+				sessionsHandler = &handlers.SessionsHandler{
+					Logger: logger,
+					Admin: &handlers.KeycloakAdminClient{
+						AdminURL:     adminURL,
+						TokenURL:     tokenURL,
+						ClientID:     cfg.KeycloakAdminClientID,
+						ClientSecret: secret,
+					},
+					RoleMap: auth.DefaultRoleMap,
+				}
+				logger.Info("keycloak admin client wired", "admin_url", adminURL, "client_id", cfg.KeycloakAdminClientID)
+			} else {
+				logger.Warn("keycloak admin URL or token URL not derivable; sessions endpoints disabled",
+					"issuer", issuer, "admin_url", cfg.KeycloakAdminURL)
+			}
+		}
+	}
+
+	// Workloads (Apps) — Helm-driven Package Center backend on the embedded
+	// k3s cluster. nova-api runs on the host so we read k3s.yaml from
+	// /etc/rancher/k3s/k3s.yaml; if the file is missing or the cluster is
+	// unreachable, the manager runs in degraded mode and the /workloads/*
+	// endpoints respond 503 — letting nova-api stay up before k3s has been
+	// bootstrapped.
+	workloadsKubeconfig := os.Getenv("WORKLOADS_KUBECONFIG")
+	if workloadsKubeconfig == "" {
+		workloadsKubeconfig = "/etc/rancher/k3s/k3s.yaml"
+	}
+	workloadsIndexPath := os.Getenv("WORKLOADS_INDEX_PATH")
+	if workloadsIndexPath == "" {
+		workloadsIndexPath = "/usr/share/nova-nas/workloads/index.json"
+	}
+	workloadsMgr := buildWorkloadsManager(logger, workloadsKubeconfig, workloadsIndexPath)
+
+	// VM management (KubeVirt). Templates are loaded from disk; the
+	// KubeClient itself is left nil here — the production wiring is the
+	// dynamic-client path scaffolded in internal/vms but the typed
+	// kubevirt.io/client-go drop-in is intentionally deferred to a
+	// follow-up, so this branch logs a warning and the manager-less API
+	// surface returns 503 until the client is wired.
+	vmMgr := buildVMManager(logger)
+
 	srv := api.New(api.Deps{
-		Logger:     logger,
-		Store:      st,
-		Disks:      disksLister,
-		Pools:      poolMgr,
-		Datasets:   datasetMgr,
-		Snapshots:  snapMgr,
-		Dispatcher: dispatcher,
-		Redis:      redisClient,
-		DatasetMgr:  datasetMgr,
-		PoolMgr:     poolMgr,
-		SnapshotMgr: snapMgr,
-		IscsiMgr:    iscsiMgr,
-		NvmeofMgr:   nvmeofMgr,
-		NfsMgr:      nfsMgr,
-		Krb5Mgr:     krb5Mgr,
-		Krb5KDC:     krb5KDC,
-		RdmaLister:  rdmaLister,
-		SambaMgr:     sambaMgr,
-		SmartMgr:     smartMgr,
-		SchedulerMgr: schedulerMgr,
+		Logger:           logger,
+		Store:            st,
+		Disks:            disksLister,
+		Pools:            poolMgr,
+		Datasets:         datasetMgr,
+		Snapshots:        snapMgr,
+		Dispatcher:       dispatcher,
+		Redis:            redisClient,
+		DatasetMgr:       datasetMgr,
+		PoolMgr:          poolMgr,
+		SnapshotMgr:      snapMgr,
+		IscsiMgr:         iscsiMgr,
+		NvmeofMgr:        nvmeofMgr,
+		NfsMgr:           nfsMgr,
+		Krb5Mgr:          krb5Mgr,
+		Krb5KDC:          krb5KDC,
+		RdmaLister:       rdmaLister,
+		SambaMgr:         sambaMgr,
+		SmartMgr:         smartMgr,
+		SchedulerMgr:     schedulerMgr,
 		NetworkMgr:       networkMgr,
 		SystemMgr:        systemMgr,
 		ProtocolShareMgr: psMgr,
 		SMTPMgr:          smtpMgr,
+		NotifyCenter:     notifyMgr,
 		EncryptionMgr:    buildEncryptionMgr(logger, datasetMgr, secretsMgr),
 		ReplicationMgr:   replMgr,
+		WorkloadsMgr:     workloadsMgr,
+		VMMgr:            vmMgr,
 
 		Verifier:     verifier,
 		RoleMap:      auth.DefaultRoleMap,
 		AuthDisabled: cfg.Auth.Disabled,
 		Secrets:      secretsMgr,
+
+		AlertsHandler:     alertsHandler,
+		LogsHandler:       logsHandler,
+		SessionsHandler:   sessionsHandler,
+		SystemMetaHandler: systemMetaHandler,
 
 		Metrics:        metricsReg,
 		MetricsHandler: metricsHandlerFor(cfg.MetricsAddr, metricsReg),
@@ -500,3 +618,101 @@ func (a asynqSlogAdapter) Info(args ...any)  { a.l.Info("asynq", "args", args) }
 func (a asynqSlogAdapter) Warn(args ...any)  { a.l.Warn("asynq", "args", args) }
 func (a asynqSlogAdapter) Error(args ...any) { a.l.Error("asynq", "args", args) }
 func (a asynqSlogAdapter) Fatal(args ...any) { a.l.Error("asynq", "args", args) }
+
+// stringIndex is a tiny strings.Index alias used to keep the import
+// surface clean in this file.
+func stringIndex(s, substr string) int {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+// buildWorkloadsManager wires the Helm-driven Apps lifecycle manager.
+// On a NAS where k3s has not yet been bootstrapped (or is running on a
+// non-default kubeconfig path) we still return a manager — the helm
+// client itself runs in degraded mode and the API surface responds 503
+// for cluster-touching calls until k3s comes up.
+func buildWorkloadsManager(logger *slog.Logger, kubeconfigPath, indexPath string) workloads.Lifecycle {
+	idx := workloads.NewFileIndex(indexPath)
+	if err := idx.Reload(context.Background()); err != nil {
+		logger.Warn("workloads: index reload failed; /workloads/index will be empty until reload",
+			"path", indexPath, "err", err)
+	} else {
+		logger.Info("workloads: index loaded", "path", indexPath)
+	}
+	helm, err := workloads.NewHelmClient(logger, kubeconfigPath)
+	if err != nil {
+		logger.Warn("workloads: helm client init failed; /workloads endpoints will return 503",
+			"err", err)
+		return nil
+	}
+	mgr, err := workloads.NewManager(workloads.ManagerOptions{
+		Logger:    logger,
+		Index:     idx,
+		Helm:      helm,
+		IndexPath: indexPath,
+	})
+	if err != nil {
+		logger.Error("workloads: manager init", "err", err)
+		return nil
+	}
+	return mgr
+}
+
+// buildVMManager wires the KubeVirt-backed VM manager. Templates are
+// loaded from VMS_TEMPLATES_PATH (defaults to
+// /usr/share/nova-nas/vms/templates.json — operators can override). The
+// KubeClient field is intentionally left nil for now; the production
+// dynamic-client wiring lands in a follow-up. Until then, the manager
+// is wired into Deps but every Kube-touching call no-ops via the 503
+// branch in handlers.VMsHandler. The handler explicitly checks for
+// Mgr == nil; we set Mgr non-nil only when KubeClient is wired so the
+// API correctly returns 503 in single-binary dev installs.
+func buildVMManager(logger *slog.Logger) *vms.Manager {
+	templatesPath := os.Getenv("VMS_TEMPLATES_PATH")
+	if templatesPath == "" {
+		templatesPath = "/usr/share/nova-nas/vms/templates.json"
+	}
+	cat, err := vms.LoadCatalog(templatesPath)
+	if err != nil {
+		logger.Warn("vms: template catalog unavailable; /vm-templates will be empty",
+			"path", templatesPath, "err", err)
+		// Empty catalog is fine — the catalog field can be nil and the
+		// handler tolerates it.
+		cat = nil
+	} else {
+		logger.Info("vms: template catalog loaded", "path", templatesPath, "count", cat.Count())
+	}
+
+	// KubeClient: the dynamic-client implementation lives outside the
+	// scope of this commit. When KUBEVIRT_DISABLED is set, or no kubeconfig
+	// is reachable, we leave the manager unwired (Deps.VMMgr == nil), and
+	// the handler returns 503 for every endpoint.
+	if os.Getenv("KUBEVIRT_DISABLED") == "true" {
+		logger.Warn("vms: KUBEVIRT_DISABLED=true — /vms endpoints will return 503")
+		return nil
+	}
+	kubeconfig := os.Getenv("KUBEVIRT_KUBECONFIG")
+	if kubeconfig == "" {
+		kubeconfig = "/etc/rancher/k3s/k3s.yaml"
+	}
+	if _, err := os.Stat(kubeconfig); err != nil {
+		logger.Warn("vms: kubeconfig not present; /vms endpoints will return 503",
+			"path", kubeconfig, "err", err)
+		return nil
+	}
+
+	// TODO(vms): construct the production KubeClient (dynamic client +
+	// kubevirt.io/api types) and assign it here. The Manager type, types,
+	// templates, console-session minting, and HTTP layer all work today;
+	// the client just needs to be plumbed in.
+	// Until the dynamic client is plumbed, return nil so the handler
+	// 503s every route consistently. Returning a half-wired Manager
+	// would risk nil-pointer panics on the first list/get call.
+	logger.Warn("vms: KubeClient not yet wired; /vms endpoints will return 503 until the dynamic client lands")
+	_ = cat
+	return nil
+}

@@ -35,6 +35,26 @@ type Job struct {
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
 }
 
+type Notification struct {
+	ID        pgtype.UUID        `json:"id"`
+	TenantID  *string            `json:"tenant_id"`
+	Source    string             `json:"source"`
+	SourceID  string             `json:"source_id"`
+	Severity  string             `json:"severity"`
+	Title     string             `json:"title"`
+	Body      string             `json:"body"`
+	Link      string             `json:"link"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type NotificationState struct {
+	NotificationID pgtype.UUID        `json:"notification_id"`
+	UserSubject    string             `json:"user_subject"`
+	ReadAt         pgtype.Timestamptz `json:"read_at"`
+	DismissedAt    pgtype.Timestamptz `json:"dismissed_at"`
+	SnoozedUntil   pgtype.Timestamptz `json:"snoozed_until"`
+}
+
 type ReplicationJob struct {
 	ID              pgtype.UUID        `json:"id"`
 	Name            string             `json:"name"`

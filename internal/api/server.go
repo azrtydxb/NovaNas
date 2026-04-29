@@ -32,35 +32,42 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
+	"github.com/novanas/nova-nas/internal/notifycenter"
 	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/store"
+	"github.com/novanas/nova-nas/internal/vms"
+	"github.com/novanas/nova-nas/internal/workloads"
 )
 
 type Deps struct {
-	Logger        *slog.Logger
-	Store         *store.Store
-	Disks         handlers.DiskLister
-	Pools         handlers.PoolManager
-	Datasets      handlers.DatasetManager
-	Snapshots     handlers.SnapshotManager
-	Dispatcher    handlers.Dispatcher
-	Redis         *redis.Client
-	DatasetMgr    *dataset.Manager   // concrete manager for streaming send/receive and queries (diff, bookmarks)
-	PoolMgr       *pool.Manager      // concrete manager for synchronous zpool wait/sync
-	SnapshotMgr   *snapshot.Manager  // concrete manager for synchronous holds queries
-	IscsiMgr      *iscsi.Manager
-	NvmeofMgr     *nvmeof.Manager
-	NfsMgr        *nfs.Manager
-	Krb5Mgr       *krb5.Manager
-	Krb5KDC       *krb5.KDCManager
-	RdmaLister    *rdma.Lister
-	SambaMgr      *samba.Manager
-	SmartMgr      *smart.Manager
-	SchedulerMgr  *scheduler.Manager
-	NetworkMgr    *network.Manager
-	SystemMgr     *system.Manager
+	Logger           *slog.Logger
+	Store            *store.Store
+	Disks            handlers.DiskLister
+	Pools            handlers.PoolManager
+	Datasets         handlers.DatasetManager
+	Snapshots        handlers.SnapshotManager
+	Dispatcher       handlers.Dispatcher
+	Redis            *redis.Client
+	DatasetMgr       *dataset.Manager  // concrete manager for streaming send/receive and queries (diff, bookmarks)
+	PoolMgr          *pool.Manager     // concrete manager for synchronous zpool wait/sync
+	SnapshotMgr      *snapshot.Manager // concrete manager for synchronous holds queries
+	IscsiMgr         *iscsi.Manager
+	NvmeofMgr        *nvmeof.Manager
+	NfsMgr           *nfs.Manager
+	Krb5Mgr          *krb5.Manager
+	Krb5KDC          *krb5.KDCManager
+	RdmaLister       *rdma.Lister
+	SambaMgr         *samba.Manager
+	SmartMgr         *smart.Manager
+	SchedulerMgr     *scheduler.Manager
+	NetworkMgr       *network.Manager
+	SystemMgr        *system.Manager
 	ProtocolShareMgr *protocolshare.Manager
 	SMTPMgr          *notifysmtp.Manager
+	// NotifyCenter is the unified Notification Center manager (the
+	// bell). When nil the /notifications/events* routes are not
+	// mounted. Distinct from SMTPMgr (outbound email).
+	NotifyCenter *notifycenter.Manager
 	// EncryptionMgr is the TPM-sealed ZFS native-encryption manager.
 	// When nil, the /encryption* endpoints return 503.
 	EncryptionMgr *dataset.EncryptionManager
@@ -68,6 +75,18 @@ type Deps struct {
 	// ReplicationMgr is the general-replication subsystem manager. When
 	// nil the /replication-jobs endpoints are not mounted.
 	ReplicationMgr *replication.Manager
+
+	// VMMgr is the KubeVirt-backed VM manager. When nil the /vms,
+	// /vm-templates, /vm-snapshots, /vm-restores routes are mounted but
+	// respond 503 — the GUI degrades gracefully on hosts without a
+	// working KubeVirt control plane.
+	VMMgr *vms.Manager
+
+	// Workloads subsystem (Helm-driven Apps lifecycle on the embedded
+	// k3s). When nil the /workloads/* routes are mounted but respond
+	// 503 — the Package Center GUI degrades gracefully on hosts where
+	// k3s hasn't been bootstrapped yet.
+	WorkloadsMgr workloads.Lifecycle
 
 	// Auth wiring. If Verifier is nil OR AuthDisabled is true, the
 	// /api/v1 group does not enforce authentication or per-route
@@ -80,6 +99,21 @@ type Deps struct {
 	// here so future handlers/jobs can read/write secrets without
 	// reaching into globals.
 	Secrets secrets.Manager
+
+	// AlertsHandler, when non-nil, mounts /api/v1/alerts*,
+	// /api/v1/alert-silences*, /api/v1/alert-receivers as a pass-through
+	// to the upstream Alertmanager.
+	AlertsHandler *handlers.AlertsHandler
+	// LogsHandler, when non-nil, mounts /api/v1/logs/* as a pass-through
+	// to the upstream Loki.
+	LogsHandler *handlers.LogsHandler
+	// SessionsHandler, when non-nil, mounts /api/v1/auth/sessions*,
+	// /api/v1/auth/users/{id}/sessions, and /api/v1/auth/login-history*
+	// as Keycloak admin pass-throughs.
+	SessionsHandler *handlers.SessionsHandler
+	// SystemMetaHandler, when non-nil, mounts /api/v1/system/version
+	// and /api/v1/system/updates.
+	SystemMetaHandler *handlers.SystemMetaHandler
 
 	// Metrics, when non-nil, installs a request-instrumentation middleware
 	// and mounts /metrics on the main router. The same Metrics handle is
@@ -517,6 +551,84 @@ func New(d Deps) *Server {
 			})
 		}
 
+		// ---- Notification Center (the bell) ----
+		// Distinct prefix (/notifications/events) from the SMTP relay
+		// (/notifications/smtp). The two share a parent path but are
+		// otherwise unrelated subsystems.
+		if d.NotifyCenter != nil {
+			nceH := &handlers.NotificationsEventsHandler{Logger: d.Logger, Mgr: d.NotifyCenter}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermNotificationsEventsRead))
+				r.Get("/notifications/events", nceH.List)
+				r.Get("/notifications/events/unread-count", nceH.UnreadCount)
+				r.Get("/notifications/events/stream", nceH.Stream)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermNotificationsEventsWrite))
+				r.Post("/notifications/events/{id}/read", nceH.MarkRead)
+				r.Post("/notifications/events/{id}/dismiss", nceH.MarkDismissed)
+				r.Post("/notifications/events/{id}/snooze", nceH.Snooze)
+				r.Post("/notifications/events/read-all", nceH.MarkAllRead)
+			})
+		}
+
+		// ---- KubeVirt VM management ----
+		// Always mounted; when VMMgr is nil the handlers respond 503 so
+		// the GUI gets a stable shape regardless of cluster state.
+		{
+			vmsH := &handlers.VMsHandler{Logger: d.Logger, Mgr: d.VMMgr}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermVMRead))
+				r.Get("/vms", vmsH.List)
+				r.Get("/vms/{namespace}/{name}", vmsH.Get)
+				r.Get("/vms/{namespace}/{name}/console", vmsH.Console)
+				r.Get("/vms/{namespace}/{name}/serial", vmsH.Serial)
+				r.Get("/vm-templates", vmsH.ListTemplates)
+				r.Get("/vm-snapshots", vmsH.ListSnapshots)
+				r.Get("/vm-restores", vmsH.ListRestores)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermVMWrite))
+				r.Post("/vms", vmsH.Create)
+				r.Patch("/vms/{namespace}/{name}", vmsH.Patch)
+				r.Delete("/vms/{namespace}/{name}", vmsH.Delete)
+				r.Post("/vms/{namespace}/{name}/start", vmsH.Start)
+				r.Post("/vms/{namespace}/{name}/stop", vmsH.Stop)
+				r.Post("/vms/{namespace}/{name}/restart", vmsH.Restart)
+				r.Post("/vms/{namespace}/{name}/pause", vmsH.Pause)
+				r.Post("/vms/{namespace}/{name}/unpause", vmsH.Unpause)
+				r.Post("/vms/{namespace}/{name}/migrate", vmsH.Migrate)
+				r.Post("/vm-snapshots", vmsH.CreateSnapshot)
+				r.Delete("/vm-snapshots/{namespace}/{name}", vmsH.DeleteSnapshot)
+				r.Post("/vm-restores", vmsH.CreateRestore)
+				r.Delete("/vm-restores/{namespace}/{name}", vmsH.DeleteRestore)
+			})
+		}
+
+		// ---- Workloads (Apps) — Helm-driven Package Center backend ----
+		// Always mounted; when WorkloadsMgr is nil the handlers respond 503
+		// so the GUI gets a stable shape on hosts where k3s isn't ready.
+		{
+			workloadsH := &handlers.WorkloadsHandler{Logger: d.Logger, Lifecycle: d.WorkloadsMgr}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermWorkloadsRead))
+				r.Get("/workloads/index", workloadsH.ListIndex)
+				r.Get("/workloads/index/{name}", workloadsH.GetIndexEntry)
+				r.Get("/workloads", workloadsH.List)
+				r.Get("/workloads/{releaseName}", workloadsH.Get)
+				r.Get("/workloads/{releaseName}/events", workloadsH.Events)
+				r.Get("/workloads/{releaseName}/logs", workloadsH.Logs)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermWorkloadsWrite))
+				r.Post("/workloads/index/reload", workloadsH.ReloadIndex)
+				r.Post("/workloads", workloadsH.Install)
+				r.Patch("/workloads/{releaseName}", workloadsH.Upgrade)
+				r.Delete("/workloads/{releaseName}", workloadsH.Uninstall)
+				r.Post("/workloads/{releaseName}/rollback", workloadsH.Rollback)
+			})
+		}
+
 		// Jobs and scheduler — only available when the store is wired.
 		if d.Store != nil {
 			jobsH := &handlers.JobsHandler{Logger: d.Logger, Q: d.Store.Queries}
@@ -620,6 +732,60 @@ func New(d Deps) *Server {
 				r.Get("/audit", auditH.List)
 				r.Get("/audit/summary", auditH.Summary)
 				r.Get("/audit/export", auditH.Export)
+			})
+		}
+
+		// ---- Alerts (Alertmanager pass-through) ----
+		if d.AlertsHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermAlertsRead))
+				r.Get("/alerts", d.AlertsHandler.ListAlerts)
+				r.Get("/alerts/{fingerprint}", d.AlertsHandler.GetAlert)
+				r.Get("/alert-silences", d.AlertsHandler.ListSilences)
+				r.Get("/alert-receivers", d.AlertsHandler.ListReceivers)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermAlertsWrite))
+				r.Post("/alert-silences", d.AlertsHandler.CreateSilence)
+				r.Delete("/alert-silences/{id}", d.AlertsHandler.DeleteSilence)
+			})
+		}
+
+		// ---- Logs (Loki pass-through) ----
+		if d.LogsHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermLogsRead))
+				r.Get("/logs/query", d.LogsHandler.QueryRange)
+				r.Get("/logs/query/instant", d.LogsHandler.QueryInstant)
+				r.Get("/logs/labels", d.LogsHandler.Labels)
+				r.Get("/logs/labels/{name}/values", d.LogsHandler.LabelValues)
+				r.Get("/logs/series", d.LogsHandler.Series)
+				r.Get("/logs/tail", d.LogsHandler.Tail)
+			})
+		}
+
+		// ---- Sessions / login history (Keycloak admin pass-through) ----
+		if d.SessionsHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermSessionsRead))
+				r.Get("/auth/sessions", d.SessionsHandler.ListOwnSessions)
+				r.Delete("/auth/sessions/{id}", d.SessionsHandler.RevokeOwnSession)
+				r.Get("/auth/login-history", d.SessionsHandler.ListOwnLoginHistory)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermSessionsAdmin))
+				r.Get("/auth/users/{id}/sessions", d.SessionsHandler.ListUserSessions)
+				r.Delete("/auth/users/{id}/sessions", d.SessionsHandler.RevokeUserSessions)
+				r.Get("/auth/users/{id}/login-history", d.SessionsHandler.ListUserLoginHistory)
+			})
+		}
+
+		// ---- System version / updates ----
+		if d.SystemMetaHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermSystemRead))
+				r.Get("/system/version", d.SystemMetaHandler.GetVersion)
+				r.Get("/system/updates", d.SystemMetaHandler.GetUpdates)
 			})
 		}
 	})

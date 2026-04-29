@@ -2623,6 +2623,436 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /notifications/events:
+    get:
+      operationId: listNotificationEvents
+      summary: List aggregated notification events
+      description: |
+        Returns notification events visible to the calling user, with
+        per-user state (read/dismissed/snoozed) attached. Dismissed
+        and currently-snoozed events are hidden by default; pass
+        `includeDismissed=true` or `onlySnoozed=true` to surface them.
+      x-required-permissions: [PermNotificationsEventsRead]
+      parameters:
+        - in: query
+          name: severity
+          schema: { type: string, enum: [info, warning, critical] }
+        - in: query
+          name: source
+          schema: { type: string, enum: [alertmanager, jobs, audit, system] }
+        - in: query
+          name: unread
+          schema: { type: boolean }
+        - in: query
+          name: includeDismissed
+          schema: { type: boolean }
+        - in: query
+          name: includeSnoozed
+          schema: { type: boolean }
+        - in: query
+          name: onlySnoozed
+          schema: { type: boolean }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500 }
+        - in: query
+          name: cursor
+          description: Opaque pagination cursor returned as `nextCursor` in the previous page.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationEventList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /notifications/events/unread-count:
+    get:
+      operationId: getNotificationUnreadCount
+      summary: Count of unread, undismissed, non-snoozed notifications
+      x-required-permissions: [PermNotificationsEventsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer, format: int64 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /notifications/events/stream:
+    get:
+      operationId: streamNotificationEvents
+      summary: SSE stream of newly-aggregated notification events
+      description: |
+        Server-Sent Events endpoint. Each event is emitted as
+        `event: notification` with the full `NotificationEvent` JSON
+        on the `data:` line. Heartbeat comments (`: keepalive`) are
+        sent every 15s to keep the connection alive across proxies.
+        See docs/notifications/events.md for the on-the-wire format.
+      x-required-permissions: [PermNotificationsEventsRead]
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /notifications/events/{id}/read:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: markNotificationRead
+      summary: Mark an event read for the calling user
+      x-required-permissions: [PermNotificationsEventsWrite]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /notifications/events/{id}/dismiss:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: dismissNotification
+      summary: Dismiss an event for the calling user
+      description: |
+        Dismissed events are hidden from the default list view and
+        omitted from the unread count. The underlying notification is
+        retained server-side so other users still see it.
+      x-required-permissions: [PermNotificationsEventsWrite]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /notifications/events/{id}/snooze:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: snoozeNotification
+      summary: Hide an event for the calling user until a future time
+      x-required-permissions: [PermNotificationsEventsWrite]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [until]
+              properties:
+                until: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  until:  { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /notifications/events/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark all currently-unread notifications read for the calling user
+      x-required-permissions: [PermNotificationsEventsWrite]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      summary: List firing/active/resolved alerts (Alertmanager pass-through)
+      x-required-permissions: [PermAlertsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Alert' }
+  /alerts/{fingerprint}:
+    parameters:
+      - in: path
+        name: fingerprint
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlert
+      x-required-permissions: [PermAlertsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+  /alert-silences:
+    get:
+      operationId: listAlertSilences
+      x-required-permissions: [PermAlertsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Silence' }
+    post:
+      operationId: createAlertSilence
+      x-required-permissions: [PermAlertsWrite]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Silence' }
+      responses:
+        '200':
+          description: Created. Body is the AM-assigned silence ID envelope.
+          content:
+            application/json:
+              schema: { type: object }
+  /alert-silences/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteAlertSilence
+      x-required-permissions: [PermAlertsWrite]
+      responses:
+        '200': { description: Expired }
+  /alert-receivers:
+    get:
+      operationId: listAlertReceivers
+      x-required-permissions: [PermAlertsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlertReceiver' }
+
+  /logs/query:
+    get:
+      operationId: queryLogsRange
+      summary: LogQL range query (Loki pass-through)
+      x-required-permissions: [PermLogsRead]
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string }
+        - in: query
+          name: start
+          schema: { type: string }
+        - in: query
+          name: end
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /logs/query/instant:
+    get:
+      operationId: queryLogsInstant
+      x-required-permissions: [PermLogsRead]
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /logs/labels:
+    get:
+      operationId: listLogLabels
+      x-required-permissions: [PermLogsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /logs/labels/{name}/values:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listLogLabelValues
+      x-required-permissions: [PermLogsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /logs/series:
+    get:
+      operationId: listLogSeries
+      x-required-permissions: [PermLogsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /logs/tail:
+    get:
+      operationId: tailLogs
+      summary: WebSocket tail (not yet implemented in v1)
+      x-required-permissions: [PermLogsRead]
+      responses:
+        '501': { description: Not implemented }
+
+  /auth/sessions:
+    get:
+      operationId: listOwnSessions
+      x-required-permissions: [PermSessionsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Session' }
+  /auth/sessions/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: revokeOwnSession
+      x-required-permissions: [PermSessionsRead]
+      responses:
+        '200': { description: Revoked }
+  /auth/users/{id}/sessions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listUserSessions
+      x-required-permissions: [PermSessionsAdmin]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Session' }
+    delete:
+      operationId: revokeAllUserSessions
+      x-required-permissions: [PermSessionsAdmin]
+      responses:
+        '200': { description: All sessions revoked }
+  /auth/login-history:
+    get:
+      operationId: listOwnLoginHistory
+      x-required-permissions: [PermSessionsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LoginEvent' }
+  /auth/users/{id}/login-history:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listUserLoginHistory
+      x-required-permissions: [PermSessionsAdmin]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LoginEvent' }
+
+  /system/version:
+    get:
+      operationId: getSystemVersion
+      x-required-permissions: [PermSystemRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemVersion' }
+  /system/updates:
+    get:
+      operationId: getSystemUpdates
+      x-required-permissions: [PermSystemRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemUpdate' }
+
   /jobs/{id}/stream:
     parameters:
       - in: path
@@ -2637,6 +3067,513 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+
+  /workloads/index:
+    get:
+      operationId: listWorkloadIndex
+      summary: List the curated chart catalog (Apps).
+      description: Returns the operator-curated index of installable apps. Each
+        entry is a Helm chart pinned to a specific version. Permissions
+        nova:workloads:read.
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkloadIndexEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /workloads/index/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getWorkloadIndexEntry
+      summary: Get one chart catalog entry plus README and values schema.
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkloadIndexEntryDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workloads/index/reload:
+    post:
+      operationId: reloadWorkloadIndex
+      summary: Re-read the on-disk chart index (operator/admin only).
+      x-required-permissions: [nova:workloads:write]
+      responses:
+        '200':
+          description: Reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string } }
+
+  /workloads:
+    get:
+      operationId: listWorkloads
+      summary: List installed apps (Helm releases in nova-app-* namespaces).
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkloadRelease' }
+    post:
+      operationId: installWorkload
+      summary: Install an app from the curated index.
+      x-required-permissions: [nova:workloads:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkloadInstallRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkloadRelease' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: A release with the same name already exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /workloads/{releaseName}:
+    parameters:
+      - in: path
+        name: releaseName
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getWorkload
+      summary: Installed-app detail (status, values, k8s resources, pods).
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkloadReleaseDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: upgradeWorkload
+      summary: Upgrade a release (new version, new values, or both).
+      x-required-permissions: [nova:workloads:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkloadUpgradeRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkloadRelease' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: uninstallWorkload
+      summary: Uninstall a release and drop its namespace.
+      x-required-permissions: [nova:workloads:write]
+      responses:
+        '204':
+          description: No content
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workloads/{releaseName}/rollback:
+    parameters:
+      - in: path
+        name: releaseName
+        required: true
+        schema: { type: string }
+    post:
+      operationId: rollbackWorkload
+      summary: Roll a release back to a previous Helm revision.
+      x-required-permissions: [nova:workloads:write]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revision:
+                  type: integer
+                  minimum: 1
+                  description: Helm revision to roll back to. Defaults to 1.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkloadRelease' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workloads/{releaseName}/events:
+    parameters:
+      - in: path
+        name: releaseName
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listWorkloadEvents
+      summary: Recent k8s events scoped to the release namespace.
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkloadEvent' }
+
+  /workloads/{releaseName}/logs:
+    parameters:
+      - in: path
+        name: releaseName
+        required: true
+        schema: { type: string }
+      - in: query
+        name: pod
+        schema: { type: string }
+      - in: query
+        name: container
+        schema: { type: string }
+      - in: query
+        name: follow
+        schema: { type: boolean }
+      - in: query
+        name: tail
+        schema: { type: integer }
+      - in: query
+        name: sinceSeconds
+        schema: { type: integer }
+      - in: query
+        name: timestamps
+        schema: { type: boolean }
+      - in: query
+        name: previous
+        schema: { type: boolean }
+    get:
+      operationId: streamWorkloadLogs
+      summary: Stream pod logs from a release's namespace.
+      description: |
+        Streams logs as text/plain. When `follow=true` the connection is
+        held open until the client cancels.
+      x-required-permissions: [nova:workloads:read]
+      responses:
+        '200':
+          description: Log stream
+          content:
+            text/plain:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503':
+          description: Cluster not available.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ---- KubeVirt VM management ----------------------------------------------
+  /vms:
+    get:
+      operationId: listVMs
+      summary: List VMs across all "vm-*" namespaces.
+      x-required-permissions: [nova:vm:read]
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VMPage' }
+        '503':
+          description: KubeVirt not available
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    post:
+      operationId: createVM
+      summary: Create a VM.
+      x-required-permissions: [nova:vm:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VMCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/VM' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: KubeVirt not available
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /vms/{namespace}/{name}:
+    parameters:
+      - in: path
+        name: namespace
+        required: true
+        schema: { type: string }
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getVM
+      x-required-permissions: [nova:vm:read]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/VM' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchVM
+      x-required-permissions: [nova:vm:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VMPatchRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/VM' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vms/{namespace}/{name}/start:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: startVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/stop:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: stopVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/restart:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: restartVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/pause:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: pauseVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/unpause:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: unpauseVM
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/migrate:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    post:
+      operationId: migrateVM
+      summary: Live-migrate a VM. Returns 501 on single-node clusters.
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '202': { description: Accepted }
+        '501':
+          description: Not implemented (single-node cluster)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vms/{namespace}/{name}/console:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+      - in: query
+        name: kind
+        schema: { type: string, enum: [vnc, spice, serial] }
+    get:
+      operationId: getVMConsole
+      summary: Mint a short-lived WebSocket session for the VM's graphical console.
+      x-required-permissions: [nova:vm:read]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/VMConsoleSession' } } }
+        '409':
+          description: VM is not running
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vms/{namespace}/{name}/serial:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    get:
+      operationId: getVMSerial
+      x-required-permissions: [nova:vm:read]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/VMConsoleSession' } } }
+        '409':
+          description: VM is not running
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vm-templates:
+    get:
+      operationId: listVMTemplates
+      summary: List the curated VM template catalog.
+      x-required-permissions: [nova:vm:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/VMTemplate' }
+
+  /vm-snapshots:
+    get:
+      operationId: listVMSnapshots
+      x-required-permissions: [nova:vm:read]
+      parameters:
+        - in: query
+          name: namespace
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/VMSnapshot' }
+    post:
+      operationId: createVMSnapshot
+      x-required-permissions: [nova:vm:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VMSnapshotCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/VMSnapshot' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /vm-snapshots/{namespace}/{name}:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteVMSnapshot
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vm-restores:
+    get:
+      operationId: listVMRestores
+      x-required-permissions: [nova:vm:read]
+      parameters:
+        - in: query
+          name: namespace
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/VMRestore' }
+    post:
+      operationId: createVMRestore
+      x-required-permissions: [nova:vm:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VMRestoreCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/VMRestore' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /vm-restores/{namespace}/{name}:
+    parameters:
+      - { in: path, name: namespace, required: true, schema: { type: string } }
+      - { in: path, name: name, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteVMRestore
+      x-required-permissions: [nova:vm:write]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
 
 components:
   responses:
@@ -2712,6 +3649,50 @@ components:
           type: integer
           minimum: 1
           description: "Per-recipient leaky-bucket rate limit. Default 30."
+    NotificationEvent:
+      type: object
+      description: |
+        A unified notification event aggregated from Alertmanager,
+        the jobs subsystem, the audit log, or the system itself.
+        Per-user state (read/dismissed/snoozed) is embedded under
+        `userState` and is computed for the calling user at read time.
+      required: [id, source, sourceId, severity, title, createdAt, userState]
+      properties:
+        id:        { type: string, format: uuid }
+        tenantId:  { type: string }
+        source:
+          type: string
+          enum: [alertmanager, jobs, audit, system]
+        sourceId:  { type: string, description: "Stable per-source identifier (alert fingerprint, job_id, audit_id, ...)." }
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        title:     { type: string }
+        body:      { type: string }
+        link:      { type: string, description: "Relative path the UI should navigate to (e.g. /jobs/<id>)." }
+        createdAt: { type: string, format: date-time }
+        userState: { $ref: '#/components/schemas/NotificationUserState' }
+    NotificationUserState:
+      type: object
+      description: Per-user state for a notification.
+      required: [read, dismissed, snoozed]
+      properties:
+        read:         { type: boolean }
+        dismissed:    { type: boolean }
+        snoozed:      { type: boolean }
+        readAt:       { type: string, format: date-time }
+        dismissedAt:  { type: string, format: date-time }
+        snoozedUntil: { type: string, format: date-time }
+    NotificationEventList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/NotificationEvent' }
+        nextCursor:
+          type: string
+          description: Opaque cursor — pass back as `cursor=` to fetch the next page.
     Identity:
       type: object
       description: Authenticated principal as projected from a verified JWT.
@@ -3608,3 +4589,379 @@ components:
         protocolsStatus:
           type: array
           items: { $ref: '#/components/schemas/ProtocolStatus' }
+
+    Alert:
+      type: object
+      properties:
+        fingerprint: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+        annotations:
+          type: object
+          additionalProperties: { type: string }
+        startsAt:     { type: string }
+        endsAt:       { type: string }
+        updatedAt:    { type: string }
+        generatorURL: { type: string }
+        status:
+          type: object
+          properties:
+            state:       { type: string }
+            silencedBy:  { type: array, items: { type: string } }
+            inhibitedBy: { type: array, items: { type: string } }
+    SilenceMatcher:
+      type: object
+      required: [name, value, isRegex]
+      properties:
+        name:    { type: string }
+        value:   { type: string }
+        isRegex: { type: boolean }
+        isEqual: { type: boolean }
+    Silence:
+      type: object
+      required: [matchers, startsAt, endsAt, createdBy, comment]
+      properties:
+        id:        { type: string }
+        matchers:
+          type: array
+          items: { $ref: '#/components/schemas/SilenceMatcher' }
+        startsAt:  { type: string }
+        endsAt:    { type: string }
+        createdBy: { type: string }
+        comment:   { type: string }
+        status:
+          type: object
+          properties:
+            state: { type: string }
+    AlertReceiver:
+      type: object
+      properties:
+        name: { type: string }
+
+    LogStream:
+      type: object
+      description: 'Loki stream envelope; the inner data shape is opaque pass-through.'
+      additionalProperties: true
+
+    Session:
+      type: object
+      properties:
+        id:         { type: string }
+        username:   { type: string }
+        userId:     { type: string }
+        ipAddress:  { type: string }
+        start:      { type: integer, format: int64 }
+        lastAccess: { type: integer, format: int64 }
+        clients:
+          type: object
+          additionalProperties: { type: string }
+        type:
+          type: string
+          description: '"user" or "offline" — distinguishes login sessions from refresh-only offline sessions.'
+    LoginEvent:
+      type: object
+      properties:
+        time:      { type: integer, format: int64 }
+        type:      { type: string }
+        realmId:   { type: string }
+        clientId:  { type: string }
+        userId:    { type: string }
+        ipAddress: { type: string }
+        error:     { type: string }
+        details:
+          type: object
+          additionalProperties: { type: string }
+
+    SystemVersion:
+      type: object
+      properties:
+        goVersion: { type: string }
+        commit:    { type: string }
+        buildTime: { type: string }
+        module:    { type: string }
+        version:   { type: string }
+    SystemUpdate:
+      type: object
+      properties:
+        available:        { type: boolean }
+        reason:           { type: string }
+        currentVersion:   { type: string }
+        availableVersion: { type: string }
+        channel:          { type: string }
+        lastChecked:      { type: string, format: date-time }
+        status:
+          type: string
+          enum: [idle, checking, downloading, installed-pending-reboot]
+
+    WorkloadIndexEntry:
+      type: object
+      required: [name, chart, version, repoURL]
+      properties:
+        name:             { type: string, description: Stable identifier used as the indexName on install. }
+        displayName:      { type: string }
+        category:         { type: string }
+        description:      { type: string }
+        chart:            { type: string, description: Helm chart name. }
+        version:          { type: string, description: Pinned chart version. }
+        repoURL:          { type: string, format: uri }
+        appVersion:       { type: string }
+        icon:             { type: string }
+        homepage:         { type: string }
+        readmeURL:        { type: string }
+        defaultNamespace: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        defaultValues:
+          type: object
+          additionalProperties: true
+
+    WorkloadIndexEntryDetail:
+      allOf:
+        - $ref: '#/components/schemas/WorkloadIndexEntry'
+        - type: object
+          properties:
+            readme:       { type: string }
+            valuesSchema:
+              type: object
+              additionalProperties: true
+
+    WorkloadRelease:
+      type: object
+      required: [name, namespace, status]
+      properties:
+        name:        { type: string }
+        namespace:   { type: string }
+        indexName:   { type: string }
+        chart:       { type: string }
+        version:     { type: string }
+        appVersion:  { type: string }
+        status:      { type: string, description: Helm status (deployed, failed, pending-install, ...). }
+        revision:    { type: integer }
+        updated:     { type: string, format: date-time }
+        installedBy: { type: string }
+        notes:       { type: string }
+
+    WorkloadResourceRef:
+      type: object
+      required: [kind, name]
+      properties:
+        apiVersion: { type: string }
+        kind:       { type: string }
+        name:       { type: string }
+        namespace:  { type: string }
+
+    WorkloadPodInfo:
+      type: object
+      required: [name, phase]
+      properties:
+        name:     { type: string }
+        phase:    { type: string }
+        ready:    { type: boolean }
+        restarts: { type: integer }
+        containers:
+          type: array
+          items: { type: string }
+        nodeName: { type: string }
+
+    WorkloadReleaseDetail:
+      allOf:
+        - $ref: '#/components/schemas/WorkloadRelease'
+        - type: object
+          properties:
+            values:
+              type: object
+              additionalProperties: true
+            resources:
+              type: array
+              items: { $ref: '#/components/schemas/WorkloadResourceRef' }
+            pods:
+              type: array
+              items: { $ref: '#/components/schemas/WorkloadPodInfo' }
+
+    WorkloadEvent:
+      type: object
+      required: [type, reason, message, object]
+      properties:
+        type:      { type: string }
+        reason:    { type: string }
+        message:   { type: string }
+        object:    { type: string }
+        count:     { type: integer }
+        firstSeen: { type: string, format: date-time }
+        lastSeen:  { type: string, format: date-time }
+
+    WorkloadInstallRequest:
+      type: object
+      required: [indexName, releaseName]
+      properties:
+        indexName:   { type: string }
+        releaseName: { type: string, description: DNS-1123 release name (a-z0-9 plus '-'). }
+        valuesYAML:  { type: string }
+        namespace:   { type: string, description: Defaults to nova-app-<releaseName>. }
+
+    WorkloadUpgradeRequest:
+      type: object
+      properties:
+        version:    { type: string }
+        valuesYAML: { type: string }
+
+    # ---- KubeVirt VM management schemas ------------------------------------
+    VMDisk:
+      type: object
+      required: [name, sizeGB, source]
+      properties:
+        name:         { type: string }
+        sizeGB:       { type: integer, minimum: 1 }
+        source:       { type: string, description: 'template:<id> | blank | url:<https://…>' }
+        boot:         { type: boolean }
+        bus:          { type: string, enum: [virtio, sata, scsi] }
+        storageClass: { type: string }
+    VMNetwork:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, description: 'pod | multus:<network-attachment>' }
+    VMCondition:
+      type: object
+      required: [type, status]
+      properties:
+        type:    { type: string }
+        status:  { type: string }
+        reason:  { type: string }
+        message: { type: string }
+    VMCloudInit:
+      type: object
+      properties:
+        user:     { type: string }
+        password: { type: string }
+        sshKeys:
+          type: array
+          items: { type: string }
+        hostname: { type: string }
+        userData: { type: string, description: Raw cloud-init NoCloud user-data; if set, overrides the other fields. }
+    VM:
+      type: object
+      required: [namespace, name, cpu, memoryMB, running, phase]
+      properties:
+        namespace: { type: string }
+        name:      { type: string }
+        uid:       { type: string }
+        cpu:       { type: integer }
+        memoryMB:  { type: integer }
+        running:   { type: boolean }
+        phase:     { type: string, enum: [Unknown, Pending, Scheduling, Scheduled, Running, Succeeded, Failed, Paused, Stopped] }
+        ip:        { type: string }
+        nodeName:  { type: string }
+        disks:
+          type: array
+          items: { $ref: '#/components/schemas/VMDisk' }
+        networks:
+          type: array
+          items: { $ref: '#/components/schemas/VMNetwork' }
+        labels:      { type: object, additionalProperties: { type: string } }
+        annotations: { type: object, additionalProperties: { type: string } }
+        createdAt:   { type: string, format: date-time }
+        conditions:
+          type: array
+          items: { $ref: '#/components/schemas/VMCondition' }
+        templateID: { type: string }
+    VMPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/VM' }
+        nextCursor: { type: string }
+    VMCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        namespace:     { type: string, description: Defaults to vm-<name>. }
+        name:          { type: string }
+        templateID:    { type: string }
+        cpu:           { type: integer, minimum: 1, maximum: 64 }
+        memoryMB:      { type: integer, minimum: 1, maximum: 262144 }
+        disks:
+          type: array
+          items: { $ref: '#/components/schemas/VMDisk' }
+        networks:
+          type: array
+          items: { $ref: '#/components/schemas/VMNetwork' }
+        cloudInit:     { $ref: '#/components/schemas/VMCloudInit' }
+        startOnCreate: { type: boolean }
+        labels:        { type: object, additionalProperties: { type: string } }
+    VMPatchRequest:
+      type: object
+      properties:
+        cpu:      { type: integer, minimum: 1, maximum: 64 }
+        memoryMB: { type: integer, minimum: 1, maximum: 262144 }
+        disks:
+          type: array
+          items: { $ref: '#/components/schemas/VMDisk' }
+        labels: { type: object, additionalProperties: { type: string } }
+    VMTemplate:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:                       { type: string }
+        displayName:              { type: string }
+        os:                       { type: string }
+        family:                   { type: string }
+        version:                  { type: string }
+        arch:                     { type: string }
+        imageURL:                 { type: string }
+        imageFormat:              { type: string }
+        defaultCPU:               { type: integer }
+        defaultMemoryMB:          { type: integer }
+        defaultDiskGB:            { type: integer }
+        cloudInitFriendly:        { type: boolean }
+        guestUser:                { type: string }
+        requiresUserSuppliedISO:  { type: boolean }
+        requiresLicenseKey:       { type: boolean }
+        description:              { type: string }
+    VMSnapshot:
+      type: object
+      required: [namespace, name, vmName]
+      properties:
+        namespace:  { type: string }
+        name:       { type: string }
+        vmName:     { type: string }
+        phase:      { type: string }
+        readyToUse: { type: boolean }
+        createdAt:  { type: string, format: date-time }
+    VMSnapshotCreateRequest:
+      type: object
+      required: [namespace, name, vmName]
+      properties:
+        namespace: { type: string }
+        name:      { type: string }
+        vmName:    { type: string }
+    VMRestore:
+      type: object
+      required: [namespace, name, vmName, snapshotName]
+      properties:
+        namespace:    { type: string }
+        name:         { type: string }
+        vmName:       { type: string }
+        snapshotName: { type: string }
+        complete:     { type: boolean }
+    VMRestoreCreateRequest:
+      type: object
+      required: [namespace, name, vmName, snapshotName]
+      properties:
+        namespace:    { type: string }
+        name:         { type: string }
+        vmName:       { type: string }
+        snapshotName: { type: string }
+    VMConsoleSession:
+      type: object
+      required: [wsUrl, token, expiresAt, kind]
+      properties:
+        wsUrl:     { type: string }
+        token:     { type: string }
+        expiresAt: { type: string, format: date-time }
+        kind:      { type: string, enum: [vnc, spice, serial] }

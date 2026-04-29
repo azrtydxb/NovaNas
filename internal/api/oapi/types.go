@@ -313,6 +313,51 @@ func (e NetworkInterfaceConfigDhcp) Valid() bool {
 	}
 }
 
+// Defines values for NotificationEventSeverity.
+const (
+	NotificationEventSeverityCritical NotificationEventSeverity = "critical"
+	NotificationEventSeverityInfo     NotificationEventSeverity = "info"
+	NotificationEventSeverityWarning  NotificationEventSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the NotificationEventSeverity enum.
+func (e NotificationEventSeverity) Valid() bool {
+	switch e {
+	case NotificationEventSeverityCritical:
+		return true
+	case NotificationEventSeverityInfo:
+		return true
+	case NotificationEventSeverityWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationEventSource.
+const (
+	NotificationEventSourceAlertmanager NotificationEventSource = "alertmanager"
+	NotificationEventSourceAudit        NotificationEventSource = "audit"
+	NotificationEventSourceJobs         NotificationEventSource = "jobs"
+	NotificationEventSourceSystem       NotificationEventSource = "system"
+)
+
+// Valid indicates whether the value is a known member of the NotificationEventSource enum.
+func (e NotificationEventSource) Valid() bool {
+	switch e {
+	case NotificationEventSourceAlertmanager:
+		return true
+	case NotificationEventSourceAudit:
+		return true
+	case NotificationEventSourceJobs:
+		return true
+	case NotificationEventSourceSystem:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NvmeofDHChapConfigDhgroup.
 const (
 	Ffdhe2048   NvmeofDHChapConfigDhgroup = "ffdhe2048"
@@ -583,6 +628,111 @@ func (e ScrubPolicyPriority) Valid() bool {
 	}
 }
 
+// Defines values for SystemUpdateStatus.
+const (
+	Checking               SystemUpdateStatus = "checking"
+	Downloading            SystemUpdateStatus = "downloading"
+	Idle                   SystemUpdateStatus = "idle"
+	InstalledPendingReboot SystemUpdateStatus = "installed-pending-reboot"
+)
+
+// Valid indicates whether the value is a known member of the SystemUpdateStatus enum.
+func (e SystemUpdateStatus) Valid() bool {
+	switch e {
+	case Checking:
+		return true
+	case Downloading:
+		return true
+	case Idle:
+		return true
+	case InstalledPendingReboot:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VMPhase.
+const (
+	VMPhaseFailed     VMPhase = "Failed"
+	VMPhasePaused     VMPhase = "Paused"
+	VMPhasePending    VMPhase = "Pending"
+	VMPhaseRunning    VMPhase = "Running"
+	VMPhaseScheduled  VMPhase = "Scheduled"
+	VMPhaseScheduling VMPhase = "Scheduling"
+	VMPhaseStopped    VMPhase = "Stopped"
+	VMPhaseSucceeded  VMPhase = "Succeeded"
+	VMPhaseUnknown    VMPhase = "Unknown"
+)
+
+// Valid indicates whether the value is a known member of the VMPhase enum.
+func (e VMPhase) Valid() bool {
+	switch e {
+	case VMPhaseFailed:
+		return true
+	case VMPhasePaused:
+		return true
+	case VMPhasePending:
+		return true
+	case VMPhaseRunning:
+		return true
+	case VMPhaseScheduled:
+		return true
+	case VMPhaseScheduling:
+		return true
+	case VMPhaseStopped:
+		return true
+	case VMPhaseSucceeded:
+		return true
+	case VMPhaseUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VMConsoleSessionKind.
+const (
+	Serial VMConsoleSessionKind = "serial"
+	Spice  VMConsoleSessionKind = "spice"
+	Vnc    VMConsoleSessionKind = "vnc"
+)
+
+// Valid indicates whether the value is a known member of the VMConsoleSessionKind enum.
+func (e VMConsoleSessionKind) Valid() bool {
+	switch e {
+	case Serial:
+		return true
+	case Spice:
+		return true
+	case Vnc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VMDiskBus.
+const (
+	Sata   VMDiskBus = "sata"
+	Scsi   VMDiskBus = "scsi"
+	Virtio VMDiskBus = "virtio"
+)
+
+// Valid indicates whether the value is a known member of the VMDiskBus enum.
+func (e VMDiskBus) Valid() bool {
+	switch e {
+	case Sata:
+		return true
+	case Scsi:
+		return true
+	case Virtio:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VdevSpecType.
 const (
 	VdevSpecTypeDisk   VdevSpecType = "disk"
@@ -669,32 +819,98 @@ func (e ExportAuditParamsOutcome) Valid() bool {
 
 // Defines values for ListJobsParamsState.
 const (
-	ListJobsParamsStateCancelled   ListJobsParamsState = "cancelled"
-	ListJobsParamsStateFailed      ListJobsParamsState = "failed"
-	ListJobsParamsStateInterrupted ListJobsParamsState = "interrupted"
-	ListJobsParamsStateQueued      ListJobsParamsState = "queued"
-	ListJobsParamsStateRunning     ListJobsParamsState = "running"
-	ListJobsParamsStateSucceeded   ListJobsParamsState = "succeeded"
+	Cancelled   ListJobsParamsState = "cancelled"
+	Failed      ListJobsParamsState = "failed"
+	Interrupted ListJobsParamsState = "interrupted"
+	Queued      ListJobsParamsState = "queued"
+	Running     ListJobsParamsState = "running"
+	Succeeded   ListJobsParamsState = "succeeded"
 )
 
 // Valid indicates whether the value is a known member of the ListJobsParamsState enum.
 func (e ListJobsParamsState) Valid() bool {
 	switch e {
-	case ListJobsParamsStateCancelled:
+	case Cancelled:
 		return true
-	case ListJobsParamsStateFailed:
+	case Failed:
 		return true
-	case ListJobsParamsStateInterrupted:
+	case Interrupted:
 		return true
-	case ListJobsParamsStateQueued:
+	case Queued:
 		return true
-	case ListJobsParamsStateRunning:
+	case Running:
 		return true
-	case ListJobsParamsStateSucceeded:
+	case Succeeded:
 		return true
 	default:
 		return false
 	}
+}
+
+// Defines values for ListNotificationEventsParamsSeverity.
+const (
+	ListNotificationEventsParamsSeverityCritical ListNotificationEventsParamsSeverity = "critical"
+	ListNotificationEventsParamsSeverityInfo     ListNotificationEventsParamsSeverity = "info"
+	ListNotificationEventsParamsSeverityWarning  ListNotificationEventsParamsSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the ListNotificationEventsParamsSeverity enum.
+func (e ListNotificationEventsParamsSeverity) Valid() bool {
+	switch e {
+	case ListNotificationEventsParamsSeverityCritical:
+		return true
+	case ListNotificationEventsParamsSeverityInfo:
+		return true
+	case ListNotificationEventsParamsSeverityWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListNotificationEventsParamsSource.
+const (
+	ListNotificationEventsParamsSourceAlertmanager ListNotificationEventsParamsSource = "alertmanager"
+	ListNotificationEventsParamsSourceAudit        ListNotificationEventsParamsSource = "audit"
+	ListNotificationEventsParamsSourceJobs         ListNotificationEventsParamsSource = "jobs"
+	ListNotificationEventsParamsSourceSystem       ListNotificationEventsParamsSource = "system"
+)
+
+// Valid indicates whether the value is a known member of the ListNotificationEventsParamsSource enum.
+func (e ListNotificationEventsParamsSource) Valid() bool {
+	switch e {
+	case ListNotificationEventsParamsSourceAlertmanager:
+		return true
+	case ListNotificationEventsParamsSourceAudit:
+		return true
+	case ListNotificationEventsParamsSourceJobs:
+		return true
+	case ListNotificationEventsParamsSourceSystem:
+		return true
+	default:
+		return false
+	}
+}
+
+// Alert defines model for Alert.
+type Alert struct {
+	Annotations  *map[string]string `json:"annotations,omitempty"`
+	EndsAt       *string            `json:"endsAt,omitempty"`
+	Fingerprint  *string            `json:"fingerprint,omitempty"`
+	GeneratorURL *string            `json:"generatorURL,omitempty"`
+	Labels       *map[string]string `json:"labels,omitempty"`
+	StartsAt     *string            `json:"startsAt,omitempty"`
+	Status       *struct {
+		InhibitedBy *[]string `json:"inhibitedBy,omitempty"`
+		SilencedBy  *[]string `json:"silencedBy,omitempty"`
+		State       *string   `json:"state,omitempty"`
+	} `json:"status,omitempty"`
+	UpdatedAt *string `json:"updatedAt,omitempty"`
+}
+
+// AlertReceiver defines model for AlertReceiver.
+type AlertReceiver struct {
+	Name *string `json:"name,omitempty"`
 }
 
 // AuditEvent defines model for AuditEvent.
@@ -1079,6 +1295,18 @@ type LoadKeyRequest struct {
 	Recursive   *bool   `json:"recursive,omitempty"`
 }
 
+// LoginEvent defines model for LoginEvent.
+type LoginEvent struct {
+	ClientId  *string            `json:"clientId,omitempty"`
+	Details   *map[string]string `json:"details,omitempty"`
+	Error     *string            `json:"error,omitempty"`
+	IpAddress *string            `json:"ipAddress,omitempty"`
+	RealmId   *string            `json:"realmId,omitempty"`
+	Time      *int64             `json:"time,omitempty"`
+	Type      *string            `json:"type,omitempty"`
+	UserId    *string            `json:"userId,omitempty"`
+}
+
 // MetadataPatch defines model for MetadataPatch.
 type MetadataPatch struct {
 	Description *string            `json:"description,omitempty"`
@@ -1165,6 +1393,53 @@ type NfsExport struct {
 
 	// Path Absolute host path
 	Path string `json:"path"`
+}
+
+// NotificationEvent A unified notification event aggregated from Alertmanager,
+// the jobs subsystem, the audit log, or the system itself.
+// Per-user state (read/dismissed/snoozed) is embedded under
+// `userState` and is computed for the calling user at read time.
+type NotificationEvent struct {
+	Body      *string            `json:"body,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Link Relative path the UI should navigate to (e.g. /jobs/<id>).
+	Link     *string                   `json:"link,omitempty"`
+	Severity NotificationEventSeverity `json:"severity"`
+	Source   NotificationEventSource   `json:"source"`
+
+	// SourceId Stable per-source identifier (alert fingerprint, job_id, audit_id, ...).
+	SourceId string  `json:"sourceId"`
+	TenantId *string `json:"tenantId,omitempty"`
+	Title    string  `json:"title"`
+
+	// UserState Per-user state for a notification.
+	UserState NotificationUserState `json:"userState"`
+}
+
+// NotificationEventSeverity defines model for NotificationEvent.Severity.
+type NotificationEventSeverity string
+
+// NotificationEventSource defines model for NotificationEvent.Source.
+type NotificationEventSource string
+
+// NotificationEventList defines model for NotificationEventList.
+type NotificationEventList struct {
+	Items []NotificationEvent `json:"items"`
+
+	// NextCursor Opaque cursor — pass back as `cursor=` to fetch the next page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// NotificationUserState Per-user state for a notification.
+type NotificationUserState struct {
+	Dismissed    bool       `json:"dismissed"`
+	DismissedAt  *time.Time `json:"dismissedAt,omitempty"`
+	Read         bool       `json:"read"`
+	ReadAt       *time.Time `json:"readAt,omitempty"`
+	Snoozed      bool       `json:"snoozed"`
+	SnoozedUntil *time.Time `json:"snoozedUntil,omitempty"`
 }
 
 // NvmeofDHChapConfig Per-host DH-HMAC-CHAP (NVMe TP4022) configuration. Secrets must be in "DHHC-1:NN:..." form. Empty fields are left unchanged on PATCH-style updates.
@@ -1608,6 +1883,41 @@ type ScrubPolicy struct {
 // ScrubPolicyPriority defines model for ScrubPolicy.Priority.
 type ScrubPolicyPriority string
 
+// Session defines model for Session.
+type Session struct {
+	Clients    *map[string]string `json:"clients,omitempty"`
+	Id         *string            `json:"id,omitempty"`
+	IpAddress  *string            `json:"ipAddress,omitempty"`
+	LastAccess *int64             `json:"lastAccess,omitempty"`
+	Start      *int64             `json:"start,omitempty"`
+
+	// Type "user" or "offline" — distinguishes login sessions from refresh-only offline sessions.
+	Type     *string `json:"type,omitempty"`
+	UserId   *string `json:"userId,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
+// Silence defines model for Silence.
+type Silence struct {
+	Comment   string           `json:"comment"`
+	CreatedBy string           `json:"createdBy"`
+	EndsAt    string           `json:"endsAt"`
+	Id        *string          `json:"id,omitempty"`
+	Matchers  []SilenceMatcher `json:"matchers"`
+	StartsAt  string           `json:"startsAt"`
+	Status    *struct {
+		State *string `json:"state,omitempty"`
+	} `json:"status,omitempty"`
+}
+
+// SilenceMatcher defines model for SilenceMatcher.
+type SilenceMatcher struct {
+	IsEqual *bool  `json:"isEqual,omitempty"`
+	IsRegex bool   `json:"isRegex"`
+	Name    string `json:"name"`
+	Value   string `json:"value"`
+}
+
 // SmartAttribute defines model for SmartAttribute.
 type SmartAttribute struct {
 	Id         *int    `json:"id,omitempty"`
@@ -1739,6 +2049,189 @@ type SystemTimezoneRequest struct {
 	Timezone string `json:"timezone"`
 }
 
+// SystemUpdate defines model for SystemUpdate.
+type SystemUpdate struct {
+	Available        *bool               `json:"available,omitempty"`
+	AvailableVersion *string             `json:"availableVersion,omitempty"`
+	Channel          *string             `json:"channel,omitempty"`
+	CurrentVersion   *string             `json:"currentVersion,omitempty"`
+	LastChecked      *time.Time          `json:"lastChecked,omitempty"`
+	Reason           *string             `json:"reason,omitempty"`
+	Status           *SystemUpdateStatus `json:"status,omitempty"`
+}
+
+// SystemUpdateStatus defines model for SystemUpdate.Status.
+type SystemUpdateStatus string
+
+// SystemVersion defines model for SystemVersion.
+type SystemVersion struct {
+	BuildTime *string `json:"buildTime,omitempty"`
+	Commit    *string `json:"commit,omitempty"`
+	GoVersion *string `json:"goVersion,omitempty"`
+	Module    *string `json:"module,omitempty"`
+	Version   *string `json:"version,omitempty"`
+}
+
+// VM defines model for VM.
+type VM struct {
+	Annotations *map[string]string `json:"annotations,omitempty"`
+	Conditions  *[]VMCondition     `json:"conditions,omitempty"`
+	Cpu         int                `json:"cpu"`
+	CreatedAt   *time.Time         `json:"createdAt,omitempty"`
+	Disks       *[]VMDisk          `json:"disks,omitempty"`
+	Ip          *string            `json:"ip,omitempty"`
+	Labels      *map[string]string `json:"labels,omitempty"`
+	MemoryMB    int                `json:"memoryMB"`
+	Name        string             `json:"name"`
+	Namespace   string             `json:"namespace"`
+	Networks    *[]VMNetwork       `json:"networks,omitempty"`
+	NodeName    *string            `json:"nodeName,omitempty"`
+	Phase       VMPhase            `json:"phase"`
+	Running     bool               `json:"running"`
+	TemplateID  *string            `json:"templateID,omitempty"`
+	Uid         *string            `json:"uid,omitempty"`
+}
+
+// VMPhase defines model for VM.Phase.
+type VMPhase string
+
+// VMCloudInit defines model for VMCloudInit.
+type VMCloudInit struct {
+	Hostname *string   `json:"hostname,omitempty"`
+	Password *string   `json:"password,omitempty"`
+	SshKeys  *[]string `json:"sshKeys,omitempty"`
+	User     *string   `json:"user,omitempty"`
+
+	// UserData Raw cloud-init NoCloud user-data; if set
+	UserData *string `json:"userData,omitempty"`
+}
+
+// VMCondition defines model for VMCondition.
+type VMCondition struct {
+	Message *string `json:"message,omitempty"`
+	Reason  *string `json:"reason,omitempty"`
+	Status  string  `json:"status"`
+	Type    string  `json:"type"`
+}
+
+// VMConsoleSession defines model for VMConsoleSession.
+type VMConsoleSession struct {
+	ExpiresAt time.Time            `json:"expiresAt"`
+	Kind      VMConsoleSessionKind `json:"kind"`
+	Token     string               `json:"token"`
+	WsUrl     string               `json:"wsUrl"`
+}
+
+// VMConsoleSessionKind defines model for VMConsoleSession.Kind.
+type VMConsoleSessionKind string
+
+// VMCreateRequest defines model for VMCreateRequest.
+type VMCreateRequest struct {
+	CloudInit *VMCloudInit       `json:"cloudInit,omitempty"`
+	Cpu       *int               `json:"cpu,omitempty"`
+	Disks     *[]VMDisk          `json:"disks,omitempty"`
+	Labels    *map[string]string `json:"labels,omitempty"`
+	MemoryMB  *int               `json:"memoryMB,omitempty"`
+	Name      string             `json:"name"`
+
+	// Namespace Defaults to vm-<name>.
+	Namespace     *string      `json:"namespace,omitempty"`
+	Networks      *[]VMNetwork `json:"networks,omitempty"`
+	StartOnCreate *bool        `json:"startOnCreate,omitempty"`
+	TemplateID    *string      `json:"templateID,omitempty"`
+}
+
+// VMDisk defines model for VMDisk.
+type VMDisk struct {
+	Boot   *bool      `json:"boot,omitempty"`
+	Bus    *VMDiskBus `json:"bus,omitempty"`
+	Name   string     `json:"name"`
+	SizeGB int        `json:"sizeGB"`
+
+	// Source template:<id> | blank | url:<https://…>
+	Source       string  `json:"source"`
+	StorageClass *string `json:"storageClass,omitempty"`
+}
+
+// VMDiskBus defines model for VMDisk.Bus.
+type VMDiskBus string
+
+// VMNetwork defines model for VMNetwork.
+type VMNetwork struct {
+	Name string `json:"name"`
+
+	// Type pod | multus:<network-attachment>
+	Type string `json:"type"`
+}
+
+// VMPage defines model for VMPage.
+type VMPage struct {
+	Items      []VM    `json:"items"`
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// VMPatchRequest defines model for VMPatchRequest.
+type VMPatchRequest struct {
+	Cpu      *int               `json:"cpu,omitempty"`
+	Disks    *[]VMDisk          `json:"disks,omitempty"`
+	Labels   *map[string]string `json:"labels,omitempty"`
+	MemoryMB *int               `json:"memoryMB,omitempty"`
+}
+
+// VMRestore defines model for VMRestore.
+type VMRestore struct {
+	Complete     *bool  `json:"complete,omitempty"`
+	Name         string `json:"name"`
+	Namespace    string `json:"namespace"`
+	SnapshotName string `json:"snapshotName"`
+	VmName       string `json:"vmName"`
+}
+
+// VMRestoreCreateRequest defines model for VMRestoreCreateRequest.
+type VMRestoreCreateRequest struct {
+	Name         string `json:"name"`
+	Namespace    string `json:"namespace"`
+	SnapshotName string `json:"snapshotName"`
+	VmName       string `json:"vmName"`
+}
+
+// VMSnapshot defines model for VMSnapshot.
+type VMSnapshot struct {
+	CreatedAt  *time.Time `json:"createdAt,omitempty"`
+	Name       string     `json:"name"`
+	Namespace  string     `json:"namespace"`
+	Phase      *string    `json:"phase,omitempty"`
+	ReadyToUse *bool      `json:"readyToUse,omitempty"`
+	VmName     string     `json:"vmName"`
+}
+
+// VMSnapshotCreateRequest defines model for VMSnapshotCreateRequest.
+type VMSnapshotCreateRequest struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	VmName    string `json:"vmName"`
+}
+
+// VMTemplate defines model for VMTemplate.
+type VMTemplate struct {
+	Arch                    *string `json:"arch,omitempty"`
+	CloudInitFriendly       *bool   `json:"cloudInitFriendly,omitempty"`
+	DefaultCPU              *int    `json:"defaultCPU,omitempty"`
+	DefaultDiskGB           *int    `json:"defaultDiskGB,omitempty"`
+	DefaultMemoryMB         *int    `json:"defaultMemoryMB,omitempty"`
+	Description             *string `json:"description,omitempty"`
+	DisplayName             string  `json:"displayName"`
+	Family                  *string `json:"family,omitempty"`
+	GuestUser               *string `json:"guestUser,omitempty"`
+	Id                      string  `json:"id"`
+	ImageFormat             *string `json:"imageFormat,omitempty"`
+	ImageURL                *string `json:"imageURL,omitempty"`
+	Os                      *string `json:"os,omitempty"`
+	RequiresLicenseKey      *bool   `json:"requiresLicenseKey,omitempty"`
+	RequiresUserSuppliedISO *bool   `json:"requiresUserSuppliedISO,omitempty"`
+	Version                 *string `json:"version,omitempty"`
+}
+
 // Vdev defines model for Vdev.
 type Vdev struct {
 	ChecksumErrors *int    `json:"checksumErrors,omitempty"`
@@ -1758,6 +2251,140 @@ type VdevSpec struct {
 
 // VdevSpecType defines model for VdevSpec.Type.
 type VdevSpecType string
+
+// WorkloadEvent defines model for WorkloadEvent.
+type WorkloadEvent struct {
+	Count     *int       `json:"count,omitempty"`
+	FirstSeen *time.Time `json:"firstSeen,omitempty"`
+	LastSeen  *time.Time `json:"lastSeen,omitempty"`
+	Message   string     `json:"message"`
+	Object    string     `json:"object"`
+	Reason    string     `json:"reason"`
+	Type      string     `json:"type"`
+}
+
+// WorkloadIndexEntry defines model for WorkloadIndexEntry.
+type WorkloadIndexEntry struct {
+	AppVersion *string `json:"appVersion,omitempty"`
+	Category   *string `json:"category,omitempty"`
+
+	// Chart Helm chart name.
+	Chart            string                  `json:"chart"`
+	DefaultNamespace *string                 `json:"defaultNamespace,omitempty"`
+	DefaultValues    *map[string]interface{} `json:"defaultValues,omitempty"`
+	Description      *string                 `json:"description,omitempty"`
+	DisplayName      *string                 `json:"displayName,omitempty"`
+	Homepage         *string                 `json:"homepage,omitempty"`
+	Icon             *string                 `json:"icon,omitempty"`
+
+	// Name Stable identifier used as the indexName on install.
+	Name        string    `json:"name"`
+	Permissions *[]string `json:"permissions,omitempty"`
+	ReadmeURL   *string   `json:"readmeURL,omitempty"`
+	RepoURL     string    `json:"repoURL"`
+
+	// Version Pinned chart version.
+	Version string `json:"version"`
+}
+
+// WorkloadIndexEntryDetail defines model for WorkloadIndexEntryDetail.
+type WorkloadIndexEntryDetail struct {
+	AppVersion *string `json:"appVersion,omitempty"`
+	Category   *string `json:"category,omitempty"`
+
+	// Chart Helm chart name.
+	Chart            string                  `json:"chart"`
+	DefaultNamespace *string                 `json:"defaultNamespace,omitempty"`
+	DefaultValues    *map[string]interface{} `json:"defaultValues,omitempty"`
+	Description      *string                 `json:"description,omitempty"`
+	DisplayName      *string                 `json:"displayName,omitempty"`
+	Homepage         *string                 `json:"homepage,omitempty"`
+	Icon             *string                 `json:"icon,omitempty"`
+
+	// Name Stable identifier used as the indexName on install.
+	Name         string                  `json:"name"`
+	Permissions  *[]string               `json:"permissions,omitempty"`
+	Readme       *string                 `json:"readme,omitempty"`
+	ReadmeURL    *string                 `json:"readmeURL,omitempty"`
+	RepoURL      string                  `json:"repoURL"`
+	ValuesSchema *map[string]interface{} `json:"valuesSchema,omitempty"`
+
+	// Version Pinned chart version.
+	Version string `json:"version"`
+}
+
+// WorkloadInstallRequest defines model for WorkloadInstallRequest.
+type WorkloadInstallRequest struct {
+	IndexName string `json:"indexName"`
+
+	// Namespace Defaults to nova-app-<releaseName>.
+	Namespace *string `json:"namespace,omitempty"`
+
+	// ReleaseName DNS-1123 release name (a-z0-9 plus '-').
+	ReleaseName string  `json:"releaseName"`
+	ValuesYAML  *string `json:"valuesYAML,omitempty"`
+}
+
+// WorkloadPodInfo defines model for WorkloadPodInfo.
+type WorkloadPodInfo struct {
+	Containers *[]string `json:"containers,omitempty"`
+	Name       string    `json:"name"`
+	NodeName   *string   `json:"nodeName,omitempty"`
+	Phase      string    `json:"phase"`
+	Ready      *bool     `json:"ready,omitempty"`
+	Restarts   *int      `json:"restarts,omitempty"`
+}
+
+// WorkloadRelease defines model for WorkloadRelease.
+type WorkloadRelease struct {
+	AppVersion  *string `json:"appVersion,omitempty"`
+	Chart       *string `json:"chart,omitempty"`
+	IndexName   *string `json:"indexName,omitempty"`
+	InstalledBy *string `json:"installedBy,omitempty"`
+	Name        string  `json:"name"`
+	Namespace   string  `json:"namespace"`
+	Notes       *string `json:"notes,omitempty"`
+	Revision    *int    `json:"revision,omitempty"`
+
+	// Status Helm status (deployed
+	Status  string     `json:"status"`
+	Updated *time.Time `json:"updated,omitempty"`
+	Version *string    `json:"version,omitempty"`
+}
+
+// WorkloadReleaseDetail defines model for WorkloadReleaseDetail.
+type WorkloadReleaseDetail struct {
+	AppVersion  *string                `json:"appVersion,omitempty"`
+	Chart       *string                `json:"chart,omitempty"`
+	IndexName   *string                `json:"indexName,omitempty"`
+	InstalledBy *string                `json:"installedBy,omitempty"`
+	Name        string                 `json:"name"`
+	Namespace   string                 `json:"namespace"`
+	Notes       *string                `json:"notes,omitempty"`
+	Pods        *[]WorkloadPodInfo     `json:"pods,omitempty"`
+	Resources   *[]WorkloadResourceRef `json:"resources,omitempty"`
+	Revision    *int                   `json:"revision,omitempty"`
+
+	// Status Helm status (deployed
+	Status  string                  `json:"status"`
+	Updated *time.Time              `json:"updated,omitempty"`
+	Values  *map[string]interface{} `json:"values,omitempty"`
+	Version *string                 `json:"version,omitempty"`
+}
+
+// WorkloadResourceRef defines model for WorkloadResourceRef.
+type WorkloadResourceRef struct {
+	ApiVersion *string `json:"apiVersion,omitempty"`
+	Kind       string  `json:"kind"`
+	Name       string  `json:"name"`
+	Namespace  *string `json:"namespace,omitempty"`
+}
+
+// WorkloadUpgradeRequest defines model for WorkloadUpgradeRequest.
+type WorkloadUpgradeRequest struct {
+	ValuesYAML *string `json:"valuesYAML,omitempty"`
+	Version    *string `json:"version,omitempty"`
+}
 
 // Accepted defines model for Accepted.
 type Accepted struct {
@@ -1887,6 +2514,19 @@ type ListJobsParams struct {
 // ListJobsParamsState defines parameters for ListJobs.
 type ListJobsParamsState string
 
+// QueryLogsRangeParams defines parameters for QueryLogsRange.
+type QueryLogsRangeParams struct {
+	Query string  `form:"query" json:"query"`
+	Start *string `form:"start,omitempty" json:"start,omitempty"`
+	End   *string `form:"end,omitempty" json:"end,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// QueryLogsInstantParams defines parameters for QueryLogsInstant.
+type QueryLogsInstantParams struct {
+	Query string `form:"query" json:"query"`
+}
+
 // ApplyNetworkBondParams defines parameters for ApplyNetworkBond.
 type ApplyNetworkBondParams struct {
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
@@ -1912,6 +2552,31 @@ type NetworkReloadParams struct {
 // ApplyNetworkVLANParams defines parameters for ApplyNetworkVLAN.
 type ApplyNetworkVLANParams struct {
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// ListNotificationEventsParams defines parameters for ListNotificationEvents.
+type ListNotificationEventsParams struct {
+	Severity         *ListNotificationEventsParamsSeverity `form:"severity,omitempty" json:"severity,omitempty"`
+	Source           *ListNotificationEventsParamsSource   `form:"source,omitempty" json:"source,omitempty"`
+	Unread           *bool                                 `form:"unread,omitempty" json:"unread,omitempty"`
+	IncludeDismissed *bool                                 `form:"includeDismissed,omitempty" json:"includeDismissed,omitempty"`
+	IncludeSnoozed   *bool                                 `form:"includeSnoozed,omitempty" json:"includeSnoozed,omitempty"`
+	OnlySnoozed      *bool                                 `form:"onlySnoozed,omitempty" json:"onlySnoozed,omitempty"`
+	Limit            *int                                  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque pagination cursor returned as `nextCursor` in the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListNotificationEventsParamsSeverity defines parameters for ListNotificationEvents.
+type ListNotificationEventsParamsSeverity string
+
+// ListNotificationEventsParamsSource defines parameters for ListNotificationEvents.
+type ListNotificationEventsParamsSource string
+
+// SnoozeNotificationJSONBody defines parameters for SnoozeNotification.
+type SnoozeNotificationJSONBody struct {
+	Until time.Time `json:"until"`
 }
 
 // SendSMTPTestJSONBody defines parameters for SendSMTPTest.
@@ -1993,6 +2658,47 @@ type SystemShutdownParams struct {
 	DelaySec *int `form:"delaySec,omitempty" json:"delaySec,omitempty"`
 }
 
+// ListVMRestoresParams defines parameters for ListVMRestores.
+type ListVMRestoresParams struct {
+	Namespace *string `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListVMSnapshotsParams defines parameters for ListVMSnapshots.
+type ListVMSnapshotsParams struct {
+	Namespace *string `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListVMsParams defines parameters for ListVMs.
+type ListVMsParams struct {
+	Cursor   *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	PageSize *int    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+}
+
+// GetVMConsoleParams defines parameters for GetVMConsole.
+type GetVMConsoleParams struct {
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// StreamWorkloadLogsParams defines parameters for StreamWorkloadLogs.
+type StreamWorkloadLogsParams struct {
+	Pod          *string `form:"pod,omitempty" json:"pod,omitempty"`
+	Container    *string `form:"container,omitempty" json:"container,omitempty"`
+	Follow       *bool   `form:"follow,omitempty" json:"follow,omitempty"`
+	Tail         *int    `form:"tail,omitempty" json:"tail,omitempty"`
+	SinceSeconds *int    `form:"sinceSeconds,omitempty" json:"sinceSeconds,omitempty"`
+	Timestamps   *bool   `form:"timestamps,omitempty" json:"timestamps,omitempty"`
+	Previous     *bool   `form:"previous,omitempty" json:"previous,omitempty"`
+}
+
+// RollbackWorkloadJSONBody defines parameters for RollbackWorkload.
+type RollbackWorkloadJSONBody struct {
+	// Revision Helm revision to roll back to. Defaults to 1.
+	Revision *int `json:"revision,omitempty"`
+}
+
+// CreateAlertSilenceJSONRequestBody defines body for CreateAlertSilence for application/json ContentType.
+type CreateAlertSilenceJSONRequestBody = Silence
+
 // CreateDatasetJSONRequestBody defines body for CreateDataset for application/json ContentType.
 type CreateDatasetJSONRequestBody = DatasetCreateSpec
 
@@ -2073,6 +2779,9 @@ type CreateNfsExportJSONRequestBody = NfsExport
 
 // UpdateNfsExportJSONRequestBody defines body for UpdateNfsExport for application/json ContentType.
 type UpdateNfsExportJSONRequestBody = NfsExport
+
+// SnoozeNotificationJSONRequestBody defines body for SnoozeNotification for application/json ContentType.
+type SnoozeNotificationJSONRequestBody SnoozeNotificationJSONBody
 
 // PutSMTPConfigJSONRequestBody defines body for PutSMTPConfig for application/json ContentType.
 type PutSMTPConfigJSONRequestBody = SMTPConfig
@@ -2181,3 +2890,24 @@ type SetSystemNTPJSONRequestBody = SystemNTPRequest
 
 // SetSystemTimezoneJSONRequestBody defines body for SetSystemTimezone for application/json ContentType.
 type SetSystemTimezoneJSONRequestBody = SystemTimezoneRequest
+
+// CreateVMRestoreJSONRequestBody defines body for CreateVMRestore for application/json ContentType.
+type CreateVMRestoreJSONRequestBody = VMRestoreCreateRequest
+
+// CreateVMSnapshotJSONRequestBody defines body for CreateVMSnapshot for application/json ContentType.
+type CreateVMSnapshotJSONRequestBody = VMSnapshotCreateRequest
+
+// CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
+type CreateVMJSONRequestBody = VMCreateRequest
+
+// PatchVMJSONRequestBody defines body for PatchVM for application/json ContentType.
+type PatchVMJSONRequestBody = VMPatchRequest
+
+// InstallWorkloadJSONRequestBody defines body for InstallWorkload for application/json ContentType.
+type InstallWorkloadJSONRequestBody = WorkloadInstallRequest
+
+// UpgradeWorkloadJSONRequestBody defines body for UpgradeWorkload for application/json ContentType.
+type UpgradeWorkloadJSONRequestBody = WorkloadUpgradeRequest
+
+// RollbackWorkloadJSONRequestBody defines body for RollbackWorkload for application/json ContentType.
+type RollbackWorkloadJSONRequestBody RollbackWorkloadJSONBody
