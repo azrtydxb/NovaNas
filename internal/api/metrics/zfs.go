@@ -52,6 +52,33 @@ type ZFSCollector struct {
 	poolScanned    *prometheus.GaugeVec
 	poolScanTotal  *prometheus.GaugeVec
 
+	// Scrub-policy observability. last_run_timestamp_seconds is the
+	// unix time of the most recent scrub fire per pool; in_progress is
+	// 1 while a scrub is running and 0 otherwise; errors_count is the
+	// summed read+write+checksum error count across the pool's leaf
+	// vdevs at scrape time. duration_seconds is the wall-clock
+	// elapsed for the in-progress scrub (or zero when idle); the
+	// alerts agent uses it to fire when a scrub is taking >24h.
+	scrubLastRun     *prometheus.GaugeVec
+	scrubInProgress  *prometheus.GaugeVec
+	scrubErrorsCount *prometheus.GaugeVec
+	scrubDuration    *prometheus.GaugeVec
+
+	// Resilver observability. We don't manage resilvers (they're
+	// triggered automatically by ZFS on disk replacement) but we
+	// observe them: in_progress is 1 while a resilver is running and 0
+	// otherwise. eta_seconds is best-effort — ZFS exposes a "time to
+	// go" string in zpool status which we parse when present.
+	resilverInProgress *prometheus.GaugeVec
+	resilverETA        *prometheus.GaugeVec
+
+	// scrubStartedAt tracks the local-monotonic time at which we first
+	// observed a scrub transition into the "in-progress" state for
+	// each pool. Used to compute scrubDuration. Cleared when the scan
+	// state moves out of in-progress. Map access is guarded by mu
+	// (the same mutex that guards the gauges).
+	scrubStartedAt map[string]time.Time
+
 	dsUsed  *prometheus.GaugeVec
 	dsAvail *prometheus.GaugeVec
 
@@ -149,6 +176,33 @@ func NewZFSCollector(logger *slog.Logger, pools PoolLister, datasets DatasetList
 
 		healthStates: []string{"ONLINE", "DEGRADED", "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL", "SUSPENDED"},
 		scrubStates:  []string{"none", "in-progress", "finished", "resilver"},
+
+		scrubLastRun: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_scrub_last_run_timestamp_seconds",
+			Help: "Unix timestamp of the most recent scrub fire for the pool. Cleared on collector restart; updated by the scrub-policy executor.",
+		}, []string{"pool"}),
+		scrubInProgress: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_scrub_in_progress",
+			Help: "1 if a scrub is currently running on the pool, 0 otherwise.",
+		}, []string{"pool"}),
+		scrubErrorsCount: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_scrub_errors_count",
+			Help: "Sum of read+write+checksum errors across the pool's leaf vdevs at scrape time. Non-zero after a scrub means the scrub found corruption.",
+		}, []string{"pool"}),
+		scrubDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_scrub_duration_seconds",
+			Help: "Wall-clock seconds since the current in-progress scrub started; 0 when idle. Alert when this exceeds the operator-defined cap (default 24h).",
+		}, []string{"pool"}),
+		resilverInProgress: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_resilver_in_progress",
+			Help: "1 if the pool is currently resilvering, 0 otherwise. Resilvers are triggered automatically by ZFS on disk replacement; NovaNAS does not manage them.",
+		}, []string{"pool", "eta_seconds"}),
+		resilverETA: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "nova_zfs_resilver_eta_seconds",
+			Help: "Best-effort ETA in seconds until the in-progress resilver completes; 0 when not resilvering or ETA unparseable.",
+		}, []string{"pool"}),
+
+		scrubStartedAt: map[string]time.Time{},
 	}
 	return c
 }
@@ -161,7 +215,19 @@ func (c *ZFSCollector) MustRegister(reg prometheus.Registerer) {
 		c.dsUsed, c.dsAvail,
 		c.vdevReadErr, c.vdevWriteErr, c.vdevCksumErr,
 		c.pollErrors,
+		c.scrubLastRun, c.scrubInProgress, c.scrubErrorsCount, c.scrubDuration,
+		c.resilverInProgress, c.resilverETA,
 	)
+}
+
+// MarkScrubFired updates the per-pool last-run gauge to the given
+// unix timestamp. Called by the scrub-policy executor on a successful
+// dispatch. Safe to call from any goroutine; access is guarded by the
+// same mutex that protects the rest of the gauges.
+func (c *ZFSCollector) MarkScrubFired(poolName string, when time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.scrubLastRun.WithLabelValues(poolName).Set(float64(when.Unix()))
 }
 
 // SetInterval overrides the default 30s poll cadence. Tests use this to
@@ -219,6 +285,16 @@ func (c *ZFSCollector) poll(ctx context.Context) {
 	c.vdevReadErr.Reset()
 	c.vdevWriteErr.Reset()
 	c.vdevCksumErr.Reset()
+	// Per-poll: reset the boolean state gauges (scrub/resilver in
+	// progress + duration + errors). last_run_timestamp_seconds is NOT
+	// reset — it is set externally by MarkScrubFired and survives
+	// pool-list polls; clearing it here would cause the gauge to
+	// flap when no scrub has fired since collector start.
+	c.scrubInProgress.Reset()
+	c.scrubErrorsCount.Reset()
+	c.scrubDuration.Reset()
+	c.resilverInProgress.Reset()
+	c.resilverETA.Reset()
 
 	for _, p := range pools {
 		c.poolSize.WithLabelValues(p.Name).Set(float64(p.SizeBytes))
@@ -277,7 +353,8 @@ func (c *ZFSCollector) poll(ctx context.Context) {
 }
 
 // recordScrub maps the parsed scrub state onto the scrubStates label
-// space (one gauge per known state, exactly one of which is 1).
+// space (one gauge per known state, exactly one of which is 1) and
+// also drives the scrub-policy / resilver observability gauges.
 func (c *ZFSCollector) recordScrub(poolName string, st *pool.Status) {
 	if st == nil {
 		return
@@ -295,6 +372,56 @@ func (c *ZFSCollector) recordScrub(poolName string, st *pool.Status) {
 		}
 		c.poolScrubState.WithLabelValues(poolName, s).Set(v)
 	}
+
+	// Scrub in_progress / duration. Track local-monotonic start time so
+	// duration is a proper wall-clock count rather than ZFS's "scanned
+	// at" rate-derived eta. mu is already held by poll().
+	if current == "in-progress" {
+		c.scrubInProgress.WithLabelValues(poolName).Set(1)
+		started, ok := c.scrubStartedAt[poolName]
+		if !ok {
+			started = time.Now()
+			c.scrubStartedAt[poolName] = started
+		}
+		c.scrubDuration.WithLabelValues(poolName).Set(time.Since(started).Seconds())
+	} else {
+		c.scrubInProgress.WithLabelValues(poolName).Set(0)
+		c.scrubDuration.WithLabelValues(poolName).Set(0)
+		delete(c.scrubStartedAt, poolName)
+	}
+
+	// Resilver in_progress. ETA is best-effort — zpool emits "X to go"
+	// in human format which we don't currently parse; leave 0 as a
+	// conservative default. The eta_seconds label on the
+	// in_progress gauge mirrors the metric name in the task spec.
+	if current == "resilver" {
+		c.resilverInProgress.WithLabelValues(poolName, "0").Set(1)
+	} else {
+		c.resilverInProgress.WithLabelValues(poolName, "0").Set(0)
+	}
+	c.resilverETA.WithLabelValues(poolName).Set(0)
+
+	// Scrub errors_count: sum of read+write+checksum at leaf vdevs.
+	// This metric is only meaningful AFTER a scrub completes; while
+	// idle it reflects historical error counts that haven't been
+	// cleared via `zpool clear`. Operators typically alert on
+	// errors_count > 0 immediately following a scrub finish.
+	c.scrubErrorsCount.WithLabelValues(poolName).Set(float64(sumPoolErrors(st.Vdevs)))
+}
+
+// sumPoolErrors walks the parsed vdev tree and sums read+write+checksum
+// errors at each leaf disk vdev. Aggregate vdevs (mirror, raidz)
+// already aggregate counters but their counts are kept on the leaves
+// underneath, so we count from leaves only.
+func sumPoolErrors(vdevs []pool.Vdev) uint64 {
+	var total uint64
+	for _, v := range vdevs {
+		if v.Type == "disk" && v.Path != "" {
+			total += v.ReadErr + v.WriteErr + v.CksumErr
+		}
+		total += sumPoolErrors(v.Children)
+	}
+	return total
 }
 
 // recordVdevs walks the parsed status tree and emits one sample per leaf
