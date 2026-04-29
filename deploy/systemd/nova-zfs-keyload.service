@@ -1,0 +1,33 @@
+[Unit]
+Description=Load ZFS native-encryption keys from TPM-sealed escrow at boot
+Documentation=file:///usr/share/doc/novanas/encryption/README.md
+# OpenBao must be unsealed and the ZFS pools imported before we can
+# fetch wrapped keys and feed them to `zfs load-key`.
+Requires=openbao.service zfs-import.target
+After=openbao.service nova-bao-tpm-unseal.service zfs-import.target
+# Anything that mounts encrypted datasets (the kernel NFS server, the
+# Samba/NVMe-oF/iSCSI restore units, and ultimately nova-api) must
+# wait for keys to be loaded so they don't race against missing
+# datasets.
+Before=zfs-mount.service nova-api.service nfs-server.service smbd.service
+       nova-iscsi-restore.service nova-nvmet-restore.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Run as root so it can talk to /dev/tpmrm0 and exec /sbin/zfs.
+User=root
+Group=root
+ExecStart=/usr/local/bin/nova-zfs-keyload
+# We deliberately do NOT Restart=on-failure: a PCR-mismatch failure
+# means the boot state has changed since seal; retrying without
+# operator intervention would loop forever. Fail closed and surface
+# the error to the operator via journalctl.
+Restart=no
+# Sourced by secrets.FromEnv to point at the OpenBao instance.
+Environment="NOVA_SECRETS_BACKEND=bao"
+Environment="NOVA_SECRETS_BAO_ADDR=https://127.0.0.1:8200"
+Environment="NOVA_SECRETS_BAO_MOUNT=nova"
+
+[Install]
+WantedBy=multi-user.target
