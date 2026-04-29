@@ -476,3 +476,131 @@ func TestSetIdmapdConfig(t *testing.T) {
 		t.Errorf("parsed mismatch: %+v", parsed)
 	}
 }
+
+// --- idmapd Translation/Mapping defaults ----------------------------------
+
+func TestRenderIdmapdConfDefaults(t *testing.T) {
+	got := string(renderIdmapdConf(IdmapdConfig{Domain: "novanas.local"}))
+	wants := []string{
+		"[General]",
+		"Verbosity = 0",
+		"Domain = novanas.local",
+		"[Translation]",
+		"Method = nsswitch",
+		"[Mapping]",
+		"Nobody-User = nobody",
+		"Nobody-Group = nogroup",
+	}
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+}
+
+func TestRenderIdmapdConfOverrides(t *testing.T) {
+	got := string(renderIdmapdConf(IdmapdConfig{
+		Domain:      "novanas.local",
+		Method:      "static",
+		NobodyUser:  "nfsnobody",
+		NobodyGroup: "nfsnobody",
+	}))
+	for _, w := range []string{"Method = static", "Nobody-User = nfsnobody", "Nobody-Group = nfsnobody"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+}
+
+func TestParseIdmapdConfTranslationAndMapping(t *testing.T) {
+	body := `[General]
+Verbosity = 1
+Domain = novanas.local
+
+[Translation]
+Method = nsswitch
+
+[Mapping]
+Nobody-User = nobody
+Nobody-Group = nogroup
+`
+	cfg, err := parseIdmapdConf([]byte(body))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.Domain != "novanas.local" || cfg.Verbosity != 1 {
+		t.Errorf("general mismatch: %+v", cfg)
+	}
+	if cfg.Method != "nsswitch" {
+		t.Errorf("Method = %q, want nsswitch", cfg.Method)
+	}
+	if cfg.NobodyUser != "nobody" || cfg.NobodyGroup != "nogroup" {
+		t.Errorf("nobody mismatch: %+v", cfg)
+	}
+}
+
+// --- rpc.gssd defaults ----------------------------------------------------
+
+func TestRenderGssdDefaultsMachineCreds(t *testing.T) {
+	got := string(renderGssdDefaults(GssdDefaults{Enabled: true, Args: "-n"}))
+	wants := []string{
+		"NEED_GSSD=yes",
+		"GSS_USE_PROXY=no",
+		`GSSDARGS="-n"`,
+	}
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+}
+
+func TestRenderGssdDefaultsDisabled(t *testing.T) {
+	got := string(renderGssdDefaults(GssdDefaults{}))
+	if !strings.Contains(got, "NEED_GSSD=no") {
+		t.Errorf("expected NEED_GSSD=no in:\n%s", got)
+	}
+	if !strings.Contains(got, `GSSDARGS=""`) {
+		t.Errorf("expected empty GSSDARGS in:\n%s", got)
+	}
+}
+
+func TestValidateGssdDefaultsRejectsShellMeta(t *testing.T) {
+	bad := []string{`-n; rm -rf /`, "-n `whoami`", `-n "$(id)"`, `-n\nfoo`}
+	for _, a := range bad {
+		if err := validateGssdDefaults(GssdDefaults{Args: a}); err == nil {
+			t.Errorf("expected error for %q", a)
+		}
+	}
+	good := []string{"", "-n", "-n -f", "-v -n", "-d /var/lib/nfs/rpc_pipefs"}
+	for _, a := range good {
+		if err := validateGssdDefaults(GssdDefaults{Args: a}); err != nil {
+			t.Errorf("good args %q: %v", a, err)
+		}
+	}
+}
+
+func TestSetGssdDefaultsWritesFile(t *testing.T) {
+	mfs := newMemFS()
+	m := &Manager{NfsCommonPath: "/etc/default/nfs-common", FS: mfs}
+	if err := m.SetGssdDefaults(context.Background(), GssdDefaults{Enabled: true, Args: "-n"}); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	body, ok := mfs.files["/etc/default/nfs-common"]
+	if !ok {
+		t.Fatal("file not written")
+	}
+	if !strings.Contains(string(body), `GSSDARGS="-n"`) {
+		t.Errorf("body missing GSSDARGS:\n%s", body)
+	}
+	if mfs.perms["/etc/default/nfs-common"] != 0o644 {
+		t.Errorf("perm = %o", mfs.perms["/etc/default/nfs-common"])
+	}
+}
+
+func TestGssdDefaultsPathDefault(t *testing.T) {
+	m := &Manager{}
+	if got := m.GssdDefaultsPath(); got != "/etc/default/nfs-common" {
+		t.Errorf("got %q, want /etc/default/nfs-common", got)
+	}
+}

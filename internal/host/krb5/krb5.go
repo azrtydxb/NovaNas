@@ -51,9 +51,44 @@ type Realm struct {
 // IdmapdConfig is /etc/idmapd.conf, used by NFSv4 to map UIDs to names
 // in a Kerberos domain. The Domain field is typically the krb5 default
 // realm in lowercase.
+//
+// Method selects the translation backend. Production NovaNAS deployments
+// use "nsswitch" so /etc/passwd / /etc/group lookups (or SSSD, if
+// joined to AD/IPA) drive uid<->name mapping. When empty the renderer
+// emits the default "nsswitch".
+//
+// NobodyUser / NobodyGroup are the local accounts idmapd falls back to
+// when a wire name has no local mapping. Empty strings cause the
+// renderer to emit the conventional "nobody" / "nogroup" defaults.
 type IdmapdConfig struct {
-	Domain    string `json:"domain"`
-	Verbosity int    `json:"verbosity,omitempty"`
+	Domain      string `json:"domain"`
+	Verbosity   int    `json:"verbosity,omitempty"`
+	Method      string `json:"method,omitempty"`
+	NobodyUser  string `json:"nobodyUser,omitempty"`
+	NobodyGroup string `json:"nobodyGroup,omitempty"`
+}
+
+// GssdDefaults captures the pieces of /etc/default/nfs-common we own.
+// The file is sourced as a POSIX shell snippet by the nfs-common init
+// scripts and the rpc-gssd unit on Debian-derived distros.
+//
+// Use Default for a production-safe machine-creds configuration:
+//
+//	GssdDefaults{Enabled: true, UseGssProxy: false, Args: "-n"}
+//
+// The "-n" flag causes rpc.gssd to use the host's /etc/krb5.keytab
+// (specifically nfs/<host>@REALM) for upcalls when no user TGT is
+// available — what makes container workloads work without per-pod TGTs.
+type GssdDefaults struct {
+	// Enabled toggles NEED_GSSD=yes — the nfs-common init script reads
+	// this to decide whether to start rpc.gssd at boot.
+	Enabled bool `json:"enabled"`
+	// UseGssProxy toggles GSS_USE_PROXY=yes (gss-proxy is an alternative
+	// to rpc.gssd). NovaNAS does not use gss-proxy by default.
+	UseGssProxy bool `json:"useGssProxy,omitempty"`
+	// Args is the literal value of GSSDARGS, e.g. `-n` for machine
+	// creds. Quotes are added by the renderer.
+	Args string `json:"args,omitempty"`
 }
 
 // KeytabEntry is one principal stored in /etc/krb5.keytab.
@@ -78,9 +113,12 @@ type Manager struct {
 	Krb5ConfPath   string
 	KeytabPath     string
 	IdmapdConfPath string
-	KlistBin       string
-	Runner         exec.Runner
-	FS             FileSystem
+	// NfsCommonPath is the path of the rpc.gssd defaults file
+	// (/etc/default/nfs-common on Debian). Empty uses the Debian default.
+	NfsCommonPath string
+	KlistBin      string
+	Runner        exec.Runner
+	FS            FileSystem
 }
 
 func (m *Manager) krb5ConfPath() string {
@@ -532,8 +570,9 @@ func renderKrb5Conf(cfg Config) []byte {
 	return b.Bytes()
 }
 
-// parseIdmapdConf handles the [General] section — the only one nfsidmap
-// needs to interoperate with NFSv4 + Kerberos.
+// parseIdmapdConf handles [General], [Translation], and [Mapping] —
+// the sections nfsidmap consults when translating wire names to local
+// uids/gids for NFSv4 + Kerberos.
 func parseIdmapdConf(data []byte) (*IdmapdConfig, error) {
 	cfg := &IdmapdConfig{}
 	section := ""
@@ -546,34 +585,126 @@ func parseIdmapdConf(data []byte) (*IdmapdConfig, error) {
 			section = strings.TrimSpace(line[1 : len(line)-1])
 			continue
 		}
-		if section != "General" {
-			continue
-		}
 		k, v, ok := splitKV(line)
 		if !ok {
 			continue
 		}
-		switch strings.ToLower(k) {
-		case "domain":
-			cfg.Domain = v
-		case "verbosity":
-			n, err := strconv.Atoi(v)
-			if err == nil {
-				cfg.Verbosity = n
+		switch section {
+		case "General":
+			switch strings.ToLower(k) {
+			case "domain":
+				cfg.Domain = v
+			case "verbosity":
+				if n, err := strconv.Atoi(v); err == nil {
+					cfg.Verbosity = n
+				}
+			}
+		case "Translation":
+			if strings.ToLower(k) == "method" {
+				cfg.Method = v
+			}
+		case "Mapping":
+			switch strings.ToLower(k) {
+			case "nobody-user":
+				cfg.NobodyUser = v
+			case "nobody-group":
+				cfg.NobodyGroup = v
 			}
 		}
 	}
 	return cfg, nil
 }
 
+// renderIdmapdConf emits a deterministic /etc/idmapd.conf that wires
+// NFSv4 ID mapping to nsswitch (and therefore /etc/passwd, /etc/group,
+// or SSSD when the host is joined to a directory). Empty Method,
+// NobodyUser, and NobodyGroup default to "nsswitch", "nobody", and
+// "nogroup" respectively — the values production NovaNAS expects.
 func renderIdmapdConf(cfg IdmapdConfig) []byte {
+	method := cfg.Method
+	if method == "" {
+		method = "nsswitch"
+	}
+	nobodyUser := cfg.NobodyUser
+	if nobodyUser == "" {
+		nobodyUser = "nobody"
+	}
+	nobodyGroup := cfg.NobodyGroup
+	if nobodyGroup == "" {
+		nobodyGroup = "nogroup"
+	}
 	var b bytes.Buffer
 	b.WriteString("[General]\n")
 	fmt.Fprintf(&b, "Verbosity = %d\n", cfg.Verbosity)
 	fmt.Fprintf(&b, "Domain = %s\n", cfg.Domain)
+	b.WriteString("\n[Translation]\n")
+	fmt.Fprintf(&b, "Method = %s\n", method)
 	b.WriteString("\n[Mapping]\n")
-	// No-op mapping section: empty Nobody-User/Group are common but
-	// optional; leaving the section header lets operators add overrides.
+	fmt.Fprintf(&b, "Nobody-User = %s\n", nobodyUser)
+	fmt.Fprintf(&b, "Nobody-Group = %s\n", nobodyGroup)
+	return b.Bytes()
+}
+
+// --- rpc.gssd defaults ----------------------------------------------------
+
+// GssdDefaultsPath returns the path of the rpc.gssd defaults file. On
+// Debian/Ubuntu this is /etc/default/nfs-common; the manager exposes it
+// as a method so callers can override for tests.
+func (m *Manager) GssdDefaultsPath() string {
+	if m.NfsCommonPath != "" {
+		return m.NfsCommonPath
+	}
+	return "/etc/default/nfs-common"
+}
+
+// SetGssdDefaults atomically writes /etc/default/nfs-common with mode
+// 0644. The file is sourced as a POSIX shell snippet, so we emit
+// deterministic, quoted assignments only.
+func (m *Manager) SetGssdDefaults(ctx context.Context, cfg GssdDefaults) error {
+	if err := validateGssdDefaults(cfg); err != nil {
+		return err
+	}
+	return atomicWrite(m.fs(), m.GssdDefaultsPath(), renderGssdDefaults(cfg), 0o644)
+}
+
+// gssdArgsRE accepts the conservative shape of valid rpc.gssd flags:
+// dashes, alphanumerics, '=', '/', ',', '.', and ':'. Anything that
+// could escape the shell-quoted string we render is rejected.
+var gssdArgsRE = regexp.MustCompile(`^[A-Za-z0-9 _\-=/,.:]*$`)
+
+func validateGssdDefaults(cfg GssdDefaults) error {
+	if !gssdArgsRE.MatchString(cfg.Args) {
+		return fmt.Errorf("gssd: args %q contains forbidden character", cfg.Args)
+	}
+	if strings.Contains(cfg.Args, `"`) || strings.Contains(cfg.Args, "`") || strings.Contains(cfg.Args, "$") {
+		return fmt.Errorf("gssd: args %q contains shell metacharacter", cfg.Args)
+	}
+	return nil
+}
+
+// renderGssdDefaults emits the POSIX-shell snippet sourced by Debian's
+// nfs-common init script (and the rpc-gssd.service drop-in).
+//
+// Layout:
+//
+//	# managed by nova-nas
+//	NEED_GSSD=yes|no
+//	GSS_USE_PROXY=yes|no
+//	GSSDARGS="<args>"
+func renderGssdDefaults(cfg GssdDefaults) []byte {
+	var b bytes.Buffer
+	b.WriteString("# managed by nova-nas\n")
+	if cfg.Enabled {
+		b.WriteString("NEED_GSSD=yes\n")
+	} else {
+		b.WriteString("NEED_GSSD=no\n")
+	}
+	if cfg.UseGssProxy {
+		b.WriteString("GSS_USE_PROXY=yes\n")
+	} else {
+		b.WriteString("GSS_USE_PROXY=no\n")
+	}
+	fmt.Fprintf(&b, "GSSDARGS=%q\n", cfg.Args)
 	return b.Bytes()
 }
 

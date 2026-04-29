@@ -1,0 +1,33 @@
+# /etc/krb5.conf — NovaNAS reference template.
+#
+# This file is rendered at runtime by internal/host/krb5 once the
+# operator submits a Config via the API. Ship it as a fallback default
+# so a fresh host can talk to the local NovaNAS KDC before the API is
+# reachable.
+#
+# Replace NOVANAS.LOCAL with your realm; replace kdc.novanas.local with
+# the FQDN (or IP) of your KDC. Defaults below assume a single-node
+# NovaNAS deployment that runs its own KDC on localhost.
+
+[libdefaults]
+    default_realm = NOVANAS.LOCAL
+    dns_lookup_kdc = false
+    dns_lookup_realm = false
+    rdns = false
+    forwardable = true
+    # AES enctypes are mandatory for modern Kerberos. NovaNAS does not
+    # provision DES or RC4 keys.
+    default_tgs_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+    default_tkt_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+    permitted_enctypes   = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+
+[realms]
+    NOVANAS.LOCAL = {
+        kdc = kdc.novanas.local:88
+        admin_server = kdc.novanas.local:749
+        default_domain = novanas.local
+    }
+
+[domain_realm]
+    .novanas.local = NOVANAS.LOCAL
+    novanas.local = NOVANAS.LOCAL

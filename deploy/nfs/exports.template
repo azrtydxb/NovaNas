@@ -1,0 +1,22 @@
+# /etc/exports.d/nova-nas-<name>.exports — example managed export.
+#
+# Each file under /etc/exports.d/ named with the "nova-nas-" prefix
+# and ".exports" suffix is owned by NovaNAS. The control plane writes
+# one path per file; the kernel composes them with any operator-managed
+# entries in /etc/exports proper.
+#
+# When the host runs with RequireKerberos=true, every client rule
+# without an explicit sec= token gets sec=krb5p prepended automatically
+# by internal/host/nfs. Operators can opt down to krb5i or krb5 (or
+# even sys, for emergency recovery) by spelling sec= explicitly.
+#
+# Format: <path> <client>(<options>) [<client>(<options>) ...]
+
+# Default: machine-cred Kerberos with privacy (encryption + integrity).
+/tank/share1 10.0.0.0/24(sec=krb5p,rw,sync,no_subtree_check,no_root_squash) *.novanas.local(sec=krb5p,ro,sync,no_subtree_check)
+
+# Mixed-mode: explicit sec=krb5i on one client (integrity only, no
+# bulk encryption) while the wildcard inherits krb5p from the host
+# default. Note that sec= MUST come first in NFS option lists for some
+# kernel versions to honor it during initial GSS context negotiation.
+# /tank/share2 10.0.1.0/24(sec=krb5i,rw,sync) *(sec=krb5p,ro)

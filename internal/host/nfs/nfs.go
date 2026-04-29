@@ -91,8 +91,14 @@ type Manager struct {
 	ExportsBin string // default "/usr/sbin/exportfs"
 	ExportsDir string // default "/etc/exports.d"
 	FilePrefix string // default "nova-nas-" — name namespace for our managed files
-	Runner     exec.Runner
-	FileWriter FileWriter
+	// RequireKerberos, when true, enforces sec=krb5p as the default for
+	// every export. ClientRules whose Options already contain a sec=
+	// token are left untouched (the explicit caller wins). Defaults to
+	// false to preserve pre-Kerberos behavior; NovaNAS deployment flips
+	// it on once the KDC and host keytab are present.
+	RequireKerberos bool
+	Runner          exec.Runner
+	FileWriter      FileWriter
 }
 
 func (m *Manager) bin() string {
@@ -267,6 +273,55 @@ func validateExport(e Export) error {
 	return nil
 }
 
+// applyKerberosDefault prepends "sec=krb5p" to every client rule's
+// option list when RequireKerberos is true and the caller has not
+// already specified a sec= token. Caller-provided sec=... values win
+// (explicit callers can opt down to sec=krb5i / sec=sys for one-off
+// exports while the global policy still requires krb5p as a default).
+//
+// We mutate a copy of e — never the caller's slice — so behavior with
+// repeated calls or shared Export structs stays predictable.
+func (m *Manager) applyKerberosDefault(e Export) Export {
+	if !m.RequireKerberos {
+		return e
+	}
+	out := e
+	out.Clients = make([]ClientRule, len(e.Clients))
+	for i, c := range e.Clients {
+		if hasSecOption(c.Options) {
+			out.Clients[i] = c
+			continue
+		}
+		opts := c.Options
+		if opts == "" {
+			opts = "sec=krb5p"
+		} else {
+			opts = "sec=krb5p," + opts
+		}
+		out.Clients[i] = ClientRule{Spec: c.Spec, Options: opts}
+	}
+	return out
+}
+
+// hasSecOption reports whether the comma-separated option list contains
+// a "sec=..." token. Tokens are matched case-insensitively on the key
+// to mirror nfs-utils which accepts SEC= as well as sec=.
+func hasSecOption(opts string) bool {
+	for _, tok := range strings.Split(opts, ",") {
+		k := strings.TrimSpace(tok)
+		if k == "" {
+			continue
+		}
+		if eq := strings.IndexByte(k, '='); eq >= 0 {
+			k = k[:eq]
+		}
+		if strings.EqualFold(k, "sec") {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------- file rendering ----------
 
 // renderExportFile builds the single-line file body for an Export. A
@@ -290,6 +345,7 @@ func renderExportFile(e Export) []byte {
 // CreateExport validates e, writes the exports file (failing if it
 // already exists), and reloads the kernel table.
 func (m *Manager) CreateExport(ctx context.Context, e Export) error {
+	e = m.applyKerberosDefault(e)
 	if err := validateExport(e); err != nil {
 		return err
 	}
@@ -315,6 +371,7 @@ func (m *Manager) CreateExport(ctx context.Context, e Export) error {
 // UpdateExport validates e, requires the file already exists, overwrites
 // its contents, and reloads.
 func (m *Manager) UpdateExport(ctx context.Context, e Export) error {
+	e = m.applyKerberosDefault(e)
 	if err := validateExport(e); err != nil {
 		return err
 	}

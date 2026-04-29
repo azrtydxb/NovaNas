@@ -551,5 +551,112 @@ func TestManagerDefaults(t *testing.T) {
 	}
 }
 
+// ---------- RequireKerberos ----------
+
+func TestApplyKerberosDefaultDisabled(t *testing.T) {
+	m := &Manager{} // RequireKerberos: false
+	out := m.applyKerberosDefault(sampleExport())
+	if out.Clients[0].Options != "rw,sync,root_squash" {
+		t.Errorf("options should be unchanged, got %q", out.Clients[0].Options)
+	}
+}
+
+func TestApplyKerberosDefaultPrependsKrb5p(t *testing.T) {
+	m := &Manager{RequireKerberos: true}
+	out := m.applyKerberosDefault(sampleExport())
+	for i, c := range out.Clients {
+		if !strings.HasPrefix(c.Options, "sec=krb5p,") {
+			t.Errorf("client[%d] options = %q, want sec=krb5p prefix", i, c.Options)
+		}
+	}
+}
+
+func TestApplyKerberosDefaultRespectsExplicitSec(t *testing.T) {
+	m := &Manager{RequireKerberos: true}
+	in := Export{
+		Name: "share1",
+		Path: "/tank/share1",
+		Clients: []ClientRule{
+			{Spec: "10.0.0.0/24", Options: "rw,sec=krb5i,sync"},
+			{Spec: "*", Options: "ro,sec=sys"},
+			{Spec: "10.1.0.0/16", Options: "rw"},
+		},
+	}
+	out := m.applyKerberosDefault(in)
+	if out.Clients[0].Options != "rw,sec=krb5i,sync" {
+		t.Errorf("explicit sec=krb5i must win, got %q", out.Clients[0].Options)
+	}
+	if out.Clients[1].Options != "ro,sec=sys" {
+		t.Errorf("explicit sec=sys must win, got %q", out.Clients[1].Options)
+	}
+	if out.Clients[2].Options != "sec=krb5p,rw" {
+		t.Errorf("missing sec must get krb5p prefix, got %q", out.Clients[2].Options)
+	}
+}
+
+func TestApplyKerberosDefaultDoesNotMutateInput(t *testing.T) {
+	m := &Manager{RequireKerberos: true}
+	in := sampleExport()
+	orig := in.Clients[0].Options
+	_ = m.applyKerberosDefault(in)
+	if in.Clients[0].Options != orig {
+		t.Errorf("input mutated: %q != %q", in.Clients[0].Options, orig)
+	}
+}
+
+func TestManager_CreateExport_RequireKerberos(t *testing.T) {
+	fw := newCaptureFileWriter()
+	r := &captureRunner{}
+	m := newManager(fw, r)
+	m.RequireKerberos = true
+	if err := m.CreateExport(context.Background(), sampleExport()); err != nil {
+		t.Fatal(err)
+	}
+	body := string(fw.writes[0].Data)
+	want := "/tank/share1 10.0.0.0/24(sec=krb5p,rw,sync,root_squash) *(sec=krb5p,ro)\n"
+	if body != want {
+		t.Errorf("body=%q\nwant=%q", body, want)
+	}
+}
+
+func TestManager_UpdateExport_RequireKerberos(t *testing.T) {
+	fw := newCaptureFileWriter()
+	fw.files["/etc/exports.d/nova-nas-share1.exports"] = []byte("old\n")
+	r := &captureRunner{}
+	m := newManager(fw, r)
+	m.RequireKerberos = true
+	e := sampleExport()
+	e.Clients = []ClientRule{{Spec: "10.1.0.0/16", Options: "rw,sync"}}
+	if err := m.UpdateExport(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	body := string(fw.writes[0].Data)
+	want := "/tank/share1 10.1.0.0/16(sec=krb5p,rw,sync)\n"
+	if body != want {
+		t.Errorf("body=%q\nwant=%q", body, want)
+	}
+}
+
+func TestHasSecOption(t *testing.T) {
+	cases := []struct {
+		opts string
+		want bool
+	}{
+		{"rw", false},
+		{"rw,sync", false},
+		{"sec=krb5p", true},
+		{"rw,sec=krb5p,sync", true},
+		{"rw,SEC=krb5i", true},
+		{"rw,fsid=0", false},
+		{"", false},
+		{"sec=", true}, // explicit empty value is still an explicit override
+	}
+	for _, c := range cases {
+		if got := hasSecOption(c.opts); got != c.want {
+			t.Errorf("hasSecOption(%q)=%v want %v", c.opts, got, c.want)
+		}
+	}
+}
+
 // Compile-time guard so tests don't drift past timeouts during local runs.
 var _ = time.Second
