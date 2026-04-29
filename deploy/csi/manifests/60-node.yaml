@@ -38,8 +38,12 @@ spec:
         - --endpoint=unix:///csi/csi.sock
         - --node-id=$(NODE_NAME)
         - --novanas-url=$(NOVANAS_URL)
-        - --novanas-token-file=/etc/nova-csi/token
+        - --novanas-token-file=
         - --novanas-ca-cert=/etc/nova-csi/ca.crt
+        - --oidc-issuer-url=https://192.168.10.204:8443/realms/novanas
+        - --oidc-client-id-file=/etc/nova-csi/oidc-client-id
+        - --oidc-client-secret-file=/etc/nova-csi/oidc-client-secret
+        - --oidc-ca-cert=/etc/nova-csi/ca.crt
         - --default-pool=tank
         - --default-parent=tank/csi
         - --log-level=info
@@ -121,8 +125,10 @@ spec:
           secretName: nova-csi-auth
           defaultMode: 256
           items:
-          - key: token
-            path: token
+          - key: oidc-client-id
+            path: oidc-client-id
+          - key: oidc-client-secret
+            path: oidc-client-secret
           - key: ca.crt
             path: ca.crt
       - name: host-root

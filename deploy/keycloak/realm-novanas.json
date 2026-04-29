@@ -28,6 +28,26 @@
   "failureFactor": 30,
   "clients": [
     {
+      "clientId": "nova-csi",
+      "name": "NovaNAS CSI driver",
+      "description": "Service account for the NovaNAS CSI driver (client_credentials grant).",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "use.refresh.tokens": "false",
+        "client_credentials.use_refresh_token": "false"
+      },
+      "defaultClientScopes": ["roles"],
+      "optionalClientScopes": []
+    },
+    {
       "clientId": "nova-api",
       "name": "NovaNAS API",
       "description": "NovaNAS storage API client",

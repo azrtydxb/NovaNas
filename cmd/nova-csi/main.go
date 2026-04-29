@@ -31,6 +31,11 @@ func main() {
 	novanasToken := flag.String("novanas-token", "", "Bearer token (or use --novanas-token-file)")
 	tokenFile := flag.String("novanas-token-file", "/var/run/novanas/token", "File path containing the bearer token (re-read on SIGHUP)")
 	caCert := flag.String("novanas-ca-cert", "/etc/nova-ca/ca.crt", "CA cert file for the NovaNAS API")
+	oidcIssuer := flag.String("oidc-issuer-url", "", "Keycloak realm issuer URL (e.g. https://kc:8443/realms/novanas). When set, enables automatic token refresh via client_credentials.")
+	oidcClientID := flag.String("oidc-client-id", "", "OIDC client ID for client_credentials grant (mutually exclusive with --oidc-client-id-file)")
+	oidcClientIDFile := flag.String("oidc-client-id-file", "", "Path to file containing OIDC client ID (alternative to --oidc-client-id)")
+	oidcClientSecretFile := flag.String("oidc-client-secret-file", "", "Path to file containing OIDC client secret")
+	oidcCACert := flag.String("oidc-ca-cert", "", "CA cert file for the OIDC issuer's TLS (defaults to --novanas-ca-cert)")
 	defaultPool := flag.String("default-pool", "", "Fallback ZFS pool when the StorageClass omits 'pool'")
 	defaultParent := flag.String("default-parent", "", "Default parent dataset (defaults to '<pool>/csi')")
 	hostRootPrefix := flag.String("host-root-prefix", "", "When running in a container, prefix prepended to host-namespace paths (e.g. /host) so they resolve under a HostToContainer-propagated bind-mount of host root")
@@ -50,11 +55,29 @@ func main() {
 		}
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	// Build the NovaNAS HTTP client. The real adapter lives in
 	// clients/go/novanas; until it lands, main fails closed.
-	client, err := buildClient(*novanasURL, *novanasToken, *tokenFile, *caCert, logger)
+	client, sdkClient, err := buildClient(*novanasURL, *novanasToken, *tokenFile, *caCert, logger)
 	if err != nil {
 		logger.Error("build NovaNAS client", "err", err)
+		os.Exit(1)
+	}
+
+	// If OIDC flags are supplied, swap the static token for a refreshing
+	// client_credentials source. We perform the initial fetch synchronously
+	// and fail closed if it errors — see fetchInitialToken for rationale.
+	oidcEnabled := *oidcIssuer != "" || *oidcClientID != "" || *oidcClientIDFile != "" || *oidcClientSecretFile != ""
+	if oidcEnabled {
+		if err := setupOIDCRefresh(ctx, sdkClient, *oidcIssuer, *oidcClientID, *oidcClientIDFile, *oidcClientSecretFile, *oidcCACert, *caCert, logger); err != nil {
+			logger.Error("oidc setup failed", "err", err)
+			os.Exit(1)
+		}
+	} else if sdkClient.Token == "" {
+		// Legacy static-token path: bearer is mandatory.
+		logger.Error("no token provided (--novanas-token, --novanas-token-file, or --oidc-* flags)")
 		os.Exit(1)
 	}
 
@@ -67,9 +90,6 @@ func main() {
 		HostRootPrefix: *hostRootPrefix,
 		Logger:        logger,
 	}, client, csi.NewShellMounter())
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	if err := driver.Run(ctx, *endpoint); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("nova-csi exited", "err", err)
@@ -93,10 +113,16 @@ func newLogger(level string) *slog.Logger {
 }
 
 // buildClient builds the NovaNAS HTTP client and adapts it to the
-// csi.NovaNASClient interface.
-func buildClient(url, token, tokenFile, caCert string, logger *slog.Logger) (csi.NovaNASClient, error) {
+// csi.NovaNASClient interface. It also returns the underlying *novanas.Client
+// so callers can install a token-refresh loop via SetToken.
+//
+// If OIDC is in use the caller will overwrite the bearer immediately after
+// startup; in that case the static-token discovery here is best-effort and
+// an empty token is permitted. Otherwise we keep the legacy "static token
+// required" semantics.
+func buildClient(url, token, tokenFile, caCert string, logger *slog.Logger) (csi.NovaNASClient, *novanas.Client, error) {
 	if url == "" {
-		return nil, errors.New("--novanas-url is required")
+		return nil, nil, errors.New("--novanas-url is required")
 	}
 	tok := strings.TrimSpace(token)
 	if tok == "" && tokenFile != "" {
@@ -104,26 +130,84 @@ func buildClient(url, token, tokenFile, caCert string, logger *slog.Logger) (csi
 		if err == nil {
 			tok = strings.TrimSpace(string(b))
 		} else if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("read token file %s: %w", tokenFile, err)
+			return nil, nil, fmt.Errorf("read token file %s: %w", tokenFile, err)
 		}
-	}
-	if tok == "" {
-		return nil, errors.New("no token provided (--novanas-token or --novanas-token-file)")
 	}
 	cfg := novanas.Config{BaseURL: url, Token: tok, Timeout: 30 * time.Second}
 	if caCert != "" {
 		ca, err := os.ReadFile(caCert)
 		if err != nil {
-			return nil, fmt.Errorf("read CA cert %s: %w", caCert, err)
+			return nil, nil, fmt.Errorf("read CA cert %s: %w", caCert, err)
 		}
 		cfg.CACertPEM = ca
 	}
 	c, err := novanas.New(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	logger.Info("novanas client ready", "url", url, "ca", caCert != "")
-	return &sdkAdapter{c: c}, nil
+	logger.Info("novanas client ready", "url", url, "ca", caCert != "", "static_token", tok != "")
+	return &sdkAdapter{c: c}, c, nil
+}
+
+// setupOIDCRefresh validates OIDC flags, performs the initial token fetch,
+// installs the resulting bearer on the SDK client, and starts the
+// background refresh goroutine. Fails closed on the initial fetch.
+func setupOIDCRefresh(ctx context.Context, sdk *novanas.Client, issuer, clientID, clientIDFile, clientSecretFile, oidcCAPath, fallbackCAPath string, logger *slog.Logger) error {
+	if issuer == "" {
+		return errors.New("--oidc-issuer-url is required when any OIDC flag is set")
+	}
+	id := strings.TrimSpace(clientID)
+	if id == "" && clientIDFile != "" {
+		b, err := os.ReadFile(clientIDFile)
+		if err != nil {
+			return fmt.Errorf("read oidc client id file %s: %w", clientIDFile, err)
+		}
+		id = strings.TrimSpace(string(b))
+	}
+	if id == "" {
+		return errors.New("--oidc-client-id or --oidc-client-id-file is required")
+	}
+	if clientSecretFile == "" {
+		return errors.New("--oidc-client-secret-file is required")
+	}
+	secB, err := os.ReadFile(clientSecretFile)
+	if err != nil {
+		return fmt.Errorf("read oidc client secret %s: %w", clientSecretFile, err)
+	}
+	secret := strings.TrimSpace(string(secB))
+	if secret == "" {
+		return fmt.Errorf("oidc client secret file %s is empty", clientSecretFile)
+	}
+
+	caPath := oidcCAPath
+	if caPath == "" {
+		caPath = fallbackCAPath
+	}
+	var caPEM []byte
+	if caPath != "" {
+		b, err := os.ReadFile(caPath)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("read oidc CA cert %s: %w", caPath, err)
+		}
+		caPEM = b
+	}
+
+	src, err := newOIDCSource(issuer, id, secret, caPEM)
+	if err != nil {
+		return err
+	}
+
+	initCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	tok, exp, err := fetchInitialToken(initCtx, src, logger)
+	if err != nil {
+		return fmt.Errorf("initial oidc token fetch: %w", err)
+	}
+	sdk.SetToken(tok)
+
+	go runOIDCRefresh(ctx, src, sdk, exp, logger)
+	logger.Info("oidc refresh loop started", "issuer", issuer, "client_id", id)
+	return nil
 }
 
 // sdkAdapter wraps *novanas.Client to satisfy csi.NovaNASClient. The shapes

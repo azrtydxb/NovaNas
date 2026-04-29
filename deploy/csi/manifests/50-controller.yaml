@@ -47,8 +47,16 @@ spec:
             - --endpoint=unix:///csi/csi.sock
             - --node-id=$(NODE_NAME)
             - --novanas-url=$(NOVANAS_URL)
-            - --novanas-token-file=/etc/nova-csi/token
+            # Static-token fallback path is left empty; OIDC client_credentials
+            # below is the production path. The flag is harmless when unset.
+            - --novanas-token-file=
             - --novanas-ca-cert=/etc/nova-csi/ca.crt
+            # OIDC client_credentials: nova-csi fetches a fresh access token
+            # at startup and refreshes it in the background.
+            - --oidc-issuer-url=https://192.168.10.204:8443/realms/novanas
+            - --oidc-client-id-file=/etc/nova-csi/oidc-client-id
+            - --oidc-client-secret-file=/etc/nova-csi/oidc-client-secret
+            - --oidc-ca-cert=/etc/nova-csi/ca.crt
             - --default-pool=tank
             - --default-parent=tank/csi
             - --log-level=info
@@ -142,7 +150,9 @@ spec:
             secretName: nova-csi-auth
             defaultMode: 0400
             items:
-              - key: token
-                path: token
+              - key: oidc-client-id
+                path: oidc-client-id
+              - key: oidc-client-secret
+                path: oidc-client-secret
               - key: ca.crt
                 path: ca.crt

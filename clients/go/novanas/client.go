@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -38,8 +39,35 @@ const apiPrefix = "/api/v1"
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
-	Token      string
-	UserAgent  string
+	// Token is the bearer token used on every request. Direct field access
+	// remains supported for back-compat (tests and callers that constructed
+	// Client by hand). For concurrent rotation (e.g. an OIDC refresh
+	// goroutine) callers MUST use SetToken / token() instead of touching
+	// Token directly, since those paths take the mutex.
+	Token     string
+	UserAgent string
+
+	// tokenMu guards Token when SetToken is in use. The zero value is fine;
+	// callers that never call SetToken pay only an uncontended RLock per
+	// request.
+	tokenMu sync.RWMutex
+}
+
+// SetToken atomically replaces the bearer token used by subsequent requests.
+// It is safe to call from a background goroutine (e.g. a token-refresh loop)
+// while requests are in flight. Existing in-flight requests are unaffected;
+// the new token applies to requests started after SetToken returns.
+func (c *Client) SetToken(token string) {
+	c.tokenMu.Lock()
+	c.Token = token
+	c.tokenMu.Unlock()
+}
+
+// token returns the current bearer token under the read lock.
+func (c *Client) token() string {
+	c.tokenMu.RLock()
+	defer c.tokenMu.RUnlock()
+	return c.Token
 }
 
 // Config controls how New constructs a Client. All fields are optional except
@@ -127,8 +155,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	} else {
 		req.Header.Set("User-Agent", DefaultUserAgent)
 	}
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+	if tok := c.token(); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
 	}
 
 	resp, err := c.HTTPClient.Do(req)

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -561,6 +562,79 @@ func TestNew_RequiresBaseURL(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
 		t.Fatal("expected error for missing BaseURL")
 	}
+}
+
+// ---- SetToken --------------------------------------------------------------
+
+func TestSetToken_RotatesAuthHeader(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		writeJSON(t, w, 200, []Pool{})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if _, err := c.ListPools(context.Background()); err != nil {
+		t.Fatalf("first ListPools: %v", err)
+	}
+
+	c.SetToken("rotated-xyz")
+	if got := c.token(); got != "rotated-xyz" {
+		t.Errorf("token() = %q, want rotated-xyz", got)
+	}
+	if _, err := c.ListPools(context.Background()); err != nil {
+		t.Fatalf("second ListPools: %v", err)
+	}
+
+	c.SetToken("")
+	if _, err := c.ListPools(context.Background()); err != nil {
+		t.Fatalf("third ListPools: %v", err)
+	}
+
+	if len(seen) != 3 {
+		t.Fatalf("calls=%d want 3", len(seen))
+	}
+	if seen[0] != "Bearer tok-abc" {
+		t.Errorf("call0 auth=%q", seen[0])
+	}
+	if seen[1] != "Bearer rotated-xyz" {
+		t.Errorf("call1 auth=%q", seen[1])
+	}
+	if seen[2] != "" {
+		t.Errorf("call2 auth=%q (expected empty after SetToken(\"\"))", seen[2])
+	}
+}
+
+func TestSetToken_Concurrent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, 200, []Pool{})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		i := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.SetToken("t-" + strconv.Itoa(i))
+				i++
+			}
+		}
+	}()
+	for i := 0; i < 50; i++ {
+		if _, err := c.ListPools(context.Background()); err != nil {
+			t.Fatalf("iter %d: %v", i, err)
+		}
+	}
+	close(stop)
+	<-done
 }
 
 // silence unused-import warning in case io.Reader stops being referenced

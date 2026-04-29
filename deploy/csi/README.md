@@ -53,25 +53,58 @@ IMPORT_K3S=1 ./deploy/csi/build-image.sh
 required. Without it, push to a registry your cluster can pull from and
 edit `image:` in the manifests.
 
-### 2. Create the auth Secret
+### 2. Create the Keycloak client and auth Secret
 
-The Secret must contain a JWT and the nova-api CA. Don't commit either.
+NovaNAS CSI uses the OAuth2 **client_credentials** grant. The driver fetches
+a fresh access token at startup and refreshes it in the background at ~70%
+of each token's remaining lifetime, so the static-JWT-in-a-Secret pattern is
+gone — operators only ship the client secret.
+
+#### 2a. Create the `nova-csi` client in Keycloak
+
+A helper that runs `kcadm.sh` against your Keycloak instance:
 
 ```
-JWT=$(curl -sf "$KEYCLOAK_TOKEN_URL" \
-  -d grant_type=client_credentials \
-  -d client_id=nova-csi \
-  -d client_secret="$NOVA_CSI_CLIENT_SECRET" \
-  | jq -r .access_token)
+KC_URL=https://kc.example:8443 \
+KC_ADMIN_USER=admin \
+KC_ADMIN_PASS='...' \
+  ./deploy/keycloak/create-csi-client.sh > /tmp/csi-client.json
+```
+
+The script is idempotent: it creates `nova-csi` as a confidential
+service-account client (`clientAuthenticatorType=client-secret`,
+`serviceAccountsEnabled=true`, both standard and direct-access flows
+disabled), maps the `nova-operator` realm role to its service account,
+and rotates the client secret. It prints
+`{"clientId":"nova-csi","clientSecret":"..."}` to stdout.
+
+#### 2b. Create the Kubernetes Secret
+
+```
+SECRET=$(jq -r .clientSecret /tmp/csi-client.json)
 
 kubectl create namespace nova-csi --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n nova-csi create secret generic nova-csi-auth \
-    --from-literal=token="${JWT}" \
+    --from-literal=oidc-client-id=nova-csi \
+    --from-literal=oidc-client-secret="${SECRET}" \
     --from-file=ca.crt=/etc/nova-ca/ca.crt
 ```
 
-Token rotation: re-create the Secret in place, then
-`kubectl -n nova-csi rollout restart deployment/nova-csi-controller daemonset/nova-csi-node`.
+The `ca.crt` is used both for the nova-api connection and (by default) for
+the Keycloak issuer's TLS — see `--oidc-ca-cert` in the manifests if your
+Keycloak uses a different CA.
+
+#### Rotation
+
+Re-run `create-csi-client.sh` (it rotates the secret), update the Secret in
+place with the new value, then:
+
+```
+kubectl -n nova-csi rollout restart deployment/nova-csi-controller daemonset/nova-csi-node
+```
+
+Because access tokens are refreshed every few minutes, **the access token
+itself never needs to be rotated by hand** — only the client secret.
 
 ### 3. Install
 
@@ -138,11 +171,25 @@ kubectl -n nova-csi logs ds/nova-csi-node -c nova-csi
 kubectl -n nova-csi logs ds/nova-csi-node -c csi-node-driver-registrar
 ```
 
-### CrashLoopBackOff with "no token provided"
+### CrashLoopBackOff with "no token provided" or "oidc setup failed"
 
 Secret missing or wrong shape. Check
 `kubectl -n nova-csi get secret nova-csi-auth -o yaml` and confirm the
-`token` and `ca.crt` keys exist and are base64-encoded.
+`oidc-client-id`, `oidc-client-secret`, and `ca.crt` keys all exist and
+are base64-encoded.
+
+### "oidc: token endpoint returned 401: invalid_client"
+
+The client secret in the Secret no longer matches Keycloak. Re-run
+`deploy/keycloak/create-csi-client.sh` to mint a fresh secret and update
+the Secret in place.
+
+### "oidc: token endpoint returned 403: ... forbidden"
+
+The `nova-csi` client's service account does not have the `nova-operator`
+realm role. The setup script assigns it; if you bypassed the script,
+assign it manually in the Keycloak admin UI under
+*Clients → nova-csi → Service account roles*.
 
 ### "x509: certificate signed by unknown authority"
 
@@ -168,7 +215,7 @@ deliberately because the dataset may hold real data.
 
 ```
 kubectl -n nova-csi exec deploy/nova-csi-controller -c nova-csi -- \
-    sh -c 'curl -k --cacert /etc/nova-csi/ca.crt -H "Authorization: Bearer $(cat /etc/nova-csi/token)" https://127.0.0.1:8444/healthz'
+    sh -c 'curl -k --cacert /etc/nova-csi/ca.crt https://127.0.0.1:8444/healthz'
 ```
 
 If this fails, the systemd nova-api isn't listening on 127.0.0.1:8444
