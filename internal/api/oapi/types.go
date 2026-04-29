@@ -196,6 +196,24 @@ func (e DatasetInheritFlag) Valid() bool {
 	}
 }
 
+// Defines values for EncryptionInitRequestType.
+const (
+	Filesystem EncryptionInitRequestType = "filesystem"
+	Volume     EncryptionInitRequestType = "volume"
+)
+
+// Valid indicates whether the value is a known member of the EncryptionInitRequestType enum.
+func (e EncryptionInitRequestType) Valid() bool {
+	switch e {
+	case Filesystem:
+		return true
+	case Volume:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IscsiPortalTransport.
 const (
 	IscsiPortalTransportIser IscsiPortalTransport = "iser"
@@ -630,14 +648,20 @@ type ChangeKeyRequest struct {
 
 // Dataset defines model for Dataset.
 type Dataset struct {
-	AvailableBytes  *int         `json:"availableBytes,omitempty"`
-	Compression     *string      `json:"compression,omitempty"`
-	Mountpoint      *string      `json:"mountpoint,omitempty"`
-	Name            *string      `json:"name,omitempty"`
-	RecordSizeBytes *int         `json:"recordSizeBytes,omitempty"`
-	ReferencedBytes *int         `json:"referencedBytes,omitempty"`
-	Type            *DatasetType `json:"type,omitempty"`
-	UsedBytes       *int         `json:"usedBytes,omitempty"`
+	AvailableBytes *int    `json:"availableBytes,omitempty"`
+	Compression    *string `json:"compression,omitempty"`
+
+	// EncryptionAlgorithm ZFS encryption algorithm (e.g. aes-256-gcm); empty if not encrypted
+	EncryptionAlgorithm *string `json:"encryptionAlgorithm,omitempty"`
+
+	// EncryptionEnabled True if the dataset uses ZFS native encryption with a NovaNAS-escrowed key
+	EncryptionEnabled *bool        `json:"encryptionEnabled,omitempty"`
+	Mountpoint        *string      `json:"mountpoint,omitempty"`
+	Name              *string      `json:"name,omitempty"`
+	RecordSizeBytes   *int         `json:"recordSizeBytes,omitempty"`
+	ReferencedBytes   *int         `json:"referencedBytes,omitempty"`
+	Type              *DatasetType `json:"type,omitempty"`
+	UsedBytes         *int         `json:"usedBytes,omitempty"`
 }
 
 // DatasetType defines model for Dataset.Type.
@@ -683,11 +707,15 @@ type DatasetCloneRequest struct {
 
 // DatasetCreateSpec defines model for DatasetCreateSpec.
 type DatasetCreateSpec struct {
-	Name            string                `json:"name"`
-	Parent          string                `json:"parent"`
-	Properties      *map[string]string    `json:"properties,omitempty"`
-	Type            DatasetCreateSpecType `json:"type"`
-	VolumeSizeBytes *int                  `json:"volumeSizeBytes,omitempty"`
+	EncryptionAlgorithm *string `json:"encryptionAlgorithm,omitempty"`
+
+	// EncryptionEnabled When true the dataset is provisioned via the encryption endpoints which generate + escrow a TPM-wrapped raw key
+	EncryptionEnabled *bool                 `json:"encryptionEnabled,omitempty"`
+	Name              string                `json:"name"`
+	Parent            string                `json:"parent"`
+	Properties        *map[string]string    `json:"properties,omitempty"`
+	Type              DatasetCreateSpecType `json:"type"`
+	VolumeSizeBytes   *int                  `json:"volumeSizeBytes,omitempty"`
 }
 
 // DatasetCreateSpecType defines model for DatasetCreateSpec.Type.
@@ -730,6 +758,36 @@ type Disk struct {
 	Serial      *string `json:"serial,omitempty"`
 	SizeBytes   *int64  `json:"sizeBytes,omitempty"`
 	Wwn         *string `json:"wwn,omitempty"`
+}
+
+// EncryptionInitRequest defines model for EncryptionInitRequest.
+type EncryptionInitRequest struct {
+	Algorithm *string `json:"algorithm,omitempty"`
+
+	// Properties Extra `-o key=value` pairs. Reserved keys (encryption, keyformat, keylocation) are rejected.
+	Properties *map[string]string        `json:"properties,omitempty"`
+	Type       EncryptionInitRequestType `json:"type"`
+
+	// VolumeSizeBytes Required for type=volume
+	VolumeSizeBytes *int `json:"volumeSizeBytes,omitempty"`
+}
+
+// EncryptionInitRequestType defines model for EncryptionInitRequest.Type.
+type EncryptionInitRequestType string
+
+// EncryptionInitResponse defines model for EncryptionInitResponse.
+type EncryptionInitResponse struct {
+	Algorithm string    `json:"algorithm"`
+	Created   time.Time `json:"created"`
+	Dataset   string    `json:"dataset"`
+}
+
+// EncryptionRecoverResponse defines model for EncryptionRecoverResponse.
+type EncryptionRecoverResponse struct {
+	Dataset string `json:"dataset"`
+
+	// KeyHex 64-character hex encoding of the unwrapped 32-byte raw key
+	KeyHex string `json:"keyHex"`
 }
 
 // Error defines model for Error.
@@ -1714,6 +1772,9 @@ type CloneDatasetJSONRequestBody = DatasetCloneRequest
 
 // DestroyDatasetBookmarkJSONRequestBody defines body for DestroyDatasetBookmark for application/json ContentType.
 type DestroyDatasetBookmarkJSONRequestBody = BookmarkDestroyRequest
+
+// InitializeDatasetEncryptionJSONRequestBody defines body for InitializeDatasetEncryption for application/json ContentType.
+type InitializeDatasetEncryptionJSONRequestBody = EncryptionInitRequest
 
 // LoadDatasetKeyJSONRequestBody defines body for LoadDatasetKey for application/json ContentType.
 type LoadDatasetKeyJSONRequestBody = LoadKeyRequest

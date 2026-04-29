@@ -405,6 +405,86 @@ paths:
       responses:
         '202': { $ref: '#/components/responses/Accepted' }
 
+  /datasets/{fullname}/encryption:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string, description: URL-encoded full dataset name }
+    post:
+      operationId: initializeDatasetEncryption
+      description: |
+        Provisions a new encrypted dataset. nova-api generates a fresh 32-byte
+        raw key, TPM-wraps it via internal/host/tpm.WrapAEAD, escrows the wrapped
+        blob in OpenBao under nova/zfs-keys/<dataset>, and runs `zfs create` with
+        the key piped to stdin. Rolls back the OpenBao escrow if `zfs create`
+        fails. The plaintext key is never written to disk.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EncryptionInitRequest' }
+      responses:
+        '201':
+          description: Encrypted dataset created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EncryptionInitResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: TPM unavailable on this host
+
+  /datasets/{fullname}/encryption/load-key:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    post:
+      operationId: encryptionLoadKey
+      description: Fetches the wrapped blob from OpenBao, TPM-unwraps, pipes to `zfs load-key`. Idempotent.
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '503':
+          description: TPM unavailable on this host
+
+  /datasets/{fullname}/encryption/unload-key:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    post:
+      operationId: encryptionUnloadKey
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /datasets/{fullname}/encryption/recover:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    post:
+      operationId: encryptionRecover
+      description: |
+        Break-glass: returns the unwrapped 32-byte raw key as hex. Gated by
+        PermPoolEncryptionRecover (admin only). Every call writes an explicit
+        `encryption.recover` audit row capturing actor + dataset + timestamp;
+        the recovered key value is NOT in the audit payload.
+      responses:
+        '200':
+          description: Unwrapped raw key (hex)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EncryptionRecoverResponse' }
+        '403':
+          description: Caller lacks PermPoolEncryptionRecover
+        '404':
+          description: No escrowed key for this dataset
+        '503':
+          description: TPM unavailable on this host
+
   /datasets/{fullname}/load-key:
     parameters:
       - in: path
@@ -2614,6 +2694,8 @@ components:
         mountpoint:      { type: string }
         compression:     { type: string }
         recordSizeBytes: { type: integer }
+        encryptionEnabled:   { type: boolean, description: True if the dataset uses ZFS native encryption with a NovaNAS-escrowed key }
+        encryptionAlgorithm: { type: string, description: ZFS encryption algorithm (e.g. aes-256-gcm); empty if not encrypted }
     DatasetDetail:
       type: object
       properties:
@@ -2630,6 +2712,35 @@ components:
         properties:
           type: object
           additionalProperties: { type: string }
+        encryptionEnabled:   { type: boolean, description: When true the dataset is provisioned via the encryption endpoints which generate + escrow a TPM-wrapped raw key }
+        encryptionAlgorithm: { type: string, default: aes-256-gcm }
+    EncryptionInitRequest:
+      type: object
+      required: [type]
+      properties:
+        type:            { type: string, enum: [filesystem, volume] }
+        volumeSizeBytes: { type: integer, description: Required for type=volume }
+        algorithm:       { type: string, default: aes-256-gcm }
+        properties:
+          type: object
+          additionalProperties: { type: string }
+          description: Extra `-o key=value` pairs. Reserved keys (encryption, keyformat, keylocation) are rejected.
+    EncryptionInitResponse:
+      type: object
+      required: [dataset, algorithm, created]
+      properties:
+        dataset:   { type: string }
+        algorithm: { type: string }
+        created:   { type: string, format: date-time }
+    EncryptionRecoverResponse:
+      type: object
+      required: [dataset, keyHex]
+      properties:
+        dataset: { type: string }
+        keyHex:
+          type: string
+          description: 64-character hex encoding of the unwrapped 32-byte raw key
+          pattern: '^[0-9a-f]{64}$'
     Snapshot:
       type: object
       properties:
