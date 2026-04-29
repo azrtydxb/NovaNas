@@ -141,11 +141,69 @@ func (d *SystemdDeployer) Install(ctx context.Context, manifest *Plugin) error {
 	if err := d.Runner.Run(ctx, "daemon-reload"); err != nil {
 		return err
 	}
+
+	// Run deploy/install.sh if present BEFORE `systemctl enable --now`.
+	// This is the conventional staging hook: it can download binaries,
+	// create users, materialize env files from templates — anything the
+	// unit needs in place before it can start. The script runs with
+	// PLUGIN_ROOT set in the env.
+	if err := d.runStagingHook(ctx, name, "deploy/install.sh"); err != nil {
+		return fmt.Errorf("plugins: deploy: install hook: %w", err)
+	}
+
 	if err := d.Runner.Run(ctx, "enable", "--now", d.unitName(name)); err != nil {
 		return err
 	}
 	if d.Logger != nil {
 		d.Logger.Info("plugins: systemd unit enabled", "plugin", name)
+	}
+
+	// PostInstall hook runs AFTER the unit is up — for things that need
+	// the running service (e.g. seeding initial state via the plugin's
+	// own API).
+	if hook := manifest.Spec.Lifecycle.PostInstall; hook != "" {
+		if err := d.runStagingHook(ctx, name, hook); err != nil {
+			return fmt.Errorf("plugins: deploy: postInstall hook: %w", err)
+		}
+	}
+	return nil
+}
+
+// runStagingHook executes a script inside the plugin's unpacked tree
+// with PLUGIN_ROOT set in its env. Returns nil if the script doesn't
+// exist (the script is conventional, not mandatory). Captures combined
+// output and includes it on failure for actionable errors.
+func (d *SystemdDeployer) runStagingHook(ctx context.Context, plugin, relPath string) error {
+	scriptPath := filepath.Join(d.pluginRoot(plugin), relPath)
+	st, err := os.Stat(scriptPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat %q: %w", scriptPath, err)
+	}
+	if st.IsDir() {
+		return fmt.Errorf("hook %q is a directory", scriptPath)
+	}
+	// Make sure the script is executable; some packagers strip perms.
+	if st.Mode()&0o111 == 0 {
+		if err := os.Chmod(scriptPath, st.Mode()|0o755); err != nil {
+			return fmt.Errorf("chmod %q: %w", scriptPath, err)
+		}
+	}
+	cmd := exec.CommandContext(ctx, scriptPath)
+	cmd.Dir = d.pluginRoot(plugin)
+	cmd.Env = append(os.Environ(),
+		"PLUGIN_ROOT="+d.pluginRoot(plugin),
+		"PLUGIN_LIB="+d.pluginRoot(plugin), // alias — PLUGIN_LIB and PLUGIN_ROOT are the same dir
+		"PLUGIN_NAME="+plugin,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("script %q: %w (%s)", scriptPath, err, strings.TrimSpace(string(out)))
+	}
+	if d.Logger != nil {
+		d.Logger.Info("plugins: hook ran", "plugin", plugin, "script", relPath, "bytes", len(out))
 	}
 	return nil
 }
