@@ -6,6 +6,7 @@ import {
   type ReplicationSchedule,
   type SnapshotSchedule,
 } from "../../api/replication";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 export function Schedules() {
@@ -29,22 +30,26 @@ export function Schedules() {
   const invalRepl = () => qc.invalidateQueries({ queryKey: ["replication-schedules"] });
 
   const delSnap = useMutation({
+    meta: { label: "Delete snapshot schedule failed" },
     mutationFn: (id: string) => replication.deleteSnapshotSchedule(id),
-    onSuccess: invalSnap,
+    onSuccess: () => { invalSnap(); toastSuccess("Snapshot schedule deleted"); },
   });
   const delRepl = useMutation({
+    meta: { label: "Delete replication schedule failed" },
     mutationFn: (id: string) => replication.deleteReplicationSchedule(id),
-    onSuccess: invalRepl,
+    onSuccess: () => { invalRepl(); toastSuccess("Replication schedule deleted"); },
   });
   const togSnap = useMutation({
+    meta: { label: "Toggle failed" },
     mutationFn: (s: SnapshotSchedule) =>
       replication.updateSnapshotSchedule(s.id, { ...s, enabled: !s.enabled }),
-    onSuccess: invalSnap,
+    onSuccess: (_d, s) => { invalSnap(); toastSuccess(s.enabled ? "Schedule disabled" : "Schedule enabled"); },
   });
   const togRepl = useMutation({
+    meta: { label: "Toggle failed" },
     mutationFn: (s: ReplicationSchedule) =>
       replication.updateReplicationSchedule(s.id, { ...s, enabled: !s.enabled }),
-    onSuccess: invalRepl,
+    onSuccess: (_d, s) => { invalRepl(); toastSuccess(s.enabled ? "Schedule disabled" : "Schedule enabled"); },
   });
 
   return (
@@ -213,10 +218,11 @@ function SnapshotScheduleModal({
   });
 
   const m = useMutation({
+    meta: { label: "Save snapshot schedule failed" },
     mutationFn: () => init
       ? replication.updateSnapshotSchedule(init.id, body())
       : replication.createSnapshotSchedule(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Schedule updated" : "Schedule created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -290,10 +296,11 @@ function ReplicationScheduleModal({
   });
 
   const m = useMutation({
+    meta: { label: "Save replication schedule failed" },
     mutationFn: () => init
       ? replication.updateReplicationSchedule(init.id, body())
       : replication.createReplicationSchedule(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Schedule updated" : "Schedule created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 

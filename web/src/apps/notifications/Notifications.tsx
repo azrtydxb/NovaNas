@@ -5,6 +5,7 @@ import {
   type NotificationEvent,
 } from "../../api/observability";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 type FilterMode = "all" | "unread" | "snoozed";
 
@@ -107,22 +108,33 @@ export default function Notifications() {
   });
 
   const readAll = useMutation({
+    meta: { label: "Mark all read failed" },
     mutationFn: () => notifications.readAll(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      toastSuccess("All notifications marked read");
+    },
   });
   const markRead = useMutation({
+    meta: { label: "Mark read failed" },
     mutationFn: (id: string) => notifications.markRead(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
   const dismiss = useMutation({
+    meta: { label: "Dismiss failed" },
     mutationFn: (id: string) => notifications.dismiss(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      toastSuccess("Notification dismissed");
+    },
   });
   const snooze = useMutation({
+    meta: { label: "Snooze failed" },
     mutationFn: ({ id, minutes }: { id: string; minutes: number }) =>
       notifications.snooze(id, minutes),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
+      toastSuccess("Notification snoozed");
       setSnoozeFor(null);
     },
   });

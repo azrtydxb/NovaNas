@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
 import { vms, type VMSnapshot } from "../../api/vms";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 export function VMSnapshots() {
   const qc = useQueryClient();
@@ -11,13 +12,21 @@ export function VMSnapshots() {
     retry: false,
   });
   const restore = useMutation({
+    meta: { label: "Restore failed" },
     mutationFn: (s: { name: string; namespace?: string }) => vms.restore(s.name, s.namespace),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms"] }),
+    onSuccess: (_d, s) => {
+      qc.invalidateQueries({ queryKey: ["vms"] });
+      toastSuccess(`Restore from ${s.name} started`);
+    },
   });
   const del = useMutation({
+    meta: { label: "Delete snapshot failed" },
     mutationFn: (s: VMSnapshot) =>
       vms.deleteSnapshot(s.namespace ?? "default", s.name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms", "snapshots"] }),
+    onSuccess: (_d, s) => {
+      qc.invalidateQueries({ queryKey: ["vms", "snapshots"] });
+      toastSuccess(`Snapshot ${s.name} deleted`);
+    },
   });
 
   if (q.isError) {

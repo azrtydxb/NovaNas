@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
 import { vms, type VM } from "../../api/vms";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function vmKey(v: VM) {
   return `${v.namespace ?? v.ns ?? "default"}/${v.name}`;
@@ -52,9 +53,11 @@ function MigrateModal({
   const qc = useQueryClient();
   const [target, setTarget] = useState("");
   const mut = useMutation({
+    meta: { label: "Migrate failed" },
     mutationFn: () => vms.migrate(vmNs(vm), vm.name, target || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vms", "list"] });
+      toastSuccess(`${vm.name} migration started`);
       onClose();
     },
   });
@@ -124,7 +127,18 @@ export function VMs() {
     retry: false,
   });
 
+  const verbLabel: Record<
+    "start" | "stop" | "restart" | "pause" | "unpause",
+    string
+  > = {
+    start: "started",
+    stop: "shut down",
+    restart: "restarting",
+    pause: "paused",
+    unpause: "resumed",
+  };
   const action = useMutation({
+    meta: { label: "VM action failed" },
     mutationFn: async (a: {
       ns: string;
       name: string;
@@ -143,7 +157,10 @@ export function VMs() {
           return vms.unpause(a.ns, a.name);
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["vms", "list"] }),
+    onSuccess: (_d, a) => {
+      qc.invalidateQueries({ queryKey: ["vms", "list"] });
+      toastSuccess(`${a.name} ${verbLabel[a.verb]}`);
+    },
   });
 
   if (list.isError) {

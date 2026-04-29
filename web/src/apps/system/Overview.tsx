@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { system, type NtpConfig } from "../../api/system";
 import { Icon } from "../../components/Icon";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 
 function formatUptime(v: string | number | undefined): string {
   if (v === undefined || v === null) return "—";
@@ -223,8 +224,12 @@ export function Overview() {
 function CancelShutdownBtn() {
   const qc = useQueryClient();
   const cancel = useMutation({
+    meta: { label: "Cancel shutdown failed" },
     mutationFn: () => system.cancelShutdown(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["system"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["system"] });
+      toastSuccess("Scheduled shutdown cancelled");
+    },
   });
   return (
     <button
@@ -248,9 +253,11 @@ function HostnameModal({
   const qc = useQueryClient();
   const [val, setVal] = useState(current);
   const save = useMutation({
+    meta: { label: "Set hostname failed" },
     mutationFn: () => system.setHostname(val.trim()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system"] });
+      toastSuccess("Hostname updated");
       onClose();
     },
   });
@@ -317,9 +324,11 @@ function TimezoneModal({
   const qc = useQueryClient();
   const [val, setVal] = useState(current);
   const save = useMutation({
+    meta: { label: "Set timezone failed" },
     mutationFn: () => system.setTimezone(val),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system"] });
+      toastSuccess("Timezone updated");
       onClose();
     },
   });
@@ -400,6 +409,7 @@ function NtpModal({
   const [enabled, setEnabled] = useState(!!current.enabled);
   const [servers, setServers] = useState((current.servers ?? []).join(", "));
   const save = useMutation({
+    meta: { label: "Save NTP failed" },
     mutationFn: () =>
       system.setNtp({
         enabled,
@@ -410,6 +420,7 @@ function NtpModal({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system"] });
+      toastSuccess("NTP configuration saved");
       onClose();
     },
   });
@@ -492,12 +503,14 @@ function PowerModal({
   useEffect(() => undefined, []);
 
   const run = useMutation({
+    meta: { label: `${verb} failed` },
     mutationFn: () =>
       isReboot
         ? system.reboot(reason || "operator initiated")
         : system.shutdown(reason || "operator initiated"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system"] });
+      toastSuccess(isReboot ? "Reboot initiated" : "Shutdown initiated");
       onClose();
     },
   });

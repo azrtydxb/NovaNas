@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
 import { workloads, type ChartIndexEntry } from "../../api/workloads";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function Field({
   label,
@@ -36,6 +37,7 @@ function InstallChartModal({
   const [values, setValues] = useState("");
 
   const mut = useMutation({
+    meta: { label: "Install failed" },
     mutationFn: () =>
       workloads.install({
         chart: entry.name,
@@ -46,6 +48,7 @@ function InstallChartModal({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workloads"] });
+      toastSuccess(`${release || entry.name} installed`);
       onClose();
     },
   });
@@ -142,8 +145,12 @@ export function Catalog() {
   });
 
   const reload = useMutation({
+    meta: { label: "Reload index failed" },
     mutationFn: () => workloads.reloadIndex(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workloads", "index"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workloads", "index"] });
+      toastSuccess("Catalog index reloaded");
+    },
   });
 
   if (q.isError) {

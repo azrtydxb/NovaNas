@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { shares, type SmbShare, type SmbUser } from "../../api/shares";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 type View = "shares" | "users" | "globals";
@@ -36,11 +37,14 @@ function SharesView() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["smb-shares"] });
   const delMut = useMutation({
+    meta: { label: "Delete share failed" },
     mutationFn: (n: string) => shares.deleteSmb(n),
-    onSuccess: inval,
+    onSuccess: (_d, n) => { inval(); toastSuccess("SMB share deleted", n); },
   });
   const reloadMut = useMutation({
+    meta: { label: "Reload failed" },
     mutationFn: () => shares.smbReload(),
+    onSuccess: () => toastSuccess("Samba reloaded"),
   });
 
   return (
@@ -141,10 +145,11 @@ function SmbShareModal({
   });
 
   const m = useMutation({
+    meta: { label: "Save share failed" },
     mutationFn: () => init
       ? shares.updateSmb(init.name, body())
       : shares.createSmb(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "SMB share updated" : "SMB share created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -215,8 +220,9 @@ function UsersView() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["smb-users"] });
   const delMut = useMutation({
+    meta: { label: "Delete user failed" },
     mutationFn: (u: string) => shares.deleteSmbUser(u),
-    onSuccess: inval,
+    onSuccess: (_d, u) => { inval(); toastSuccess("User deleted", u); },
   });
 
   return (
@@ -294,10 +300,11 @@ function SmbUserModal({
   const [err, setErr] = useState<string | null>(null);
 
   const m = useMutation({
+    meta: { label: "Save user failed" },
     mutationFn: () => init
       ? shares.updateSmbUser(init.username, { fullname, enabled })
       : shares.createSmbUser({ username, fullname, enabled, password: password || undefined }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "User updated" : "User created", username); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -345,8 +352,9 @@ function SmbPasswordModal({ username, onClose }: { username: string; onClose: ()
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Set password failed" },
     mutationFn: () => shares.setSmbUserPassword(username, pw),
-    onSuccess: onClose,
+    onSuccess: () => { onClose(); toastSuccess("Password updated", username); },
     onError: (e: Error) => setErr(e.message),
   });
   return (

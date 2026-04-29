@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { storage, type Snapshot } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 function snapKey(s: Snapshot): string {
@@ -13,15 +14,22 @@ export function SnapshotsTab() {
   const [filter, setFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [holdFor, setHoldFor] = useState<string | null>(null);
+  const [diffSel, setDiffSel] = useState<string[]>([]);
+  const [showDiff, setShowDiff] = useState(false);
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["snapshots"], queryFn: () => storage.listSnapshots() });
 
   const inval = () => qc.invalidateQueries({ queryKey: ["snapshots"] });
 
   const delMut = useMutation({
+    meta: { label: "Delete failed" },
     mutationFn: (full: string) => storage.deleteSnapshot(full),
-    onSuccess: inval,
+    onSuccess: (_d, full) => { inval(); toastSuccess("Snapshot deleted", full); },
   });
+
+  const toggleDiff = (k: string) => {
+    setDiffSel((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k].slice(-2));
+  };
 
   const list = (q.data ?? []).filter((s) =>
     filter ? snapKey(s).toLowerCase().includes(filter.toLowerCase()) : true
@@ -33,6 +41,15 @@ export function SnapshotsTab() {
         <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
           <Icon name="plus" size={11} />
           Take snapshot
+        </button>
+        <button
+          className="btn"
+          disabled={diffSel.length !== 2}
+          onClick={() => setShowDiff(true)}
+          title="Pick exactly two snapshots of the same dataset, then click Diff"
+        >
+          <Icon name="files" size={11} />
+          Diff ({diffSel.length}/2)
         </button>
         <input
           className="input"
@@ -61,6 +78,7 @@ export function SnapshotsTab() {
               <th>Schedule</th>
               <th>Hold</th>
               <th>Created</th>
+              <th>Diff</th>
               <th></th>
             </tr>
           </thead>
@@ -78,6 +96,13 @@ export function SnapshotsTab() {
                     {s.hold ? <Icon name="shield" size={11} /> : <span className="muted">—</span>}
                   </td>
                   <td className="muted">{s.created ?? "—"}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={diffSel.includes(k)}
+                      onChange={() => toggleDiff(k)}
+                    />
+                  </td>
                   <td className="num">
                     <button className="btn btn--sm" onClick={() => setHoldFor(k)}>
                       Holds
@@ -101,7 +126,66 @@ export function SnapshotsTab() {
 
       {showCreate && <CreateSnapshotModal onClose={() => setShowCreate(false)} onDone={inval} />}
       {holdFor && <HoldsModal fullname={holdFor} onClose={() => setHoldFor(null)} />}
+      {showDiff && diffSel.length === 2 && (
+        <DiffModal a={diffSel[0]!} b={diffSel[1]!} onClose={() => setShowDiff(false)} />
+      )}
     </div>
+  );
+}
+
+function DiffModal({ a, b, onClose }: { a: string; b: string; onClose: () => void }) {
+  // a and b are full snapshot names like "pool/ds@snap1". The /datasets/{full}/diff endpoint
+  // is keyed on the dataset name; both snapshots must share the same dataset.
+  const dsA = a.split("@")[0] ?? a;
+  const dsB = b.split("@")[0] ?? b;
+  const sameDataset = dsA === dsB;
+  const [data, setData] = useState<unknown>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Diff failed" },
+    mutationFn: () => storage.diffDataset(dsA, { from: a, to: b }),
+    onSuccess: (d) => setData(d),
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Snapshot diff" sub={`${a}  →  ${b}`} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Close</button>
+          <button
+            className="btn btn--primary"
+            disabled={!sameDataset || m.isPending}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Comparing…" : "Compare"}
+          </button>
+        </>
+      }
+    >
+      {!sameDataset && (
+        <div className="modal__err">
+          Snapshots must belong to the same dataset to diff.<br/>
+          Got <code>{dsA}</code> vs <code>{dsB}</code>.
+        </div>
+      )}
+      {err && <div className="modal__err">{err}</div>}
+      {data != null && (
+        <pre
+          className="mono"
+          style={{
+            fontSize: 11,
+            maxHeight: 360,
+            overflow: "auto",
+            background: "var(--bg-2)",
+            padding: 10,
+            border: "1px solid var(--line)",
+            borderRadius: 6,
+          }}
+        >
+          {typeof data === "string" ? data : JSON.stringify(data, null, 2)}
+        </pre>
+      )}
+    </Modal>
   );
 }
 
@@ -119,8 +203,9 @@ function CreateSnapshotModal({
   const [err, setErr] = useState<string | null>(null);
 
   const m = useMutation({
+    meta: { label: "Snapshot failed" },
     mutationFn: () => storage.createSnapshot(dataset, name),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Snapshot taken", `${dataset}@${name}`); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -174,13 +259,15 @@ function HoldsModal({ fullname, onClose }: { fullname: string; onClose: () => vo
   const [err, setErr] = useState<string | null>(null);
 
   const holdMut = useMutation({
+    meta: { label: "Hold failed" },
     mutationFn: () => storage.holdSnapshot(fullname, tag),
-    onSuccess: () => { setTag(""); inval(); },
+    onSuccess: () => { setTag(""); inval(); toastSuccess("Hold added"); },
     onError: (e: Error) => setErr(e.message),
   });
   const releaseMut = useMutation({
+    meta: { label: "Release failed" },
     mutationFn: (t: string) => storage.releaseSnapshot(fullname, t),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Hold released"); },
   });
 
   return (

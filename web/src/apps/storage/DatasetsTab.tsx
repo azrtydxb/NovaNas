@@ -7,6 +7,7 @@ import {
   type DatasetMetadata,
 } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 function dsKey(d: Dataset): string {
@@ -41,6 +42,9 @@ export function DatasetsTab() {
             <Icon name="plus" size={11} />
             New dataset
           </button>
+          <span className="muted small" style={{ marginLeft: 8 }}>
+            Not yet supported — backend has no <code>POST /datasets</code> endpoint.
+          </span>
         </div>
         {q.isLoading && <div className="empty-hint">Loading datasets…</div>}
         {q.isError && (
@@ -120,7 +124,7 @@ export function DatasetsTab() {
   );
 }
 
-type SubTab = "general" | "props" | "quota" | "policy" | "sharing" | "acl" | "meta";
+type SubTab = "general" | "props" | "quota" | "policy" | "sharing" | "acl" | "bookmarks" | "meta";
 
 function DatasetDetail({
   fullname,
@@ -147,8 +151,9 @@ function DatasetDetail({
   };
 
   const promoteMut = useMutation({
+    meta: { label: "Promote failed" },
     mutationFn: () => storage.promoteDataset(fullname),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Dataset promoted", fullname); },
   });
 
   if (!d) {
@@ -187,7 +192,7 @@ function DatasetDetail({
       </div>
 
       <div className="win-tabs" style={{ overflowX: "auto" }}>
-        {(["general", "props", "quota", "policy", "sharing", "acl", "meta"] as const).map((t) => (
+        {(["general", "props", "quota", "policy", "sharing", "acl", "bookmarks", "meta"] as const).map((t) => (
           <button key={t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>
             {t}
           </button>
@@ -276,6 +281,7 @@ function DatasetDetail({
       )}
 
       {tab === "acl" && <AclPanel fullname={fullname} />}
+      {tab === "bookmarks" && <BookmarksPanel fullname={fullname} />}
       {tab === "meta" && <MetadataPanel fullname={fullname} />}
 
       <div
@@ -325,8 +331,9 @@ function AclPanel({ fullname }: { fullname: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["acl", fullname] });
   const removeMut = useMutation({
+    meta: { label: "Remove ACL failed" },
     mutationFn: (i: number) => storage.removeAcl(fullname, i),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("ACL entry removed"); },
   });
   const [tag, setTag] = useState("user");
   const [who, setWho] = useState("");
@@ -334,8 +341,9 @@ function AclPanel({ fullname }: { fullname: string }) {
   const [err, setErr] = useState<string | null>(null);
 
   const appendMut = useMutation({
+    meta: { label: "Add ACL failed" },
     mutationFn: () => storage.appendAcl(fullname, { tag, who, permissions: perms }),
-    onSuccess: () => { setWho(""); inval(); },
+    onSuccess: () => { setWho(""); inval(); toastSuccess("ACL entry added"); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -427,8 +435,9 @@ function MetadataPanel({ fullname }: { fullname: string }) {
   }, [q.data]);
 
   const saveMut = useMutation({
+    meta: { label: "Save metadata failed" },
     mutationFn: () => storage.putMetadata(fullname, draft),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meta", fullname] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["meta", fullname] }); toastSuccess("Metadata saved"); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -497,12 +506,106 @@ function MetadataPanel({ fullname }: { fullname: string }) {
   );
 }
 
+function BookmarksPanel({ fullname }: { fullname: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["bookmarks", fullname],
+    queryFn: () => storage.listBookmarks(fullname),
+  });
+  const inval = () => qc.invalidateQueries({ queryKey: ["bookmarks", fullname] });
+  const [snap, setSnap] = useState("");
+  const [bm, setBm] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const createMut = useMutation({
+    meta: { label: "Create bookmark failed" },
+    mutationFn: () => storage.createBookmark(fullname, { snapshot: snap, bookmark: bm }),
+    onSuccess: () => { setSnap(""); setBm(""); inval(); toastSuccess("Bookmark created"); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  const destroyMut = useMutation({
+    meta: { label: "Destroy bookmark failed" },
+    mutationFn: (b: string) => storage.destroyBookmark(fullname, b),
+    onSuccess: () => { inval(); toastSuccess("Bookmark destroyed"); },
+  });
+  return (
+    <div className="sect">
+      <div className="sect__title">Bookmarks</div>
+      <div className="sect__body">
+        {q.isLoading && <div className="muted">Loading…</div>}
+        {q.isError && (
+          <div className="muted" style={{ color: "var(--err)" }}>{(q.error as Error).message}</div>
+        )}
+        {q.data && q.data.length === 0 && <div className="muted">No bookmarks.</div>}
+        {q.data && q.data.length > 0 && (
+          <table className="tbl tbl--compact">
+            <thead>
+              <tr>
+                <th>Bookmark</th>
+                <th>Created</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((b) => {
+                const k = b.fullname ?? b.name;
+                const tail = k.includes("#") ? k.slice(k.indexOf("#") + 1) : k;
+                return (
+                  <tr key={k}>
+                    <td className="mono" style={{ fontSize: 11 }}>{k}</td>
+                    <td className="muted">{b.created ?? "—"}</td>
+                    <td className="num">
+                      <button
+                        className="btn btn--sm btn--danger"
+                        disabled={destroyMut.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Destroy bookmark ${k}?`)) destroyMut.mutate(tail);
+                        }}
+                      >
+                        Destroy
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <div className="row gap-8" style={{ marginTop: 8, flexWrap: "wrap" }}>
+          <input
+            className="input"
+            placeholder="snapshot (e.g. snap-1)"
+            value={snap}
+            onChange={(e) => setSnap(e.target.value)}
+            style={{ flex: 1, minWidth: 120 }}
+          />
+          <input
+            className="input"
+            placeholder="bookmark name"
+            value={bm}
+            onChange={(e) => setBm(e.target.value)}
+            style={{ flex: 1, minWidth: 120 }}
+          />
+          <button
+            className="btn btn--sm"
+            disabled={createMut.isPending || !snap || !bm}
+            onClick={() => { setErr(null); createMut.mutate(); }}
+          >
+            Create
+          </button>
+        </div>
+        {err && <div className="modal__err" style={{ marginTop: 6 }}>{err}</div>}
+      </div>
+    </div>
+  );
+}
+
 function RollbackModal({ fullname, onClose, onDone }: { fullname: string; onClose: () => void; onDone: () => void }) {
   const [snap, setSnap] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Rollback failed" },
     mutationFn: () => storage.rollbackDataset(fullname, snap || undefined),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Dataset rolled back", fullname); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -530,8 +633,9 @@ function CloneModal({ fullname, onClose, onDone }: { fullname: string; onClose: 
   const [target, setTarget] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Clone failed" },
     mutationFn: () => storage.cloneDataset(fullname, { snapshot: snap, target }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Dataset cloned", target); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -566,8 +670,9 @@ function RenameModal({ fullname, onClose, onDone }: { fullname: string; onClose:
   const [target, setTarget] = useState(fullname);
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Rename failed" },
     mutationFn: () => storage.renameDataset(fullname, target),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Dataset renamed", target); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -603,15 +708,99 @@ function SendReceiveModal({
   fullname: string;
   onClose: () => void;
 }) {
+  const [snapshot, setSnapshot] = useState("");
+  const [target, setTarget] = useState("");
+  const [incremental, setIncremental] = useState("");
+  const [encrypted, setEncrypted] = useState(false);
+  const [resumeToken, setResumeToken] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const m = useMutation({
+    meta: { label: `${mode === "send" ? "Send" : "Receive"} failed` },
+    mutationFn: () => mode === "send"
+      ? storage.sendDataset(fullname, {
+          snapshot: snapshot || undefined,
+          target: target || undefined,
+          incremental: incremental || undefined,
+          encrypted: encrypted || undefined,
+          resume_token: resumeToken || undefined,
+        })
+      : storage.receiveDataset(fullname, {
+          source: target || undefined,
+          snapshot: snapshot || undefined,
+          resume_token: resumeToken || undefined,
+        }),
+    onSuccess: () => {
+      onClose();
+      toastSuccess(mode === "send" ? "Send started" : "Receive started", fullname);
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const valid = mode === "send" ? !!snapshot : !!target;
+
   return (
-    <Modal title={mode === "send" ? "Send dataset" : "Receive dataset"} sub={fullname} onClose={onClose}
-      footer={<button className="btn" onClick={onClose}>Close</button>}
+    <Modal
+      title={mode === "send" ? "Send dataset" : "Receive dataset"}
+      sub={fullname}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !valid}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Working…" : (mode === "send" ? "Send" : "Receive")}
+          </button>
+        </>
+      }
     >
-      <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
-        Streaming send/receive is a multi-step flow (target selection, encryption,
-        resume tokens). The endpoint exists at{" "}
-        <code>POST /api/v1/datasets/{fullname}/{mode}</code> — wiring the
-        actual streaming UI is coming next.
+      {err && <div className="modal__err">{err}</div>}
+      {mode === "send" ? (
+        <>
+          <div className="field">
+            <label className="field__label">Snapshot to send (required)</label>
+            <input className="input" value={snapshot} onChange={(e) => setSnapshot(e.target.value)} placeholder="snap-2026-04-29" />
+          </div>
+          <div className="field">
+            <label className="field__label">Target (replication-target id or remote dataset)</label>
+            <input className="input" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="target-id or host:pool/ds" />
+          </div>
+          <div className="field">
+            <label className="field__label">Incremental from (optional)</label>
+            <input className="input" value={incremental} onChange={(e) => setIncremental(e.target.value)} placeholder="prev-snap" />
+          </div>
+          <div className="field">
+            <label className="row gap-8" style={{ fontSize: 11 }}>
+              <input type="checkbox" checked={encrypted} onChange={(e) => setEncrypted(e.target.checked)} />
+              Send raw encrypted stream
+            </label>
+          </div>
+          <div className="field">
+            <label className="field__label">Resume token (optional)</label>
+            <input className="input" value={resumeToken} onChange={(e) => setResumeToken(e.target.value)} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="field">
+            <label className="field__label">Source (required)</label>
+            <input className="input" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="target-id or host:pool/ds" />
+          </div>
+          <div className="field">
+            <label className="field__label">Snapshot (optional)</label>
+            <input className="input" value={snapshot} onChange={(e) => setSnapshot(e.target.value)} placeholder="snap-name" />
+          </div>
+          <div className="field">
+            <label className="field__label">Resume token (optional)</label>
+            <input className="input" value={resumeToken} onChange={(e) => setResumeToken(e.target.value)} />
+          </div>
+        </>
+      )}
+      <div className="muted small" style={{ marginTop: 6 }}>
+        Streams are tracked by the replication engine; check the Replication app for live progress.
       </div>
     </Modal>
   );

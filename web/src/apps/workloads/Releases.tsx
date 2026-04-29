@@ -7,6 +7,7 @@ import {
   type HelmReleaseDetail,
 } from "../../api/workloads";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function ns(w: HelmRelease) {
   return w.namespace ?? w.ns ?? "—";
@@ -67,6 +68,7 @@ function UpgradeModal({
     current?.values ? JSON.stringify(current.values, null, 2) : "",
   );
   const mut = useMutation({
+    meta: { label: "Upgrade failed" },
     mutationFn: () =>
       workloads.upgrade(release, {
         version: version || undefined,
@@ -74,6 +76,7 @@ function UpgradeModal({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workloads"] });
+      toastSuccess(`${release} upgraded`);
       onClose();
     },
   });
@@ -154,10 +157,12 @@ function RollbackModal({
     history.length > 1 ? history[history.length - 2].revision : "",
   );
   const mut = useMutation({
+    meta: { label: "Rollback failed" },
     mutationFn: () =>
       workloads.rollback(release, typeof revision === "number" ? revision : undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workloads"] });
+      toastSuccess(`${release} rolled back`);
       onClose();
     },
   });
@@ -223,6 +228,77 @@ function RollbackModal({
   );
 }
 
+function LogsModal({
+  release,
+  onClose,
+}: {
+  release: string;
+  onClose: () => void;
+}) {
+  const q = useQuery({
+    queryKey: ["workloads", "logs", release],
+    queryFn: () => workloads.logs(release),
+    retry: false,
+    refetchInterval: 5000,
+  });
+  const raw: unknown = q.data;
+  const text =
+    typeof raw === "string"
+      ? raw
+      : raw != null
+        ? JSON.stringify(raw, null, 2)
+        : "";
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" style={{ width: 820 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal__head">
+          <div className="modal__icon">
+            <Icon name="terminal" size={16} />
+          </div>
+          <div className="modal__head-meta">
+            <div className="modal__title">Logs · {release}</div>
+            <div className="muted modal__sub">
+              Aggregated pod logs · auto-refresh every 5s
+            </div>
+          </div>
+          <button className="modal__close" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+        <div className="modal__body">
+          {q.isLoading && <div className="modal__loading muted">Loading logs…</div>}
+          {q.isError && (
+            <div className="modal__err">
+              Failed: {(q.error as Error).message}
+            </div>
+          )}
+          {!q.isLoading && !q.isError && (
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--fg-1)",
+                background: "var(--bg-1)",
+                maxHeight: 480,
+                overflow: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {text || "(no log output)"}
+            </pre>
+          )}
+        </div>
+        <div className="modal__foot">
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InstallModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [chart, setChart] = useState("");
@@ -231,6 +307,7 @@ function InstallModal({ onClose }: { onClose: () => void }) {
   const [version, setVersion] = useState("");
   const [values, setValues] = useState("");
   const mut = useMutation({
+    meta: { label: "Install failed" },
     mutationFn: () =>
       workloads.install({
         chart,
@@ -241,6 +318,7 @@ function InstallModal({ onClose }: { onClose: () => void }) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workloads"] });
+      toastSuccess(`${release || chart} installed`);
       onClose();
     },
   });
@@ -331,6 +409,7 @@ export function Releases() {
   const [showInstall, setShowInstall] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showRollback, setShowRollback] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   const list = useQuery({
     queryKey: ["workloads", "list"],
@@ -350,9 +429,11 @@ export function Releases() {
   });
 
   const uninstall = useMutation({
+    meta: { label: "Uninstall failed" },
     mutationFn: (name: string) => workloads.uninstall(name),
-    onSuccess: () => {
+    onSuccess: (_d, name) => {
       qc.invalidateQueries({ queryKey: ["workloads"] });
+      toastSuccess(`${name} uninstalled`);
       setSel(null);
     },
   });
@@ -535,6 +616,13 @@ export function Releases() {
               Rollback…
             </button>
             <button
+              className="btn btn--sm"
+              onClick={() => setShowLogs(true)}
+            >
+              <Icon name="terminal" size={11} />
+              Logs
+            </button>
+            <button
               className="btn btn--sm btn--danger"
               style={{ marginLeft: "auto" }}
               disabled={uninstall.isPending}
@@ -563,6 +651,9 @@ export function Releases() {
           detail={detail.data}
           onClose={() => setShowRollback(false)}
         />
+      )}
+      {showLogs && curName && (
+        <LogsModal release={curName} onClose={() => setShowLogs(false)} />
       )}
     </div>
   );

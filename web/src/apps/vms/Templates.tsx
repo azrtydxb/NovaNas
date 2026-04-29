@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
 import { vms, type VMTemplate } from "../../api/vms";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function Field({
   label,
@@ -36,10 +37,12 @@ function CreateFromTemplateModal({
   const [template, setTemplate] = useState(initial?.name ?? templates[0]?.name ?? "");
   const [namespace, setNamespace] = useState(initial?.namespace ?? "default");
   const mut = useMutation({
+    meta: { label: "Create VM failed" },
     mutationFn: () =>
       vms.createFromTemplate({ name, template, namespace: namespace || undefined }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vms", "list"] });
+      toastSuccess(`VM ${name} created`);
       onClose();
     },
   });

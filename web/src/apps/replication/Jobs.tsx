@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { replication, type ReplicationJob } from "../../api/replication";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 function statePill(state: string | undefined): string {
@@ -26,8 +27,13 @@ export function Jobs() {
   const cur = jobs.find((j) => j.id === sel);
 
   const runMut = useMutation({
+    meta: { label: "Run job failed" },
     mutationFn: (id: string) => replication.runJob(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["replication-jobs"] }),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["replication-jobs"] });
+      qc.invalidateQueries({ queryKey: ["replication-runs", id] });
+      toastSuccess("Job run started", id);
+    },
   });
 
   return (
@@ -131,6 +137,7 @@ function JobDetail({
   runPending: boolean;
   onRun: (id: string) => void;
 }) {
+  const [showLog, setShowLog] = useState(false);
   const runsQ = useQuery({
     queryKey: ["replication-runs", job.id],
     queryFn: () => replication.listRuns(job.id),
@@ -232,6 +239,12 @@ function JobDetail({
         >
           Run now
         </button>
+        <button
+          className="btn btn--sm"
+          onClick={() => setShowLog(true)}
+        >
+          View log
+        </button>
         <button className="btn btn--sm" disabled title="Edit via Schedules tab — backend has no PUT /replication-jobs/{id}">
           Edit
         </button>
@@ -244,7 +257,68 @@ function JobDetail({
           Delete
         </button>
       </div>
+      {showLog && <JobLogModal jobId={job.id} onClose={() => setShowLog(false)} />}
     </div>
+  );
+}
+
+function JobLogModal({ jobId, onClose }: { jobId: string; onClose: () => void }) {
+  const jobQ = useQuery({
+    queryKey: ["replication-job", jobId],
+    queryFn: () => replication.getJob(jobId),
+  });
+  const runsQ = useQuery({
+    queryKey: ["replication-runs", jobId],
+    queryFn: () => replication.listRuns(jobId),
+  });
+  const latest = (runsQ.data ?? [])[0];
+  return (
+    <Modal title="Replication job log" sub={jobId} onClose={onClose}
+      footer={<button className="btn" onClick={onClose}>Close</button>}
+    >
+      <div className="sect">
+        <div className="sect__title">Job</div>
+        <div className="sect__body">
+          {jobQ.isLoading && <div className="muted">Loading…</div>}
+          {jobQ.data && (
+            <dl className="kv">
+              <dt>Name</dt><dd>{jobQ.data.name ?? jobQ.data.id}</dd>
+              <dt>State</dt><dd>{jobQ.data.state ?? "—"}</dd>
+              <dt>Last run</dt><dd>{jobQ.data.lastRun ?? "—"}</dd>
+              <dt>Last bytes</dt><dd>{jobQ.data.lastBytes ? formatBytes(jobQ.data.lastBytes) : "—"}</dd>
+              <dt>Last duration</dt><dd>{jobQ.data.lastDur ?? jobQ.data.lastDuration ?? "—"}</dd>
+              <dt>Error</dt>
+              <dd style={{ color: jobQ.data.error ? "var(--err)" : undefined }}>
+                {jobQ.data.error ?? "—"}
+              </dd>
+            </dl>
+          )}
+        </div>
+      </div>
+      <div className="sect">
+        <div className="sect__title">Latest run</div>
+        <div className="sect__body">
+          {runsQ.isLoading && <div className="muted">Loading…</div>}
+          {runsQ.data && runsQ.data.length === 0 && <div className="muted">No runs yet.</div>}
+          {latest && (
+            <pre
+              className="mono"
+              style={{
+                fontSize: 11,
+                maxHeight: 240,
+                overflow: "auto",
+                background: "var(--bg-2)",
+                padding: 10,
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+              }}
+            >
+              {JSON.stringify(latest, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

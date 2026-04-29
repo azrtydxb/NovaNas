@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { identity, type Krb5Principal } from "../../api/identity";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function Sect({
   title,
@@ -56,6 +57,7 @@ function PrincipalModal({
   const [password, setPassword] = useState("");
 
   const mut = useMutation({
+    meta: { label: mode === "create" ? "Create principal failed" : "Update principal failed" },
     mutationFn: () =>
       mode === "create"
         ? identity.krb5CreatePrincipal({ name, password: password || undefined, type })
@@ -65,6 +67,7 @@ function PrincipalModal({
           }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["krb5", "principals"] });
+      toastSuccess(mode === "create" ? "Principal created" : "Principal updated");
       onClose();
     },
   });
@@ -170,9 +173,11 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
   }, [cfg.data]);
 
   const save = useMutation({
+    meta: { label: "Save krb5.conf failed" },
     mutationFn: () => identity.krb5UpdateConfig({ raw }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["krb5", "config"] });
+      toastSuccess("krb5.conf saved");
       onClose();
     },
   });
@@ -257,11 +262,17 @@ export function Kerberos() {
     retry: false,
   });
   const refreshKeytab = useMutation({
+    meta: { label: "Refresh keytab failed" },
     mutationFn: (name: string) => identity.krb5RefreshKeytab(name),
+    onSuccess: () => toastSuccess("Keytab refreshed"),
   });
   const del = useMutation({
+    meta: { label: "Delete principal failed" },
     mutationFn: (name: string) => identity.krb5DeletePrincipal(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["krb5", "principals"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["krb5", "principals"] });
+      toastSuccess("Principal deleted");
+    },
   });
 
   const online = status.data?.online ?? status.data?.status === "online";

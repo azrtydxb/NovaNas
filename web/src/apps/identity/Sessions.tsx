@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { identity, type AuthSession } from "../../api/identity";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function fmt(s: AuthSession, key: "ip" | "user" | "client" | "started"): string {
   switch (key) {
@@ -32,8 +33,13 @@ export function Sessions() {
   const [sel, setSel] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["auth", "sessions"], queryFn: () => identity.sessions() });
   const revoke = useMutation({
+    meta: { label: "Revoke session failed" },
     mutationFn: (id: string) => identity.revokeSession(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "sessions"] }),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["auth", "sessions"] });
+      if (sel === id) setSel(null);
+      toastSuccess("Session revoked");
+    },
   });
 
   const items = q.data ?? [];
@@ -116,6 +122,14 @@ export function Sessions() {
                 {cur.id.slice(0, 12)}…
               </div>
             </div>
+            <button
+              className="modal__close"
+              onClick={() => setSel(null)}
+              aria-label="Close"
+              style={{ marginLeft: "auto" }}
+            >
+              <Icon name="x" size={12} />
+            </button>
           </div>
           <Sect title="Identity">
             <dl className="kv">

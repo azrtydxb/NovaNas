@@ -60,6 +60,16 @@ export function PoolsTab({ onPick }: Props) {
     mutationFn: () => storage.syncPools(),
     onSuccess: () => { inval(); toastSuccess("Pools refreshed"); },
   });
+  const discardCheckpointMut = useMutation({
+    meta: { label: "Discard checkpoint failed" },
+    mutationFn: (n: string) => storage.discardCheckpoint(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Checkpoint discarded", `Pool ${n}`); },
+  });
+  const waitMut = useMutation({
+    meta: { label: "Wait failed" },
+    mutationFn: (n: string) => storage.waitPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Wait complete", `Pool ${n}`); },
+  });
 
   const detail = pools.find((p) => p.name === detailFor) ?? null;
 
@@ -183,6 +193,26 @@ export function PoolsTab({ onPick }: Props) {
                     onClick={() => checkpointMut.mutate(p.name)}
                   >
                     Checkpoint
+                  </button>
+                  <button
+                    className="btn btn--sm"
+                    disabled={waitMut.isPending}
+                    onClick={() => waitMut.mutate(p.name)}
+                    title="Wait for resilver/scrub to finish"
+                  >
+                    Wait
+                  </button>
+                  <button
+                    className="btn btn--sm"
+                    disabled={discardCheckpointMut.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Discard checkpoint on "${p.name}"?`)) {
+                        discardCheckpointMut.mutate(p.name);
+                      }
+                    }}
+                    title="Discard previously-taken checkpoint"
+                  >
+                    Discard ckpt
                   </button>
                   <button
                     className="btn btn--sm"
@@ -314,8 +344,9 @@ function ImportPoolModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [force, setForce] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Import failed" },
     mutationFn: () => storage.importPool({ name: name || undefined, dir: dir || undefined, force }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Pool imported", name || "auto-discovered"); },
     onError: (e: Error) => setErr(e.message),
   });
   return (

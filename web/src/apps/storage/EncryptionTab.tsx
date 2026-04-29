@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { storage, type Dataset } from "../../api/storage";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 function dsKey(d: Dataset): string {
   return d.fullname ?? d.name;
 }
 
-type Action = { kind: "load" | "rotate"; full: string } | null;
+type Action = { kind: "load" | "rotate" | "recover"; full: string } | null;
 
 export function EncryptionTab() {
   const qc = useQueryClient();
@@ -17,8 +18,9 @@ export function EncryptionTab() {
   const inval = () => qc.invalidateQueries({ queryKey: ["datasets"] });
 
   const unloadMut = useMutation({
+    meta: { label: "Unload key failed" },
     mutationFn: (full: string) => storage.unloadKey(full),
-    onSuccess: inval,
+    onSuccess: (_d, full) => { inval(); toastSuccess("Key unloaded", full); },
   });
 
   const encrypted = (q.data ?? []).filter(
@@ -93,6 +95,13 @@ export function EncryptionTab() {
                       onClick={() => setAction({ kind: "rotate", full: k })}
                     >
                       Rotate key
+                    </button>{" "}
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => setAction({ kind: "recover", full: k })}
+                      title="Recover via TPM-sealed escrow"
+                    >
+                      Recover
                     </button>
                   </td>
                 </tr>
@@ -108,7 +117,63 @@ export function EncryptionTab() {
       {action?.kind === "rotate" && (
         <RotateKeyModal full={action.full} onClose={() => setAction(null)} onDone={inval} />
       )}
+      {action?.kind === "recover" && (
+        <RecoverKeyModal full={action.full} onClose={() => setAction(null)} onDone={inval} />
+      )}
     </div>
+  );
+}
+
+function RecoverKeyModal({
+  full,
+  onClose,
+  onDone,
+}: {
+  full: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [escrowToken, setEscrowToken] = useState("");
+  const [adminConfirm, setAdminConfirm] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Recovery failed" },
+    mutationFn: () => storage.recoverKey(full, {
+      escrow_token: escrowToken || undefined,
+      admin_confirm: adminConfirm,
+    }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Key recovered", full); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Recover encryption key" sub={full} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !adminConfirm}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Recovering…" : "Recover"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
+        Recovery is audit-logged and requires admin confirmation. Use this when the
+        TPM seal is broken (firmware update, mainboard swap) or the passphrase is lost.
+      </div>
+      <div className="field">
+        <label className="field__label">Escrow token (optional, for off-host recovery)</label>
+        <input className="input" type="password" value={escrowToken} onChange={(e) => setEscrowToken(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="field__label">Type "RECOVER" to confirm</label>
+        <input className="input" value={adminConfirm} onChange={(e) => setAdminConfirm(e.target.value)} placeholder="RECOVER" />
+      </div>
+    </Modal>
   );
 }
 
@@ -124,8 +189,9 @@ function LoadKeyModal({
   const [key, setKey] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Load key failed" },
     mutationFn: () => storage.loadKey(full, key || undefined),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Key loaded", full); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -160,8 +226,9 @@ function RotateKeyModal({
   const [key, setKey] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Rotate key failed" },
     mutationFn: () => storage.changeKey(full, key ? { key } : {}),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Key rotated", full); },
     onError: (e: Error) => setErr(e.message),
   });
   return (

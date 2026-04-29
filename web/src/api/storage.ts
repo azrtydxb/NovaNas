@@ -156,6 +156,8 @@ export const storage = {
     api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/export`, { method: "POST" }),
   reguidPool: (name: string) =>
     api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/reguid`, { method: "POST" }),
+  waitPool: (name: string) =>
+    api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/wait`, { method: "POST" }),
 
   // Datasets
   listDatasets: (pool?: string) =>

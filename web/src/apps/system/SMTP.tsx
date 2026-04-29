@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { system, type SmtpConfig } from "../../api/system";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 export function SMTP() {
   const qc = useQueryClient();
@@ -18,9 +19,11 @@ export function SMTP() {
   }, [smtp.data, dirty]);
 
   const save = useMutation({
+    meta: { label: "Save SMTP failed" },
     mutationFn: () => system.saveSmtp(form),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system", "smtp"] });
+      toastSuccess("SMTP configuration saved");
       setDirty(false);
     },
   });
@@ -187,7 +190,9 @@ export function SMTP() {
 function TestModal({ onClose }: { onClose: () => void }) {
   const [to, setTo] = useState("");
   const send = useMutation({
+    meta: { label: "Send test email failed" },
     mutationFn: () => system.testSmtp(to.trim()),
+    onSuccess: () => toastSuccess("Test email sent"),
   });
   return (
     <div className="modal-bg" onClick={onClose}>

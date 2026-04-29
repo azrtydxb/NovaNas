@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { network, type NetConfig, type NetInterface } from "../../api/network";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 type AddType = "eth" | "bond" | "vlan" | "bridge";
 
@@ -17,16 +18,20 @@ export function Interfaces() {
   });
 
   const reload = useMutation({
+    meta: { label: "Network reload failed" },
     mutationFn: () => network.reload(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["network"] });
+      toastSuccess("Network configuration reloaded");
     },
   });
 
   const remove = useMutation({
+    meta: { label: "Delete interface failed" },
     mutationFn: (name: string) => network.deleteConfig(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["network"] });
+      toastSuccess("Interface deleted");
       setSelected(null);
     },
   });
@@ -234,6 +239,7 @@ function AddInterfaceModal({ onClose }: { onClose: () => void }) {
   const [mtu, setMtu] = useState("");
 
   const create = useMutation({
+    meta: { label: "Create interface failed" },
     mutationFn: async () => {
       if (type === "bond") {
         return network.createBond({
@@ -264,6 +270,7 @@ function AddInterfaceModal({ onClose }: { onClose: () => void }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["network"] });
+      toastSuccess(`Interface ${name} created`);
       onClose();
     },
   });
@@ -442,6 +449,7 @@ function EditConfigModal({
   }, [cfg.data, text]);
 
   const save = useMutation({
+    meta: { label: "Update interface failed" },
     mutationFn: async () => {
       let body: NetConfig;
       try {
@@ -456,6 +464,7 @@ function EditConfigModal({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["network"] });
+      toastSuccess(`Config saved for ${name}`);
       onClose();
     },
   });

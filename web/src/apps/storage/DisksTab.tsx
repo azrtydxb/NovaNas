@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { storage, type Disk } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 
 function diskCap(d: Disk): number {
   return d.capacity ?? d.size ?? d.cap ?? 0;
@@ -21,14 +22,22 @@ export function DisksTab() {
   });
 
   const enableMut = useMutation({
+    meta: { label: "Enable SMART failed" },
     mutationFn: (n: string) => storage.enableSmart(n),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["smart", selected?.name] }),
+    onSuccess: (_d, n) => {
+      qc.invalidateQueries({ queryKey: ["smart", selected?.name] });
+      toastSuccess("SMART enabled", n);
+    },
   });
 
   const testMut = useMutation({
+    meta: { label: "SMART test failed" },
     mutationFn: ({ n, type }: { n: string; type: "short" | "long" | "conveyance" | "offline" }) =>
       storage.startSmartTest(n, type),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["smart", selected?.name] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["smart", selected?.name] });
+      toastSuccess(`SMART ${v.type} test running`, v.n);
+    },
   });
 
   return (

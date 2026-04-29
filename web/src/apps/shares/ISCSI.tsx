@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
-import { shares, type IscsiTarget } from "../../api/shares";
+import { shares, type IscsiTarget, type IscsiLun } from "../../api/shares";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 export function ISCSI() {
@@ -15,10 +16,15 @@ export function ISCSI() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["iscsi-targets"] });
   const delMut = useMutation({
+    meta: { label: "Delete target failed" },
     mutationFn: (iqn: string) => shares.deleteIscsi(iqn),
-    onSuccess: inval,
+    onSuccess: (_d, iqn) => { inval(); toastSuccess("Target deleted", iqn); },
   });
-  const saveMut = useMutation({ mutationFn: () => shares.iscsiSaveConfig() });
+  const saveMut = useMutation({
+    meta: { label: "Save config failed" },
+    mutationFn: () => shares.iscsiSaveConfig(),
+    onSuccess: () => toastSuccess("iSCSI config saved"),
+  });
 
   return (
     <div
@@ -122,10 +128,11 @@ function IscsiTargetModal({
   const [err, setErr] = useState<string | null>(null);
 
   const m = useMutation({
+    meta: { label: "Save target failed" },
     mutationFn: () => init
       ? shares.updateIscsi(init.iqn, { alias })
       : shares.createIscsi({ iqn, alias }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Target updated" : "Target created", init ? init.iqn : iqn); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -200,10 +207,12 @@ function LunsPanel({ iqn }: { iqn: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["iscsi-luns", iqn] });
   const delMut = useMutation({
+    meta: { label: "Delete LUN failed" },
     mutationFn: (id: string) => shares.deleteIscsiLun(iqn, id),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("LUN deleted"); },
   });
   const [show, setShow] = useState(false);
+  const [editLun, setEditLun] = useState<IscsiLun | null>(null);
 
   return (
     <div className="sect">
@@ -235,9 +244,17 @@ function LunsPanel({ iqn }: { iqn: string }) {
                   <td className="num mono">{l.size ? formatBytes(l.size) : "—"}</td>
                   <td className="num">
                     <button
+                      className="btn btn--sm"
+                      onClick={() => setEditLun(l)}
+                    >
+                      Edit
+                    </button>{" "}
+                    <button
                       className="btn btn--sm btn--danger"
                       disabled={delMut.isPending}
-                      onClick={() => delMut.mutate(l.id)}
+                      onClick={() => {
+                        if (window.confirm(`Delete LUN ${l.lun ?? l.id}?`)) delMut.mutate(l.id);
+                      }}
                     >
                       ×
                     </button>
@@ -249,7 +266,82 @@ function LunsPanel({ iqn }: { iqn: string }) {
         )}
       </div>
       {show && <LunModal iqn={iqn} onClose={() => setShow(false)} onDone={inval} />}
+      {editLun && (
+        <EditLunModal
+          iqn={iqn}
+          lun={editLun}
+          onClose={() => setEditLun(null)}
+          onDone={inval}
+        />
+      )}
     </div>
+  );
+}
+
+function EditLunModal({
+  iqn,
+  lun,
+  onClose,
+  onDone,
+}: {
+  iqn: string;
+  lun: IscsiLun;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [num, setNum] = useState<number | "">(lun.lun ?? "");
+  const [backing, setBacking] = useState(lun.backing ?? "");
+  const [size, setSize] = useState<number | "">(lun.size ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Update LUN failed" },
+    mutationFn: () => shares.updateIscsiLun(iqn, lun.id, {
+      lun: num === "" ? undefined : Number(num),
+      backing: backing || undefined,
+      size: size === "" ? undefined : Number(size),
+    }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("LUN updated"); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title={`Edit LUN ${lun.lun ?? lun.id}`} sub={iqn} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">LUN number</label>
+        <input
+          className="input"
+          type="number"
+          value={num}
+          onChange={(e) => setNum(e.target.value === "" ? "" : Number(e.target.value))}
+        />
+      </div>
+      <div className="field">
+        <label className="field__label">Backing path</label>
+        <input className="input" value={backing} onChange={(e) => setBacking(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="field__label">Size (bytes)</label>
+        <input
+          className="input"
+          type="number"
+          value={size}
+          onChange={(e) => setSize(e.target.value === "" ? "" : Number(e.target.value))}
+        />
+      </div>
+    </Modal>
   );
 }
 
@@ -267,12 +359,13 @@ function LunModal({
   const [size, setSize] = useState<number | "">("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Add LUN failed" },
     mutationFn: () => shares.createIscsiLun(iqn, {
       lun: lun === "" ? undefined : Number(lun),
       backing: backing || undefined,
       size: size === "" ? undefined : Number(size),
     }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("LUN added"); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -321,9 +414,10 @@ function PortalsPanel({ iqn }: { iqn: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["iscsi-portals", iqn] });
   const delMut = useMutation({
+    meta: { label: "Delete portal failed" },
     mutationFn: ({ ip, port }: { ip: string; port: number }) =>
       shares.deleteIscsiPortal(iqn, ip, port),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Portal deleted"); },
   });
   const [show, setShow] = useState(false);
   return (
@@ -380,12 +474,13 @@ function PortalModal({
   const [tag, setTag] = useState<number | "">(1);
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Add portal failed" },
     mutationFn: () => shares.createIscsiPortal(iqn, {
       ip,
       port: port === "" ? undefined : Number(port),
       tag: tag === "" ? undefined : Number(tag),
     }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Portal added", ip); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -434,8 +529,9 @@ function AclsPanel({ iqn }: { iqn: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["iscsi-acls", iqn] });
   const delMut = useMutation({
+    meta: { label: "Delete ACL failed" },
     mutationFn: (initiator: string) => shares.deleteIscsiAcl(iqn, initiator),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("ACL deleted"); },
   });
   const [show, setShow] = useState(false);
 
@@ -493,12 +589,13 @@ function AclModal({
   const [authMethod, setAuthMethod] = useState("CHAP");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Add ACL failed" },
     mutationFn: () => shares.createIscsiAcl(iqn, {
       initiator,
       user: user || undefined,
       authMethod,
     }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("ACL added"); },
     onError: (e: Error) => setErr(e.message),
   });
   return (

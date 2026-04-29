@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
-import { shares, type NvmeofSubsystem, type NvmeofPort } from "../../api/shares";
+import { shares, type NvmeofSubsystem, type NvmeofPort, type NvmeofNamespace } from "../../api/shares";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 type View = "subsystems" | "ports";
 
 export function NVMEOF() {
   const [view, setView] = useState<View>("subsystems");
-  const saveMut = useMutation({ mutationFn: () => shares.nvmeofSaveConfig() });
+  const saveMut = useMutation({
+    meta: { label: "Save config failed" },
+    mutationFn: () => shares.nvmeofSaveConfig(),
+    onSuccess: () => toastSuccess("NVMe-oF config saved"),
+  });
 
   return (
     <div className="app-storage">
@@ -47,8 +52,9 @@ function SubsystemsView() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["nvmeof-subsystems"] });
   const delMut = useMutation({
+    meta: { label: "Delete subsystem failed" },
     mutationFn: (nqn: string) => shares.deleteNvmeofSubsystem(nqn),
-    onSuccess: inval,
+    onSuccess: (_d, nqn) => { inval(); toastSuccess("Subsystem deleted", nqn); },
   });
 
   return (
@@ -151,10 +157,11 @@ function SubsystemModal({
   const [dhchap, setDhchap] = useState(init?.dhchap ?? false);
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Save subsystem failed" },
     mutationFn: () => init
       ? shares.updateNvmeofSubsystem(init.nqn, { serial, dhchap })
       : shares.createNvmeofSubsystem({ nqn, serial, dhchap }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Subsystem updated" : "Subsystem created", init ? init.nqn : nqn); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -233,10 +240,12 @@ function NamespacesPanel({ nqn }: { nqn: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["nvmeof-ns", nqn] });
   const delMut = useMutation({
+    meta: { label: "Delete namespace failed" },
     mutationFn: (nsid: number) => shares.deleteNvmeofNamespace(nqn, nsid),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Namespace deleted"); },
   });
   const [show, setShow] = useState(false);
+  const [editNs, setEditNs] = useState<NvmeofNamespace | null>(null);
   return (
     <div className="sect">
       <div className="sect__head row gap-8">
@@ -267,9 +276,17 @@ function NamespacesPanel({ nqn }: { nqn: string }) {
                   <td className="num mono">{n.size ? formatBytes(n.size) : "—"}</td>
                   <td className="num">
                     <button
+                      className="btn btn--sm"
+                      onClick={() => setEditNs(n)}
+                    >
+                      Edit
+                    </button>{" "}
+                    <button
                       className="btn btn--sm btn--danger"
                       disabled={delMut.isPending}
-                      onClick={() => delMut.mutate(n.nsid)}
+                      onClick={() => {
+                        if (window.confirm(`Delete namespace ${n.nsid}?`)) delMut.mutate(n.nsid);
+                      }}
                     >
                       ×
                     </button>
@@ -281,7 +298,62 @@ function NamespacesPanel({ nqn }: { nqn: string }) {
         )}
       </div>
       {show && <NamespaceModal nqn={nqn} onClose={() => setShow(false)} onDone={inval} />}
+      {editNs && (
+        <EditNamespaceModal
+          nqn={nqn}
+          ns={editNs}
+          onClose={() => setEditNs(null)}
+          onDone={inval}
+        />
+      )}
     </div>
+  );
+}
+
+function EditNamespaceModal({
+  nqn,
+  ns,
+  onClose,
+  onDone,
+}: {
+  nqn: string;
+  ns: NvmeofNamespace;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [device, setDevice] = useState(ns.device ?? "");
+  const [uuid, setUuid] = useState(ns.uuid ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Update namespace failed" },
+    mutationFn: () => shares.updateNvmeofNamespace(nqn, ns.nsid, {
+      device: device || undefined,
+      uuid: uuid || undefined,
+    }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Namespace updated", `nsid ${ns.nsid}`); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title={`Edit namespace ${ns.nsid}`} sub={nqn} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary" disabled={m.isPending} onClick={() => { setErr(null); m.mutate(); }}>
+            {m.isPending ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Device</label>
+        <input className="input" value={device} onChange={(e) => setDevice(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="field__label">UUID</label>
+        <input className="input" value={uuid} onChange={(e) => setUuid(e.target.value)} />
+      </div>
+    </Modal>
   );
 }
 
@@ -299,12 +371,13 @@ function NamespaceModal({
   const [uuid, setUuid] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Add namespace failed" },
     mutationFn: () => shares.createNvmeofNamespace(nqn, {
       nsid: nsid === "" ? undefined : Number(nsid),
       device: device || undefined,
       uuid: uuid || undefined,
     }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Namespace added", device); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -348,8 +421,9 @@ function HostsPanel({ nqn }: { nqn: string }) {
   });
   const inval = () => qc.invalidateQueries({ queryKey: ["nvmeof-hosts", nqn] });
   const delMut = useMutation({
+    meta: { label: "Remove host failed" },
     mutationFn: (hostNqn: string) => shares.removeNvmeofHost(nqn, hostNqn),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Host removed"); },
   });
   const [show, setShow] = useState(false);
   const [dhchapFor, setDhchapFor] = useState<string | null>(null);
@@ -410,8 +484,9 @@ function HostModal({
   const [hostNqn, setHostNqn] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Add host failed" },
     mutationFn: () => shares.addNvmeofHost(nqn, hostNqn),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Host allowed", hostNqn); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -435,11 +510,18 @@ function HostModal({
 }
 
 function DhchapModal({ hostNqn, onClose }: { hostNqn: string; onClose: () => void }) {
+  const qc = useQueryClient();
   const [secret, setSecret] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Set DH-CHAP failed" },
     mutationFn: () => shares.setNvmeofDhchap(hostNqn, { secret }),
-    onSuccess: onClose,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nvmeof-subsystems"] });
+      qc.invalidateQueries({ queryKey: ["nvmeof-hosts"] });
+      onClose();
+      toastSuccess("DH-CHAP secret set", hostNqn);
+    },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -473,11 +555,19 @@ function PortsView() {
   const subs = subQ.data ?? [];
   const [edit, setEdit] = useState<NvmeofPort | "new" | null>(null);
   const [bindFor, setBindFor] = useState<string | null>(null);
+  const [unbindFor, setUnbindFor] = useState<string | null>(null);
 
   const inval = () => qc.invalidateQueries({ queryKey: ["nvmeof-ports"] });
   const delMut = useMutation({
+    meta: { label: "Delete port failed" },
     mutationFn: (id: string) => shares.deleteNvmeofPort(id),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Port deleted"); },
+  });
+  const unbindMut = useMutation({
+    meta: { label: "Unbind failed" },
+    mutationFn: ({ portId, nqn }: { portId: string; nqn: string }) =>
+      shares.unbindNvmeofPort(portId, nqn),
+    onSuccess: () => { inval(); toastSuccess("Subsystem unbound"); },
   });
 
   return (
@@ -512,6 +602,13 @@ function PortsView() {
                   <button className="btn btn--sm" onClick={() => setEdit(p)}>Edit</button>{" "}
                   <button className="btn btn--sm" onClick={() => setBindFor(p.id)}>Bind</button>{" "}
                   <button
+                    className="btn btn--sm"
+                    onClick={() => setUnbindFor(p.id)}
+                    disabled={subs.length === 0}
+                  >
+                    Unbind
+                  </button>{" "}
+                  <button
                     className="btn btn--sm btn--danger"
                     disabled={delMut.isPending}
                     onClick={() => {
@@ -541,7 +638,56 @@ function PortsView() {
           onClose={() => setBindFor(null)}
         />
       )}
+      {unbindFor && (
+        <UnbindPortModal
+          portId={unbindFor}
+          subsystems={subs.map((s) => s.nqn)}
+          onClose={() => setUnbindFor(null)}
+          onSubmit={(nqn) => unbindMut.mutate({ portId: unbindFor, nqn })}
+          pending={unbindMut.isPending}
+        />
+      )}
     </div>
+  );
+}
+
+function UnbindPortModal({
+  portId,
+  subsystems,
+  onClose,
+  onSubmit,
+  pending,
+}: {
+  portId: string;
+  subsystems: string[];
+  onClose: () => void;
+  onSubmit: (nqn: string) => void;
+  pending: boolean;
+}) {
+  const [nqn, setNqn] = useState(subsystems[0] ?? "");
+  return (
+    <Modal title="Unbind subsystem from port" sub={`port ${portId}`} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--danger"
+            disabled={pending || !nqn}
+            onClick={() => { onSubmit(nqn); onClose(); }}
+          >
+            {pending ? "Unbinding…" : "Unbind"}
+          </button>
+        </>
+      }
+    >
+      <div className="field">
+        <label className="field__label">Subsystem</label>
+        <select className="input" value={nqn} onChange={(e) => setNqn(e.target.value)}>
+          {subsystems.length === 0 && <option value="">— no subsystems —</option>}
+          {subsystems.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+    </Modal>
   );
 }
 
@@ -560,10 +706,11 @@ function PortModal({
   const [adrfam, setAdrfam] = useState(init?.adrfam ?? "ipv4");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Save port failed" },
     mutationFn: () => init
       ? shares.updateNvmeofPort(init.id, { trtype, traddr, trsvcid, adrfam })
       : shares.createNvmeofPort({ trtype, traddr, trsvcid, adrfam }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Port updated" : "Port created"); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -616,9 +763,16 @@ function BindPortModal({
 }) {
   const [nqn, setNqn] = useState(subsystems[0] ?? "");
   const [err, setErr] = useState<string | null>(null);
+  const qc = useQueryClient();
   const m = useMutation({
+    meta: { label: "Bind failed" },
     mutationFn: () => shares.bindNvmeofPort(portId, nqn),
-    onSuccess: onClose,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nvmeof-ports"] });
+      qc.invalidateQueries({ queryKey: ["nvmeof-subsystems"] });
+      onClose();
+      toastSuccess("Subsystem bound", nqn);
+    },
     onError: (e: Error) => setErr(e.message),
   });
   return (

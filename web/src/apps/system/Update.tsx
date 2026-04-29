@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { system } from "../../api/system";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 export function Update() {
   const qc = useQueryClient();
@@ -10,8 +11,12 @@ export function Update() {
   });
 
   const apply = useMutation({
+    meta: { label: "Apply update failed" },
     mutationFn: () => system.applyUpdate(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["system", "updates"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["system", "updates"] });
+      toastSuccess("Update started");
+    },
   });
 
   if (upd.isLoading) return <div className="muted">Checking for updates…</div>;

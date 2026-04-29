@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { replication, type ScrubPolicy } from "../../api/replication";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 export function Scrub() {
@@ -15,8 +16,9 @@ export function Scrub() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["scrub-policies"] });
   const delMut = useMutation({
+    meta: { label: "Delete scrub policy failed" },
     mutationFn: (id: string) => replication.deleteScrubPolicy(id),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Scrub policy deleted"); },
   });
 
   return (
@@ -126,10 +128,11 @@ function ScrubPolicyModal({
   });
 
   const m = useMutation({
+    meta: { label: "Save scrub policy failed" },
     mutationFn: () => init
       ? replication.updateScrubPolicy(init.id, body())
       : replication.createScrubPolicy(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Scrub policy updated" : "Scrub policy created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 

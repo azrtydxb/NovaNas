@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { replication, type ReplicationTarget } from "../../api/replication";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 export function Targets() {
@@ -15,8 +16,9 @@ export function Targets() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["replication-targets"] });
   const delMut = useMutation({
+    meta: { label: "Delete target failed" },
     mutationFn: (id: string) => replication.deleteTarget(id),
-    onSuccess: inval,
+    onSuccess: () => { inval(); toastSuccess("Target deleted"); },
   });
 
   return (
@@ -118,10 +120,11 @@ function TargetModal({
   });
 
   const m = useMutation({
+    meta: { label: "Save target failed" },
     mutationFn: () => init
       ? replication.updateTarget(init.id, body())
       : replication.createTarget(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Target updated" : "Target created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 

@@ -6,6 +6,7 @@ import {
   type AlertSilenceMatcher,
 } from "../../api/observability";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function fmtMatcher(m: AlertSilenceMatcher): string {
   const op = m.isRegex ? (m.isEqual === false ? "!~" : "=~") : m.isEqual === false ? "!=" : "=";
@@ -40,6 +41,7 @@ function CreateModal({ onClose }: CreateModalProps) {
   ]);
 
   const create = useMutation({
+    meta: { label: "Create silence failed" },
     mutationFn: () => {
       const now = new Date();
       const ends = new Date(now.getTime() + parseDuration(duration));
@@ -53,6 +55,7 @@ function CreateModal({ onClose }: CreateModalProps) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts", "silences"] });
+      toastSuccess("Silence created");
       onClose();
     },
   });
@@ -192,8 +195,12 @@ export default function Silences() {
     refetchInterval: 30_000,
   });
   const expire = useMutation({
+    meta: { label: "Expire silence failed" },
     mutationFn: (id: string) => alerts.expireSilence(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", "silences"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alerts", "silences"] });
+      toastSuccess("Silence expired");
+    },
   });
   const [showCreate, setShowCreate] = useState(false);
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { jobs, type Job, type JobDetail } from "../../api/observability";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function statePill(state?: string): string {
   if (state === "ok" || state === "completed" || state === "succeeded")
@@ -73,12 +74,20 @@ export default function Jobs() {
   });
 
   const retry = useMutation({
+    meta: { label: "Retry job failed" },
     mutationFn: (id: string) => jobs.retry(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      toastSuccess("Job re-queued");
+    },
   });
   const cancel = useMutation({
+    meta: { label: "Cancel job failed" },
     mutationFn: (id: string) => jobs.cancel(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      toastSuccess("Job cancelled");
+    },
   });
 
   const counts = {

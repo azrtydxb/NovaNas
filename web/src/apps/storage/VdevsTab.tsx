@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { storage, type Vdev } from "../../api/storage";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 type Props = { pool: string | null; setPool: (n: string) => void };
@@ -55,18 +56,40 @@ export function VdevsTab({ pool, setPool }: Props) {
     qc.invalidateQueries({ queryKey: ["pools"] });
   };
 
-  const scrubMut = useMutation({ mutationFn: (n: string) => storage.scrubPool(n), onSuccess: inval });
-  const trimMut = useMutation({ mutationFn: (n: string) => storage.trimPool(n), onSuccess: inval });
+  const scrubMut = useMutation({
+    meta: { label: "Scrub failed" },
+    mutationFn: (n: string) => storage.scrubPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Scrub started", `Pool ${n}`); },
+  });
+  const trimMut = useMutation({
+    meta: { label: "Trim failed" },
+    mutationFn: (n: string) => storage.trimPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Trim started", `Pool ${n}`); },
+  });
+  const waitMut = useMutation({
+    meta: { label: "Wait failed" },
+    mutationFn: (n: string) => storage.waitPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Wait complete", `Pool ${n}`); },
+  });
   const onlineMut = useMutation({
+    meta: { label: "Online failed" },
     mutationFn: ({ p, d }: { p: string; d: string }) => storage.onlineDevice(p, d),
-    onSuccess: inval,
+    onSuccess: (_d, v) => { inval(); toastSuccess("Device online", v.d); },
   });
   const offlineMut = useMutation({
+    meta: { label: "Offline failed" },
     mutationFn: ({ p, d }: { p: string; d: string }) => storage.offlineDevice(p, d),
-    onSuccess: inval,
+    onSuccess: (_d, v) => { inval(); toastSuccess("Device offline", v.d); },
+  });
+  const detachMut = useMutation({
+    meta: { label: "Detach failed" },
+    mutationFn: ({ p, d }: { p: string; d: string }) => storage.detachFromPool(p, d),
+    onSuccess: (_d, v) => { inval(); toastSuccess("Device detached", v.d); },
   });
 
   const [replaceFor, setReplaceFor] = useState<string | null>(null);
+  const [attachFor, setAttachFor] = useState<string | null>(null);
+  const [showAddVdev, setShowAddVdev] = useState(false);
 
   const cur = detailQ.data;
   const rows = flattenDisks(cur?.vdevs);
@@ -127,6 +150,22 @@ export function VdevsTab({ pool, setPool }: Props) {
               >
                 <Icon name="bolt" size={9} />
                 Trim
+              </button>
+              <button
+                className="btn btn--sm"
+                disabled={waitMut.isPending}
+                onClick={() => waitMut.mutate(cur.name)}
+                title="Wait for resilver / scrub"
+              >
+                Wait
+              </button>
+              <button
+                className="btn btn--sm"
+                onClick={() => setShowAddVdev(true)}
+                title="Add a new VDEV to the pool"
+              >
+                <Icon name="plus" size={9} />
+                Add VDEV
               </button>
             </div>
 
@@ -223,6 +262,24 @@ export function VdevsTab({ pool, setPool }: Props) {
                                   onClick={() => setReplaceFor(r.disk!)}
                                 >
                                   Replace
+                                </button>{" "}
+                                <button
+                                  className="btn btn--sm"
+                                  onClick={() => setAttachFor(r.disk!)}
+                                  title="Attach a mirror to this device"
+                                >
+                                  Attach
+                                </button>{" "}
+                                <button
+                                  className="btn btn--sm btn--danger"
+                                  disabled={detachMut.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(`Detach ${r.disk} from ${cur.name}?`)) {
+                                      detachMut.mutate({ p: cur.name, d: r.disk! });
+                                    }
+                                  }}
+                                >
+                                  Detach
                                 </button>
                               </>
                             )}
@@ -280,7 +337,123 @@ export function VdevsTab({ pool, setPool }: Props) {
           onDone={inval}
         />
       )}
+      {attachFor && active && (
+        <AttachDeviceModal
+          pool={active}
+          device={attachFor}
+          onClose={() => setAttachFor(null)}
+          onDone={inval}
+        />
+      )}
+      {showAddVdev && active && (
+        <AddVdevModal
+          pool={active}
+          onClose={() => setShowAddVdev(false)}
+          onDone={inval}
+        />
+      )}
     </div>
+  );
+}
+
+function AttachDeviceModal({
+  pool,
+  device,
+  onClose,
+  onDone,
+}: {
+  pool: string;
+  device: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [newDev, setNewDev] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Attach failed" },
+    mutationFn: () => storage.attachToPool(pool, { device, new_device: newDev }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Device attached", newDev); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Attach mirror device" sub={`Pool ${pool} · ${device}`} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !newDev}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Attaching…" : "Attach"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">New device path</label>
+        <input className="input" value={newDev} onChange={(e) => setNewDev(e.target.value)} placeholder="/dev/disk/by-id/…" />
+      </div>
+    </Modal>
+  );
+}
+
+function AddVdevModal({
+  pool,
+  onClose,
+  onDone,
+}: {
+  pool: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [type, setType] = useState("mirror");
+  const [devices, setDevices] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Add VDEV failed" },
+    mutationFn: () => storage.addToPool(pool, {
+      type,
+      devices: devices.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean),
+    }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("VDEV added", `Pool ${pool}`); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal title="Add VDEV" sub={`Pool ${pool}`} onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !devices}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Adding…" : "Add"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">VDEV type</label>
+        <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="mirror">mirror</option>
+          <option value="raidz1">raidz1</option>
+          <option value="raidz2">raidz2</option>
+          <option value="raidz3">raidz3</option>
+          <option value="stripe">stripe</option>
+          <option value="cache">cache (L2ARC)</option>
+          <option value="log">log (SLOG)</option>
+          <option value="spare">spare</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="field__label">Devices (whitespace or comma-separated)</label>
+        <input className="input" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder="/dev/sda /dev/sdb" />
+      </div>
+    </Modal>
   );
 }
 
@@ -298,8 +471,9 @@ function ReplaceDeviceModal({
   const [newDev, setNewDev] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const m = useMutation({
+    meta: { label: "Replace failed" },
     mutationFn: () => storage.replaceDevice(pool, { old_device: oldDevice, new_device: newDev }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Device replaced", newDev); },
     onError: (e: Error) => setErr(e.message),
   });
   return (

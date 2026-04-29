@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { plugins, type PluginManifest } from "../../api/plugins";
 import { api } from "../../api/client";
 import { Icon } from "../../components/Icon";
+import { toastInfo, toastSuccess } from "../../store/toast";
 
 export function Installed() {
   const qc = useQueryClient();
@@ -27,9 +28,13 @@ export function Installed() {
   });
 
   const uninstall = useMutation({
+    meta: { label: "Uninstall failed" },
     mutationFn: (name: string) =>
       api(`/api/v1/plugins/${encodeURIComponent(name)}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plugins"] }),
+    onSuccess: (_d, name) => {
+      qc.invalidateQueries({ queryKey: ["plugins"] });
+      toastSuccess("Plugin uninstalled", name);
+    },
   });
 
   if (q.isLoading) return <div className="discover__msg">Loading installed plugins…</div>;
@@ -113,10 +118,26 @@ export function Installed() {
             </Sect>
           )}
           <div className="installed__actions">
-            <button className="btn">
+            <button
+              className="btn"
+              onClick={() =>
+                toastInfo(
+                  "Restart not yet supported",
+                  "The plugin engine doesn't expose restart yet — coming next."
+                )
+              }
+            >
               <Icon name="refresh" size={11} /> Restart
             </button>
-            <button className="btn">
+            <button
+              className="btn"
+              onClick={() =>
+                toastInfo(
+                  "Plugin logs not yet wired",
+                  "Plugin stdout/stderr will route to the Logs app — coming next."
+                )
+              }
+            >
               <Icon name="log" size={11} /> Logs
             </button>
             <button

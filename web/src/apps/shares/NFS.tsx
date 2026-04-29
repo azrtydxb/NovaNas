@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { shares, type NfsExport } from "../../api/shares";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 export function NFS() {
@@ -12,10 +13,15 @@ export function NFS() {
 
   const inval = () => qc.invalidateQueries({ queryKey: ["nfs-exports"] });
   const delMut = useMutation({
+    meta: { label: "Delete export failed" },
     mutationFn: (n: string) => shares.deleteNfs(n),
-    onSuccess: inval,
+    onSuccess: (_d, n) => { inval(); toastSuccess("Export deleted", n); },
   });
-  const reloadMut = useMutation({ mutationFn: () => shares.nfsReload() });
+  const reloadMut = useMutation({
+    meta: { label: "Reload failed" },
+    mutationFn: () => shares.nfsReload(),
+    onSuccess: () => toastSuccess("NFS reloaded"),
+  });
 
   return (
     <div style={{ padding: 14 }}>
@@ -113,10 +119,11 @@ function NfsModal({
   const body = (): Partial<NfsExport> => ({ name, path, clients, options, active });
 
   const m = useMutation({
+    meta: { label: "Save export failed" },
     mutationFn: () => init
       ? shares.updateNfs(init.name, body())
       : shares.createNfs(body()),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: () => { onDone(); onClose(); toastSuccess(init ? "Export updated" : "Export created", name); },
     onError: (e: Error) => setErr(e.message),
   });
 

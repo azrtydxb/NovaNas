@@ -6,6 +6,7 @@ import {
   type AlertSilenceMatcher,
 } from "../../api/observability";
 import { Icon } from "../../components/Icon";
+import { toastSuccess } from "../../store/toast";
 
 function severityOf(a: Alert): string {
   return a.labels?.severity ?? "info";
@@ -50,6 +51,7 @@ function SilenceModal({ alert, onClose }: SilenceModalProps) {
   const [matchers, setMatchers] = useState<AlertSilenceMatcher[]>(initial);
 
   const create = useMutation({
+    meta: { label: "Create silence failed" },
     mutationFn: () => {
       const now = new Date();
       const ms = parseDuration(duration);
@@ -64,6 +66,7 @@ function SilenceModal({ alert, onClose }: SilenceModalProps) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts"] });
+      toastSuccess("Silence created");
       onClose();
     },
   });
