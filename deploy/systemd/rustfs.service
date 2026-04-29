@@ -1,0 +1,60 @@
+[Unit]
+Description=RustFS S3-compatible object storage (NovaNAS)
+Documentation=https://rustfs.com/docs/ https://docs.rustfs.com/
+# Ensure ZFS pool is online (data lives on tank/objects) before we start.
+After=network-online.target zfs-mount.service
+Wants=network-online.target
+RequiresMountsFor=/var/lib/rustfs
+
+[Service]
+Type=simple
+User=rustfs
+Group=rustfs
+WorkingDirectory=/var/lib/rustfs
+
+# Environment is sourced from /etc/rustfs/rustfs.env (rendered from rustfs.env.template).
+# RUSTFS_VOLUMES is passed positionally on the command line because the
+# upstream binary expects volumes as args; everything else (address, TLS
+# path, OIDC, console) is consumed via env vars.
+EnvironmentFile=/etc/rustfs/rustfs.env
+ExecStart=/usr/local/bin/rustfs ${RUSTFS_VOLUMES}
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+SendSIGKILL=no
+
+# Resource limits — RustFS opens many file descriptors for object handles.
+LimitNOFILE=1048576
+LimitNPROC=32768
+TasksMax=infinity
+OOMScoreAdjust=-500
+
+# Sandbox: mirror the hardening pattern used by grafana.service / prometheus.service.
+ProtectSystem=strict
+# /var/lib/rustfs is the data directory (RUSTFS_VOLUMES); /var/log/rustfs
+# is the log dir. /etc/rustfs is read-only (NOT in ReadWritePaths).
+ReadWritePaths=/var/lib/rustfs /var/log/rustfs
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+StandardOutput=append:/var/log/rustfs/rustfs.log
+StandardError=append:/var/log/rustfs/rustfs-err.log
+
+[Install]
+WantedBy=multi-user.target
