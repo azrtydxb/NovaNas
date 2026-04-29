@@ -149,5 +149,20 @@
   "scopeMappings": [],
   "clientScopeMappings": {},
   "organizationsEnabled": false,
+  "attributes": {
+    "userProfileEnabled": "true"
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"nova-tenant\",\"displayName\":\"NovaNAS tenant ID\",\"multivalued\":true,\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"validations\":{\"length\":{\"min\":1,\"max\":63},\"pattern\":{\"pattern\":\"^[a-z0-9][a-z0-9-]{0,62}$\",\"error-message\":\"tenant id must be lowercase alphanumeric/hyphen, 1-63 chars\"}},\"annotations\":{\"description\":\"Scopes the user to a NovaNAS tenant. The Keycloak ↔ KDC sync daemon provisions a Kerberos principal '<username>/<tenant>@NOVANAS.LOCAL' for each value. Multi-valued: a user can belong to multiple tenants.\"}},{\"name\":\"nova-platform-nfs\",\"displayName\":\"Platform NFS access\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"annotations\":{\"description\":\"Set to 'true' to provision a bare-username Kerberos principal for a platform-level (non-tenant) user. Ignored when nova-tenant is set.\"}}]}"
+          ]
+        }
+      }
+    ]
+  },
   "keycloakVersion": "25.0.0"
 }
