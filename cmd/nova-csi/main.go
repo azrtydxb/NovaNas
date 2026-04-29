@@ -83,7 +83,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	driver := csi.NewDriver(csi.Config{
+	driver, err := csi.NewDriver(csi.Config{
 		Name:              *driverName,
 		Version:           *driverVersion,
 		NodeID:            *nodeID,
@@ -94,6 +94,10 @@ func main() {
 		DefaultNFSClients: *defaultNFSClients,
 		Logger:            logger,
 	}, client, csi.NewShellMounter())
+	if err != nil {
+		logger.Error("driver init", "err", err)
+		os.Exit(1)
+	}
 
 	if err := driver.Run(ctx, *endpoint); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("nova-csi exited", "err", err)

@@ -65,7 +65,14 @@ type Driver struct {
 }
 
 // NewDriver constructs a Driver. Name/Version default if blank.
-func NewDriver(cfg Config, client NovaNASClient, mounter Mounter) *Driver {
+//
+// Returns an error when NFSServer or DefaultNFSClients reference public IPs.
+// NovaNAS volumes should never be reachable from the public internet — if you
+// hit this, the misconfiguration was almost certainly a copy-paste error.
+func NewDriver(cfg Config, client NovaNASClient, mounter Mounter) (*Driver, error) {
+	if err := validatePrivateNFSEndpoints(cfg.NFSServer, cfg.DefaultNFSClients); err != nil {
+		return nil, err
+	}
 	if cfg.Name == "" {
 		cfg.Name = DefaultName
 	}
@@ -75,7 +82,7 @@ func NewDriver(cfg Config, client NovaNASClient, mounter Mounter) *Driver {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	return &Driver{cfg: cfg, client: client, mounter: mounter, log: cfg.Logger}
+	return &Driver{cfg: cfg, client: client, mounter: mounter, log: cfg.Logger}, nil
 }
 
 // hostPath rewrites a host-namespace path so it's reachable from inside

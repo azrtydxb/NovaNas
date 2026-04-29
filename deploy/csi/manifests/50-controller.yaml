@@ -52,22 +52,31 @@ spec:
             - --novanas-token-file=
             - --novanas-ca-cert=/etc/nova-csi/ca.crt
             # OIDC client_credentials: nova-csi fetches a fresh access token
-            # at startup and refreshes it in the background.
-            - --oidc-issuer-url=https://192.168.10.204:8443/realms/novanas
+            # at startup and refreshes it in the background. Issuer URL
+            # comes from the nova-csi-config ConfigMap.
+            - --oidc-issuer-url=$(OIDC_ISSUER_URL)
             - --oidc-client-id-file=/etc/nova-csi/oidc-client-id
             - --oidc-client-secret-file=/etc/nova-csi/oidc-client-secret
             - --oidc-ca-cert=/etc/nova-csi/ca.crt
             - --default-pool=tank
             - --default-parent=tank/csi
             - --log-level=info
+          envFrom:
+            # OIDC_ISSUER_URL is consumed; NFS_* / NOVANAS_URL from the same
+            # ConfigMap are unused by the controller (NOVANAS_URL is set
+            # explicitly below to loopback because the controller runs with
+            # hostNetwork=true on the storage host).
+            - configMapRef:
+                name: nova-csi-config
           env:
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            # nova-api listens on the host. With hostNetwork: true we can
-            # reach it via 127.0.0.1. If you ever move nova-api off the
-            # storage host, change this URL (and drop hostNetwork).
+            # Override NOVANAS_URL from the ConfigMap: with hostNetwork=true
+            # we reach nova-api via loopback. If you ever move nova-api
+            # off the storage host, drop this and let the ConfigMap value
+            # (the LAN IP) propagate.
             - name: NOVANAS_URL
               value: https://127.0.0.1:8444
           volumeMounts:

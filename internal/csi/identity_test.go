@@ -8,12 +8,16 @@ import (
 )
 
 func newTestDriver(client NovaNASClient, mounter Mounter) *Driver {
-	return NewDriver(Config{
+	d, err := NewDriver(Config{
 		Name:        "csi.novanas.io",
 		Version:     "0.1.0",
 		NodeID:      "test-node",
 		DefaultPool: "tank",
 	}, client, mounter)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func TestGetPluginInfo(t *testing.T) {

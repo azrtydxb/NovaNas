@@ -40,7 +40,7 @@ spec:
         - --novanas-url=$(NOVANAS_URL)
         - --novanas-token-file=
         - --novanas-ca-cert=/etc/nova-csi/ca.crt
-        - --oidc-issuer-url=https://192.168.10.204:8443/realms/novanas
+        - --oidc-issuer-url=$(OIDC_ISSUER_URL)
         - --oidc-client-id-file=/etc/nova-csi/oidc-client-id
         - --oidc-client-secret-file=/etc/nova-csi/oidc-client-secret
         - --oidc-ca-cert=/etc/nova-csi/ca.crt
@@ -48,21 +48,19 @@ spec:
         - --default-parent=tank/csi
         - --log-level=info
         - --host-root-prefix=/host
-        # Enables NFS-mode StorageClasses (novanas-nfs). Pods receive this
-        # value in VolumeContext.nfsServer and the kernel NFS client mounts
-        # against it via mount.nfs4 in this container.
-        - --nfs-server=192.168.10.204
-        # Default per-export client allowlist when the StorageClass omits
-        # 'nfsClients'. Owned export options (sec=krb5p) live in the host's
-        # /etc/exports.d defaults, not here.
-        - --default-nfs-clients=10.0.0.0/8
+        # NFS server + client allowlist come from the nova-csi-node-config
+        # ConfigMap. The driver validates them at startup and refuses to
+        # start if either contains a public IP — see internal/csi/nfs_addr.go.
+        - --nfs-server=$(NFS_SERVER)
+        - --default-nfs-clients=$(NFS_CLIENTS)
+        envFrom:
+        - configMapRef:
+            name: nova-csi-config
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: NOVANAS_URL
-          value: https://192.168.10.204:8444
         securityContext:
           privileged: true
         volumeMounts:

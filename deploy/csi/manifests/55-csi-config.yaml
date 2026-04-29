@@ -1,0 +1,40 @@
+---
+# Operator-tunable runtime config for the NovaNAS CSI node DaemonSet.
+#
+# Replace these values with the IP/hostname of your storage host and the
+# private CIDR(s) that pod traffic originates from.
+#
+# Constraints (enforced at startup by nova-csi):
+#   - NFS_SERVER must be empty or an RFC1918 / loopback / ULA / link-local
+#     address, or a hostname (validated by the operator).
+#   - NFS_CLIENTS is a comma-separated list of NFS export rules. Every IP
+#     or CIDR must be private. Wildcards (`*` / `*.example.org`) and bare
+#     hostnames are accepted as opaque tokens.
+#
+# Public IPs WILL fail the driver's startup check — by design. NovaNAS
+# volumes must never be reachable from the public internet.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-csi-config
+  namespace: nova-csi
+  labels:
+    app.kubernetes.io/name: nova-csi
+data:
+  # Address pods (and the kernel NFS client inside the node DaemonSet) use
+  # to reach the NovaNAS NFS server. Default: dev box LAN IP. Replace with
+  # your storage host's private IP or a private DNS name.
+  NFS_SERVER: "192.168.10.204"
+
+  # Default NFS export client allowlist when the StorageClass does not
+  # override `nfsClients`. Default: cluster pod CIDR (k3s ships 10.42.0.0/16).
+  NFS_CLIENTS: "10.42.0.0/16"
+
+  # Keycloak realm issuer URL. Both controller and node consume this.
+  OIDC_ISSUER_URL: "https://192.168.10.204:8443/realms/novanas"
+
+  # nova-api control-plane URL as seen from the NODE DaemonSet — pods on
+  # other hosts (future multi-node) will use this. The controller has its
+  # own value (127.0.0.1) baked into 50-controller.yaml because it runs
+  # hostNetwork=true on the storage host and reaches nova-api via loopback.
+  NOVANAS_URL: "https://192.168.10.204:8444"
