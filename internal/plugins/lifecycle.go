@@ -62,9 +62,22 @@ type Manager struct {
 	Provisioner NeedsProvisioner
 	Router      *Router
 	UI          *UIAssets
+	// Deployer runs the plugin's runtime — currently only SystemdDeployer
+	// for spec.deployment.type=systemd. nil means deployment is skipped
+	// (the engine still records the install; the operator may bring up
+	// the plugin out-of-band).
+	Deployer Deployer
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+}
+
+// Deployer runs the plugin's runtime substrate after needs are
+// fulfilled. Implementations are expected to be idempotent on Install
+// and best-effort on Uninstall.
+type Deployer interface {
+	Install(ctx context.Context, manifest *Plugin) error
+	Uninstall(ctx context.Context, plugin string) error
 }
 
 // ManagerOptions wires a Manager.
@@ -76,6 +89,7 @@ type ManagerOptions struct {
 	Provisioner NeedsProvisioner
 	Router      *Router
 	UI          *UIAssets
+	Deployer    Deployer
 }
 
 // NewManager constructs a Manager. Provisioner nil falls back to
@@ -94,6 +108,7 @@ func NewManager(o ManagerOptions) *Manager {
 		Provisioner: o.Provisioner,
 		Router:      o.Router,
 		UI:          o.UI,
+		Deployer:    o.Deployer,
 		locks:       map[string]*sync.Mutex{},
 	}
 }
@@ -177,6 +192,27 @@ func (m *Manager) Install(ctx context.Context, req InstallRequest) (*Installatio
 		m.UI.Register(req.Name, uiDir)
 	}
 
+	// Runtime deployment. A failure rolls everything back so the engine
+	// never advertises a half-installed plugin. The Deployer is
+	// responsible for being idempotent — see SystemdDeployer.
+	if m.Deployer != nil {
+		if err := m.Deployer.Install(ctx, manifest); err != nil {
+			if m.Logger != nil {
+				m.Logger.Error("plugins: deploy failed; rolling back", "name", req.Name, "err", err)
+			}
+			if m.Router != nil {
+				m.Router.Unmount(req.Name)
+			}
+			if m.UI != nil {
+				m.UI.Deregister(req.Name)
+			}
+			_ = m.Queries.DeletePlugin(ctx, req.Name)
+			_ = rollbackNeeds(ctx, m.Provisioner, req.Name, resources)
+			_ = os.RemoveAll(destDir)
+			return nil, fmt.Errorf("plugins: deploy: %w", err)
+		}
+	}
+
 	if m.Logger != nil {
 		m.Logger.Info("plugins: installed", "name", req.Name, "version", manifest.Metadata.Version)
 	}
@@ -198,6 +234,11 @@ func (m *Manager) Uninstall(ctx context.Context, name string, purge bool) error 
 		return ErrNotFound
 	}
 
+	if m.Deployer != nil {
+		if err := m.Deployer.Uninstall(ctx, name); err != nil && m.Logger != nil {
+			m.Logger.Warn("plugins: deployer uninstall partial", "name", name, "err", err)
+		}
+	}
 	if m.Router != nil {
 		m.Router.Unmount(name)
 	}
@@ -278,6 +319,13 @@ func (m *Manager) Upgrade(ctx context.Context, name, version string) (*Installat
 	}
 	if m.UI != nil && uiDir != "" {
 		m.UI.Register(name, uiDir)
+	}
+	if m.Deployer != nil {
+		if err := m.Deployer.Install(ctx, manifest); err != nil {
+			if m.Logger != nil {
+				m.Logger.Error("plugins: upgrade deploy failed", "name", name, "err", err)
+			}
+		}
 	}
 	if m.Logger != nil {
 		m.Logger.Info("plugins: upgraded", "name", name, "version", manifest.Metadata.Version)

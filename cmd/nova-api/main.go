@@ -35,6 +35,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/secrets"
 	"github.com/novanas/nova-nas/internal/host/smart"
 	"github.com/novanas/nova-nas/internal/host/system"
+	hostls "github.com/novanas/nova-nas/internal/host/tls"
 	"github.com/novanas/nova-nas/internal/host/tpm"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -336,6 +337,7 @@ func main() {
 	systemMetaHandler := &handlers.SystemMetaHandler{Logger: logger, BuildCommit: buildCommit, BuildTime: buildTime}
 
 	var sessionsHandler *handlers.SessionsHandler
+	var keycloakAdmin *handlers.KeycloakAdminClient
 	if cfg.KeycloakAdminClientID != "" && cfg.KeycloakAdminClientSecretFile != "" {
 		secretBytes, err := os.ReadFile(cfg.KeycloakAdminClientSecretFile)
 		if err != nil {
@@ -364,14 +366,15 @@ func main() {
 				tokenURL = issuer + "/protocol/openid-connect/token"
 			}
 			if adminURL != "" && tokenURL != "" {
+				keycloakAdmin = &handlers.KeycloakAdminClient{
+					AdminURL:     adminURL,
+					TokenURL:     tokenURL,
+					ClientID:     cfg.KeycloakAdminClientID,
+					ClientSecret: secret,
+				}
 				sessionsHandler = &handlers.SessionsHandler{
-					Logger: logger,
-					Admin: &handlers.KeycloakAdminClient{
-						AdminURL:     adminURL,
-						TokenURL:     tokenURL,
-						ClientID:     cfg.KeycloakAdminClientID,
-						ClientSecret: secret,
-					},
+					Logger:  logger,
+					Admin:   keycloakAdmin,
 					RoleMap: auth.DefaultRoleMap,
 				}
 				logger.Info("keycloak admin client wired", "admin_url", adminURL, "client_id", cfg.KeycloakAdminClientID)
@@ -407,24 +410,35 @@ func main() {
 	vmMgr := buildVMManager(logger)
 
 	// Tier 2 plugin engine wiring. Marketplace client is always built
-	// (the index URL is configurable). The verifier and provisioner
-	// are wired with the operator-supplied trust key + a NopProvisioner
-	// (real provisioner — datasets/keycloak/CA — is wired in a follow-
-	// up). The lifecycle manager re-mounts API routes + UI bundles for
-	// previously-installed plugins on startup.
+	// (the index URL is configurable). The verifier is wired with the
+	// operator-supplied trust key. The provisioner is composed from
+	// four sub-provisioners — dataset (ZFS), oidcClient (Keycloak admin),
+	// tlsCert (local CA), permission (Keycloak realm-role binding) —
+	// and falls back to NopProvisioner when no Keycloak admin client is
+	// available so installs still succeed for plugins with no `needs:`.
+	// The systemd Deployer is wired unconditionally; the deployer only
+	// touches plugins whose deployment.type=systemd.
 	pluginsMarket := plugins.NewMarketplaceClient(cfg.MarketplaceIndexURL, nil)
 	pluginsVerifier := plugins.NewVerifier(cfg.MarketplaceTrustKeyPath)
 	pluginsVerifier.CosignBin = cfg.MarketplaceCosignBin
 	pluginsRouter := plugins.NewRouter(logger, nil)
 	pluginsUI := plugins.NewUIAssets(cfg.PluginsRoot)
+	pluginsProv := buildPluginsProvisioner(logger, datasetMgr, keycloakAdmin, secretsMgr, cfg)
+	pluginsDeployer := plugins.NewSystemdDeployer(cfg.PluginsRoot, logger)
+	if cfg.PluginsSystemctlBin != "" {
+		// Override the default systemctl path. Keep the runner type
+		// internal — main.go only knows the bin path.
+		pluginsDeployer.Runner = &plugins.SystemctlExec{Bin: cfg.PluginsSystemctlBin}
+	}
 	pluginsMgr := plugins.NewManager(plugins.ManagerOptions{
 		Logger:      logger,
 		Queries:     st.Queries,
 		Marketplace: pluginsMarket,
 		Verifier:    pluginsVerifier,
-		Provisioner: plugins.NopProvisioner{},
+		Provisioner: pluginsProv,
 		Router:      pluginsRouter,
 		UI:          pluginsUI,
+		Deployer:    pluginsDeployer,
 	})
 	go pluginsMgr.RestoreAtStartup(context.Background())
 
@@ -688,6 +702,39 @@ func buildWorkloadsManager(logger *slog.Logger, kubeconfigPath, indexPath string
 		return nil
 	}
 	return mgr
+}
+
+// buildPluginsProvisioner composes the production NeedsProvisioner
+// from the four sub-provisioners. When the Keycloak admin client is
+// not configured (e.g. dev boxes with no realm) the OIDC + Permission
+// sub-provisioners are left nil; a plugin claiming those needs will
+// fail at install time with a clear error rather than silently
+// stubbing them out. Plugins with no `needs:` install fine.
+func buildPluginsProvisioner(
+	logger *slog.Logger,
+	datasetMgr *dataset.Manager,
+	keycloakAdmin *handlers.KeycloakAdminClient,
+	secretsMgr secrets.Manager,
+	cfg *config.Config,
+) plugins.NeedsProvisioner {
+	dsP := &plugins.DatasetProvisioner{Client: datasetMgr, Logger: logger}
+	tlsP := &plugins.TLSCertProvisioner{
+		Issuer: &hostls.Issuer{
+			CACertPath: cfg.PluginsCACertPath,
+			CAKeyPath:  cfg.PluginsCAKeyPath,
+		},
+		PluginsRoot: cfg.PluginsRoot,
+		Logger:      logger,
+	}
+	var oidcP *plugins.OIDCClientProvisioner
+	var permP *plugins.PermissionProvisioner
+	if keycloakAdmin != nil {
+		oidcP = &plugins.OIDCClientProvisioner{Admin: keycloakAdmin, Secrets: secretsMgr, Logger: logger}
+		permP = &plugins.PermissionProvisioner{Admin: keycloakAdmin, Logger: logger}
+	} else {
+		logger.Warn("plugins: Keycloak admin client unconfigured; oidcClient/permission needs will fail until KEYCLOAK_ADMIN_* is set")
+	}
+	return plugins.NewProductionProvisioner(dsP, oidcP, tlsP, permP)
 }
 
 // buildVMManager wires the KubeVirt-backed VM manager. Templates are

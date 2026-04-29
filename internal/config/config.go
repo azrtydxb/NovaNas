@@ -78,6 +78,17 @@ type Config struct {
 	// (UI bundles, manifest.yaml, etc.) live. Default
 	// /var/lib/nova-nas/plugins.
 	PluginsRoot string `envconfig:"PLUGINS_ROOT" default:"/var/lib/nova-nas/plugins"`
+
+	// PluginsCACertPath / PluginsCAKeyPath point at the local NovaNAS
+	// CA used by the plugin engine to mint server certs for plugins
+	// that claim a `tlsCert` need. Defaults match the host bootstrap
+	// (see deploy/observability/issue-certs.sh).
+	PluginsCACertPath string `envconfig:"PLUGINS_CA_CERT_PATH" default:"/etc/nova-ca/ca.crt"`
+	PluginsCAKeyPath  string `envconfig:"PLUGINS_CA_KEY_PATH" default:"/etc/nova-ca/ca.key"`
+
+	// PluginsSystemctlBin overrides the systemctl binary used by the
+	// plugin systemd deployer. Empty falls back to /bin/systemctl.
+	PluginsSystemctlBin string `envconfig:"PLUGINS_SYSTEMCTL_BIN"`
 }
 
 // SMTPConfig configures the outbound SMTP relay used by transactional
