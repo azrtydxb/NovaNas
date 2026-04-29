@@ -75,13 +75,18 @@ aws --endpoint-url https://<host>:9000 --no-verify-ssl \
     iam attach-group-policy --group-name nova-viewer   --policy-arn arn:aws:iam::aws:policy/readonly
 ```
 
-> **Heads-up on IAM CLI:** RustFS's exact admin CLI surface for attaching
-> policies to OIDC groups is still evolving in the 1.0.0-beta.x line. If
-> the `aws iam` calls above are rejected, the alternative is to use the
-> RustFS console UI (Identity -> Policies -> attach to group), or — if
-> you have the `mc` MinIO client around — the equivalent
-> `mc admin policy attach <alias> <policy> --group <group>`. See
-> "Troubleshooting" below.
+> **How RustFS resolves an OIDC user to a policy** (verified against
+> [`crates/iam/src/oidc.rs`](https://github.com/rustfs/rustfs/blob/main/crates/iam/src/oidc.rs)):
+> on each request, RustFS reads the configured `groups_claim` from the
+> JWT and looks up an IAM policy of the same name. The Keycloak protocol
+> mapper we install emits realm roles (`nova-admin`, `nova-operator`,
+> `nova-viewer`) flattened into the `groups` claim, so each role name
+> needs an IAM policy of that exact name to exist on the RustFS side.
+> The `aws iam create-policy` + `attach-group-policy` calls above are
+> the supported path; the RustFS console UI (Identity → Policies) is
+> the no-CLI alternative. `RUSTFS_IDENTITY_OPENID_ROLE_POLICY` lets you
+> set a baseline policy attached to every authenticated user as a
+> safety net — see `rustfs.env.template`.
 
 ## Quickstart for end users
 
@@ -198,14 +203,14 @@ Some other service (often a leftover MinIO) is on 9000/9001. Stop it or
 change `RUSTFS_ADDRESS` / `RUSTFS_CONSOLE_ADDRESS` in
 `/etc/rustfs/rustfs.env`.
 
-### OIDC config knob doesn't seem to apply
+### OIDC env-var reference
 
-The OIDC env-var surface in RustFS 1.0.0-beta.x is still evolving. If a
-variable in `/etc/rustfs/rustfs.env` looks like it's being ignored, run
-`/usr/local/bin/rustfs --help` on the pinned binary and cross-reference
-against <https://docs.rustfs.com/> for the same release tag. The
-`rustfs.env.template` flags one such variable
-(`RUSTFS_IDENTITY_OPENID_REDIRECT_URI`) with a `# TODO: verify` comment.
+All `RUSTFS_IDENTITY_OPENID_*` variables in `rustfs.env.template` are
+verified against the canonical source-of-truth file in the RustFS repo:
+[`crates/config/src/constants/oidc.rs`](https://github.com/rustfs/rustfs/blob/main/crates/config/src/constants/oidc.rs).
+That file declares every `ENV_IDENTITY_OPENID_*` constant the daemon reads.
+If a variable looks like it's being ignored on your pinned release, check
+the same file at the matching tag on GitHub.
 
 ## Backup and snapshot
 
