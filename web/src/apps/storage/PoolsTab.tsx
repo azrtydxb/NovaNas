@@ -30,45 +30,13 @@ export function PoolsTab({ onPick }: Props) {
     if (detailFor) qc.invalidateQueries({ queryKey: ["pool", detailFor] });
   };
 
-  const scrubMut = useMutation({
-    meta: { label: "Scrub failed" },
-    mutationFn: (n: string) => storage.scrubPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Scrub started", `Pool ${n}`); },
-  });
-  const trimMut = useMutation({
-    meta: { label: "Trim failed" },
-    mutationFn: (n: string) => storage.trimPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Trim started", `Pool ${n}`); },
-  });
-  const clearMut = useMutation({
-    meta: { label: "Clear failed" },
-    mutationFn: (n: string) => storage.clearPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Errors cleared", `Pool ${n}`); },
-  });
-  const checkpointMut = useMutation({
-    meta: { label: "Checkpoint failed" },
-    mutationFn: (n: string) => storage.checkpointPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Checkpoint taken", `Pool ${n}`); },
-  });
-  const exportMut = useMutation({
-    meta: { label: "Export failed" },
-    mutationFn: (n: string) => storage.exportPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Pool exported", n); },
-  });
+  // Per-pool actions (Scrub/Trim/Clear/Checkpoint/Wait/Discard/Export)
+  // moved into <PoolDetailModal> to match the design — pool cards are
+  // informational only, click opens detail.
   const syncMut = useMutation({
     meta: { label: "Sync failed" },
     mutationFn: () => storage.syncPools(),
     onSuccess: () => { inval(); toastSuccess("Pools refreshed"); },
-  });
-  const discardCheckpointMut = useMutation({
-    meta: { label: "Discard checkpoint failed" },
-    mutationFn: (n: string) => storage.discardCheckpoint(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Checkpoint discarded", `Pool ${n}`); },
-  });
-  const waitMut = useMutation({
-    meta: { label: "Wait failed" },
-    mutationFn: (n: string) => storage.waitPool(n),
-    onSuccess: (_d, n) => { inval(); toastSuccess("Wait complete", `Pool ${n}`); },
   });
 
   const detail = pools.find((p) => p.name === detailFor) ?? null;
@@ -161,78 +129,9 @@ export function PoolsTab({ onPick }: Props) {
                   <span className="muted">scrub: {p.scrubLast ?? "—"}</span>
                   <span className="muted">next: {p.scrubNext ?? "—"}</span>
                 </div>
-                <div
-                  className="row gap-8"
-                  style={{ flexWrap: "wrap", paddingTop: 6, borderTop: "1px solid var(--line)" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    className="btn btn--sm"
-                    disabled={scrubMut.isPending}
-                    onClick={() => scrubMut.mutate(p.name)}
-                  >
-                    Scrub
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    disabled={trimMut.isPending}
-                    onClick={() => trimMut.mutate(p.name)}
-                  >
-                    Trim
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    disabled={clearMut.isPending}
-                    onClick={() => clearMut.mutate(p.name)}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    disabled={checkpointMut.isPending}
-                    onClick={() => checkpointMut.mutate(p.name)}
-                  >
-                    Checkpoint
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    disabled={waitMut.isPending}
-                    onClick={() => waitMut.mutate(p.name)}
-                    title="Wait for resilver/scrub to finish"
-                  >
-                    Wait
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    disabled={discardCheckpointMut.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Discard checkpoint on "${p.name}"?`)) {
-                        discardCheckpointMut.mutate(p.name);
-                      }
-                    }}
-                    title="Discard previously-taken checkpoint"
-                  >
-                    Discard ckpt
-                  </button>
-                  <button
-                    className="btn btn--sm"
-                    onClick={() => onPick(p.name)}
-                  >
-                    Vdevs
-                  </button>
-                  <button
-                    className="btn btn--sm btn--danger"
-                    style={{ marginLeft: "auto" }}
-                    disabled={exportMut.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Export pool "${p.name}"? It will be unmounted.`)) {
-                        exportMut.mutate(p.name);
-                      }
-                    }}
-                  >
-                    Export
-                  </button>
-                </div>
+                {/* Per design: pool cards are informational. Actions
+                    live on the detail modal opened by clicking the
+                    card, and on the Vdev tab toolbar. */}
               </div>
             );
           })}
@@ -270,11 +169,28 @@ function PoolDetailModal({
   onClose: () => void;
   onVdevs: () => void;
 }) {
+  const qc = useQueryClient();
   const propsQ = useQuery({
     queryKey: ["pool-props", pool.name],
     queryFn: () => storage.getPoolProperties(pool.name),
   });
   const props = (propsQ.data ?? {}) as Record<string, unknown>;
+
+  const inval = () => qc.invalidateQueries({ queryKey: ["pools"] });
+  const m = (label: string, fn: () => Promise<unknown>, ok: string) =>
+    useMutation({
+      meta: { label: `${label} failed` },
+      mutationFn: fn,
+      onSuccess: () => { inval(); toastSuccess(ok, `Pool ${pool.name}`); },
+    });
+  const scrub = m("Scrub", () => storage.scrubPool(pool.name), "Scrub started");
+  const trim = m("Trim", () => storage.trimPool(pool.name), "Trim started");
+  const clear = m("Clear", () => storage.clearPool(pool.name), "Errors cleared");
+  const ckpt = m("Checkpoint", () => storage.checkpointPool(pool.name), "Checkpoint taken");
+  const discardCkpt = m("Discard checkpoint", () => storage.discardCheckpoint(pool.name), "Checkpoint discarded");
+  const wait = m("Wait", () => storage.waitPool(pool.name), "Wait complete");
+  const exportPool = m("Export", () => storage.exportPool(pool.name), "Pool exported");
+
   return (
     <Modal title={`Pool · ${pool.name}`} sub={pool.state ?? pool.health ?? ""} onClose={onClose}
       footer={
@@ -284,6 +200,29 @@ function PoolDetailModal({
         </>
       }
     >
+      <div className="sect">
+        <div className="sect__title">Actions</div>
+        <div className="sect__body">
+          <div className="row gap-8" style={{ flexWrap: "wrap" }}>
+            <button className="btn btn--sm" disabled={scrub.isPending} onClick={() => scrub.mutate()}>Scrub</button>
+            <button className="btn btn--sm" disabled={trim.isPending} onClick={() => trim.mutate()}>Trim</button>
+            <button className="btn btn--sm" disabled={clear.isPending} onClick={() => clear.mutate()}>Clear errors</button>
+            <button className="btn btn--sm" disabled={ckpt.isPending} onClick={() => ckpt.mutate()}>Checkpoint</button>
+            <button className="btn btn--sm" disabled={discardCkpt.isPending} onClick={() => {
+              if (window.confirm(`Discard checkpoint on "${pool.name}"?`)) discardCkpt.mutate();
+            }}>Discard ckpt</button>
+            <button className="btn btn--sm" disabled={wait.isPending} onClick={() => wait.mutate()} title="Wait for resilver/scrub to finish">Wait</button>
+            <button
+              className="btn btn--sm btn--danger"
+              style={{ marginLeft: "auto" }}
+              disabled={exportPool.isPending}
+              onClick={() => {
+                if (window.confirm(`Export pool "${pool.name}"? It will be unmounted.`)) exportPool.mutate();
+              }}
+            >Export</button>
+          </div>
+        </div>
+      </div>
       <div className="sect">
         <div className="sect__title">Summary</div>
         <div className="sect__body">

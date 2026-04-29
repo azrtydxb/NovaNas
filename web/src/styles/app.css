@@ -1102,3 +1102,32 @@ body {
 }
 .hjob__bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .hjob__t { font-size: 10px; color: var(--fg-3); white-space: nowrap; }
+
+/* Critical-alert triangle in topbar */
+.topbar__icon--alert { color: var(--err); position: relative; }
+.topbar__icon--alert::after {
+  content: ""; position: absolute; top: 6px; right: 6px;
+  width: 5px; height: 5px; border-radius: 999px; background: var(--err);
+  box-shadow: 0 0 6px var(--err);
+}
+
+/* User menu popover */
+.topbar__user-btn { width: 26px; height: 26px; }
+.user-menu {
+  position: absolute; top: 40px; right: 8px; z-index: 8000;
+  min-width: 200px;
+  background: var(--popover-bg); border: 1px solid var(--line-strong);
+  border-radius: var(--r-md); box-shadow: 0 16px 40px oklch(0 0 0 / 0.55);
+  padding: 4px;
+}
+.user-menu__head { padding: 10px 12px 8px; border-bottom: 1px solid var(--line); }
+.user-menu__name { font-size: 11px; color: var(--fg-0); font-weight: 500; }
+.user-menu__email { font-size: 10px; margin-top: 2px; }
+.user-menu__item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 10px;
+  background: transparent; border: none;
+  color: var(--fg-1); font-size: 11px;
+  text-align: left; cursor: pointer; border-radius: var(--r-xs);
+}
+.user-menu__item:hover { background: var(--bg-3); color: var(--fg-0); }
