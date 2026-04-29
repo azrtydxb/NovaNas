@@ -23,11 +23,32 @@ All components:
 
 | Component | Port | Protocol | Purpose |
 |-----------|------|----------|---------|
-| Prometheus | 9090 | HTTPS | Metrics API & UI |
-| Alertmanager | 9093 | HTTPS | Alert routing & API |
-| Grafana | 3000 | HTTPS | Dashboards & visualization |
-| Loki | 3100 | HTTP | Log API (no TLS by default) |
+| Prometheus | 9090 | HTTPS | Metrics API & UI (localhost only) |
+| Alertmanager | 9093 | HTTPS | Alert routing & API (localhost only) |
+| Grafana | 3000 | HTTPS | Dashboards & visualization (browser-facing, native Keycloak OIDC) |
+| Loki | 3100 | HTTP | Log API (localhost only) |
 | Promtail | (no listen) | - | Ships logs via push to Loki |
+| oauth2-proxy (prometheus) | 9091 | HTTPS | Keycloak SSO front for Prometheus |
+| oauth2-proxy (alertmanager) | 9094 | HTTPS | Keycloak SSO front for Alertmanager |
+| oauth2-proxy (loki) | 3101 | HTTPS | Keycloak SSO front for Loki |
+
+### Single Sign-On
+
+All four UIs are gated by Keycloak (realm `novanas`):
+
+- **Grafana** speaks OIDC natively (`auth.generic_oauth`).
+- **Prometheus**, **Alertmanager**, **Loki** stay bound to localhost and
+  are fronted by per-service `oauth2-proxy` instances that terminate TLS
+  and enforce realm-role gating.
+
+Browser entry points:
+
+- `https://novanas.local:3000`  Grafana
+- `https://novanas.local:9091`  Prometheus
+- `https://novanas.local:9094`  Alertmanager
+- `https://novanas.local:3101`  Loki
+
+Bootstrap and troubleshooting: see [`sso.md`](./sso.md).
 
 ### Architecture Diagram
 
@@ -643,8 +664,8 @@ session_lifetime = 604800  # 1 week
 ## Security Hardening
 
 1. **TLS**: All components use certs signed by local CA. Replace with proper certificates if exposing externally.
-2. **Auth**: Grafana integrated with Keycloak via OIDC. Configure fine-grained role mappings.
-3. **Network**: All components listen on localhost only. Use a reverse proxy or network policies if exposing.
+2. **Auth**: Grafana speaks Keycloak OIDC natively. Prometheus, Alertmanager, and Loki are fronted by `oauth2-proxy` (one instance per service) which terminates TLS and gates access on realm roles. See [`sso.md`](./sso.md).
+3. **Network**: All upstream components listen on localhost only. Browser-facing access goes through Grafana (3000) and oauth2-proxy (9091/9094/3101).
 4. **Secrets**: Store SMTP passwords, API keys, etc. in OpenBao, not in plaintext configs.
 5. **RBAC**: Create OpenBao policies per component (see `deploy/openbao/*-policy.hcl`)
 

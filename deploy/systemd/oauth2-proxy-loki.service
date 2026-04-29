@@ -1,0 +1,36 @@
+[Unit]
+Description=oauth2-proxy in front of Loki (Keycloak SSO)
+Documentation=https://oauth2-proxy.github.io/oauth2-proxy/
+Wants=network-online.target
+After=network-online.target loki.service
+Requires=loki.service
+
+[Service]
+Type=simple
+User=oauth2-proxy
+Group=oauth2-proxy
+EnvironmentFile=-/etc/oauth2-proxy/loki.env
+LoadCredential=cookie-secret:/etc/oauth2-proxy/loki-cookie-secret
+LoadCredential=client-secret:/etc/oauth2-proxy/loki-client-secret
+Environment=OAUTH2_PROXY_COOKIE_SECRET_FILE=%d/cookie-secret
+Environment=OAUTH2_PROXY_CLIENT_SECRET_FILE=%d/client-secret
+ExecStart=/usr/local/bin/oauth2-proxy --config=/etc/oauth2-proxy/loki.cfg
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadOnlyPaths=/etc/oauth2-proxy /etc/nova-ca
+
+[Install]
+WantedBy=multi-user.target

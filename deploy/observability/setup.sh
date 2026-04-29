@@ -251,6 +251,97 @@ systemctl enable grafana.service
 systemctl enable loki.service
 systemctl enable promtail.service
 
+# 14. Keycloak SSO bootstrap (Grafana OIDC + oauth2-proxy fronts).
+#     Idempotent: re-running rotates client secrets and refreshes
+#     cookie secrets. Requires KC_URL and KC_ADMIN_PASS in the env.
+log "Step 14: Bootstrapping Keycloak SSO clients..."
+if [[ -n "${KC_URL:-}" && -n "${KC_ADMIN_PASS:-}" ]]; then
+    # Create oauth2-proxy system user/group + config dir.
+    if ! id oauth2-proxy &>/dev/null; then
+        useradd --system --home /var/lib/oauth2-proxy --shell /bin/false oauth2-proxy \
+            || warn "could not create oauth2-proxy user"
+    fi
+    mkdir -p /etc/oauth2-proxy/tls
+    chown -R oauth2-proxy:oauth2-proxy /etc/oauth2-proxy
+    chmod 0750 /etc/oauth2-proxy
+    chmod 0750 /etc/oauth2-proxy/tls
+
+    # Drop oauth2-proxy configs in place.
+    for svc in prometheus alertmanager loki; do
+        cp "$SCRIPT_DIR/oauth2-proxy/${svc}.cfg" "/etc/oauth2-proxy/${svc}.cfg"
+        chown oauth2-proxy:oauth2-proxy "/etc/oauth2-proxy/${svc}.cfg"
+        chmod 0640 "/etc/oauth2-proxy/${svc}.cfg"
+        # Empty env override file (operators may add overrides).
+        if [[ ! -f "/etc/oauth2-proxy/${svc}.env" ]]; then
+            : > "/etc/oauth2-proxy/${svc}.env"
+            chown oauth2-proxy:oauth2-proxy "/etc/oauth2-proxy/${svc}.env"
+            chmod 0640 "/etc/oauth2-proxy/${svc}.env"
+        fi
+        # Reuse host certs (CA-signed) for oauth2-proxy TLS.
+        if [[ -f "/etc/nova-certs/${svc}.crt" && -f "/etc/nova-certs/${svc}.key" ]]; then
+            cp "/etc/nova-certs/${svc}.crt" "/etc/oauth2-proxy/tls/${svc}.crt"
+            cp "/etc/nova-certs/${svc}.key" "/etc/oauth2-proxy/tls/${svc}.key"
+            chown oauth2-proxy:oauth2-proxy "/etc/oauth2-proxy/tls/${svc}.crt" "/etc/oauth2-proxy/tls/${svc}.key"
+            chmod 0644 "/etc/oauth2-proxy/tls/${svc}.crt"
+            chmod 0600 "/etc/oauth2-proxy/tls/${svc}.key"
+        else
+            warn "oauth2-proxy TLS material missing for $svc; issue-certs.sh must publish ${svc}.crt/.key"
+        fi
+    done
+
+    # Grafana OIDC client.
+    log "  Creating grafana Keycloak client..."
+    GRAFANA_JSON="$(bash "$SCRIPT_DIR/keycloak/create-grafana-client.sh")" \
+        || error "create-grafana-client.sh failed"
+    GRAFANA_SECRET="$(jq -r '.clientSecret' <<<"$GRAFANA_JSON")"
+    if [[ -z "$GRAFANA_SECRET" || "$GRAFANA_SECRET" == "null" ]]; then
+        error "did not receive grafana client secret"
+    fi
+    install -m 0400 -o grafana -g grafana /dev/null /etc/grafana/oidc-secret
+    printf '%s' "$GRAFANA_SECRET" > /etc/grafana/oidc-secret
+    chown grafana:grafana /etc/grafana/oidc-secret
+    chmod 0400 /etc/grafana/oidc-secret
+
+    # oauth2-proxy clients (one per protected service).
+    log "  Creating oauth2-proxy Keycloak clients..."
+    O2P_JSON="$(bash "$SCRIPT_DIR/keycloak/create-oauth2-proxy-clients.sh")" \
+        || error "create-oauth2-proxy-clients.sh failed"
+
+    for svc in prometheus alertmanager loki; do
+        cs="$(jq -r --arg s "$svc" '.clients[]|select(.service==$s)|.clientSecret' <<<"$O2P_JSON")"
+        ck="$(jq -r --arg s "$svc" '.clients[]|select(.service==$s)|.cookieSecret' <<<"$O2P_JSON")"
+        if [[ -z "$cs" || "$cs" == "null" || -z "$ck" || "$ck" == "null" ]]; then
+            error "missing secrets for oauth2-proxy-$svc"
+        fi
+        printf '%s' "$cs" > "/etc/oauth2-proxy/${svc}-client-secret"
+        printf '%s' "$ck" > "/etc/oauth2-proxy/${svc}-cookie-secret"
+        chown oauth2-proxy:oauth2-proxy \
+            "/etc/oauth2-proxy/${svc}-client-secret" \
+            "/etc/oauth2-proxy/${svc}-cookie-secret"
+        chmod 0400 \
+            "/etc/oauth2-proxy/${svc}-client-secret" \
+            "/etc/oauth2-proxy/${svc}-cookie-secret"
+    done
+
+    # oauth2-proxy systemd units.
+    cp "$SCRIPT_DIR/systemd/oauth2-proxy-prometheus.service" /etc/systemd/system/
+    cp "$SCRIPT_DIR/systemd/oauth2-proxy-alertmanager.service" /etc/systemd/system/
+    cp "$SCRIPT_DIR/systemd/oauth2-proxy-loki.service" /etc/systemd/system/
+    chmod 0644 /etc/systemd/system/oauth2-proxy-{prometheus,alertmanager,loki}.service
+    systemctl daemon-reload
+    systemctl enable oauth2-proxy-prometheus.service
+    systemctl enable oauth2-proxy-alertmanager.service
+    systemctl enable oauth2-proxy-loki.service
+
+    # Restart Grafana so the new OIDC config (and secret file) takes
+    # effect, but only if it's already running.
+    if systemctl is-active --quiet grafana.service; then
+        systemctl restart grafana.service || warn "grafana restart failed"
+    fi
+else
+    warn "KC_URL/KC_ADMIN_PASS not set; skipping SSO bootstrap. See docs/observability/sso.md."
+fi
+
 log "✓ Installation complete!"
 log ""
 log "Next steps:"
@@ -275,3 +366,17 @@ log "   curl -sk https://127.0.0.1:9090/api/v1/status/config"
 log "   curl -sk https://127.0.0.1:9093/-/healthy"
 log "   curl -sk https://127.0.0.1:3000/api/health"
 log "   curl -s http://127.0.0.1:3100/ready"
+log ""
+log "5. SSO (Keycloak):"
+log "   - With KC_URL + KC_ADMIN_PASS exported, this script provisioned"
+log "     Grafana OIDC + oauth2-proxy clients in realm 'novanas'."
+log "   - Public URLs once oauth2-proxy units are started:"
+log "       https://novanas.local:3000   (Grafana, native OIDC)"
+log "       https://novanas.local:9091   (Prometheus via oauth2-proxy)"
+log "       https://novanas.local:9094   (Alertmanager via oauth2-proxy)"
+log "       https://novanas.local:3101   (Loki via oauth2-proxy)"
+log "   - Start the oauth2-proxy units:"
+log "       sudo systemctl start oauth2-proxy-prometheus.service"
+log "       sudo systemctl start oauth2-proxy-alertmanager.service"
+log "       sudo systemctl start oauth2-proxy-loki.service"
+log "   - See docs/observability/sso.md for troubleshooting."
