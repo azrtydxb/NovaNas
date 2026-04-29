@@ -1,0 +1,61 @@
+---
+# Base recording rules. These exist so alert rules stay short and so the
+# same expression isn't recomputed at evaluation time across multiple
+# alerts. Naming convention: <level>:<metric>:<aggregation>
+groups:
+  - name: novanas-recording
+    interval: 30s
+    rules:
+      # ---- nova-api HTTP ----
+      # Total request rate per route (5m window).
+      - record: job:nova_http_requests:rate5m
+        expr: sum by (job, path, method) (rate(nova_http_requests_total[5m]))
+
+      # 5xx request rate per route (5m window).
+      - record: job:nova_http_5xx:rate5m
+        expr: sum by (job, path, method) (rate(nova_http_requests_total{status=~"5.."}[5m]))
+
+      # 5xx ratio across the whole API (used by the global 5xx alert).
+      # `> 0` guard avoids 0/0 NaN when there is no traffic.
+      - record: job:nova_http_5xx_ratio:rate5m
+        expr: |
+          sum(rate(nova_http_requests_total{status=~"5.."}[5m]))
+            /
+          (sum(rate(nova_http_requests_total[5m])) > 0)
+
+      # ---- nova-api jobs ----
+      # Per-kind job dispatch / finish rates.
+      - record: job:nova_jobs_finished:rate5m
+        expr: sum by (kind, state) (rate(nova_jobs_finished_total[5m]))
+
+      # Failure ratio per kind (failed/(failed+succeeded)). Guarded by `> 0`.
+      - record: job:nova_jobs_failure_ratio:rate5m
+        expr: |
+          sum by (kind) (rate(nova_jobs_finished_total{state="failed"}[5m]))
+            /
+          (sum by (kind) (rate(nova_jobs_finished_total[5m])) > 0)
+
+      # ---- ZFS ----
+      # Sum of vdev errors (read+write+cksum) per pool over 1h. We use
+      # increase() to catch counter-style growth even though the source
+      # gauges reset on each poll; in practice the gauges accumulate the
+      # same value zpool reports until cleared.
+      - record: pool:nova_zfs_vdev_errors:increase1h
+        expr: |
+          sum by (pool) (
+            (nova_zfs_vdev_read_errors > 0)
+            or (nova_zfs_vdev_write_errors > 0)
+            or (nova_zfs_vdev_checksum_errors > 0)
+          )
+
+      # Boolean: pool is in a healthy state (ONLINE).
+      - record: pool:nova_zfs_pool_online:bool
+        expr: max by (pool) (nova_zfs_pool_health{state="ONLINE"})
+
+      # ---- Filesystem ----
+      # Free space ratio per mountpoint (excluding tmpfs/overlay/devtmpfs).
+      - record: instance_mountpoint:node_filesystem_avail_ratio
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|devtmpfs|squashfs|ramfs"}
+            /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|devtmpfs|squashfs|ramfs"}

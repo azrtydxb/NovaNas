@@ -1,0 +1,172 @@
+---
+# alertmanager.yml.example — routing/inhibition reference for NovaNAS alerts.
+#
+# WHO OWNS WHAT
+#   - This file is owned by the alerts agent. It documents the routes,
+#     receivers, and inhibition rules the alert *rules* expect.
+#   - The SMTP agent owns deploy/alertmanager/alertmanager.yml. They
+#     merge the route tree, inhibit_rules, and receivers below into the
+#     real alertmanager.yml alongside the smtp_* global block and any
+#     credentialed receivers.
+#
+# MERGE GUIDANCE FOR THE SMTP AGENT
+#   1. Keep the global.resolve_timeout at 5m so resolved-on-recovery
+#      semantics work cleanly (rules emit `for:` durations; resolved
+#      alerts disappear naturally without any stale-on-resolve workaround).
+#   2. Replace the "null" receiver references below with the SMTP/webhook
+#      receivers you provision (page-team, email-team, digest-team).
+#   3. Severity routing: critical -> page now, warning -> email-only,
+#      info -> daily digest. The structure below already encodes that.
+#   4. Inhibition rules below assume label `pool` is present on ZFS
+#      alerts and `instance` on host alerts; both are guaranteed by the
+#      rule files in deploy/prometheus/rules/.
+
+global:
+  resolve_timeout: 5m
+  # SMTP block lives in alertmanager.yml; the SMTP agent maintains it
+  # against OpenBao secrets. Example shape:
+  #   smtp_smarthost: 'smtp.example.com:587'
+  #   smtp_from: 'alerts@novanas.local'
+  #   smtp_auth_username: '{{ SECRET:alertmanager/smtp_user }}'
+  #   smtp_auth_password: '{{ SECRET:alertmanager/smtp_pass }}'
+
+# Templates (shared across receivers).
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+# ---------------------------------------------------------------------------
+# Routing tree: severity-first, then component-specific tweaks for grouping.
+# ---------------------------------------------------------------------------
+route:
+  receiver: 'email-team'
+  group_by: ['alertname', 'cluster', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # CRITICAL -> page immediately, short repeats.
+    - matchers:
+        - severity="critical"
+      receiver: 'page-team'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 30m
+      continue: false
+      # Group ZFS alerts by pool so a noisy pool doesn't fan out across
+      # rows. Override at the leaf level:
+      routes:
+        - matchers:
+            - component="zfs"
+          group_by: ['alertname', 'pool']
+          receiver: 'page-team'
+        - matchers:
+            - component=~"openbao|keycloak|postgres"
+          group_by: ['alertname', 'component']
+          receiver: 'page-team'
+
+    # WARNING -> email within an hour, longer grouping.
+    - matchers:
+        - severity="warning"
+      receiver: 'email-team'
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 6h
+      continue: false
+      routes:
+        - matchers:
+            - component="zfs"
+          group_by: ['alertname', 'pool']
+          receiver: 'email-team'
+        - matchers:
+            - component="disk"
+          group_by: ['alertname', 'instance', 'device']
+          receiver: 'email-team'
+
+    # INFO -> daily digest only.
+    - matchers:
+        - severity="info"
+      receiver: 'digest-team'
+      group_wait: 5m
+      group_interval: 1h
+      repeat_interval: 24h
+      continue: false
+
+# ---------------------------------------------------------------------------
+# Inhibition rules
+# ---------------------------------------------------------------------------
+inhibit_rules:
+  # A pool that is FAULTED/UNAVAIL silences vdev/scrub/capacity warnings
+  # on the same pool — the operator sees the worst symptom first.
+  - source_matchers:
+      - alertname=~"ZFSPoolFaulted|ZFSPoolUnavail"
+    target_matchers:
+      - component="zfs"
+      - severity=~"warning|info"
+    equal: ['pool']
+
+  # A degraded pool inhibits per-vdev error pages on that same pool.
+  - source_matchers:
+      - alertname="ZFSPoolDegraded"
+    target_matchers:
+      - alertname=~"ZFSVdev(Read|Write|Checksum)Errors"
+    equal: ['pool']
+
+  # Critical capacity inhibits the warning-level capacity alert on the
+  # same pool to avoid double-paging.
+  - source_matchers:
+      - alertname="ZFSPoolCapacityCritical"
+    target_matchers:
+      - alertname="ZFSPoolCapacityWarn"
+    equal: ['pool']
+
+  # Host-down inhibits everything else on that instance — there's no
+  # point paging on Postgres/Redis when the box is unreachable.
+  - source_matchers:
+      - alertname="HostDown"
+    target_matchers:
+      - severity=~"warning|critical"
+    equal: ['instance']
+
+  # Generic critical-suppresses-warning for the same alertname/instance.
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'instance']
+
+  # SMART overall-health failing supersedes individual SMART attribute
+  # alerts on the same device.
+  - source_matchers:
+      - alertname="SMARTHealthFailing"
+    target_matchers:
+      - alertname=~"DiskReallocatedSectorsIncreasing|DiskPendingSectors|DiskOfflineUncorrectable"
+    equal: ['instance', 'device']
+
+# ---------------------------------------------------------------------------
+# Receivers — placeholders. The SMTP agent fills in real email_configs /
+# webhook_configs against OpenBao-issued credentials.
+# ---------------------------------------------------------------------------
+receivers:
+  # page-team: critical alerts → on-call (PagerDuty/Opsgenie webhook +
+  # high-priority email). The SMTP agent wires the actual integration.
+  - name: 'page-team'
+    # Example shape — replace with real config:
+    # email_configs:
+    #   - to: 'oncall@novanas.local'
+    #     send_resolved: true
+    # webhook_configs:
+    #   - url: 'https://events.pagerduty.com/integration/{{ SECRET:alertmanager/pd_key }}/enqueue'
+    #     send_resolved: true
+
+  # email-team: warning alerts → ops mailing list.
+  - name: 'email-team'
+    # email_configs:
+    #   - to: 'ops@novanas.local'
+    #     send_resolved: true
+
+  # digest-team: info alerts → low-frequency mailing list / dashboard.
+  - name: 'digest-team'
+    # email_configs:
+    #   - to: 'digest@novanas.local'
+    #     send_resolved: false

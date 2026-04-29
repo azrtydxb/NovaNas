@@ -1,0 +1,110 @@
+---
+# Disk health (SMART via node_exporter smartctl-collector) and filesystem
+# capacity alerts.
+groups:
+  - name: novanas-smart
+    interval: 1m
+    rules:
+      - alert: DiskReallocatedSectorsIncreasing
+        # The reallocated-sector count rising means the drive is using up
+        # spare blocks to mask media defects. A growing trend is
+        # near-deterministic predictor of failure.
+        expr: |
+          increase(node_disk_smart_attribute_realloc_count[6h]) > 0
+        for: 1h
+        labels:
+          severity: warning
+          component: disk
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#diskreallocatedsectorsincreasing
+        annotations:
+          summary: "Reallocated sectors increasing on {{ $labels.device }}"
+          description: "Device {{ $labels.device }} on {{ $labels.instance }} grew its reallocated-sector count in the last 6h."
+          why: "Growing realloc count indicates progressive media failure; the drive should be considered end-of-life."
+          fix: "Schedule a replacement. If part of a ZFS pool, `zpool replace` proactively before total failure."
+
+      - alert: DiskPendingSectors
+        expr: node_disk_smart_attribute_pending_count > 0
+        for: 30m
+        labels:
+          severity: warning
+          component: disk
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#diskpendingsectors
+        annotations:
+          summary: "Pending sectors on {{ $labels.device }}"
+          description: "Device {{ $labels.device }} reports {{ $value }} pending sectors."
+          why: "Pending sectors are reads that returned bad data and are queued for reallocation on next write — disk is at risk."
+          fix: "Run a ZFS scrub (forces rewrite via parity), and watch realloc count. Replace if pending stays >0 after scrub."
+
+      - alert: DiskOfflineUncorrectable
+        expr: node_disk_smart_attribute_offline_uncorrectable > 0
+        for: 15m
+        labels:
+          severity: critical
+          component: disk
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#diskofflineuncorrectable
+        annotations:
+          summary: "Offline-uncorrectable sectors on {{ $labels.device }}"
+          description: "Device {{ $labels.device }} reports {{ $value }} offline-uncorrectable sectors — data loss already occurred at the device level."
+          why: "Sectors that can't be read or remapped: the disk has lost data. Future failures are highly likely."
+          fix: "Replace the disk immediately. If in a ZFS pool, `zpool replace` and trigger a resilver."
+
+      - alert: SMARTHealthFailing
+        # node_exporter exposes node_smartmon_device_smart_healthy=0 when
+        # the drive's overall SMART health flag is failing.
+        expr: node_smartmon_device_smart_healthy == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: disk
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#smarthealthfailing
+        annotations:
+          summary: "SMART overall-health failing on {{ $labels.device }}"
+          description: "Device {{ $labels.device }} reports overall SMART health = FAILING."
+          why: "The drive's own self-assessment says it is about to fail. Replace before it dies."
+          fix: "Schedule replacement now. For pool members, `zpool replace`."
+
+  - name: novanas-filesystems
+    interval: 1m
+    rules:
+      - alert: FilesystemAlmostFull
+        expr: |
+          instance_mountpoint:node_filesystem_avail_ratio
+            {mountpoint=~"/|/var/lib/.*|/var|/srv/.*"} < 0.10
+        for: 15m
+        labels:
+          severity: warning
+          component: filesystem
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#filesystemalmostfull
+        annotations:
+          summary: "Filesystem {{ $labels.mountpoint }} <10% free on {{ $labels.instance }}"
+          description: "Mountpoint {{ $labels.mountpoint }} has less than 10% available space."
+          why: "Postgres, Loki, Prometheus and most services break in surprising ways below ~5% free space."
+          fix: "Trim logs, clear retention buffers, expand the underlying dataset, or move data."
+
+      - alert: FilesystemCritical
+        expr: |
+          instance_mountpoint:node_filesystem_avail_ratio
+            {mountpoint=~"/|/var/lib/.*|/var|/srv/.*"} < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: filesystem
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#filesystemcritical
+        annotations:
+          summary: "Filesystem {{ $labels.mountpoint }} <5% free on {{ $labels.instance }}"
+          description: "Mountpoint {{ $labels.mountpoint }} is critically full."
+          why: "Below 5% free, services start failing writes and Postgres may shut down."
+          fix: "Free space immediately; this typically blocks production writes."
+
+      - alert: FilesystemReadOnly
+        expr: node_filesystem_readonly{fstype!~"tmpfs|overlay|devtmpfs|squashfs|ramfs"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: filesystem
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#filesystemreadonly
+        annotations:
+          summary: "Filesystem {{ $labels.mountpoint }} is read-only"
+          description: "{{ $labels.device }} on {{ $labels.mountpoint }} ({{ $labels.instance }}) is mounted read-only — kernel likely flipped it after I/O errors."
+          why: "Linux remounts ext4/xfs read-only on persistent I/O errors. Service writes are failing now."
+          fix: "Check `dmesg` for I/O errors. Replace the failing disk. After repair, remount r/w (`mount -o remount,rw <mp>`)."

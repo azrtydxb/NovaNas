@@ -1,0 +1,138 @@
+---
+# nova-api application alerts: 5xx rate, job failures, scrape liveness.
+groups:
+  - name: novanas-api
+    interval: 30s
+    rules:
+      - alert: NovaAPIDown
+        expr: up{job="nova-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novaapidown
+        annotations:
+          summary: "nova-api scrape failing on {{ $labels.instance }}"
+          description: "Prometheus has been unable to scrape nova-api at {{ $labels.instance }} for >2m."
+          why: "nova-api is the management plane; if it's down the operator cannot manage pools/datasets and the UI is broken."
+          fix: "Check `systemctl status nova-api`, journalctl -u nova-api, and TLS/cert health on :8444."
+
+      - alert: NovaAPIHigh5xxRate
+        # >5% 5xx over a 5m window with non-trivial traffic.
+        expr: |
+          job:nova_http_5xx_ratio:rate5m > 0.05
+          and
+          sum(rate(nova_http_requests_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: critical
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novaapihigh5xxrate
+        annotations:
+          summary: "nova-api 5xx rate {{ $value | humanizePercentage }} (>5%)"
+          description: "More than 5% of nova-api responses are 5xx over the last 5 minutes."
+          why: "Server errors mean clients (UI, CSI, replication) are getting failures. Pools/datasets may not be manageable."
+          fix: "Check nova-api logs for stack traces, then dependencies (Postgres, OpenBao, Redis, ZFS binaries)."
+
+      - alert: NovaAPIRouteHigh5xxRate
+        # Per-route alert at a slightly looser threshold so operators can
+        # see which endpoint is broken even when the global rate is low.
+        expr: |
+          (
+            job:nova_http_5xx:rate5m
+              /
+            (job:nova_http_requests:rate5m > 0)
+          ) > 0.10
+          and
+          job:nova_http_requests:rate5m > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novaapiroutehigh5xxrate
+        annotations:
+          summary: "nova-api {{ $labels.method }} {{ $labels.path }} 5xx >10%"
+          description: "Route {{ $labels.method }} {{ $labels.path }} is returning >10% 5xx."
+          why: "A specific endpoint is failing — narrows diagnosis to one handler/dependency."
+          fix: "Inspect nova-api logs filtered by route. Check the dependency the handler talks to."
+
+      - alert: NovaAPILatencyHigh
+        # p95 over 5m above 2s on any route with traffic.
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, path, method) (
+              rate(nova_http_request_duration_seconds_bucket[5m])
+            )
+          ) > 2
+          and on (path, method)
+          (job:nova_http_requests:rate5m > 0.05)
+        for: 15m
+        labels:
+          severity: warning
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novaapilatencyhigh
+        annotations:
+          summary: "nova-api p95 latency >2s on {{ $labels.method }} {{ $labels.path }}"
+          description: "p95 latency for {{ $labels.method }} {{ $labels.path }} exceeds 2s."
+          why: "Slow management API breaks UI responsiveness and CSI timeouts."
+          fix: "Look for slow zpool/zfs invocations or DB latency; profile with pprof."
+
+  - name: novanas-jobs
+    interval: 30s
+    rules:
+      - alert: NovaJobsHighFailureRate
+        expr: |
+          job:nova_jobs_failure_ratio:rate5m > 0.10
+          and
+          sum by (kind) (rate(nova_jobs_finished_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novajobshighfailurerate
+        annotations:
+          summary: "nova-api jobs kind={{ $labels.kind }} failure rate >10%"
+          description: "More than 10% of '{{ $labels.kind }}' jobs are finishing in failed state."
+          why: "Failed jobs mean snapshots, replications, or admin tasks aren't completing — silent data risk."
+          fix: "Inspect nova-api worker logs for the failing kind. Check ZFS, Postgres, network."
+
+      - alert: NovaJobsBacklogGrowing
+        # In-flight jobs growing without finishing. >10 in flight for 30m
+        # is a strong indicator of a stuck worker / blocked dependency.
+        expr: max by (kind) (nova_jobs_in_flight) > 10
+        for: 30m
+        labels:
+          severity: warning
+          component: nova-api
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novajobsbackloggrowing
+        annotations:
+          summary: "nova-api job backlog: kind={{ $labels.kind }} >10 in flight for 30m"
+          description: "Jobs of kind {{ $labels.kind }} are accumulating in the worker pool."
+          why: "Persistent in-flight backlog usually means a hung subprocess (zfs/zpool) or DB lock."
+          fix: "Check `pstree` on the host for stuck zfs processes. Restart nova-api if necessary."
+
+  # Replication job failure alert. The metric below is a placeholder the
+  # replication subsystem will emit in the upcoming work item; the rule is
+  # wired so it activates the moment the metric is published. Until then
+  # `absent()` keeps the rule itself silent.
+  - name: novanas-replication
+    interval: 1m
+    rules:
+      - alert: NovaReplicationJobFailing
+        # nova_replication_last_run_status: gauge labelled by job_id where
+        # 1 = failed, 0 = success. We page after 3 consecutive failures
+        # (max_over_time on a 30m window approximates "N consecutive runs"
+        # for hourly schedules).
+        expr: |
+          max_over_time(nova_replication_last_run_status[30m]) == 1
+        for: 30m
+        labels:
+          severity: critical
+          component: replication
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#novareplicationjobfailing
+        annotations:
+          summary: "Replication job {{ $labels.job_id }} failing"
+          description: "Replication job {{ $labels.job_id }} (target {{ $labels.target }}) has failed its last runs."
+          why: "Off-site/secondary copy is stale — RPO is silently growing."
+          fix: "Check nova-api replication logs and the destination host's network/zfs receive state."

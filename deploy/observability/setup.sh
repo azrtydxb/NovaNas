@@ -204,28 +204,49 @@ for dir in /etc/{prometheus,alertmanager,grafana,loki,promtail}; do
     fi
 done
 
-# 10. Create rules directory for Prometheus
-log "Step 10: Creating Prometheus rules directory..."
+# 10. Install Prometheus alerting + recording rules
+log "Step 10: Installing Prometheus rules..."
 mkdir -p /etc/prometheus/rules
 chmod 0755 /etc/prometheus/rules
 chown prometheus:prometheus /etc/prometheus/rules
 
-# Create placeholder rules file
-cat > /etc/prometheus/rules/novanas.rules.yml << 'EOF'
-groups:
-  - name: novanas
-    interval: 30s
-    rules:
-      # Example rule: high memory usage
-      # - alert: HighMemoryUsage
-      #   expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
-      #   for: 5m
-      #   labels:
-      #     severity: warning
-      #   annotations:
-      #     summary: High memory usage on {{ $labels.instance }}
-EOF
-chmod 0644 /etc/prometheus/rules/novanas.rules.yml
+# Drop legacy placeholder rules file from earlier installs (idempotent).
+if [[ -f /etc/prometheus/rules/novanas.rules.yml ]]; then
+    rm -f /etc/prometheus/rules/novanas.rules.yml
+fi
+
+# Sync repo rule files into /etc/prometheus/rules. We always overwrite so
+# re-running setup.sh picks up rule changes; permissions are reset every
+# time so the step is fully idempotent.
+RULES_SRC="$SCRIPT_DIR/prometheus/rules"
+if [[ -d "$RULES_SRC" ]]; then
+    for rule in "$RULES_SRC"/*.yml; do
+        [[ -e "$rule" ]] || continue
+        cp "$rule" /etc/prometheus/rules/
+    done
+    chown -R prometheus:prometheus /etc/prometheus/rules
+    chmod 0644 /etc/prometheus/rules/*.yml
+else
+    warn "rules source dir $RULES_SRC missing; skipping rule install"
+fi
+
+# Validate before reloading so a syntax error doesn't break a running
+# prometheus. promtool ships with the prometheus package.
+if command -v promtool >/dev/null 2>&1; then
+    if ! promtool check rules /etc/prometheus/rules/*.yml; then
+        error "promtool check rules failed; refusing to reload prometheus"
+    fi
+else
+    warn "promtool not found; skipping rule validation"
+fi
+
+# Reload prometheus if it's running so the new rules take effect without
+# a restart. The first-time installer hasn't started the service yet, so
+# we only reload when active.
+if systemctl is-active --quiet prometheus.service; then
+    log "Reloading prometheus to pick up new rules..."
+    systemctl reload prometheus.service || warn "prometheus reload failed"
+fi
 
 # 11. Copy certs to component directories
 log "Step 11: Installing TLS certificates..."

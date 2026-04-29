@@ -1,0 +1,97 @@
+---
+# Host-level alerts: load, memory, network, time sync, host reachability.
+groups:
+  - name: novanas-system
+    interval: 30s
+    rules:
+      - alert: HostDown
+        expr: up{job=~"node|prometheus"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: host
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#hostdown
+        annotations:
+          summary: "Host {{ $labels.instance }} ({{ $labels.job }}) unreachable"
+          description: "Prometheus scrape failed for >2m on {{ $labels.instance }} job={{ $labels.job }}."
+          why: "node_exporter or the host is down — we have no visibility into this machine."
+          fix: "SSH to the host. Check `systemctl status prometheus-node-exporter`, network, power."
+
+      - alert: HighLoad
+        # 1-minute load average > number of CPU cores. Sustained for 15m
+        # means real saturation, not a transient burst.
+        expr: |
+          node_load1
+            >
+          on (instance) (count by (instance) (node_cpu_seconds_total{mode="idle"}))
+        for: 15m
+        labels:
+          severity: warning
+          component: host
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#highload
+        annotations:
+          summary: "High load on {{ $labels.instance }} (load1 > #cores for 15m)"
+          description: "1-minute load average exceeds CPU count for 15 minutes."
+          why: "Sustained load above core count means tasks are queueing — latency rises across all services."
+          fix: "Use `top`/`pidstat` to identify the noisy process. Throttle or scale out."
+
+      - alert: HighMemoryPressure
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 10m
+        labels:
+          severity: warning
+          component: host
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#highmemorypressure
+        annotations:
+          summary: "Available memory <10% on {{ $labels.instance }}"
+          description: "Less than 10% of memory is available; OOM-killer is closer than you'd like."
+          why: "Below 10% available, ZFS ARC is squeezed and the kernel may start killing processes."
+          fix: "Inspect `top`/`smem`; restart leaky services or add RAM. Consider tuning `zfs_arc_max`."
+
+      - alert: HighSwapUsage
+        expr: |
+          (
+            node_memory_SwapTotal_bytes > 0
+          )
+          and
+          (
+            (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes)
+              / node_memory_SwapTotal_bytes > 0.5
+          )
+        for: 30m
+        labels:
+          severity: warning
+          component: host
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#highswapusage
+        annotations:
+          summary: "Swap >50% used on {{ $labels.instance }}"
+          description: "Swap is more than half-consumed — performance is likely degraded."
+          why: "Heavy swap thrashing kills latency. Often a precursor to OOM."
+          fix: "Check memory pressure causes; restart the offender or reduce ARC/working sets."
+
+      - alert: TimeDriftHigh
+        expr: abs(node_timex_offset_seconds) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: host
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#timedrifthigh
+        annotations:
+          summary: "Clock drift >500ms on {{ $labels.instance }}"
+          description: "Host clock differs from NTP by more than 500ms."
+          why: "Skewed clocks break Kerberos, JWT validation, replication scheduling and metrics correlation."
+          fix: "Check `timedatectl status`, `systemctl status systemd-timesyncd`/`chronyd`. Verify NTP reachability."
+
+      - alert: NetworkInterfaceDown
+        expr: node_network_up{device!~"lo|docker.*|veth.*|br-.*|cni.*|flannel.*|cilium.*|vxlan.*|tap.*|virbr.*"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: network
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#networkinterfacedown
+        annotations:
+          summary: "Interface {{ $labels.device }} down on {{ $labels.instance }}"
+          description: "Physical interface {{ $labels.device }} is down."
+          why: "A physical NIC outage may break service traffic, replication, or cluster heartbeat."
+          fix: "Check cable, switch port, and `ip link`. Bring up with `ip link set {{ $labels.device }} up`."

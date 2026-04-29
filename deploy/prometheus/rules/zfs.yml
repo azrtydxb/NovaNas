@@ -1,0 +1,186 @@
+---
+# ZFS pool / vdev / scrub / resilver alerts.
+# Metric source: nova-api ZFSCollector (internal/api/metrics/zfs.go).
+groups:
+  - name: novanas-zfs-pool
+    interval: 30s
+    rules:
+      - alert: ZFSPoolFaulted
+        expr: max by (pool) (nova_zfs_pool_health{state="FAULTED"}) == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspoolfaulted
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is FAULTED"
+          description: |
+            Pool {{ $labels.pool }} reports state=FAULTED. The pool is
+            unusable until a fault is cleared. Data may be at risk.
+          why: "FAULTED means ZFS cannot read/write the pool — production traffic is broken."
+          fix: "Run `zpool status -v {{ $labels.pool }}`. Replace failed disks, then `zpool clear {{ $labels.pool }}`."
+
+      - alert: ZFSPoolDegraded
+        expr: max by (pool) (nova_zfs_pool_health{state="DEGRADED"}) == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspooldegraded
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is DEGRADED"
+          description: |
+            Pool {{ $labels.pool }} is operating in DEGRADED state — at
+            least one vdev is offline/missing/erroring. Redundancy is
+            reduced; another failure could fault the pool.
+          why: "Redundancy lost: any further disk failure may take the pool offline and risk data loss."
+          fix: "Identify the failing device with `zpool status -v {{ $labels.pool }}`, replace it, run `zpool replace`."
+
+      - alert: ZFSPoolUnavail
+        expr: max by (pool) (nova_zfs_pool_health{state=~"UNAVAIL|REMOVED|SUSPENDED"}) == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspoolunavail
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is {{ $labels.state }}"
+          description: "Pool {{ $labels.pool }} state={{ $labels.state }} — I/O suspended or pool removed."
+          why: "Pool is not serving I/O. Any consumer of this pool is hard-down."
+          fix: "Check kernel log (`dmesg | grep -i zfs`), reattach hardware if removed, then `zpool clear` once recoverable."
+
+      - alert: ZFSPoolCapacityWarn
+        expr: nova_zfs_pool_capacity_pct > 85 and nova_zfs_pool_capacity_pct <= 95
+        for: 15m
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspoolcapacitywarn
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} {{ printf \"%.0f\" $value }}% full (>85%)"
+          description: "Pool {{ $labels.pool }} is past 85% capacity — performance degrades and snapshot/COW headroom shrinks."
+          why: "ZFS performance falls off a cliff above ~80% utilization, and snapshots can fail due to lack of free metaslabs."
+          fix: "Free space (delete old snapshots, prune datasets) or expand the pool by adding a vdev."
+
+      - alert: ZFSPoolCapacityCritical
+        expr: nova_zfs_pool_capacity_pct > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspoolcapacitycritical
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} {{ printf \"%.0f\" $value }}% full (>95%)"
+          description: "Pool {{ $labels.pool }} is critically full — writes will start failing imminently."
+          why: "Above 95% the pool can refuse writes; running databases and VM disks will see I/O errors."
+          fix: "Immediately delete snapshots/datasets to free space, or attach an additional vdev. Stop non-essential writers."
+
+      - alert: ZFSPoolFragmentationHigh
+        expr: nova_zfs_pool_fragmentation_pct > 50
+        for: 1h
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfspoolfragmentationhigh
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} fragmentation {{ printf \"%.0f\" $value }}% (>50%)"
+          description: "Pool {{ $labels.pool }} fragmentation exceeds 50%; sequential write throughput will be reduced."
+          why: "High fragmentation on COW filesystems hurts allocation latency and write throughput."
+          fix: "Plan a data rebalance: send/recv to a fresh dataset, or add fresh vdevs and let new writes spread."
+
+  - name: novanas-zfs-vdev
+    interval: 30s
+    rules:
+      - alert: ZFSVdevReadErrors
+        expr: nova_zfs_vdev_read_errors > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfsvdevreaderrors
+        annotations:
+          summary: "ZFS read errors on {{ $labels.path }} (pool {{ $labels.pool }})"
+          description: "vdev {{ $labels.path }} ({{ $labels.vdev }}) reports {{ $value }} read errors."
+          why: "Read errors typically indicate a failing disk. ZFS will repair on read but the disk likely needs replacement."
+          fix: "Check `zpool status -v {{ $labels.pool }}` and SMART attributes for {{ $labels.path }}; plan replacement."
+
+      - alert: ZFSVdevWriteErrors
+        expr: nova_zfs_vdev_write_errors > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfsvdevwriteerrors
+        annotations:
+          summary: "ZFS write errors on {{ $labels.path }} (pool {{ $labels.pool }})"
+          description: "vdev {{ $labels.path }} ({{ $labels.vdev }}) reports {{ $value }} write errors."
+          why: "Write errors usually mean the disk is failing or the controller/cable is degraded."
+          fix: "Inspect cabling, then SMART. Replace the disk if SMART indicates failure."
+
+      - alert: ZFSVdevChecksumErrors
+        expr: nova_zfs_vdev_checksum_errors > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfsvdevchecksumerrors
+        annotations:
+          summary: "ZFS checksum errors on {{ $labels.path }} (pool {{ $labels.pool }})"
+          description: "vdev {{ $labels.path }} ({{ $labels.vdev }}) reports {{ $value }} checksum errors."
+          why: "Checksum errors mean ZFS detected silent corruption — usually disk, RAM, cable, or controller fault."
+          fix: "Run a scrub. Check disk SMART, RAM (memtest), and cabling. Replace persistently bad disks."
+
+  - name: novanas-zfs-scrub
+    interval: 1m
+    rules:
+      - alert: ZFSScrubMissing
+        # No scrub reported (gauge for "finished" or "in-progress" is 0)
+        # AND the pool is currently not running one. We approximate "last
+        # scrub older than 30 days" by looking for absence of a finished
+        # scrub state along with a non-zero scrub_total — operators are
+        # expected to also monitor snapshot recency externally.
+        expr: |
+          (max by (pool) (nova_zfs_pool_scrub_state{state="none"}) == 1)
+          and on (pool)
+          (max by (pool) (nova_zfs_pool_scrub_total_bytes) == 0)
+        for: 30d
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfsscrubmissing
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} has no recorded scrub"
+          description: "Pool {{ $labels.pool }} has not had a scrub recorded — silent corruption may go undetected."
+          why: "Scrubs are the only way to detect and repair latent bit-rot before redundancy is needed."
+          fix: "`zpool scrub {{ $labels.pool }}`. Schedule monthly via systemd timer or cron."
+
+      - alert: ZFSResilverStuck
+        # Scrub state == "resilver" continuously for > 24h indicates a
+        # resilver that is making no progress or thrashing on a bad disk.
+        expr: max by (pool) (nova_zfs_pool_scrub_state{state="resilver"}) == 1
+        for: 24h
+        labels:
+          severity: critical
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfsresilverstuck
+        annotations:
+          summary: "ZFS resilver running >24h on {{ $labels.pool }}"
+          description: "Pool {{ $labels.pool }} has been resilvering for more than 24 hours — likely stuck or hardware-broken."
+          why: "Long-running resilvers usually mean another failing disk is throwing read errors and restarting progress."
+          fix: "Check `zpool status` for additional failing disks, replace them, and let the resilver complete."
+
+  - name: novanas-zfs-collector
+    interval: 1m
+    rules:
+      - alert: ZFSCollectorErrors
+        expr: rate(nova_zfs_collector_errors_total[10m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: zfs
+          runbook_url: https://github.com/azrtydxb/NovaNas/blob/main/docs/observability/alerts.md#zfscollectorerrors
+        annotations:
+          summary: "nova-api ZFS collector failing on {{ $labels.instance }}"
+          description: "ZFS collector poll errors are non-zero — pool/dataset metrics may be stale."
+          why: "Without fresh ZFS metrics, downstream alerts will not detect new pool problems."
+          fix: "Check nova-api logs for `zfs metrics:` warnings. Verify zfs/zpool binaries are present and accessible."
