@@ -1,0 +1,133 @@
+{
+  "realm": "novanas",
+  "enabled": true,
+  "displayName": "NovaNAS",
+  "displayNameHtml": "NovaNAS Storage Control Plane",
+  "accessTokenLifespan": 300,
+  "refreshTokenLifespan": 1800,
+  "revokeRefreshToken": true,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespan": 5184000,
+  "refreshTokenMaxReuse": 0,
+  "sslRequired": "all",
+  "defaultSignatureAlgorithm": "RS256",
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 0,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "clients": [
+    {
+      "clientId": "nova-api",
+      "name": "NovaNAS API",
+      "description": "NovaNAS storage API client",
+      "enabled": true,
+      "publicClient": true,
+      "redirectUris": [],
+      "webOrigins": [],
+      "protocol": "openid-connect",
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": true,
+      "accessType": "PUBLIC",
+      "defaultClientScopes": ["profile", "email", "roles"],
+      "optionalClientScopes": [],
+      "useRefreshTokens": true,
+      "requireRefreshTokenRotation": true,
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "nova-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "nova-admin",
+        "description": "Full administrative access to NovaNAS",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "novanas"
+      },
+      {
+        "name": "nova-operator",
+        "description": "Operator access: manage pools, datasets, snapshots",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "novanas"
+      },
+      {
+        "name": "nova-viewer",
+        "description": "Read-only access to NovaNAS resources",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "novanas"
+      },
+      {
+        "name": "nova-system-admin",
+        "description": "System-level admin for bootstrap and recovery",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "novanas"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@novanas.local",
+      "emailVerified": false,
+      "enabled": true,
+      "firstName": "NovaNAS",
+      "lastName": "Administrator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "CHANGE_ME_ON_FIRST_LOGIN",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["nova-admin", "nova-system-admin"],
+      "clientRoles": {}
+    }
+  ],
+  "userFederationProviders": [],
+  "userFederationMappers": [],
+  "scopeMappings": [],
+  "clientScopeMappings": {},
+  "organizationsEnabled": false,
+  "keycloakVersion": "25.0.0"
+}

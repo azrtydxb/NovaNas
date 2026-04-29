@@ -71,6 +71,10 @@ func newE2EServer(t *testing.T, disp *fakeDispatcher) http.Handler {
 		Datasets:   &fakeDS{rows: []dataset.Dataset{{Name: "tank/x"}}},
 		Snapshots:  &fakeSnap{rows: []snapshot.Snapshot{{Name: "tank/x@s1"}}},
 		Dispatcher: disp,
+		// E2E exercises route wiring; auth is bypassed so no real
+		// Keycloak (or mock Verifier) is needed. Production wiring lives
+		// in cmd/nova-api/main.go.
+		AuthDisabled: true,
 	})
 	return srv.Handler()
 }

@@ -1,0 +1,26 @@
+[Unit]
+Description=Keycloak Identity Provider
+Requires=network-online.target postgresql.service openbao.service
+After=network-online.target postgresql.service openbao.service nova-bao-tpm-unseal.service
+Wants=nova-bao-tpm-unseal.service
+Before=nova-api.service
+
+[Service]
+Type=simple
+User=keycloak
+Group=keycloak
+EnvironmentFile=/etc/keycloak/keycloak.env
+ExecStartPre=/usr/local/bin/nova-keycloak-bootstrap
+ExecStart=/opt/keycloak/bin/kc.sh start --optimized
+Restart=on-failure
+RestartSec=10s
+LimitNOFILE=65536
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+WorkingDirectory=/opt/keycloak
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

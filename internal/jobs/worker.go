@@ -22,6 +22,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/scheduler"
+	"github.com/novanas/nova-nas/internal/host/secrets"
 	"github.com/novanas/nova-nas/internal/host/smart"
 	"github.com/novanas/nova-nas/internal/host/system"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
@@ -47,6 +48,11 @@ type WorkerDeps struct {
 	NetworkMgr       *network.Manager
 	SystemMgr        *system.Manager
 	ProtocolShareMgr *protocolshare.Manager
+
+	// Secrets is the runtime secret-storage manager. Optional in tests;
+	// production wiring sets it via cmd/nova-api so handlers/jobs can
+	// read or write secrets without a global.
+	Secrets secrets.Manager
 }
 
 func NewServeMux(d WorkerDeps) *asynq.ServeMux {

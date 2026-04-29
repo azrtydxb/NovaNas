@@ -1,8 +1,8 @@
 [Unit]
 Description=NovaNAS API server
-After=network-online.target postgresql.service redis.service
+After=network-online.target postgresql.service redis.service keycloak.service
 Wants=network-online.target
-Requires=postgresql.service redis.service
+Requires=postgresql.service redis.service keycloak.service
 
 [Service]
 Type=simple

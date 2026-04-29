@@ -15,6 +15,72 @@ type Config struct {
 	ZpoolBin    string `envconfig:"ZPOOL_BIN" default:"/sbin/zpool"`
 	LsblkBin    string `envconfig:"LSBLK_BIN" default:"/usr/bin/lsblk"`
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
+
+	TLS  TLSConfig
+	Auth AuthConfig
+}
+
+// AuthConfig configures OIDC token verification for the HTTP API.
+//
+// When Disabled is true, the API skips both verification and per-route
+// permission enforcement and logs a loud WARN line at startup. Intended
+// for local development only.
+type AuthConfig struct {
+	// IssuerURL is Keycloak's realm URL (e.g.
+	// "https://kc.example.com/realms/novanas"). Required unless Disabled.
+	IssuerURL string `envconfig:"OIDC_ISSUER_URL"`
+
+	// Audience is the expected `aud` claim. Required unless Disabled.
+	Audience string `envconfig:"OIDC_AUDIENCE"`
+
+	// RequiredRolePrefix optionally filters realm/resource roles. Empty
+	// means accept all roles.
+	RequiredRolePrefix string `envconfig:"OIDC_REQUIRED_ROLE_PREFIX"`
+
+	// ClientID is the Keycloak client whose resource_access.<client>.roles
+	// should be merged into the Identity. Empty means realm roles only.
+	ClientID string `envconfig:"OIDC_CLIENT_ID"`
+
+	// Disabled bypasses authentication entirely. Dev only.
+	Disabled bool `envconfig:"OIDC_DISABLED"`
+}
+
+// TLSConfig configures the HTTPS listener and optional HTTP redirect.
+//
+// HTTPSAddr empty disables TLS entirely (legacy plain-HTTP mode via
+// Config.ListenAddr). When HTTPSAddr is set and CertPath/KeyPath are
+// both empty, a self-signed cert is generated under CertDir at first
+// boot.
+type TLSConfig struct {
+	// Listen address for HTTPS (e.g. ":8443"). Empty disables HTTPS.
+	HTTPSAddr string `envconfig:"TLS_HTTPS_ADDR"`
+
+	// Listen address for HTTP redirect (e.g. ":8080"). Empty disables.
+	HTTPAddr string `envconfig:"TLS_HTTP_ADDR"`
+
+	// CertPath / KeyPath: operator-supplied PEM files. If both empty
+	// AND HTTPSAddr is set, a self-signed cert is generated at
+	// <CertDir>/cert.pem + key.pem on first boot.
+	CertPath string `envconfig:"TLS_CERT_PATH"`
+	KeyPath  string `envconfig:"TLS_KEY_PATH"`
+
+	// CertDir is where self-signed and rotated certs live when no
+	// operator paths are given. Default /etc/nova-nas/tls.
+	CertDir string `envconfig:"TLS_CERT_DIR" default:"/etc/nova-nas/tls"`
+
+	// MinTLSVersion: "1.2" or "1.3". Default "1.2".
+	MinTLSVersion string `envconfig:"TLS_MIN_VERSION" default:"1.2"`
+
+	// CipherSuites optional override; empty = Go default modern set.
+	CipherSuites []string `envconfig:"-"`
+
+	// SelfSignedHostname: name to put in the cert CN/SAN when
+	// generating self-signed. Default os.Hostname().
+	SelfSignedHostname string `envconfig:"-"`
+
+	// DisableHTTPRedirect: if true, the HTTP listener serves nothing
+	// (or doesn't bind at all). Default false (redirect enabled).
+	DisableHTTPRedirect bool `envconfig:"TLS_DISABLE_HTTP_REDIRECT"`
 }
 
 func Load() (*Config, error) {

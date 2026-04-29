@@ -1,0 +1,31 @@
+[Unit]
+Description=OpenBao secret store
+Documentation=https://openbao.org
+Requires=network-online.target nova-bao-tpm-unseal.service
+After=network-online.target local-fs.target
+
+[Service]
+Type=notify
+User=openbao
+Group=openbao
+ExecStart=/usr/bin/bao server -config=/etc/openbao/openbao.hcl
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=no  # need /dev/tpmrm0
+DeviceAllow=/dev/tpmrm0 rw
+DeviceAllow=/dev/tpm0 rw
+SupplementaryGroups=tss
+AmbientCapabilities=CAP_IPC_LOCK
+SecureBits=keep-caps
+CapabilityBoundingSet=CAP_IPC_LOCK CAP_SYSLOG
+
+[Install]
+WantedBy=multi-user.target

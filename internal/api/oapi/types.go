@@ -9,6 +9,10 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+const (
+	BearerAuthScopes = "bearerAuth.Scopes"
+)
+
 // Defines values for DatasetType.
 const (
 	DatasetTypeFilesystem DatasetType = "filesystem"
@@ -588,6 +592,21 @@ type Hold struct {
 	CreationUnix int64  `json:"creationUnix"`
 	Snapshot     string `json:"snapshot"`
 	Tag          string `json:"tag"`
+}
+
+// Identity Authenticated principal as projected from a verified JWT.
+type Identity struct {
+	Email             *openapi_types.Email `json:"email,omitempty"`
+	ExpiresAt         time.Time            `json:"expiresAt"`
+	PreferredUsername *string              `json:"preferredUsername,omitempty"`
+
+	// Realm Keycloak realm derived from the issuer.
+	Realm  *string  `json:"realm,omitempty"`
+	Roles  []string `json:"roles"`
+	Scopes []string `json:"scopes"`
+
+	// Sub Subject (stable user id).
+	Sub string `json:"sub"`
 }
 
 // IscsiACL defines model for IscsiACL.
@@ -1218,6 +1237,9 @@ type BadRequest = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = Error
 
 // ListDatasetsParams defines parameters for ListDatasets.
 type ListDatasetsParams struct {

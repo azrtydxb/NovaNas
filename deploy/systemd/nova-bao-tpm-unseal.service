@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenBao TPM-backed unseal at boot
+Documentation=https://openbao.org
+BindsTo=openbao.service
+After=openbao.service
+Before=keycloak.service nova-api.service
+
+[Service]
+Type=oneshot
+User=openbao
+Group=openbao
+ExecStart=/usr/local/bin/nova-bao-unseal
+Restart=no
+RemainAfterExit=yes
+Environment="NOVA_BAO_UNSEAL_CONFIG=/etc/openbao/unseal/keys.enc"
+
+[Install]
+WantedBy=multi-user.target

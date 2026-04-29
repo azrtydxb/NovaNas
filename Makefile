@@ -1,4 +1,4 @@
-.PHONY: build all-binaries test test-integration test-e2e lint fmt gen gen-sqlc gen-openapi verify-openapi gen-ts run clean migrate-up migrate-down migrate-status
+.PHONY: build all-binaries deploy-bin deploy-package test test-integration test-e2e lint fmt gen gen-sqlc gen-openapi verify-openapi gen-ts run clean migrate-up migrate-down migrate-status
 
 GO ?= go
 BIN := bin/nova-api
@@ -15,6 +15,21 @@ all-binaries:
 	$(GO) build -o bin/nova-iscsi-restore ./cmd/nova-iscsi-restore
 	$(GO) build -o bin/zfs-validate ./cmd/zfs-validate
 	$(GO) build -o bin/zfs-validate-neg ./cmd/zfs-validate-neg
+
+# deploy-bin builds deployment-related binaries into bin/
+deploy-bin: all-binaries
+	mkdir -p bin
+	$(GO) build -o bin/nova-bao-unseal ./cmd/nova-bao-unseal
+
+# deploy-package creates a tarball with binaries, systemd units, and sample configs
+# ready for deployment to a target host.
+deploy-package: deploy-bin
+	mkdir -p dist
+	tar --exclude='*.enc' --exclude='*.token' \
+		-czf dist/novanas-deployment.tar.gz \
+		-C . bin/nova-api bin/nova-nvmet-restore bin/nova-iscsi-restore bin/nova-bao-unseal \
+		-C . deploy/systemd/ deploy/openbao/ deploy/keycloak/ deploy/postgres/
+	@echo "Deployment package created: dist/novanas-deployment.tar.gz"
 
 test:
 	$(GO) test ./...

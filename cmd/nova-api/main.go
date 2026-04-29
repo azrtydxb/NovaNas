@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/novanas/nova-nas/internal/api"
+	"github.com/novanas/nova-nas/internal/auth"
 	"github.com/novanas/nova-nas/internal/config"
 	"github.com/novanas/nova-nas/internal/host/disks"
 	"github.com/novanas/nova-nas/internal/host/iscsi"
@@ -27,8 +28,10 @@ import (
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/scheduler"
+	"github.com/novanas/nova-nas/internal/host/secrets"
 	"github.com/novanas/nova-nas/internal/host/smart"
 	"github.com/novanas/nova-nas/internal/host/system"
+	"github.com/novanas/nova-nas/internal/host/tpm"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
@@ -47,6 +50,42 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logger:", err)
 		os.Exit(1)
+	}
+
+	// Register the TPM-backed sealer factory before secrets.FromEnv so
+	// SECRETS_FILE_TPM_SEAL=true can resolve a real Sealer. The factory
+	// is invoked lazily and only if the env opts in.
+	secrets.RegisterTPMSealerFactory(func() (secrets.Sealer, error) {
+		return tpm.New(logger)
+	})
+
+	// Build the secret-storage manager from env. Failure here is fatal:
+	// later code may need to read DB or Redis credentials at startup.
+	secretsMgr, err := secrets.FromEnv(logger)
+	if err != nil {
+		logger.Error("secrets init", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("secrets backend ready", "backend", secretsMgr.Backend())
+
+	// Build the OIDC verifier. When OIDC_DISABLED=true we skip verifier
+	// construction entirely and emit a loud WARN so operators notice if
+	// dev mode escapes a local box.
+	var verifier *auth.Verifier
+	if cfg.Auth.Disabled {
+		logger.Warn("OIDC AUTH DISABLED — all /api/v1 routes are publicly reachable; set OIDC_DISABLED=false to enable verification")
+	} else {
+		auth.SetDevLogger(logger)
+		verifier, err = auth.NewVerifier(auth.Config{
+			IssuerURL:          cfg.Auth.IssuerURL,
+			Audience:           cfg.Auth.Audience,
+			RequiredRolePrefix: cfg.Auth.RequiredRolePrefix,
+			ResourceClient:     cfg.Auth.ClientID,
+		}, nil)
+		if err != nil {
+			logger.Error("auth init", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	ctx := context.Background()
@@ -115,6 +154,7 @@ func main() {
 		Logger:       logger,
 		Queries:      st.Queries,
 		Redis:        redisClient,
+		Secrets:      secretsMgr,
 		Pools:        poolMgr,
 		Datasets:     datasetMgr,
 		Snapshots:    snapMgr,
@@ -174,6 +214,11 @@ func main() {
 		NetworkMgr:       networkMgr,
 		SystemMgr:        systemMgr,
 		ProtocolShareMgr: psMgr,
+
+		Verifier:     verifier,
+		RoleMap:      auth.DefaultRoleMap,
+		AuthDisabled: cfg.Auth.Disabled,
+		Secrets:      secretsMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -186,6 +231,13 @@ func main() {
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	tlsCancel, err := startTLS(context.Background(), cfg.TLS, logger, srv.Handler())
+	if err != nil {
+		logger.Error("tls start", "err", err)
+		os.Exit(1)
+	}
+	defer tlsCancel()
 
 	logger.Info("starting", "addr", cfg.ListenAddr)
 	go func() {

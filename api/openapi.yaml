@@ -6,11 +6,19 @@ info:
 servers:
   - url: /api/v1
 
+# Default security applies to every operation. /healthz overrides with
+# `security: []` to remain public. Per-operation role requirements are
+# documented either in the description or via the x-required-permissions
+# extension (a list of Permission constants from internal/auth/rbac.go).
+security:
+  - bearerAuth: []
+
 paths:
   /healthz:
     get:
       summary: Liveness probe
       operationId: getHealthz
+      security: []
       responses:
         '200':
           description: OK
@@ -19,6 +27,23 @@ paths:
               schema:
                 type: object
                 properties: { status: { type: string } }
+
+  /auth/me:
+    get:
+      summary: Current identity
+      description: |
+        Returns the authenticated user's Identity (subject, roles, scopes,
+        expiresAt). Any valid bearer token is accepted; no specific role
+        is required beyond authentication.
+      operationId: getAuthMe
+      x-required-permissions: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Identity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   /disks:
     get:
@@ -2063,6 +2088,28 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but lacking the required permission
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OIDC-issued JWT (typically from Keycloak). The verifier checks the
+        signature against the issuer's JWKS, validates `aud` and `exp`,
+        and projects realm/resource roles into the request Identity.
+        Operators map roles to nova:* permissions via the RoleMap; see
+        internal/auth/rbac.go for the canonical permission constants.
 
   schemas:
     Error:
@@ -2070,6 +2117,22 @@ components:
       properties:
         error:   { type: string }
         message: { type: string }
+    Identity:
+      type: object
+      description: Authenticated principal as projected from a verified JWT.
+      required: [sub, roles, scopes, expiresAt]
+      properties:
+        sub:               { type: string, description: "Subject (stable user id)." }
+        preferredUsername: { type: string }
+        email:             { type: string, format: email }
+        realm:             { type: string, description: "Keycloak realm derived from the issuer." }
+        roles:
+          type: array
+          items: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        expiresAt:         { type: string, format: date-time }
     Disk:
       type: object
       properties:
