@@ -682,6 +682,24 @@ type Krb5IdmapdConfig struct {
 	Verbosity *int   `json:"verbosity,omitempty"`
 }
 
+// Krb5KDCStatus defines model for Krb5KDCStatus.
+type Krb5KDCStatus struct {
+	// DatabaseExists Has the principal DB been bootstrapped?
+	DatabaseExists bool `json:"databaseExists"`
+
+	// PrincipalCount Number of principals known to the KDC
+	PrincipalCount int `json:"principalCount"`
+
+	// Realm Configured realm (e.g. NOVANAS.LOCAL)
+	Realm string `json:"realm"`
+
+	// Running Is krb5kdc.service active?
+	Running bool `json:"running"`
+
+	// StashSealed Is the master-key stash file present?
+	StashSealed bool `json:"stashSealed"`
+}
+
 // Krb5KeytabEntry defines model for Krb5KeytabEntry.
 type Krb5KeytabEntry struct {
 	Encryption string `json:"encryption"`
@@ -693,6 +711,33 @@ type Krb5KeytabEntry struct {
 type Krb5KeytabUpload struct {
 	// Data Base64-encoded raw keytab bytes (must begin with magic byte 0x05)
 	Data []byte `json:"data"`
+}
+
+// Krb5Principal defines model for Krb5Principal.
+type Krb5Principal struct {
+	// Attributes kadmin attribute flags (REQUIRES_PRE_AUTH, ...)
+	Attributes *string `json:"attributes,omitempty"`
+
+	// Expiration kadmin-formatted expiration ([never] or RFC date)
+	Expiration *string `json:"expiration,omitempty"`
+
+	// Kvno Current key version number
+	Kvno *int `json:"kvno,omitempty"`
+
+	// Name Fully-qualified principal (e.g. nfs/host@REALM)
+	Name string `json:"name"`
+}
+
+// Krb5PrincipalCreate defines model for Krb5PrincipalCreate.
+type Krb5PrincipalCreate struct {
+	// Name Principal name; realm optional
+	Name string `json:"name"`
+
+	// Password Initial password (mutually exclusive with randkey)
+	Password *string `json:"password,omitempty"`
+
+	// Randkey Generate a random key (default for service principals)
+	Randkey *bool `json:"randkey,omitempty"`
 }
 
 // Krb5Realm defines model for Krb5Realm.
@@ -1456,6 +1501,9 @@ type SetKrb5IdmapdJSONRequestBody = Krb5IdmapdConfig
 
 // UploadKrb5KeytabJSONRequestBody defines body for UploadKrb5Keytab for application/json ContentType.
 type UploadKrb5KeytabJSONRequestBody = Krb5KeytabUpload
+
+// CreateKrb5PrincipalJSONRequestBody defines body for CreateKrb5Principal for application/json ContentType.
+type CreateKrb5PrincipalJSONRequestBody = Krb5PrincipalCreate
 
 // ApplyNetworkBondJSONRequestBody defines body for ApplyNetworkBond for application/json ContentType.
 type ApplyNetworkBondJSONRequestBody = NetworkBond

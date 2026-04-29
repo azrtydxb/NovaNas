@@ -1,0 +1,14 @@
+[Unit]
+Description=NovaNAS embedded MIT KDC first-boot bootstrap
+Documentation=https://github.com/novanas/nova-nas/blob/main/docs/krb5/README.md
+Before=krb5kdc.service kadmind.service
+ConditionPathExists=!/var/lib/krb5kdc/principal
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/nova-kdc/bootstrap.env
+ExecStart=/usr/local/sbin/nova-kdc-bootstrap.sh
+
+[Install]
+WantedBy=multi-user.target

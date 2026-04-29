@@ -1,0 +1,23 @@
+[Unit]
+Description=MIT Kerberos KDC (NovaNAS embedded)
+Documentation=man:krb5kdc(8)
+After=network.target nova-kdc-bootstrap.service
+Wants=nova-kdc-bootstrap.service
+ConditionPathExists=/var/lib/krb5kdc/principal
+
+[Service]
+Type=forking
+PIDFile=/var/run/krb5kdc.pid
+ExecStart=/usr/sbin/krb5kdc -P /var/run/krb5kdc.pid
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+# Hardening: KDC needs root for /var/lib/krb5kdc + binding to port 88.
+# We narrow filesystem access but keep PrivateTmp off so the standard
+# logging path under /var/log works.
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

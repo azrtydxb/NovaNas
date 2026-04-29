@@ -47,6 +47,7 @@ type Deps struct {
 	NvmeofMgr     *nvmeof.Manager
 	NfsMgr        *nfs.Manager
 	Krb5Mgr       *krb5.Manager
+	Krb5KDC       *krb5.KDCManager
 	RdmaLister    *rdma.Lister
 	SambaMgr      *samba.Manager
 	SmartMgr      *smart.Manager
@@ -154,6 +155,10 @@ func New(d Deps) *Server {
 		krb5H = &handlers.Krb5Handler{Logger: d.Logger, Mgr: d.Krb5Mgr}
 	}
 	krb5W := &handlers.Krb5WriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var krb5KDCH *handlers.Krb5KDCHandler
+	if d.Krb5KDC != nil {
+		krb5KDCH = &handlers.Krb5KDCHandler{Logger: d.Logger, KDC: d.Krb5KDC}
+	}
 	rdmaH := &handlers.RDMAHandler{Logger: d.Logger, Lister: d.RdmaLister}
 	var sambaH *handlers.SambaHandler
 	if d.SambaMgr != nil {
@@ -379,6 +384,28 @@ func New(d Deps) *Server {
 			if smartH != nil {
 				r.Post("/disks/{name}/smart/test", smartH.RunSelfTest)
 				r.Post("/disks/{name}/smart/enable", smartH.Enable)
+			}
+		})
+
+		// ---- Krb5 KDC read (principal listing + status) ----
+		r.Group(func(r chi.Router) {
+			r.Use(require(auth.PermKrb5Read))
+			if krb5KDCH != nil {
+				r.Get("/krb5/kdc/status", krb5KDCH.GetStatus)
+				r.Get("/krb5/principals", krb5KDCH.ListPrincipals)
+				r.Get("/krb5/principals/{name}", krb5KDCH.GetPrincipal)
+			}
+		})
+
+		// ---- Krb5 KDC write (principal CRUD + keytab issuance) ----
+		// Keytab generation is gated on PermKrb5Write because the
+		// returned bytes ARE the credential.
+		r.Group(func(r chi.Router) {
+			r.Use(require(auth.PermKrb5Write))
+			if krb5KDCH != nil {
+				r.Post("/krb5/principals", krb5KDCH.CreatePrincipal)
+				r.Delete("/krb5/principals/{name}", krb5KDCH.DeletePrincipal)
+				r.Post("/krb5/principals/{name}/keytab", krb5KDCH.GetPrincipalKeytab)
 			}
 		})
 

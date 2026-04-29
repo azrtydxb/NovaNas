@@ -16,6 +16,10 @@ const (
 	PermAuditRead      Permission = "nova:audit:read"
 	PermSchedulerRead  Permission = "nova:scheduler:read"
 	PermSchedulerWrite Permission = "nova:scheduler:write"
+	// Krb5 KDC management. PermKrb5Write is sensitive — it implicitly
+	// grants the holder the ability to mint service keytabs.
+	PermKrb5Read  Permission = "nova:krb5:read"
+	PermKrb5Write Permission = "nova:krb5:write"
 )
 
 // RoleMap maps Keycloak role names to a set of Permissions. Operators
@@ -31,6 +35,7 @@ var DefaultRoleMap = RoleMap{
 		PermSystemRead, PermSystemWrite, PermSystemAdmin,
 		PermAuditRead,
 		PermSchedulerRead, PermSchedulerWrite,
+		PermKrb5Read, PermKrb5Write,
 	},
 	"nova-operator": {
 		PermStorageRead, PermStorageWrite,

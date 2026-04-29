@@ -1,0 +1,9 @@
+# /var/lib/krb5kdc/kadm5.acl — kadmind ACL.
+#
+# Grants the bootstrap admin principal full rights over all principals.
+# nova-api uses kadmin.local (not kadmin), so ACLs do NOT gate the API
+# server's principal CRUD; they only matter for remote kadmin clients.
+#
+# Replace NOVANAS.LOCAL at deploy time if a non-default realm is in use.
+
+nova-kdc-admin/admin@NOVANAS.LOCAL  *

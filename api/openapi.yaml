@@ -1429,6 +1429,92 @@ paths:
       responses:
         '202': { $ref: '#/components/responses/Accepted' }
 
+  /krb5/kdc/status:
+    get:
+      operationId: getKrb5KDCStatus
+      summary: Read embedded MIT KDC status (running, realm, principal count)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Krb5KDCStatus' }
+
+  /krb5/principals:
+    get:
+      operationId: listKrb5Principals
+      summary: List all principals known to the embedded KDC
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+    post:
+      operationId: createKrb5Principal
+      summary: Create a service principal in the embedded KDC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Krb5PrincipalCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Krb5Principal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /krb5/principals/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Principal name (URL-encoded; '@' and '/' permitted)
+    get:
+      operationId: getKrb5Principal
+      summary: Get a single principal's projected info
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Krb5Principal' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteKrb5Principal
+      summary: Delete a principal (idempotent)
+      responses:
+        '204':
+          description: Deleted
+
+  /krb5/principals/{name}/keytab:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      operationId: getKrb5PrincipalKeytab
+      summary: Generate a keytab for the principal (rotates KVNO)
+      description: |
+        Returns the raw MIT keytab bytes as application/octet-stream.
+        Note: ktadd increments the principal's KVNO — distribute the
+        returned keytab atomically; existing keytabs become invalid.
+      responses:
+        '200':
+          description: Raw keytab bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /network/rdma:
     get:
       operationId: listRdmaAdapters
@@ -2537,6 +2623,30 @@ components:
           type: string
           format: byte
           description: 'Base64-encoded raw keytab bytes (must begin with magic byte 0x05)'
+    Krb5KDCStatus:
+      type: object
+      required: [running, realm, databaseExists, stashSealed, principalCount]
+      properties:
+        running:        { type: boolean, description: 'Is krb5kdc.service active?' }
+        realm:          { type: string,  description: 'Configured realm (e.g. NOVANAS.LOCAL)' }
+        databaseExists: { type: boolean, description: 'Has the principal DB been bootstrapped?' }
+        stashSealed:    { type: boolean, description: 'Is the master-key stash file present?' }
+        principalCount: { type: integer, description: 'Number of principals known to the KDC' }
+    Krb5Principal:
+      type: object
+      required: [name]
+      properties:
+        name:       { type: string, description: 'Fully-qualified principal (e.g. nfs/host@REALM)' }
+        kvno:       { type: integer, description: 'Current key version number' }
+        expiration: { type: string,  description: 'kadmin-formatted expiration ([never] or RFC date)' }
+        attributes: { type: string,  description: 'kadmin attribute flags (REQUIRES_PRE_AUTH, ...)' }
+    Krb5PrincipalCreate:
+      type: object
+      required: [name]
+      properties:
+        name:     { type: string,  description: 'Principal name; realm optional' }
+        randkey:  { type: boolean, description: 'Generate a random key (default for service principals)' }
+        password: { type: string,  description: 'Initial password (mutually exclusive with randkey)' }
     RdmaAdapter:
       type: object
       required: [name]

@@ -1,0 +1,20 @@
+[Unit]
+Description=MIT Kerberos Admin Server (kadmind)
+Documentation=man:kadmind(8)
+After=network.target krb5kdc.service
+Requires=krb5kdc.service
+ConditionPathExists=/var/lib/krb5kdc/principal
+
+[Service]
+Type=forking
+PIDFile=/var/run/kadmind.pid
+ExecStart=/usr/sbin/kadmind -P /var/run/kadmind.pid
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
