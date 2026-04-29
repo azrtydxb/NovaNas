@@ -3299,22 +3299,69 @@ paths:
       description: |
         Returns the cosign-verified marketplace index. Cached server-side
         for 15 minutes; pass `?refresh=true` to force a fresh fetch.
+
+        Optional `displayCategory` and `tag` query parameters filter the
+        catalog server-side. `tag` may be repeated; AND semantics apply
+        (a plugin must carry every listed tag).
       x-required-permissions: [nova:plugins:read]
       parameters:
         - in: query
           name: refresh
           schema: { type: boolean }
+        - in: query
+          name: displayCategory
+          description: |
+            Filter by display category. Single-valued; must be one of
+            the 14 known display categories (see `DisplayCategory`).
+            Unknown values yield 400.
+          schema: { $ref: '#/components/schemas/DisplayCategory' }
+        - in: query
+          name: tag
+          description: |
+            Filter by tag. Repeat to require multiple tags; AND
+            semantics — a plugin must carry every listed tag to pass
+            the filter.
+          schema:
+            type: array
+            items: { type: string }
+          style: form
+          explode: true
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PluginIndex' }
+        '400':
+          description: Unknown displayCategory.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '502':
           description: Marketplace unreachable
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /plugins/categories:
+    get:
+      operationId: listPluginCategories
+      summary: List the 14 display categories with plugin counts.
+      description: |
+        Returns the canonical display-category list with the number of
+        plugins in each. Zero-count entries are included so Aurora's
+        App Center sidebar layout stays stable as plugins are
+        installed/removed. Counts are derived from the merged
+        marketplace index; the endpoint never fails on a transient
+        marketplace outage — counts simply fall back to zero.
+      x-required-permissions: [nova:plugins:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PluginCategoryCount' }
   /plugins/index/{name}:
     parameters:
       - in: path
@@ -3333,6 +3380,63 @@ paths:
               schema: { $ref: '#/components/schemas/PluginIndexEntry' }
         '404':
           description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /plugins/index/{name}/manifest:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: previewPluginManifest
+      summary: Pre-install manifest preview with permissions summary.
+      description: |
+        Downloads the marketplace tarball + signature for (name, version),
+        cosign-verifies the signature, parses the embedded manifest.yaml,
+        and returns a structured permissions summary suitable for an
+        Aurora consent dialog.
+
+        This endpoint is read-only — it does NOT install, persist, or
+        otherwise mutate state. The same payload is captured in the
+        audit row when the user confirms the install, so the consent
+        record is exact.
+      x-required-permissions: [nova:plugins:read]
+      parameters:
+        - in: query
+          name: version
+          required: true
+          schema: { type: string }
+          description: |
+            SemVer of the released artifact to preview. Required so
+            consent and the eventual install pin to the same tarball.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginPreview' }
+        '400':
+          description: Missing version query parameter.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Plugin or version not in marketplace index.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: |
+            Cosign signature verification failed or the manifest is
+            invalid. The package cannot be trusted and MUST NOT be
+            installed; surface a tampering warning to the operator.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Marketplace unreachable.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -3421,14 +3525,93 @@ paths:
         With `?purge=true`, the engine also unwinds all auto-provisioned
         `needs:` resources (datasets, oidcClients, …). Without purge they
         are preserved so an immediate reinstall is fast.
+
+        With `?force=true`, the engine bypasses the dependency-guard.
+        Without it the call returns 409 if other installed plugins
+        still depend on this one, with a `blockedBy` envelope listing
+        them.
       x-required-permissions: [nova:plugins:admin]
       parameters:
         - in: query
           name: purge
           schema: { type: boolean }
+        - in: query
+          name: force
+          schema: { type: boolean }
       responses:
         '204':
           description: Uninstalled
+        '409':
+          description: Has dependents (omit `force=true` to surface this)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:     { type: string }
+                  message:   { type: string }
+                  plugin:    { type: string }
+                  blockedBy:
+                    type: array
+                    items: { type: string }
+
+  /plugins/{name}/dependencies:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPluginDependencies
+      summary: The plugin's dependency graph.
+      description: |
+        Resolves the plugin's dependency graph WITHOUT installing
+        anything. If the plugin is installed the stored manifest is
+        used; otherwise the marketplace is consulted. Pass
+        `?version=…` to inspect a specific marketplace version of an
+        uninstalled plugin.
+      x-required-permissions: [nova:plugins:read]
+      parameters:
+        - in: query
+          name: version
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginDependenciesResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Dependency graph invalid (cycle, unsatisfiable, …)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /plugins/{name}/dependents:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPluginDependents
+      summary: Installed plugins that depend on this plugin.
+      description: |
+        Returns the names of installed plugins whose manifests list
+        the named plugin as a tier-2 dependency. Useful for "are you
+        sure?" confirmation dialogs ahead of an uninstall.
+      x-required-permissions: [nova:plugins:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginDependentsResponse' }
 
   # ---- KubeVirt VM management ----------------------------------------------
   /vms:
@@ -3713,6 +3896,142 @@ paths:
       responses:
         '204': { description: Deleted }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- Marketplaces registry (multi-source) ------------------------------
+  /marketplaces:
+    get:
+      operationId: listMarketplaces
+      summary: List registered marketplaces (locked first, then registration order).
+      x-required-permissions: [nova:marketplaces:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Marketplace' }
+    post:
+      operationId: addMarketplace
+      summary: Register a new marketplace.
+      description: |
+        Operators add additional marketplaces (TrueCharts, third-party
+        publishers, internal mirrors); each carries its own pinned
+        cosign trust key. Adding a marketplace expands the trust
+        surface, so the call is gated on `nova:marketplaces:admin`.
+
+        The server validates the index URL is reachable (HTTP HEAD)
+        and the trust key URL returns a parseable cosign public key
+        BEFORE persisting.
+      x-required-permissions: [nova:marketplaces:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarketplaceCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Marketplace' }
+        '400': { description: Invalid input or unparseable trust key, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Reserved name or duplicate, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '502': { description: Index URL or trust key URL unreachable, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /marketplaces/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getMarketplace
+      summary: One registered marketplace.
+      x-required-permissions: [nova:marketplaces:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Marketplace' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateMarketplace
+      summary: Toggle enabled and/or refresh the pinned trust key.
+      description: |
+        The locked novanas-official entry refuses `enabled=false`
+        with 409. Setting `refreshTrustKey=true` is equivalent to
+        POST /marketplaces/{id}/refresh-trust-key.
+      x-required-permissions: [nova:marketplaces:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:         { type: boolean }
+                refreshTrustKey: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Marketplace' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Locked entry refuses enabled=false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      operationId: deleteMarketplace
+      summary: Remove a marketplace.
+      description: |
+        The locked novanas-official entry returns 409. Removing a
+        marketplace does NOT uninstall plugins that were installed
+        from it; the existing installations remain trusted.
+      x-required-permissions: [nova:marketplaces:admin]
+      responses:
+        '204':
+          description: Deleted
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Refused on locked entry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /marketplaces/{id}/refresh-trust-key:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: refreshMarketplaceTrustKey
+      summary: Re-fetch and pin the marketplace's cosign trust key.
+      description: |
+        Hits the marketplace's pinned `trustKeyUrl`, parses the
+        returned PEM, and atomically updates the row's
+        `trustKeyPem`. This is the ONLY supported way to rotate a
+        marketplace's trust key — there is no auto-refresh path,
+        otherwise a malicious marketplace could rotate its key after
+        gaining trust.
+      x-required-permissions: [nova:marketplaces:admin]
+      responses:
+        '200':
+          description: Refreshed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Marketplace' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502':
+          description: trust_key_url unreachable or returned an unparseable key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
 components:
   responses:
@@ -5116,17 +5435,60 @@ components:
         sha256:       { type: string }
         size:         { type: integer, format: int64 }
         releasedAt:   { type: string, format: date-time }
+    DisplayCategory:
+      type: string
+      description: |
+        User-facing App Center grouping. Orthogonal to the privilege
+        `category` field which gates which `needs:` kinds a plugin may
+        claim. The engine ignores DisplayCategory for privilege
+        decisions; it exists purely so Aurora can group/filter plugins
+        by intent.
+      enum:
+        - backup
+        - files
+        - multimedia
+        - photos
+        - productivity
+        - security
+        - communication
+        - home
+        - developer
+        - network
+        - storage
+        - surveillance
+        - utilities
+        - observability
+    PluginTags:
+      type: array
+      maxItems: 16
+      description: |
+        Free-form tags the plugin author declares. Each tag is
+        lowercase alphanumeric with optional dashes, max 32 chars; max
+        16 tags per plugin.
+      items:
+        type: string
+        maxLength: 32
+        pattern: '^[a-z0-9][a-z0-9-]*$'
+    PluginCategoryCount:
+      type: object
+      required: [category, displayName, count]
+      properties:
+        category:    { $ref: '#/components/schemas/DisplayCategory' }
+        displayName: { type: string }
+        count:       { type: integer }
     PluginIndexEntry:
       type: object
       required: [name, vendor, category, versions]
       properties:
-        name:        { type: string }
-        displayName: { type: string }
-        vendor:      { type: string }
-        category:    { type: string }
-        description: { type: string }
-        icon:        { type: string }
-        homepage:    { type: string }
+        name:            { type: string }
+        displayName:     { type: string }
+        vendor:          { type: string }
+        category:        { type: string }
+        displayCategory: { $ref: '#/components/schemas/DisplayCategory' }
+        tags:            { $ref: '#/components/schemas/PluginTags' }
+        description:     { type: string }
+        icon:            { type: string }
+        homepage:        { type: string }
         versions:
           type: array
           items: { $ref: '#/components/schemas/PluginIndexVersion' }
@@ -5159,6 +5521,64 @@ components:
         resources:
           type: array
           items: { $ref: '#/components/schemas/PluginResource' }
+        installedDeps:
+          type: array
+          description: |
+            Tier-2 dependencies that were installed (or skipped
+            because they were already at a satisfying version) as
+            part of this install. Empty when the plugin had no
+            dependencies.
+          items: { $ref: '#/components/schemas/PluginPlanStep' }
+    PluginDependency:
+      type: object
+      required: [name, source]
+      properties:
+        name:              { type: string }
+        versionConstraint: { type: string, description: 'SemVer constraint, e.g. ">=1.0.0,<2.0.0"' }
+        source:
+          type: string
+          enum: [tier-2, bundled]
+          description: |
+            tier-2: marketplace plugin, recursively installed.
+            bundled: NovaNAS core feature; documentation only.
+    PluginPlanStep:
+      type: object
+      required: [name, source, action]
+      properties:
+        name:       { type: string }
+        version:    { type: string }
+        source:     { type: string, enum: [tier-2, bundled] }
+        action:     { type: string, enum: [install, skip, bundled] }
+        constraint: { type: string }
+    PluginDependencyTreeNode:
+      type: object
+      required: [name, source]
+      properties:
+        name:       { type: string }
+        version:    { type: string }
+        constraint: { type: string }
+        source:     { type: string, enum: [tier-2, bundled] }
+        installed:  { type: boolean }
+        satisfied:  { type: boolean }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/PluginDependencyTreeNode' }
+    PluginDependenciesResponse:
+      type: object
+      required: [plan]
+      properties:
+        tree: { $ref: '#/components/schemas/PluginDependencyTreeNode' }
+        plan:
+          type: array
+          items: { $ref: '#/components/schemas/PluginPlanStep' }
+    PluginDependentsResponse:
+      type: object
+      required: [plugin, dependents]
+      properties:
+        plugin: { type: string }
+        dependents:
+          type: array
+          items: { type: string }
     PluginInstallRequest:
       type: object
       required: [name]
@@ -5171,3 +5591,109 @@ components:
       required: [version]
       properties:
         version: { type: string }
+    ProvisionedResource:
+      type: object
+      description: |
+        One resource the engine will create when the plugin is
+        installed. Derived from a single `needs:` entry in the manifest.
+      required: [kind, what, destructive]
+      properties:
+        kind:
+          type: string
+          enum: [dataset, oidcClient, tlsCert, permission]
+          description: Mirrors the manifest NeedKind.
+        what:
+          type: string
+          description: |
+            One-line human-readable description suitable for a consent
+            dialog bullet (e.g. "ZFS dataset tank/objects").
+        destructive:
+          type: boolean
+          description: |
+            True when the resource mutates state the plugin does NOT
+            own (reuses an existing dataset, binds a global role).
+            For v1 every resource is non-destructive (engine creates
+            fresh resources scoped to the plugin) so this defaults
+            to false.
+    PermissionsSummary:
+      type: object
+      description: |
+        Structured "what will happen on Install" payload. Aurora's
+        consent dialog renders this verbatim.
+      required: [willCreate, willMount, willOpen, scopes, category]
+      properties:
+        willCreate:
+          type: array
+          items: { $ref: '#/components/schemas/ProvisionedResource' }
+        willMount:
+          type: array
+          description: |
+            Absolute nova-api paths the engine will register on
+            Install — one per spec.api.routes[*].path, formatted as
+            "/api/v1/plugins/{name}{route.path}/*".
+          items: { type: string }
+        willOpen:
+          type: array
+          description: |
+            Reserved for future port-allocation declarations. v1
+            manifests do not declare ports so this is always [].
+          items: { type: string }
+        scopes:
+          type: array
+          description: |
+            nova-api permissions a caller needs for read-side
+            interaction. v1 surfaces only the read scope; admin
+            actions (install/uninstall/upgrade) require
+            nova:plugins:admin and are not listed here.
+          items: { type: string }
+        category:
+          type: string
+          description: Mirrors spec.category — Aurora groups apps by it.
+    PluginPreview:
+      type: object
+      description: |
+        GET /plugins/index/{name}/manifest response. Manifest is the
+        full parsed Plugin object; permissions is the summary; the
+        SHA256 pins exactly which tarball was previewed.
+      required: [manifest, permissions, tarballSha256]
+      properties:
+        manifest:
+          type: object
+          description: The full parsed Plugin manifest (apiVersion, kind, metadata, spec).
+        permissions:
+          $ref: '#/components/schemas/PermissionsSummary'
+        tarballSha256:
+          type: string
+          description: |
+            Hex-encoded SHA256 of the cosign-verified tarball. Captured
+            so the install audit row can pin EXACTLY what the operator
+            consented to.
+    Marketplace:
+      type: object
+      required: [id, name, indexUrl, locked, enabled]
+      properties:
+        id:          { type: string, format: uuid }
+        name:        { type: string }
+        indexUrl:    { type: string, format: uri }
+        trustKeyUrl: { type: string, format: uri }
+        trustKeyPem: { type: string, description: "PEM-encoded cosign public key currently pinned for this marketplace." }
+        locked:      { type: boolean, description: "True for the immutable novanas-official entry." }
+        enabled:     { type: boolean }
+        addedBy:     { type: string }
+        addedAt:     { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+    MarketplaceCreateRequest:
+      type: object
+      required: [name, indexUrl, trustKeyUrl]
+      properties:
+        name:
+          type: string
+          description: "Operator-chosen unique name (the reserved name 'novanas-official' is refused with 409)."
+        indexUrl:
+          type: string
+          format: uri
+          description: "URL of the marketplace's index.json. Validated reachable (HEAD) before persisting."
+        trustKeyUrl:
+          type: string
+          format: uri
+          description: "URL of the cosign public key (.pub). Fetched and pinned at create time; never auto-refreshed."

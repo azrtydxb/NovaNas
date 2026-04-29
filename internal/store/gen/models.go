@@ -35,6 +35,19 @@ type Job struct {
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
 }
 
+type Marketplace struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	IndexUrl    string             `json:"index_url"`
+	TrustKeyUrl string             `json:"trust_key_url"`
+	TrustKeyPem string             `json:"trust_key_pem"`
+	Locked      bool               `json:"locked"`
+	Enabled     bool               `json:"enabled"`
+	AddedBy     *string            `json:"added_by"`
+	AddedAt     pgtype.Timestamptz `json:"added_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Notification struct {
 	ID        pgtype.UUID        `json:"id"`
 	TenantID  *string            `json:"tenant_id"`
@@ -53,6 +66,24 @@ type NotificationState struct {
 	ReadAt         pgtype.Timestamptz `json:"read_at"`
 	DismissedAt    pgtype.Timestamptz `json:"dismissed_at"`
 	SnoozedUntil   pgtype.Timestamptz `json:"snoozed_until"`
+}
+
+type Plugin struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Version     string             `json:"version"`
+	Manifest    []byte             `json:"manifest"`
+	Status      string             `json:"status"`
+	InstalledAt pgtype.Timestamptz `json:"installed_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PluginResource struct {
+	ID           int64              `json:"id"`
+	PluginID     pgtype.UUID        `json:"plugin_id"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   string             `json:"resource_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type ReplicationJob struct {

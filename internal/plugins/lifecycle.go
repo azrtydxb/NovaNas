@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +23,33 @@ var (
 	ErrNotFound      = errors.New("plugins: not found")
 	ErrAlreadyExists = errors.New("plugins: already installed")
 	ErrInvalid       = errors.New("plugins: invalid argument")
+	// ErrHasDependents is returned by Uninstall when other installed
+	// plugins still depend on the target. Callers can override with
+	// UninstallOptions.Force.
+	ErrHasDependents = errors.New("plugins: has dependents")
 )
+
+// UninstallOptions controls Uninstall behaviour.
+type UninstallOptions struct {
+	// Purge unwinds auto-provisioned needs (datasets, oidcClients, …).
+	Purge bool
+	// Force bypasses the dependents-guard. Audit-logged so operators can
+	// review what got broken.
+	Force bool
+}
+
+// DependentsError carries the list of installed plugins that block an
+// uninstall. The handler unwraps it to populate the 409 envelope.
+type DependentsError struct {
+	Plugin    string   `json:"plugin"`
+	BlockedBy []string `json:"blockedBy"`
+}
+
+func (e *DependentsError) Error() string {
+	return fmt.Sprintf("plugins: %q has dependents: %s", e.Plugin, strings.Join(e.BlockedBy, ", "))
+}
+
+func (e *DependentsError) Unwrap() error { return ErrHasDependents }
 
 // Status values used in the plugins.status column.
 const (
@@ -33,14 +60,18 @@ const (
 
 // Installation is the API value object for an installed plugin.
 type Installation struct {
-	ID          uuid.UUID    `json:"id"`
-	Name        string       `json:"name"`
-	Version     string       `json:"version"`
-	Manifest    *Plugin      `json:"manifest"`
-	Status      string       `json:"status"`
-	InstalledAt time.Time    `json:"installedAt"`
-	UpdatedAt   time.Time    `json:"updatedAt"`
+	ID          uuid.UUID     `json:"id"`
+	Name        string        `json:"name"`
+	Version     string        `json:"version"`
+	Manifest    *Plugin       `json:"manifest"`
+	Status      string        `json:"status"`
+	InstalledAt time.Time     `json:"installedAt"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
 	Resources   []ResourceRef `json:"resources,omitempty"`
+	// InstalledDeps lists tier-2 dependencies that were installed (or
+	// skipped) as part of this Install call. Aurora uses it to surface
+	// what was pulled in. Empty when the install had no deps.
+	InstalledDeps []PlanStep `json:"installedDeps,omitempty"`
 }
 
 // ResourceRef is one auto-provisioned `needs:` resource recorded for
@@ -58,6 +89,12 @@ type Manager struct {
 	Logger      *slog.Logger
 	Queries     *storedb.Queries
 	Marketplace *MarketplaceClient
+	// Multi, when non-nil, takes precedence over Marketplace for
+	// install/upgrade routing. The single-source Marketplace remains
+	// supported for backward-compat (tests, dev installs without a DB
+	// registry). When Multi is set, per-marketplace pinned trust keys
+	// are used and the top-level Verifier is ignored.
+	Multi       *MultiMarketplaceClient
 	Verifier    *Verifier
 	Provisioner NeedsProvisioner
 	Router      *Router
@@ -85,6 +122,10 @@ type ManagerOptions struct {
 	Logger      *slog.Logger
 	Queries     *storedb.Queries
 	Marketplace *MarketplaceClient
+	// Multi is the multi-source marketplace client. When non-nil it
+	// takes precedence over Marketplace; install/upgrade routes through
+	// the registry instead of the single hardcoded source.
+	Multi       *MultiMarketplaceClient
 	Verifier    *Verifier
 	Provisioner NeedsProvisioner
 	Router      *Router
@@ -104,6 +145,7 @@ func NewManager(o ManagerOptions) *Manager {
 		Logger:      o.Logger,
 		Queries:     o.Queries,
 		Marketplace: o.Marketplace,
+		Multi:       o.Multi,
 		Verifier:    o.Verifier,
 		Provisioner: o.Provisioner,
 		Router:      o.Router,
@@ -129,12 +171,45 @@ type InstallRequest struct {
 	Name       string `json:"name"`
 	Version    string `json:"version"`
 	ValuesYAML string `json:"valuesYAML,omitempty"`
+	// MarketplaceID, when set, pins the install to a specific
+	// registered marketplace. Empty means the engine searches all
+	// enabled marketplaces in registration order (locked first). Use
+	// this to disambiguate when two marketplaces publish a plugin with
+	// the same name.
+	MarketplaceID string `json:"marketplaceId,omitempty"`
+}
+
+// installedLookup is the InstalledLookup adapter that asks the
+// Manager's DB for the currently-installed version of a plugin.
+type installedLookup struct{ m *Manager }
+
+func (l installedLookup) InstalledVersion(ctx context.Context, name string) (string, bool, error) {
+	if l.m == nil || l.m.Queries == nil {
+		return "", false, nil
+	}
+	row, err := l.m.Queries.GetPluginByName(ctx, name)
+	if err != nil {
+		// Not found vs. real errors are indistinguishable from the
+		// generated querier; treat as "not installed". The caller will
+		// recover any real DB error from the next query.
+		return "", false, nil
+	}
+	return row.Version, true, nil
 }
 
 // Install fetches+verifies+unpacks+provisions+mounts the plugin.
 //
 // Failures roll back already-completed steps. The returned error is
 // the original cause; rollback errors are logged.
+//
+// Dependency handling: before the existing fetch + verify + provision
+// path, the engine fetches the root manifest, resolves its
+// `spec.dependencies` graph, and recursively installs any tier-2 deps
+// that are missing or at a satisfying version. Bundled deps are noted
+// for audit but never installed. If a dep install fails the root
+// install fails too; deps that DID install are NOT auto-rolled-back —
+// they may be useful on their own. The partial-state outcome is
+// audit-logged.
 func (m *Manager) Install(ctx context.Context, req InstallRequest) (*Installation, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("%w: name is required", ErrInvalid)
@@ -151,7 +226,38 @@ func (m *Manager) Install(ctx context.Context, req InstallRequest) (*Installatio
 		return nil, ErrAlreadyExists
 	}
 
-	manifest, destDir, uiDir, resources, err := m.fetchVerifyUnpackProvision(ctx, req.Name, req.Version)
+	// Resolve + install dependencies first. We fetch the root manifest
+	// up front so the resolver can see its spec.dependencies. This is a
+	// cheap operation (an index lookup + a tarball download) and the
+	// downloaded artefacts are reused by fetchVerifyUnpackProvision.
+	plan, _, err := m.planInstall(ctx, req.Name, req.Version, req.MarketplaceID)
+	if err != nil {
+		return nil, err
+	}
+	for _, step := range plan {
+		if step.Name == req.Name {
+			continue // root is installed last by the existing path
+		}
+		if step.Action != PlanActionInstall {
+			continue
+		}
+		if _, err := m.Queries.GetPluginByName(ctx, step.Name); err == nil {
+			continue // raced with a parallel install — accept the dep
+		}
+		if _, derr := m.Install(ctx, InstallRequest{Name: step.Name, Version: step.Version, MarketplaceID: req.MarketplaceID}); derr != nil {
+			if m.Logger != nil {
+				m.Logger.Error("plugins: dependency install failed",
+					"root", req.Name, "dep", step.Name, "err", derr,
+					"note", "previously-installed deps were left in place")
+			}
+			return nil, fmt.Errorf("plugins: install dependency %q for %q: %w", step.Name, req.Name, derr)
+		}
+		if m.Logger != nil {
+			m.Logger.Info("plugins: dependency installed", "root", req.Name, "dep", step.Name, "version", step.Version)
+		}
+	}
+
+	manifest, destDir, uiDir, resources, err := m.fetchVerifyUnpackProvision(ctx, req.Name, req.Version, req.MarketplaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,12 +322,22 @@ func (m *Manager) Install(ctx context.Context, req InstallRequest) (*Installatio
 	if m.Logger != nil {
 		m.Logger.Info("plugins: installed", "name", req.Name, "version", manifest.Metadata.Version)
 	}
-	return m.toInstallation(row, manifest, resources), nil
+	inst := m.toInstallation(row, manifest, resources)
+	for _, step := range plan {
+		if step.Name == req.Name {
+			continue
+		}
+		inst.InstalledDeps = append(inst.InstalledDeps, step)
+	}
+	return inst, nil
 }
 
-// Uninstall removes runtime mounts + DB row. purge=true also unwinds
-// the auto-provisioned `needs:` resources via the provisioner.
-func (m *Manager) Uninstall(ctx context.Context, name string, purge bool) error {
+// Uninstall removes runtime mounts + DB row. opts.Purge unwinds the
+// auto-provisioned `needs:` resources via the provisioner. opts.Force
+// bypasses the dependents-guard; otherwise the call returns
+// *DependentsError when other installed plugins still depend on this
+// plugin.
+func (m *Manager) Uninstall(ctx context.Context, name string, opts UninstallOptions) error {
 	if m.Queries == nil {
 		return errors.New("plugins: store not configured")
 	}
@@ -233,6 +349,16 @@ func (m *Manager) Uninstall(ctx context.Context, name string, purge bool) error 
 	if err != nil {
 		return ErrNotFound
 	}
+	if dependents, derr := m.dependentsOf(ctx, name); derr == nil && len(dependents) > 0 {
+		if !opts.Force {
+			return &DependentsError{Plugin: name, BlockedBy: dependents}
+		}
+		if m.Logger != nil {
+			m.Logger.Warn("plugins: forced uninstall — breaking dependents",
+				"name", name, "dependents", dependents)
+		}
+	}
+	purge := opts.Purge
 
 	if m.Deployer != nil {
 		if err := m.Deployer.Uninstall(ctx, name); err != nil && m.Logger != nil {
@@ -285,7 +411,10 @@ func (m *Manager) Upgrade(ctx context.Context, name, version string) (*Installat
 	if _, err := m.Queries.GetPluginByName(ctx, name); err != nil {
 		return nil, ErrNotFound
 	}
-	manifest, destDir, uiDir, resources, err := m.fetchVerifyUnpackProvision(ctx, name, version)
+	// Upgrade does not pin to a marketplace — the engine searches the
+	// same set of enabled marketplaces it would for a fresh install. If
+	// operators need to switch upgrade source, uninstall + reinstall.
+	manifest, destDir, uiDir, resources, err := m.fetchVerifyUnpackProvision(ctx, name, version, "")
 	if err != nil {
 		return nil, err
 	}
@@ -411,22 +540,44 @@ func (m *Manager) RestoreAtStartup(ctx context.Context) {
 
 // fetchVerifyUnpackProvision is the shared install/upgrade flow. It
 // stops at any failure with the partial state cleaned up.
-func (m *Manager) fetchVerifyUnpackProvision(ctx context.Context, name, version string) (*Plugin, string, string, []provisionedResource, error) {
-	if m.Marketplace == nil {
-		return nil, "", "", nil, errors.New("plugins: marketplace not configured")
-	}
-	_, ver, err := m.Marketplace.FindVersion(ctx, name, version)
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	tarball, sig, err := m.Marketplace.DownloadArtifacts(ctx, ver)
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	if m.Verifier != nil {
-		if err := m.Verifier.Verify(ctx, tarball, sig); err != nil {
-			return nil, "", "", nil, fmt.Errorf("plugins: signature: %w", err)
+//
+// When the Manager has a MultiMarketplaceClient configured (the
+// production path), the install routes through the registry: the
+// requested marketplaceID (or empty for "search all enabled") picks
+// which marketplace to download from, and verification uses THAT
+// marketplace's pinned trust key. The single-source Marketplace +
+// Verifier path remains for backward-compat with existing tests and
+// dev installs.
+func (m *Manager) fetchVerifyUnpackProvision(ctx context.Context, name, version, marketplaceID string) (*Plugin, string, string, []provisionedResource, error) {
+	var tarball []byte
+	switch {
+	case m.Multi != nil:
+		_, ver, mp, err := m.Multi.FindVersion(ctx, name, version, marketplaceID)
+		if err != nil {
+			return nil, "", "", nil, err
 		}
+		tb, err := m.Multi.DownloadAndVerify(ctx, mp.ID, ver)
+		if err != nil {
+			return nil, "", "", nil, err
+		}
+		tarball = tb
+	case m.Marketplace != nil:
+		_, ver, err := m.Marketplace.FindVersion(ctx, name, version)
+		if err != nil {
+			return nil, "", "", nil, err
+		}
+		tb, sig, err := m.Marketplace.DownloadArtifacts(ctx, ver)
+		if err != nil {
+			return nil, "", "", nil, err
+		}
+		if m.Verifier != nil {
+			if err := m.Verifier.Verify(ctx, tb, sig); err != nil {
+				return nil, "", "", nil, fmt.Errorf("plugins: signature: %w", err)
+			}
+		}
+		tarball = tb
+	default:
+		return nil, "", "", nil, errors.New("plugins: marketplace not configured")
 	}
 	root := DefaultPluginsRoot
 	if m.UI != nil && m.UI.Root != "" {
@@ -475,4 +626,162 @@ func (m *Manager) toInstallation(row storedb.Plugin, manifest *Plugin, resources
 		out.Resources = append(out.Resources, ResourceRef{Type: r.Kind, ID: r.ID})
 	}
 	return out
+}
+
+// planInstall fetches the root plugin's manifest and runs the
+// resolver against it. Returns the install plan (deps in order, root
+// last) and the parsed root manifest.
+//
+// This duplicates a small amount of fetchVerifyUnpackProvision work —
+// we download the tarball once here to read its manifest, then again
+// inside fetchVerifyUnpackProvision for the actual install. The
+// duplication is intentional: keeping plan-time fetches separate from
+// install-time fetches means a planned install that fails partway
+// (e.g. mid-dependency) doesn't leave half-extracted artefacts at the
+// real install root.
+func (m *Manager) planInstall(ctx context.Context, name, version, marketplaceID string) ([]PlanStep, *Plugin, error) {
+	tarball, err := m.fetchVerifiedTarball(ctx, name, version, marketplaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	tmp, err := os.MkdirTemp("", "nova-plugin-plan-")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer os.RemoveAll(tmp)
+	manifestBytes, _, err := ExtractTarball(tarball, tmp)
+	if err != nil {
+		return nil, nil, err
+	}
+	manifest, err := ParseManifest(manifestBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolver := NewResolver(m.dependencyLookup(), installedLookup{m: m})
+	plan, err := resolver.Plan(ctx, manifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, manifest, nil
+}
+
+// fetchVerifiedTarball downloads the (verified) tarball bytes for the
+// requested plugin/version. It is a smaller-surface analog of
+// fetchVerifyUnpackProvision used at plan time — no extraction, no
+// needs-provisioning. Mirrors the multi/single marketplace switch.
+func (m *Manager) fetchVerifiedTarball(ctx context.Context, name, version, marketplaceID string) ([]byte, error) {
+	switch {
+	case m.Multi != nil:
+		_, ver, mp, err := m.Multi.FindVersion(ctx, name, version, marketplaceID)
+		if err != nil {
+			return nil, err
+		}
+		return m.Multi.DownloadAndVerify(ctx, mp.ID, ver)
+	case m.Marketplace != nil:
+		_, ver, err := m.Marketplace.FindVersion(ctx, name, version)
+		if err != nil {
+			return nil, err
+		}
+		tb, sig, err := m.Marketplace.DownloadArtifacts(ctx, ver)
+		if err != nil {
+			return nil, err
+		}
+		if m.Verifier != nil {
+			if err := m.Verifier.Verify(ctx, tb, sig); err != nil {
+				return nil, fmt.Errorf("plugins: signature: %w", err)
+			}
+		}
+		return tb, nil
+	default:
+		return nil, errors.New("plugins: marketplace not configured")
+	}
+}
+
+// dependencyLookup returns the resolver-friendly lookup adapter. When
+// Multi is configured it consults all enabled marketplaces; otherwise
+// it falls back to the single MarketplaceClient. Returns nil when no
+// marketplace is configured (the resolver tolerates nil for tests
+// that pass a fake lookup directly).
+func (m *Manager) dependencyLookup() DependencyLookup {
+	if m.Multi != nil {
+		return multiLookup{m: m.Multi}
+	}
+	if m.Marketplace != nil {
+		return m.Marketplace
+	}
+	return nil
+}
+
+// multiLookup adapts MultiMarketplaceClient.FindVersion to the
+// DependencyLookup three-arg signature the resolver expects. It hands
+// "" as marketplaceID — the multi client searches all enabled sources
+// in registration order, which is the right behaviour for transitive
+// deps (we don't pin transitive deps to a specific marketplace).
+type multiLookup struct{ m *MultiMarketplaceClient }
+
+func (l multiLookup) FindVersion(ctx context.Context, name, version string) (*IndexPlugin, *IndexVersion, error) {
+	idxPlugin, idxVer, _, err := l.m.FindVersion(ctx, name, version, "")
+	return idxPlugin, idxVer, err
+}
+
+// dependentsOf returns the names of installed plugins whose
+// spec.dependencies list `name` as a tier-2 dep.
+func (m *Manager) dependentsOf(ctx context.Context, name string) ([]string, error) {
+	if m.Queries == nil {
+		return nil, nil
+	}
+	rows, err := m.Queries.ListPlugins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, row := range rows {
+		if row.Name == name {
+			continue
+		}
+		var p Plugin
+		if err := json.Unmarshal(row.Manifest, &p); err != nil {
+			continue
+		}
+		for _, d := range p.Spec.Dependencies {
+			if d.Source == DependencySourceTier2 && d.Name == name {
+				out = append(out, row.Name)
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// DependentsOf is the exported form of dependentsOf for the
+// /plugins/{name}/dependents handler.
+func (m *Manager) DependentsOf(ctx context.Context, name string) ([]string, error) {
+	return m.dependentsOf(ctx, name)
+}
+
+// Resolver returns a fresh resolver wired to this Manager. Useful for
+// the /plugins/{name}/dependencies endpoint.
+func (m *Manager) Resolver() *Resolver {
+	return NewResolver(m.dependencyLookup(), installedLookup{m: m})
+}
+
+// ManifestForPlanning fetches and parses a plugin's manifest from the
+// configured marketplace WITHOUT installing anything. Used by
+// /plugins/{name}/dependencies to render a tree for an uninstalled
+// plugin.
+func (m *Manager) ManifestForPlanning(ctx context.Context, name, version string) (*Plugin, error) {
+	tarball, err := m.fetchVerifiedTarball(ctx, name, version, "")
+	if err != nil {
+		return nil, err
+	}
+	tmp, err := os.MkdirTemp("", "nova-plugin-plan-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmp)
+	manifestBytes, _, err := ExtractTarball(tarball, tmp)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManifest(manifestBytes)
 }

@@ -11,115 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Plugin is one row of the plugins table.
-type Plugin struct {
-	ID          pgtype.UUID        `json:"id"`
-	Name        string             `json:"name"`
-	Version     string             `json:"version"`
-	Manifest    []byte             `json:"manifest"`
-	Status      string             `json:"status"`
-	InstalledAt pgtype.Timestamptz `json:"installed_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-// PluginResource is one row of the plugin_resources table.
-type PluginResource struct {
-	ID           int64              `json:"id"`
-	PluginID     pgtype.UUID        `json:"plugin_id"`
-	ResourceType string             `json:"resource_type"`
-	ResourceID   string             `json:"resource_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-const createPlugin = `-- name: CreatePlugin :one
-INSERT INTO plugins (id, name, version, manifest, status)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, version, manifest, status, installed_at, updated_at
-`
-
-type CreatePluginParams struct {
-	ID       pgtype.UUID `json:"id"`
-	Name     string      `json:"name"`
-	Version  string      `json:"version"`
-	Manifest []byte      `json:"manifest"`
-	Status   string      `json:"status"`
-}
-
-func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error) {
-	row := q.db.QueryRow(ctx, createPlugin,
-		arg.ID, arg.Name, arg.Version, arg.Manifest, arg.Status,
-	)
-	var i Plugin
-	err := row.Scan(&i.ID, &i.Name, &i.Version, &i.Manifest, &i.Status, &i.InstalledAt, &i.UpdatedAt)
-	return i, err
-}
-
-const updatePlugin = `-- name: UpdatePlugin :one
-UPDATE plugins
-SET version = $2, manifest = $3, status = $4, updated_at = now()
-WHERE name = $1
-RETURNING id, name, version, manifest, status, installed_at, updated_at
-`
-
-type UpdatePluginParams struct {
-	Name     string `json:"name"`
-	Version  string `json:"version"`
-	Manifest []byte `json:"manifest"`
-	Status   string `json:"status"`
-}
-
-func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plugin, error) {
-	row := q.db.QueryRow(ctx, updatePlugin, arg.Name, arg.Version, arg.Manifest, arg.Status)
-	var i Plugin
-	err := row.Scan(&i.ID, &i.Name, &i.Version, &i.Manifest, &i.Status, &i.InstalledAt, &i.UpdatedAt)
-	return i, err
-}
-
-const getPluginByName = `-- name: GetPluginByName :one
-SELECT id, name, version, manifest, status, installed_at, updated_at
-FROM plugins WHERE name = $1
-`
-
-func (q *Queries) GetPluginByName(ctx context.Context, name string) (Plugin, error) {
-	row := q.db.QueryRow(ctx, getPluginByName, name)
-	var i Plugin
-	err := row.Scan(&i.ID, &i.Name, &i.Version, &i.Manifest, &i.Status, &i.InstalledAt, &i.UpdatedAt)
-	return i, err
-}
-
-const listPlugins = `-- name: ListPlugins :many
-SELECT id, name, version, manifest, status, installed_at, updated_at
-FROM plugins ORDER BY name
-`
-
-func (q *Queries) ListPlugins(ctx context.Context) ([]Plugin, error) {
-	rows, err := q.db.Query(ctx, listPlugins)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Plugin
-	for rows.Next() {
-		var i Plugin
-		if err := rows.Scan(&i.ID, &i.Name, &i.Version, &i.Manifest, &i.Status, &i.InstalledAt, &i.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, i)
-	}
-	return out, rows.Err()
-}
-
-const deletePlugin = `-- name: DeletePlugin :exec
-DELETE FROM plugins WHERE name = $1
-`
-
-func (q *Queries) DeletePlugin(ctx context.Context, name string) error {
-	_, err := q.db.Exec(ctx, deletePlugin, name)
-	return err
-}
-
 const addPluginResource = `-- name: AddPluginResource :exec
-INSERT INTO plugin_resources (plugin_id, resource_type, resource_id) VALUES ($1, $2, $3)
+INSERT INTO plugin_resources (plugin_id, resource_type, resource_id)
+VALUES ($1, $2, $3)
 `
 
 type AddPluginResourceParams struct {
@@ -133,26 +27,54 @@ func (q *Queries) AddPluginResource(ctx context.Context, arg AddPluginResourcePa
 	return err
 }
 
-const listPluginResources = `-- name: ListPluginResources :many
-SELECT id, plugin_id, resource_type, resource_id, created_at
-FROM plugin_resources WHERE plugin_id = $1 ORDER BY id
+const createPlugin = `-- name: CreatePlugin :one
+
+INSERT INTO plugins (id, name, version, manifest, status)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, version, manifest, status, installed_at, updated_at
 `
 
-func (q *Queries) ListPluginResources(ctx context.Context, pluginID pgtype.UUID) ([]PluginResource, error) {
-	rows, err := q.db.Query(ctx, listPluginResources, pluginID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []PluginResource
-	for rows.Next() {
-		var i PluginResource
-		if err := rows.Scan(&i.ID, &i.PluginID, &i.ResourceType, &i.ResourceID, &i.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, i)
-	}
-	return out, rows.Err()
+type CreatePluginParams struct {
+	ID       pgtype.UUID `json:"id"`
+	Name     string      `json:"name"`
+	Version  string      `json:"version"`
+	Manifest []byte      `json:"manifest"`
+	Status   string      `json:"status"`
+}
+
+// =====================================================================
+// Tier 2 plugin engine queries. Hand-written DAO at
+// internal/plugins/store.go is the canonical caller in v1; sqlc
+// regeneration of these queries lands when the next bulk regen runs.
+// =====================================================================
+func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error) {
+	row := q.db.QueryRow(ctx, createPlugin,
+		arg.ID,
+		arg.Name,
+		arg.Version,
+		arg.Manifest,
+		arg.Status,
+	)
+	var i Plugin
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Version,
+		&i.Manifest,
+		&i.Status,
+		&i.InstalledAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deletePlugin = `-- name: DeletePlugin :exec
+DELETE FROM plugins WHERE name = $1
+`
+
+func (q *Queries) DeletePlugin(ctx context.Context, name string) error {
+	_, err := q.db.Exec(ctx, deletePlugin, name)
+	return err
 }
 
 const deletePluginResources = `-- name: DeletePluginResources :exec
@@ -162,4 +84,129 @@ DELETE FROM plugin_resources WHERE plugin_id = $1
 func (q *Queries) DeletePluginResources(ctx context.Context, pluginID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deletePluginResources, pluginID)
 	return err
+}
+
+const getPluginByName = `-- name: GetPluginByName :one
+SELECT id, name, version, manifest, status, installed_at, updated_at
+FROM plugins
+WHERE name = $1
+`
+
+func (q *Queries) GetPluginByName(ctx context.Context, name string) (Plugin, error) {
+	row := q.db.QueryRow(ctx, getPluginByName, name)
+	var i Plugin
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Version,
+		&i.Manifest,
+		&i.Status,
+		&i.InstalledAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listPluginResources = `-- name: ListPluginResources :many
+SELECT id, plugin_id, resource_type, resource_id, created_at
+FROM plugin_resources
+WHERE plugin_id = $1
+ORDER BY id
+`
+
+func (q *Queries) ListPluginResources(ctx context.Context, pluginID pgtype.UUID) ([]PluginResource, error) {
+	rows, err := q.db.Query(ctx, listPluginResources, pluginID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PluginResource
+	for rows.Next() {
+		var i PluginResource
+		if err := rows.Scan(
+			&i.ID,
+			&i.PluginID,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlugins = `-- name: ListPlugins :many
+SELECT id, name, version, manifest, status, installed_at, updated_at
+FROM plugins
+ORDER BY name
+`
+
+func (q *Queries) ListPlugins(ctx context.Context) ([]Plugin, error) {
+	rows, err := q.db.Query(ctx, listPlugins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Plugin
+	for rows.Next() {
+		var i Plugin
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Version,
+			&i.Manifest,
+			&i.Status,
+			&i.InstalledAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updatePlugin = `-- name: UpdatePlugin :one
+UPDATE plugins
+SET version = $2,
+    manifest = $3,
+    status = $4,
+    updated_at = now()
+WHERE name = $1
+RETURNING id, name, version, manifest, status, installed_at, updated_at
+`
+
+type UpdatePluginParams struct {
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Manifest []byte `json:"manifest"`
+	Status   string `json:"status"`
+}
+
+func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plugin, error) {
+	row := q.db.QueryRow(ctx, updatePlugin,
+		arg.Name,
+		arg.Version,
+		arg.Manifest,
+		arg.Status,
+	)
+	var i Plugin
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Version,
+		&i.Manifest,
+		&i.Status,
+		&i.InstalledAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

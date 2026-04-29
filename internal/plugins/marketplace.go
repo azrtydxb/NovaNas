@@ -29,14 +29,16 @@ type Index struct {
 
 // IndexPlugin is one plugin entry — name + a list of available versions.
 type IndexPlugin struct {
-	Name        string         `json:"name"`
-	DisplayName string         `json:"displayName,omitempty"`
-	Vendor      string         `json:"vendor"`
-	Category    string         `json:"category"`
-	Description string         `json:"description,omitempty"`
-	Icon        string         `json:"icon,omitempty"`
-	Homepage    string         `json:"homepage,omitempty"`
-	Versions    []IndexVersion `json:"versions"`
+	Name            string         `json:"name"`
+	DisplayName     string         `json:"displayName,omitempty"`
+	Vendor          string         `json:"vendor"`
+	Category        string         `json:"category"`
+	DisplayCategory string         `json:"displayCategory,omitempty"`
+	Tags            []string       `json:"tags,omitempty"`
+	Description     string         `json:"description,omitempty"`
+	Icon            string         `json:"icon,omitempty"`
+	Homepage        string         `json:"homepage,omitempty"`
+	Versions        []IndexVersion `json:"versions"`
 }
 
 // IndexVersion is one release of a plugin.
@@ -70,6 +72,13 @@ func NewMarketplaceClient(indexURL string, h *http.Client) *MarketplaceClient {
 		h = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &MarketplaceClient{IndexURL: indexURL, HTTP: h}
+}
+
+// NewMarketplaceClientFor constructs a single-source MarketplaceClient
+// for a registered Marketplace row. Used internally by
+// MultiMarketplaceClient to wrap each registered source.
+func NewMarketplaceClientFor(m Marketplace, h *http.Client) *MarketplaceClient {
+	return NewMarketplaceClient(m.IndexURL, h)
 }
 
 // FetchIndex returns the cached index when fresh, otherwise refreshes.

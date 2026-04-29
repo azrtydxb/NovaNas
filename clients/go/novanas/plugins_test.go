@@ -84,3 +84,63 @@ func TestClient_InstallPlugin_NameRequired(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestClient_ListPluginIndexWithOptions(t *testing.T) {
+	c, srv := newPluginsTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/plugins/index" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("displayCategory") != "storage" {
+			t.Errorf("missing displayCategory: %s", r.URL.RawQuery)
+		}
+		tags := q["tag"]
+		if len(tags) != 2 || tags[0] != "s3" || tags[1] != "object" {
+			t.Errorf("tags=%+v", tags)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(PluginIndex{
+			Version: 1,
+			Plugins: []PluginIndexEntry{{
+				Name:            "object-storage",
+				DisplayCategory: "storage",
+				Tags:            []string{"s3", "object", "backup-target"},
+			}},
+		})
+	})
+	defer srv.Close()
+	idx, err := c.ListPluginIndexWithOptions(context.Background(), ListPluginIndexOptions{
+		DisplayCategory: "storage",
+		Tags:            []string{"s3", "object"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idx.Plugins) != 1 || idx.Plugins[0].DisplayCategory != "storage" {
+		t.Errorf("idx=%+v", idx)
+	}
+	if len(idx.Plugins[0].Tags) != 3 {
+		t.Errorf("tags=%+v", idx.Plugins[0].Tags)
+	}
+}
+
+func TestClient_ListPluginCategories(t *testing.T) {
+	c, srv := newPluginsTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/plugins/categories" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]PluginCategoryCount{
+			{Category: "storage", DisplayName: "Storage", Count: 2},
+			{Category: "photos", DisplayName: "Photos", Count: 1},
+		})
+	})
+	defer srv.Close()
+	got, err := c.ListPluginCategories(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Category != "storage" || got[0].Count != 2 {
+		t.Errorf("got=%+v", got)
+	}
+}

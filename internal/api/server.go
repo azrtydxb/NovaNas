@@ -99,6 +99,11 @@ type Deps struct {
 	PluginsRouter  *plugins.Router
 	PluginsUI      *plugins.UIAssets
 	PluginsMarket  *plugins.MarketplaceClient
+	// MarketplacesStore + MarketplacesMulti drive the multi-source
+	// marketplace registry surfaced at /marketplaces. When Store is
+	// nil the routes respond 503.
+	MarketplacesStore plugins.MarketplacesStore
+	MarketplacesMulti *plugins.MultiMarketplaceClient
 
 	// Auth wiring. If Verifier is nil OR AuthDisabled is true, the
 	// /api/v1 group does not enforce authentication or per-route
@@ -804,12 +809,34 @@ func New(d Deps) *Server {
 				Router:      d.PluginsRouter,
 				UI:          d.PluginsUI,
 			}
+			// Preview handler is logically distinct from PluginsHandler:
+			// it needs only the marketplace + verifier, not the engine
+			// Manager. We borrow Verifier from the Manager so wiring
+			// stays single-source.
+			var previewVerifier *plugins.Verifier
+			if d.PluginsMgr != nil {
+				previewVerifier = d.PluginsMgr.Verifier
+			}
+			var previewAuditor handlers.PluginsPreviewAuditor
+			if d.Store != nil {
+				previewAuditor = d.Store.Queries
+			}
+			pluginsPreviewH := &handlers.PluginsPreviewHandler{
+				Logger:      d.Logger,
+				Marketplace: d.PluginsMarket,
+				Verifier:    previewVerifier,
+				Auditor:     previewAuditor,
+			}
 			r.Group(func(r chi.Router) {
 				r.Use(require(auth.PermPluginsRead))
 				r.Get("/plugins/index", pluginsH.Index)
+				r.Get("/plugins/categories", pluginsH.Categories)
 				r.Get("/plugins/index/{name}", pluginsH.IndexEntry)
+				r.Get("/plugins/index/{name}/manifest", pluginsPreviewH.Preview)
 				r.Get("/plugins", pluginsH.List)
 				r.Get("/plugins/{name}", pluginsH.Get)
+				r.Get("/plugins/{name}/dependencies", pluginsH.Dependencies)
+				r.Get("/plugins/{name}/dependents", pluginsH.Dependents)
 				// Static UI bundle. Open to any read-capable identity so
 				// Aurora can lazy-load the React module without escalating.
 				r.Get("/plugins/{name}/ui/*", pluginsH.ServeUI)
@@ -829,6 +856,37 @@ func New(d Deps) *Server {
 			r.Group(func(r chi.Router) {
 				r.Use(require(auth.PermPluginsRead))
 				r.HandleFunc("/plugins/{name}/api/*", pluginsH.ServeProxy)
+			})
+		}
+
+		// ---- Marketplaces registry (multi-source) ----
+		// The locked novanas-official entry is seeded at boot. Operators
+		// add other marketplaces (TrueCharts, third-party publishers,
+		// internal mirrors) via POST. Adding a marketplace expands the
+		// trust surface, so write paths are admin-gated.
+		{
+			marketsH := &handlers.MarketplacesHandler{
+				Logger: d.Logger,
+				Store:  d.MarketplacesStore,
+				Multi:  d.MarketplacesMulti,
+				AddedBy: func(req *http.Request) string {
+					if id, ok := auth.IdentityFromContext(req.Context()); ok && id != nil {
+						return id.Subject
+					}
+					return ""
+				},
+			}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermMarketplacesRead))
+				r.Get("/marketplaces", marketsH.List)
+				r.Get("/marketplaces/{id}", marketsH.Get)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermMarketplacesAdmin))
+				r.Post("/marketplaces", marketsH.Create)
+				r.Patch("/marketplaces/{id}", marketsH.Patch)
+				r.Delete("/marketplaces/{id}", marketsH.Delete)
+				r.Post("/marketplaces/{id}/refresh-trust-key", marketsH.RefreshTrustKey)
 			})
 		}
 

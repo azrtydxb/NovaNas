@@ -93,6 +93,14 @@ const (
 	PermPluginsRead  Permission = "nova:plugins:read"
 	PermPluginsWrite Permission = "nova:plugins:write"
 	PermPluginsAdmin Permission = "nova:plugins:admin"
+
+	// Marketplaces registry. Read covers list/detail; Admin gates
+	// add/remove/disable/refresh-trust-key — adding a marketplace
+	// expands the trust surface (every install signed by that
+	// marketplace's pinned key is now accepted) so the bar is the
+	// same as PermPluginsAdmin.
+	PermMarketplacesRead  Permission = "nova:marketplaces:read"
+	PermMarketplacesAdmin Permission = "nova:marketplaces:admin"
 )
 
 // RoleMap maps Keycloak role names to a set of Permissions. Operators
@@ -120,6 +128,7 @@ var DefaultRoleMap = RoleMap{
 		PermVMRead, PermVMWrite,
 		PermWorkloadsRead, PermWorkloadsWrite,
 		PermPluginsRead, PermPluginsWrite, PermPluginsAdmin,
+		PermMarketplacesRead, PermMarketplacesAdmin,
 	},
 	"nova-operator": {
 		PermStorageRead, PermStorageWrite,
@@ -138,6 +147,7 @@ var DefaultRoleMap = RoleMap{
 		PermVMRead, PermVMWrite,
 		PermWorkloadsRead, PermWorkloadsWrite,
 		PermPluginsRead,
+		PermMarketplacesRead,
 	},
 	// Viewers intentionally do NOT receive PermAuditRead. The audit log
 	// reveals who has accessed which resources; granting it to read-only
@@ -154,6 +164,7 @@ var DefaultRoleMap = RoleMap{
 		PermVMRead,
 		PermWorkloadsRead,
 		PermPluginsRead,
+		PermMarketplacesRead,
 		PermNotificationsEventsRead, PermNotificationsEventsWrite,
 	},
 	"nova-system-admin": {

@@ -421,6 +421,23 @@ func main() {
 	pluginsMarket := plugins.NewMarketplaceClient(cfg.MarketplaceIndexURL, nil)
 	pluginsVerifier := plugins.NewVerifier(cfg.MarketplaceTrustKeyPath)
 	pluginsVerifier.CosignBin = cfg.MarketplaceCosignBin
+
+	// Multi-source marketplace registry. The locked novanas-official
+	// entry is seeded on first boot from MARKETPLACE_INDEX_URL +
+	// MARKETPLACE_TRUST_KEY_PATH (backward compat). Failures here are
+	// non-fatal: the API still starts, and operators can add the
+	// official entry later via POST /marketplaces.
+	marketplacesStore := plugins.NewPgxMarketplacesStore(st.Queries)
+	if seeded, created, err := plugins.SeedOfficialIfMissing(ctx, marketplacesStore, cfg.MarketplaceIndexURL, cfg.MarketplaceTrustKeyPath); err != nil {
+		logger.Warn("marketplaces: seed novanas-official failed; multi-source path may degrade",
+			"err", err)
+	} else if created {
+		logger.Info("marketplaces: seeded novanas-official", "id", seeded.ID.String(), "index_url", seeded.IndexURL)
+	} else {
+		logger.Info("marketplaces: novanas-official already present", "id", seeded.ID.String())
+	}
+	multiMarket := plugins.NewMultiMarketplaceClient(marketplacesStore, nil)
+	multiMarket.PluginsRoot = cfg.PluginsRoot
 	pluginsRouter := plugins.NewRouter(logger, nil)
 	pluginsUI := plugins.NewUIAssets(cfg.PluginsRoot)
 	pluginsProv := buildPluginsProvisioner(logger, datasetMgr, keycloakAdmin, secretsMgr, cfg)
@@ -434,6 +451,7 @@ func main() {
 		Logger:      logger,
 		Queries:     st.Queries,
 		Marketplace: pluginsMarket,
+		Multi:       multiMarket,
 		Verifier:    pluginsVerifier,
 		Provisioner: pluginsProv,
 		Router:      pluginsRouter,
@@ -477,6 +495,9 @@ func main() {
 		PluginsRouter: pluginsRouter,
 		PluginsUI:     pluginsUI,
 		PluginsMarket: pluginsMarket,
+
+		MarketplacesStore: marketplacesStore,
+		MarketplacesMulti: multiMarket,
 
 		Verifier:     verifier,
 		RoleMap:      auth.DefaultRoleMap,

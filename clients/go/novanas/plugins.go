@@ -21,14 +21,38 @@ type PluginIndexVersion struct {
 
 // PluginIndexEntry is one plugin in the marketplace catalog.
 type PluginIndexEntry struct {
-	Name        string                `json:"name"`
-	DisplayName string                `json:"displayName,omitempty"`
-	Vendor      string                `json:"vendor"`
-	Category    string                `json:"category"`
-	Description string                `json:"description,omitempty"`
-	Icon        string                `json:"icon,omitempty"`
-	Homepage    string                `json:"homepage,omitempty"`
-	Versions    []PluginIndexVersion `json:"versions"`
+	Name            string               `json:"name"`
+	DisplayName     string               `json:"displayName,omitempty"`
+	Vendor          string               `json:"vendor"`
+	Category        string               `json:"category"`
+	DisplayCategory string               `json:"displayCategory,omitempty"`
+	Tags            []string             `json:"tags,omitempty"`
+	Description     string               `json:"description,omitempty"`
+	Icon            string               `json:"icon,omitempty"`
+	Homepage        string               `json:"homepage,omitempty"`
+	Versions        []PluginIndexVersion `json:"versions"`
+}
+
+// PluginCategoryCount is one entry in the GET /plugins/categories
+// response — Aurora's App Center sidebar uses this to render the
+// category list with counts.
+type PluginCategoryCount struct {
+	Category    string `json:"category"`
+	DisplayName string `json:"displayName"`
+	Count       int    `json:"count"`
+}
+
+// ListPluginIndexOptions filters the marketplace catalog server-side.
+// Empty fields are not sent.
+type ListPluginIndexOptions struct {
+	// Refresh bypasses the server's 15-minute cache.
+	Refresh bool
+	// DisplayCategory filters to plugins whose displayCategory matches
+	// (must be one of the 14 known values; the server rejects others
+	// with 400).
+	DisplayCategory string
+	// Tags filters to plugins that have ALL listed tags (AND semantics).
+	Tags []string
 }
 
 // PluginIndex is the GET /plugins/index response.
@@ -72,15 +96,42 @@ type PluginUpgradeRequest struct {
 // ListPluginIndex returns the marketplace catalog. force=true bypasses
 // the server's 15-minute cache.
 func (c *Client) ListPluginIndex(ctx context.Context, force bool) (*PluginIndex, error) {
+	return c.ListPluginIndexWithOptions(ctx, ListPluginIndexOptions{Refresh: force})
+}
+
+// ListPluginIndexWithOptions is the filtered variant of ListPluginIndex.
+// DisplayCategory and Tags are applied server-side; Tags has AND
+// semantics (a plugin must carry every tag listed).
+func (c *Client) ListPluginIndexWithOptions(ctx context.Context, opts ListPluginIndexOptions) (*PluginIndex, error) {
 	q := url.Values{}
-	if force {
+	if opts.Refresh {
 		q.Set("refresh", "true")
+	}
+	if opts.DisplayCategory != "" {
+		q.Set("displayCategory", opts.DisplayCategory)
+	}
+	for _, t := range opts.Tags {
+		if t != "" {
+			q.Add("tag", t)
+		}
 	}
 	var out PluginIndex
 	if _, err := c.do(ctx, http.MethodGet, "/plugins/index", q, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ListPluginCategories returns the 14 display categories with the
+// number of plugins in each. The list is stable and includes zero-count
+// entries so Aurora's sidebar layout doesn't shift as plugins are
+// installed/removed.
+func (c *Client) ListPluginCategories(ctx context.Context) ([]PluginCategoryCount, error) {
+	var out []PluginCategoryCount
+	if _, err := c.do(ctx, http.MethodGet, "/plugins/categories", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // GetPluginIndexEntry returns one entry from the marketplace catalog.

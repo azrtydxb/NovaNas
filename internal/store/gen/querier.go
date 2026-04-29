@@ -11,7 +11,18 @@ import (
 )
 
 type Querier interface {
+	AddPluginResource(ctx context.Context, arg AddPluginResourceParams) error
 	CancelJob(ctx context.Context, id pgtype.UUID) error
+	// =====================================================================
+	// Marketplaces registry queries (Tier 2 plugin engine).
+	// =====================================================================
+	CreateMarketplace(ctx context.Context, arg CreateMarketplaceParams) (Marketplace, error)
+	// =====================================================================
+	// Tier 2 plugin engine queries. Hand-written DAO at
+	// internal/plugins/store.go is the canonical caller in v1; sqlc
+	// regeneration of these queries lands when the next bulk regen runs.
+	// =====================================================================
+	CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error)
 	// =====================================================================
 	// Replication jobs + runs (internal/replication subsystem)
 	// =====================================================================
@@ -32,6 +43,9 @@ type Querier interface {
 	// Snapshot schedules
 	// =====================================================================
 	CreateSnapshotSchedule(ctx context.Context, arg CreateSnapshotScheduleParams) (SnapshotSchedule, error)
+	DeleteMarketplace(ctx context.Context, id pgtype.UUID) error
+	DeletePlugin(ctx context.Context, name string) error
+	DeletePluginResources(ctx context.Context, pluginID pgtype.UUID) error
 	DeleteReplicationJob(ctx context.Context, id pgtype.UUID) error
 	DeleteReplicationSchedule(ctx context.Context, id pgtype.UUID) error
 	DeleteReplicationTarget(ctx context.Context, id pgtype.UUID) error
@@ -39,7 +53,10 @@ type Querier interface {
 	DeleteScrubPolicy(ctx context.Context, id pgtype.UUID) error
 	DeleteSnapshotSchedule(ctx context.Context, id pgtype.UUID) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetMarketplace(ctx context.Context, id pgtype.UUID) (Marketplace, error)
+	GetMarketplaceByName(ctx context.Context, name string) (Marketplace, error)
 	GetNotification(ctx context.Context, id pgtype.UUID) (Notification, error)
+	GetPluginByName(ctx context.Context, name string) (Plugin, error)
 	GetReplicationJob(ctx context.Context, id pgtype.UUID) (ReplicationJob, error)
 	GetReplicationSchedule(ctx context.Context, id pgtype.UUID) (ReplicationSchedule, error)
 	GetReplicationTarget(ctx context.Context, id pgtype.UUID) (ReplicationTarget, error)
@@ -59,15 +76,19 @@ type Querier interface {
 	InsertNotification(ctx context.Context, arg InsertNotificationParams) (Notification, error)
 	InsertReplicationRun(ctx context.Context, arg InsertReplicationRunParams) (ReplicationRun, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListEnabledMarketplaces(ctx context.Context) ([]Marketplace, error)
 	ListEnabledReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
 	ListEnabledReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
 	ListEnabledScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListEnabledSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
+	ListMarketplaces(ctx context.Context) ([]Marketplace, error)
 	// Filter columns are nullable; NULL means "don't filter". Cursor predicate
 	// (created_at, id) yields a stable DESC ordering even under concurrent
 	// inserts.
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
+	ListPluginResources(ctx context.Context, pluginID pgtype.UUID) ([]PluginResource, error)
+	ListPlugins(ctx context.Context) ([]Plugin, error)
 	ListReplicationJobs(ctx context.Context) ([]ReplicationJob, error)
 	ListReplicationRuns(ctx context.Context, arg ListReplicationRunsParams) ([]ReplicationRun, error)
 	ListReplicationRunsAfter(ctx context.Context, arg ListReplicationRunsAfterParams) ([]ReplicationRun, error)
@@ -107,6 +128,9 @@ type Querier interface {
 	// Counts notifications the user hasn't read or dismissed, and that aren't
 	// currently snoozed. Used to populate the bell badge.
 	UnreadCountForUser(ctx context.Context, userSubject string) (int64, error)
+	UpdateMarketplaceEnabled(ctx context.Context, arg UpdateMarketplaceEnabledParams) (Marketplace, error)
+	UpdateMarketplaceTrustKey(ctx context.Context, arg UpdateMarketplaceTrustKeyParams) (Marketplace, error)
+	UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plugin, error)
 	UpdateReplicationJob(ctx context.Context, arg UpdateReplicationJobParams) (ReplicationJob, error)
 	UpdateReplicationRun(ctx context.Context, arg UpdateReplicationRunParams) (ReplicationRun, error)
 	UpdateReplicationSchedule(ctx context.Context, arg UpdateReplicationScheduleParams) (ReplicationSchedule, error)

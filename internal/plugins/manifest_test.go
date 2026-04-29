@@ -121,3 +121,164 @@ func TestParseManifest_BadDeploymentType(t *testing.T) {
 		t.Fatal("expected deployment type rejection")
 	}
 }
+
+const manifestWithDeps = `apiVersion: novanas.io/v1
+kind: Plugin
+metadata:
+  name: app
+  version: 1.0.0
+  vendor: ACME
+spec:
+  description: depends on object-storage
+  category: utility
+  deployment:
+    type: systemd
+    unit: app.service
+  dependencies:
+    - name: object-storage
+      versionConstraint: ">=1.0.0,<2.0.0"
+      source: tier-2
+    - name: zfs-replication
+      source: bundled
+`
+
+func TestParseManifest_GoodDependencies(t *testing.T) {
+	p, err := ParseManifest([]byte(manifestWithDeps))
+	if err != nil {
+		t.Fatalf("expected good manifest, got %v", err)
+	}
+	if len(p.Spec.Dependencies) != 2 {
+		t.Fatalf("expected 2 deps, got %d", len(p.Spec.Dependencies))
+	}
+	if p.Spec.Dependencies[0].Source != DependencySourceTier2 {
+		t.Errorf("dep[0].source=%q", p.Spec.Dependencies[0].Source)
+	}
+	if p.Spec.Dependencies[1].Source != DependencySourceBundled {
+		t.Errorf("dep[1].source=%q", p.Spec.Dependencies[1].Source)
+	}
+}
+
+func TestParseManifest_BadDependencyName(t *testing.T) {
+	bad := strings.Replace(manifestWithDeps, "name: object-storage", "name: BadName!", 1)
+	if _, err := ParseManifest([]byte(bad)); err == nil {
+		t.Fatal("expected bad dep name rejection")
+	}
+}
+
+func TestParseManifest_BadDependencySource(t *testing.T) {
+	bad := strings.Replace(manifestWithDeps, "source: tier-2", "source: rogue", 1)
+	if _, err := ParseManifest([]byte(bad)); err == nil {
+		t.Fatal("expected bad source rejection")
+	}
+}
+
+func TestParseManifest_BadDependencyConstraint(t *testing.T) {
+	bad := strings.Replace(manifestWithDeps, `versionConstraint: ">=1.0.0,<2.0.0"`, `versionConstraint: "garbage"`, 1)
+	if _, err := ParseManifest([]byte(bad)); err == nil {
+		t.Fatal("expected bad constraint rejection")
+	}
+}
+
+func TestParseManifest_SelfDependency(t *testing.T) {
+	bad := strings.Replace(manifestWithDeps, "name: object-storage", "name: app", 1)
+	if _, err := ParseManifest([]byte(bad)); err == nil {
+		t.Fatal("expected self-dep rejection")
+	}
+}
+
+// --- displayCategory + tags ----------------------------------------------
+
+func TestParseManifest_DisplayCategoryDefaultFromPrivilege(t *testing.T) {
+	// goodManifest has category=storage and no displayCategory; the
+	// fill-in helper must set displayCategory=storage.
+	p, err := ParseManifest([]byte(goodManifest))
+	if err != nil {
+		t.Fatalf("expected good manifest, got %v", err)
+	}
+	if p.Spec.DisplayCategory != DisplayStorage {
+		t.Errorf("displayCategory: want %q, got %q", DisplayStorage, p.Spec.DisplayCategory)
+	}
+}
+
+func TestParseManifest_DisplayCategoryExplicit(t *testing.T) {
+	manifest := strings.Replace(goodManifest,
+		"  category: storage\n",
+		"  category: storage\n  displayCategory: backup\n  tags: [\"s3\", \"backup-target\"]\n",
+		1)
+	p, err := ParseManifest([]byte(manifest))
+	if err != nil {
+		t.Fatalf("expected good manifest, got %v", err)
+	}
+	if p.Spec.DisplayCategory != DisplayBackup {
+		t.Errorf("displayCategory=%q", p.Spec.DisplayCategory)
+	}
+	if len(p.Spec.Tags) != 2 || p.Spec.Tags[0] != "s3" {
+		t.Errorf("tags=%+v", p.Spec.Tags)
+	}
+}
+
+func TestParseManifest_DisplayCategoryUnknown(t *testing.T) {
+	manifest := strings.Replace(goodManifest,
+		"  category: storage\n",
+		"  category: storage\n  displayCategory: bogus\n",
+		1)
+	if _, err := ParseManifest([]byte(manifest)); err == nil {
+		t.Fatal("expected unknown displayCategory rejection")
+	} else if !strings.Contains(err.Error(), "displayCategory") {
+		t.Errorf("error should mention displayCategory, got %v", err)
+	}
+}
+
+func TestParseManifest_TagBadChars(t *testing.T) {
+	manifest := strings.Replace(goodManifest,
+		"  category: storage\n",
+		"  category: storage\n  tags: [\"BadTag\"]\n",
+		1)
+	if _, err := ParseManifest([]byte(manifest)); err == nil {
+		t.Fatal("expected bad tag rejection")
+	}
+}
+
+func TestParseManifest_TagTooLong(t *testing.T) {
+	long := strings.Repeat("a", MaxTagLength+1)
+	manifest := strings.Replace(goodManifest,
+		"  category: storage\n",
+		"  category: storage\n  tags: [\""+long+"\"]\n",
+		1)
+	if _, err := ParseManifest([]byte(manifest)); err == nil {
+		t.Fatal("expected tag-length rejection")
+	}
+}
+
+func TestParseManifest_TooManyTags(t *testing.T) {
+	tags := make([]string, MaxTags+1)
+	for i := range tags {
+		tags[i] = "\"t" + string(rune('a'+i%26)) + "\""
+	}
+	manifest := strings.Replace(goodManifest,
+		"  category: storage\n",
+		"  category: storage\n  tags: ["+strings.Join(tags, ",")+"]\n",
+		1)
+	if _, err := ParseManifest([]byte(manifest)); err == nil {
+		t.Fatal("expected too-many-tags rejection")
+	}
+}
+
+func TestDefaultDisplayCategoryFor(t *testing.T) {
+	cases := []struct {
+		in   Category
+		want DisplayCategory
+	}{
+		{CategoryStorage, DisplayStorage},
+		{CategoryNetworking, DisplayNetwork},
+		{CategoryObservability, DisplayObservability},
+		{CategoryDeveloper, DisplayDeveloper},
+		{CategoryUtility, DisplayUtilities},
+		{Category("unknown"), DisplayCategory("")},
+	}
+	for _, tc := range cases {
+		if got := DefaultDisplayCategoryFor(tc.in); got != tc.want {
+			t.Errorf("DefaultDisplayCategoryFor(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+}
