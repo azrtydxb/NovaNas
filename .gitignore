@@ -24,3 +24,4 @@ coverage.txt
 # TS client generation artifacts
 clients/typescript/node_modules/
 clients/typescript/src/
+/nova-bao-unseal
