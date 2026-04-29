@@ -70,6 +70,20 @@ type ResourceMetadatum struct {
 	Tags        []byte  `json:"tags"`
 }
 
+type ScrubPolicy struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Pools       string             `json:"pools"`
+	Cron        string             `json:"cron"`
+	Priority    string             `json:"priority"`
+	Enabled     bool               `json:"enabled"`
+	Builtin     bool               `json:"builtin"`
+	LastFiredAt pgtype.Timestamptz `json:"last_fired_at"`
+	LastError   *string            `json:"last_error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type SnapshotSchedule struct {
 	ID               pgtype.UUID        `json:"id"`
 	Dataset          string             `json:"dataset"`

@@ -7,6 +7,8 @@ package storedb
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const insertAudit = `-- name: InsertAudit :exec
@@ -64,6 +66,129 @@ func (q *Queries) ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLo
 			&i.RequestID,
 			&i.Payload,
 			&i.Result,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAudit = `-- name: SearchAudit :many
+SELECT id, ts, actor, action, target, request_id, payload, result
+FROM audit_log
+WHERE ($2::text   IS NULL OR actor  = $2)
+  AND ($3::text  IS NULL OR action = $3)
+  AND ($4::text  IS NULL OR result = $4)
+  AND ($5::text IS NULL OR target LIKE $5 || '%')
+  AND ($6::timestamptz IS NULL OR ts >= $6)
+  AND ($7::timestamptz IS NULL OR ts <  $7)
+  AND ($8::timestamptz IS NULL
+       OR ts <  $8
+       OR (ts = $8 AND id < $9::bigint))
+ORDER BY ts DESC, id DESC
+LIMIT $1
+`
+
+type SearchAuditParams struct {
+	Limit        int32              `json:"limit"`
+	Actor        *string            `json:"actor"`
+	Action       *string            `json:"action"`
+	Result       *string            `json:"result"`
+	TargetPrefix *string            `json:"target_prefix"`
+	Since        pgtype.Timestamptz `json:"since"`
+	Until        pgtype.Timestamptz `json:"until"`
+	CursorTs     pgtype.Timestamptz `json:"cursor_ts"`
+	CursorID     *int64             `json:"cursor_id"`
+}
+
+// Filter columns are nullable; NULL means "don't filter on this column".
+// The (ts, id) cursor predicate yields a stable DESC ordering even under
+// concurrent inserts — new rows always sort before any returned cursor.
+// target prefix match uses LIKE with an explicit anchor ('foo%').
+func (q *Queries) SearchAudit(ctx context.Context, arg SearchAuditParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, searchAudit,
+		arg.Limit,
+		arg.Actor,
+		arg.Action,
+		arg.Result,
+		arg.TargetPrefix,
+		arg.Since,
+		arg.Until,
+		arg.CursorTs,
+		arg.CursorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Ts,
+			&i.Actor,
+			&i.Action,
+			&i.Target,
+			&i.RequestID,
+			&i.Payload,
+			&i.Result,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const summaryAudit = `-- name: SummaryAudit :many
+SELECT
+  COALESCE(actor, '') AS actor,
+  action,
+  result,
+  COUNT(*)::bigint    AS count
+FROM audit_log
+WHERE ($1::timestamptz IS NULL OR ts >= $1)
+  AND ($2::timestamptz IS NULL OR ts <  $2)
+GROUP BY COALESCE(actor, ''), action, result
+ORDER BY count DESC, actor, action, result
+`
+
+type SummaryAuditParams struct {
+	Since pgtype.Timestamptz `json:"since"`
+	Until pgtype.Timestamptz `json:"until"`
+}
+
+type SummaryAuditRow struct {
+	Actor  string `json:"actor"`
+	Action string `json:"action"`
+	Result string `json:"result"`
+	Count  int64  `json:"count"`
+}
+
+// Aggregate counts grouped by (actor, action, result) within an optional
+// time window. Used by the /audit/summary endpoint.
+func (q *Queries) SummaryAudit(ctx context.Context, arg SummaryAuditParams) ([]SummaryAuditRow, error) {
+	rows, err := q.db.Query(ctx, summaryAudit, arg.Since, arg.Until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SummaryAuditRow
+	for rows.Next() {
+		var i SummaryAuditRow
+		if err := rows.Scan(
+			&i.Actor,
+			&i.Action,
+			&i.Result,
+			&i.Count,
 		); err != nil {
 			return nil, err
 		}

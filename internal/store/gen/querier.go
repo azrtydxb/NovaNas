@@ -21,27 +21,36 @@ type Querier interface {
 	// =====================================================================
 	CreateReplicationTarget(ctx context.Context, arg CreateReplicationTargetParams) (ReplicationTarget, error)
 	// =====================================================================
+	// Scrub policies
+	// =====================================================================
+	CreateScrubPolicy(ctx context.Context, arg CreateScrubPolicyParams) (ScrubPolicy, error)
+	// =====================================================================
 	// Snapshot schedules
 	// =====================================================================
 	CreateSnapshotSchedule(ctx context.Context, arg CreateSnapshotScheduleParams) (SnapshotSchedule, error)
 	DeleteReplicationSchedule(ctx context.Context, id pgtype.UUID) error
 	DeleteReplicationTarget(ctx context.Context, id pgtype.UUID) error
 	DeleteResourceMetadata(ctx context.Context, arg DeleteResourceMetadataParams) error
+	DeleteScrubPolicy(ctx context.Context, id pgtype.UUID) error
 	DeleteSnapshotSchedule(ctx context.Context, id pgtype.UUID) error
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetReplicationSchedule(ctx context.Context, id pgtype.UUID) (ReplicationSchedule, error)
 	GetReplicationTarget(ctx context.Context, id pgtype.UUID) (ReplicationTarget, error)
 	GetResourceMetadata(ctx context.Context, arg GetResourceMetadataParams) (ResourceMetadatum, error)
+	GetScrubPolicy(ctx context.Context, id pgtype.UUID) (ScrubPolicy, error)
+	GetScrubPolicyByName(ctx context.Context, name string) (ScrubPolicy, error)
 	GetSnapshotSchedule(ctx context.Context, id pgtype.UUID) (SnapshotSchedule, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertJob(ctx context.Context, arg InsertJobParams) (Job, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	ListEnabledReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
+	ListEnabledScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListEnabledSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
 	ListReplicationSchedules(ctx context.Context) ([]ReplicationSchedule, error)
 	ListReplicationTargets(ctx context.Context) ([]ReplicationTarget, error)
 	ListResourceMetadataByKind(ctx context.Context, kind string) ([]ResourceMetadatum, error)
+	ListScrubPolicies(ctx context.Context) ([]ScrubPolicy, error)
 	ListSnapshotSchedules(ctx context.Context) ([]SnapshotSchedule, error)
 	// Only writes if the row is still 'running'. A user CancelJob between
 	// markRunning and finish flips state to 'cancelled' and the host op is
@@ -52,9 +61,19 @@ type Querier interface {
 	MarkReplicationScheduleFired(ctx context.Context, arg MarkReplicationScheduleFiredParams) error
 	MarkReplicationScheduleResult(ctx context.Context, arg MarkReplicationScheduleResultParams) error
 	MarkRunningInterrupted(ctx context.Context) error
+	MarkScrubPolicyFired(ctx context.Context, arg MarkScrubPolicyFiredParams) error
 	MarkSnapshotScheduleFired(ctx context.Context, arg MarkSnapshotScheduleFiredParams) error
+	// Filter columns are nullable; NULL means "don't filter on this column".
+	// The (ts, id) cursor predicate yields a stable DESC ordering even under
+	// concurrent inserts — new rows always sort before any returned cursor.
+	// target prefix match uses LIKE with an explicit anchor ('foo%').
+	SearchAudit(ctx context.Context, arg SearchAuditParams) ([]AuditLog, error)
+	// Aggregate counts grouped by (actor, action, result) within an optional
+	// time window. Used by the /audit/summary endpoint.
+	SummaryAudit(ctx context.Context, arg SummaryAuditParams) ([]SummaryAuditRow, error)
 	UpdateReplicationSchedule(ctx context.Context, arg UpdateReplicationScheduleParams) (ReplicationSchedule, error)
 	UpdateReplicationTarget(ctx context.Context, arg UpdateReplicationTargetParams) (ReplicationTarget, error)
+	UpdateScrubPolicy(ctx context.Context, arg UpdateScrubPolicyParams) (ScrubPolicy, error)
 	UpdateSnapshotSchedule(ctx context.Context, arg UpdateSnapshotScheduleParams) (SnapshotSchedule, error)
 	UpsertResourceMetadata(ctx context.Context, arg UpsertResourceMetadataParams) (ResourceMetadatum, error)
 }
