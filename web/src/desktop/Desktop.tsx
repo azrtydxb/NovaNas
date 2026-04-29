@@ -7,6 +7,7 @@ import { BellDrawer } from "./BellDrawer";
 import { Window } from "../wm/Window";
 import { useWM } from "../wm/store";
 import { APPS } from "../wm/registry";
+import { Widgets } from "./Widgets";
 
 export function Desktop() {
   const windows = useWM((s) => s.windows);
@@ -49,6 +50,7 @@ export function Desktop() {
         onBell={() => setBellOpen((v) => !v)}
         unreadCount={0}
       />
+      <Widgets />
       <div className="windows-layer">
         {windows.map((w) => {
           const def = APPS[w.appId];

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { storage, type Pool } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
+import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
 
 type Props = { onPick: (name: string) => void };
@@ -29,12 +30,36 @@ export function PoolsTab({ onPick }: Props) {
     if (detailFor) qc.invalidateQueries({ queryKey: ["pool", detailFor] });
   };
 
-  const scrubMut = useMutation({ mutationFn: (n: string) => storage.scrubPool(n), onSuccess: inval });
-  const trimMut = useMutation({ mutationFn: (n: string) => storage.trimPool(n), onSuccess: inval });
-  const clearMut = useMutation({ mutationFn: (n: string) => storage.clearPool(n), onSuccess: inval });
-  const checkpointMut = useMutation({ mutationFn: (n: string) => storage.checkpointPool(n), onSuccess: inval });
-  const exportMut = useMutation({ mutationFn: (n: string) => storage.exportPool(n), onSuccess: inval });
-  const syncMut = useMutation({ mutationFn: () => storage.syncPools(), onSuccess: inval });
+  const scrubMut = useMutation({
+    meta: { label: "Scrub failed" },
+    mutationFn: (n: string) => storage.scrubPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Scrub started", `Pool ${n}`); },
+  });
+  const trimMut = useMutation({
+    meta: { label: "Trim failed" },
+    mutationFn: (n: string) => storage.trimPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Trim started", `Pool ${n}`); },
+  });
+  const clearMut = useMutation({
+    meta: { label: "Clear failed" },
+    mutationFn: (n: string) => storage.clearPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Errors cleared", `Pool ${n}`); },
+  });
+  const checkpointMut = useMutation({
+    meta: { label: "Checkpoint failed" },
+    mutationFn: (n: string) => storage.checkpointPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Checkpoint taken", `Pool ${n}`); },
+  });
+  const exportMut = useMutation({
+    meta: { label: "Export failed" },
+    mutationFn: (n: string) => storage.exportPool(n),
+    onSuccess: (_d, n) => { inval(); toastSuccess("Pool exported", n); },
+  });
+  const syncMut = useMutation({
+    meta: { label: "Sync failed" },
+    mutationFn: () => storage.syncPools(),
+    onSuccess: () => { inval(); toastSuccess("Pools refreshed"); },
+  });
 
   const detail = pools.find((p) => p.name === detailFor) ?? null;
 
