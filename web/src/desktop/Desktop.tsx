@@ -7,8 +7,6 @@ import { BellDrawer } from "./BellDrawer";
 import { Window } from "../wm/Window";
 import { useWM } from "../wm/store";
 import { APPS } from "../wm/registry";
-import { useTheme } from "../store/theme";
-import { Tweaks } from "./Tweaks";
 
 export function Desktop() {
   const windows = useWM((s) => s.windows);
@@ -16,8 +14,6 @@ export function Desktop() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const variant = useTheme((s) => s.variant);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -45,7 +41,7 @@ export function Desktop() {
   }, [open]);
 
   return (
-    <div className={`os os--${variant}`}>
+    <div className="os os--aurora">
       <div className="wallpaper" />
       <TopBar
         onLauncher={() => setLauncherOpen(true)}
@@ -68,7 +64,6 @@ export function Desktop() {
       {launcherOpen && <Launcher onClose={() => setLauncherOpen(false)} />}
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} />}
       {bellOpen && <BellDrawer onClose={() => setBellOpen(false)} />}
-      <Tweaks />
     </div>
   );
 }
