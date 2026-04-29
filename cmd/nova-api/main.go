@@ -23,6 +23,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/scheduler"
@@ -73,6 +74,7 @@ func main() {
 			"err", err)
 	}
 	systemMgr := &system.Manager{}
+	psMgr := protocolshare.New(datasetMgr, nfsMgr, sambaMgr)
 	schedulerMgr := scheduler.New(logger, st.Queries, snapMgr, datasetMgr, nil)
 
 	// Asynq client (dispatcher uses this)
@@ -123,8 +125,9 @@ func main() {
 		SambaMgr:     sambaMgr,
 		SmartMgr:     smartMgr,
 		SchedulerMgr: schedulerMgr,
-		NetworkMgr:   networkMgr,
-		SystemMgr:    systemMgr,
+		NetworkMgr:       networkMgr,
+		SystemMgr:        systemMgr,
+		ProtocolShareMgr: psMgr,
 	})
 	go func() {
 		if err := asyncSrv.Run(mux); err != nil {
@@ -168,8 +171,9 @@ func main() {
 		SambaMgr:     sambaMgr,
 		SmartMgr:     smartMgr,
 		SchedulerMgr: schedulerMgr,
-		NetworkMgr:   networkMgr,
-		SystemMgr:    systemMgr,
+		NetworkMgr:       networkMgr,
+		SystemMgr:        systemMgr,
+		ProtocolShareMgr: psMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

@@ -27,6 +27,87 @@ func (e DatasetType) Valid() bool {
 	}
 }
 
+// Defines values for DatasetACEType.
+const (
+	Allow DatasetACEType = "allow"
+	Deny  DatasetACEType = "deny"
+)
+
+// Valid indicates whether the value is a known member of the DatasetACEType enum.
+func (e DatasetACEType) Valid() bool {
+	switch e {
+	case Allow:
+		return true
+	case Deny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatasetACLPerm.
+const (
+	Append      DatasetACLPerm = "append"
+	Delete      DatasetACLPerm = "delete"
+	DeleteChild DatasetACLPerm = "delete_child"
+	Execute     DatasetACLPerm = "execute"
+	FullControl DatasetACLPerm = "full_control"
+	Modify      DatasetACLPerm = "modify"
+	Read        DatasetACLPerm = "read"
+	ReadAcl     DatasetACLPerm = "read_acl"
+	ReadAttrs   DatasetACLPerm = "read_attrs"
+	ReadOnly    DatasetACLPerm = "read_only"
+	ReadXattr   DatasetACLPerm = "read_xattr"
+	Synchronize DatasetACLPerm = "synchronize"
+	Write       DatasetACLPerm = "write"
+	WriteAcl    DatasetACLPerm = "write_acl"
+	WriteAttrs  DatasetACLPerm = "write_attrs"
+	WriteOwner  DatasetACLPerm = "write_owner"
+	WriteXattr  DatasetACLPerm = "write_xattr"
+)
+
+// Valid indicates whether the value is a known member of the DatasetACLPerm enum.
+func (e DatasetACLPerm) Valid() bool {
+	switch e {
+	case Append:
+		return true
+	case Delete:
+		return true
+	case DeleteChild:
+		return true
+	case Execute:
+		return true
+	case FullControl:
+		return true
+	case Modify:
+		return true
+	case Read:
+		return true
+	case ReadAcl:
+		return true
+	case ReadAttrs:
+		return true
+	case ReadOnly:
+		return true
+	case ReadXattr:
+		return true
+	case Synchronize:
+		return true
+	case Write:
+		return true
+	case WriteAcl:
+		return true
+	case WriteAttrs:
+		return true
+	case WriteOwner:
+		return true
+	case WriteXattr:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DatasetCreateSpecType.
 const (
 	DatasetCreateSpecTypeFilesystem DatasetCreateSpecType = "filesystem"
@@ -63,6 +144,30 @@ func (e DatasetDiffEntryChange) Valid() bool {
 	case Plus:
 		return true
 	case R:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatasetInheritFlag.
+const (
+	Dir         DatasetInheritFlag = "dir"
+	File        DatasetInheritFlag = "file"
+	InheritOnly DatasetInheritFlag = "inherit_only"
+	NoPropagate DatasetInheritFlag = "no_propagate"
+)
+
+// Valid indicates whether the value is a known member of the DatasetInheritFlag enum.
+func (e DatasetInheritFlag) Valid() bool {
+	switch e {
+	case Dir:
+		return true
+	case File:
+		return true
+	case InheritOnly:
+		return true
+	case NoPropagate:
 		return true
 	default:
 		return false
@@ -237,6 +342,60 @@ func (e NvmeofPortTransport) Valid() bool {
 	}
 }
 
+// Defines values for Protocol.
+const (
+	Nfs Protocol = "nfs"
+	Smb Protocol = "smb"
+)
+
+// Valid indicates whether the value is a known member of the Protocol enum.
+func (e Protocol) Valid() bool {
+	switch e {
+	case Nfs:
+		return true
+	case Smb:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SambaGlobalsOptsAclProfile.
+const (
+	Nfsv4 SambaGlobalsOptsAclProfile = "nfsv4"
+	Posix SambaGlobalsOptsAclProfile = "posix"
+)
+
+// Valid indicates whether the value is a known member of the SambaGlobalsOptsAclProfile enum.
+func (e SambaGlobalsOptsAclProfile) Valid() bool {
+	switch e {
+	case Nfsv4:
+		return true
+	case Posix:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SambaGlobalsOptsSecurityMode.
+const (
+	Ads  SambaGlobalsOptsSecurityMode = "ads"
+	User SambaGlobalsOptsSecurityMode = "user"
+)
+
+// Valid indicates whether the value is a known member of the SambaGlobalsOptsSecurityMode enum.
+func (e SambaGlobalsOptsSecurityMode) Valid() bool {
+	switch e {
+	case Ads:
+		return true
+	case User:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VdevSpecType.
 const (
 	VdevSpecTypeDisk   VdevSpecType = "disk"
@@ -329,6 +488,32 @@ type Dataset struct {
 // DatasetType defines model for Dataset.Type.
 type DatasetType string
 
+// DatasetACE defines model for DatasetACE.
+type DatasetACE struct {
+	Inheritance *[]DatasetInheritFlag `json:"inheritance,omitempty"`
+	Permissions []DatasetACLPerm      `json:"permissions"`
+
+	// Principal user:<name>", "group:<name>", or one of "OWNER@","GROUP@","EVERYONE@"
+	Principal string         `json:"principal"`
+	Type      DatasetACEType `json:"type"`
+}
+
+// DatasetACEType defines model for DatasetACE.Type.
+type DatasetACEType string
+
+// DatasetACLAppendRequest defines model for DatasetACLAppendRequest.
+type DatasetACLAppendRequest struct {
+	Ace DatasetACE `json:"ace"`
+}
+
+// DatasetACLPerm defines model for DatasetACLPerm.
+type DatasetACLPerm string
+
+// DatasetACLSetRequest defines model for DatasetACLSetRequest.
+type DatasetACLSetRequest struct {
+	Aces []DatasetACE `json:"aces"`
+}
+
 // DatasetBookmarkRequest defines model for DatasetBookmarkRequest.
 type DatasetBookmarkRequest struct {
 	// Bookmark Full bookmark name `<dataset>#<short>`.
@@ -371,6 +556,9 @@ type DatasetDiffEntry struct {
 
 // DatasetDiffEntryChange Change type — added
 type DatasetDiffEntryChange string
+
+// DatasetInheritFlag defines model for DatasetInheritFlag.
+type DatasetInheritFlag string
 
 // DatasetRenameRequest defines model for DatasetRenameRequest.
 type DatasetRenameRequest struct {
@@ -713,6 +901,52 @@ type PoolTrimRequest struct {
 	Disk *string `json:"disk,omitempty"`
 }
 
+// Protocol defines model for Protocol.
+type Protocol string
+
+// ProtocolNFSOpts defines model for ProtocolNFSOpts.
+type ProtocolNFSOpts struct {
+	Clients []NfsClientRule `json:"clients"`
+}
+
+// ProtocolSMBOpts defines model for ProtocolSMBOpts.
+type ProtocolSMBOpts struct {
+	Browseable *bool     `json:"browseable,omitempty"`
+	Comment    *string   `json:"comment,omitempty"`
+	GuestOk    *bool     `json:"guestOk,omitempty"`
+	ValidUsers *[]string `json:"validUsers,omitempty"`
+	WriteList  *[]string `json:"writeList,omitempty"`
+}
+
+// ProtocolShare defines model for ProtocolShare.
+type ProtocolShare struct {
+	Acls        []DatasetACE `json:"acls"`
+	DatasetName string       `json:"datasetName"`
+
+	// Name 1-64 alnum/-/_ identifier.
+	Name       string           `json:"name"`
+	Nfs        *ProtocolNFSOpts `json:"nfs,omitempty"`
+	Pool       string           `json:"pool"`
+	Protocols  []Protocol       `json:"protocols"`
+	QuotaBytes *int64           `json:"quotaBytes,omitempty"`
+	Smb        *ProtocolSMBOpts `json:"smb,omitempty"`
+}
+
+// ProtocolShareDetail defines model for ProtocolShareDetail.
+type ProtocolShareDetail struct {
+	Acl             []DatasetACE     `json:"acl"`
+	Path            string           `json:"path"`
+	ProtocolsStatus []ProtocolStatus `json:"protocolsStatus"`
+	Share           ProtocolShare    `json:"share"`
+}
+
+// ProtocolStatus defines model for ProtocolStatus.
+type ProtocolStatus struct {
+	Active   bool     `json:"active"`
+	Detail   *string  `json:"detail,omitempty"`
+	Protocol Protocol `json:"protocol"`
+}
+
 // RdmaAdapter defines model for RdmaAdapter.
 type RdmaAdapter struct {
 	BoardId *string `json:"boardId,omitempty"`
@@ -766,6 +1000,30 @@ type ResourceMetadata struct {
 	Tags        *map[string]string `json:"tags,omitempty"`
 	ZfsName     *string            `json:"zfsName,omitempty"`
 }
+
+// SambaGlobalsOpts defines model for SambaGlobalsOpts.
+type SambaGlobalsOpts struct {
+	// AclProfile Default nfsv4. Selects vfs_zfsacl vs acl_xattr.
+	AclProfile    *SambaGlobalsOptsAclProfile `json:"aclProfile,omitempty"`
+	CustomLines   *[]string                   `json:"customLines,omitempty"`
+	EnableNetbios *bool                       `json:"enableNetbios,omitempty"`
+
+	// Realm Required when securityMode=ads.
+	Realm        *string                       `json:"realm,omitempty"`
+	SecurityMode *SambaGlobalsOptsSecurityMode `json:"securityMode,omitempty"`
+
+	// ServerString Default NovaNAS
+	ServerString *string `json:"serverString,omitempty"`
+
+	// Workgroup Default WORKGROUP
+	Workgroup *string `json:"workgroup,omitempty"`
+}
+
+// SambaGlobalsOptsAclProfile Default nfsv4. Selects vfs_zfsacl vs acl_xattr.
+type SambaGlobalsOptsAclProfile string
+
+// SambaGlobalsOptsSecurityMode defines model for SambaGlobalsOpts.SecurityMode.
+type SambaGlobalsOptsSecurityMode string
 
 // SambaShare defines model for SambaShare.
 type SambaShare struct {
@@ -1082,6 +1340,18 @@ type WaitPoolParams struct {
 	TimeoutSec *int   `form:"timeoutSec,omitempty" json:"timeoutSec,omitempty"`
 }
 
+// DeleteProtocolShareParams defines parameters for DeleteProtocolShare.
+type DeleteProtocolShareParams struct {
+	Pool    *string `form:"pool,omitempty" json:"pool,omitempty"`
+	Dataset *string `form:"dataset,omitempty" json:"dataset,omitempty"`
+}
+
+// GetProtocolShareParams defines parameters for GetProtocolShare.
+type GetProtocolShareParams struct {
+	Pool    string `form:"pool" json:"pool"`
+	Dataset string `form:"dataset" json:"dataset"`
+}
+
 // ListSnapshotsParams defines parameters for ListSnapshots.
 type ListSnapshotsParams struct {
 	Dataset *string `form:"dataset,omitempty" json:"dataset,omitempty"`
@@ -1110,6 +1380,12 @@ type CreateDatasetJSONRequestBody = DatasetCreateSpec
 
 // PatchDatasetPropsJSONRequestBody defines body for PatchDatasetProps for application/json ContentType.
 type PatchDatasetPropsJSONRequestBody PatchDatasetPropsJSONBody
+
+// SetDatasetACLJSONRequestBody defines body for SetDatasetACL for application/json ContentType.
+type SetDatasetACLJSONRequestBody = DatasetACLSetRequest
+
+// AppendDatasetACEJSONRequestBody defines body for AppendDatasetACE for application/json ContentType.
+type AppendDatasetACEJSONRequestBody = DatasetACLAppendRequest
 
 // BookmarkSnapshotJSONRequestBody defines body for BookmarkSnapshot for application/json ContentType.
 type BookmarkSnapshotJSONRequestBody = DatasetBookmarkRequest
@@ -1206,6 +1482,15 @@ type PatchPoolPropertiesJSONRequestBody = PoolPropertiesPatch
 
 // TrimPoolJSONRequestBody defines body for TrimPool for application/json ContentType.
 type TrimPoolJSONRequestBody = PoolTrimRequest
+
+// CreateProtocolShareJSONRequestBody defines body for CreateProtocolShare for application/json ContentType.
+type CreateProtocolShareJSONRequestBody = ProtocolShare
+
+// UpdateProtocolShareJSONRequestBody defines body for UpdateProtocolShare for application/json ContentType.
+type UpdateProtocolShareJSONRequestBody = ProtocolShare
+
+// SetSambaGlobalsJSONRequestBody defines body for SetSambaGlobals for application/json ContentType.
+type SetSambaGlobalsJSONRequestBody = SambaGlobalsOpts
 
 // CreateSambaShareJSONRequestBody defines body for CreateSambaShare for application/json ContentType.
 type CreateSambaShareJSONRequestBody = SambaShare

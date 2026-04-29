@@ -553,6 +553,73 @@ paths:
                 items: { $ref: '#/components/schemas/Bookmark' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /datasets/{fullname}/acl:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        description: 'URL-encoded dataset fullname (pool/dataset).'
+        schema: { type: string }
+    get:
+      operationId: getDatasetACL
+      summary: Read the NFSv4 ACL on the dataset's mount path (synchronous).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DatasetACE' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    put:
+      operationId: setDatasetACL
+      summary: Replace the entire NFSv4 ACL on the dataset (async).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatasetACLSetRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /datasets/{fullname}/acl/append:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+    post:
+      operationId: appendDatasetACE
+      summary: Append a single ACE to the dataset's NFSv4 ACL (async).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatasetACLAppendRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /datasets/{fullname}/acl/{index}:
+    parameters:
+      - in: path
+        name: fullname
+        required: true
+        schema: { type: string }
+      - in: path
+        name: index
+        required: true
+        description: '0-based index in the order returned by GET /acl.'
+        schema: { type: integer, minimum: 0 }
+    delete:
+      operationId: removeDatasetACE
+      summary: Remove the ACE at index from the dataset's NFSv4 ACL (async).
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   /datasets/{fullname}/metadata:
     parameters:
       - in: path
@@ -1430,6 +1497,108 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/SambaUserCredentials' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /samba/globals:
+    get:
+      operationId: getSambaGlobals
+      summary: Read the managed Samba [global] settings (synchronous).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SambaGlobalsOpts' }
+    put:
+      operationId: setSambaGlobals
+      summary: Replace the managed Samba [global] settings (async).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SambaGlobalsOpts' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /protocol-shares:
+    get:
+      operationId: listProtocolShares
+      summary: List managed unified NFS+SMB shares (name + detected protocols only).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProtocolShare' }
+    post:
+      operationId: createProtocolShare
+      summary: Create a unified ProtocolShare (dataset + NFS export + Samba share).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolShare' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /protocol-shares/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getProtocolShare
+      summary: Read the detail view of a ProtocolShare. Requires pool+dataset query.
+      parameters:
+        - in: query
+          name: pool
+          required: true
+          schema: { type: string }
+        - in: query
+          name: dataset
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProtocolShareDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    patch:
+      operationId: updateProtocolShare
+      summary: Replace an existing ProtocolShare (full body).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolShare' }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteProtocolShare
+      summary: |
+        Delete a ProtocolShare. When `pool` and `dataset` query params are
+        both supplied the share is fully torn down (samba + nfs + dataset
+        destroy). Without those params only the nfs + samba surfaces are
+        removed and the dataset is left intact.
+      parameters:
+        - in: query
+          name: pool
+          required: false
+          schema: { type: string }
+        - in: query
+          name: dataset
+          required: false
+          schema: { type: string }
       responses:
         '202': { $ref: '#/components/responses/Accepted' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -2506,3 +2675,111 @@ components:
       properties:
         enabled: { type: boolean }
         servers: { type: array, items: { type: string } }
+
+    DatasetACLPerm:
+      type: string
+      enum: [read, write, execute, append, delete, delete_child, read_acl, write_acl, write_owner, read_attrs, write_attrs, read_xattr, write_xattr, synchronize, full_control, modify, read_only]
+    DatasetInheritFlag:
+      type: string
+      enum: [file, dir, no_propagate, inherit_only]
+    DatasetACE:
+      type: object
+      required: [type, principal, permissions]
+      properties:
+        type:
+          type: string
+          enum: [allow, deny]
+        principal:
+          type: string
+          description: 'user:<name>", "group:<name>", or one of "OWNER@","GROUP@","EVERYONE@"'
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/DatasetACLPerm' }
+        inheritance:
+          type: array
+          items: { $ref: '#/components/schemas/DatasetInheritFlag' }
+    DatasetACLSetRequest:
+      type: object
+      required: [aces]
+      properties:
+        aces:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/DatasetACE' }
+    DatasetACLAppendRequest:
+      type: object
+      required: [ace]
+      properties:
+        ace: { $ref: '#/components/schemas/DatasetACE' }
+
+    SambaGlobalsOpts:
+      type: object
+      properties:
+        workgroup:     { type: string, description: 'Default WORKGROUP' }
+        serverString:  { type: string, description: 'Default NovaNAS' }
+        aclProfile:
+          type: string
+          enum: [nfsv4, posix]
+          description: 'Default nfsv4. Selects vfs_zfsacl vs acl_xattr.'
+        securityMode:
+          type: string
+          enum: [user, ads]
+        realm:         { type: string, description: 'Required when securityMode=ads.' }
+        enableNetbios: { type: boolean }
+        customLines:
+          type: array
+          items: { type: string, description: 'Verbatim "key = value" line appended to [global].' }
+
+    Protocol:
+      type: string
+      enum: [nfs, smb]
+    ProtocolNFSOpts:
+      type: object
+      required: [clients]
+      properties:
+        clients:
+          type: array
+          items: { $ref: '#/components/schemas/NfsClientRule' }
+    ProtocolSMBOpts:
+      type: object
+      properties:
+        comment:    { type: string }
+        browseable: { type: boolean }
+        guestOk:    { type: boolean }
+        validUsers: { type: array, items: { type: string } }
+        writeList:  { type: array, items: { type: string } }
+    ProtocolShare:
+      type: object
+      required: [name, pool, datasetName, protocols, acls]
+      properties:
+        name:        { type: string, description: '1-64 alnum/-/_ identifier.' }
+        pool:        { type: string }
+        datasetName: { type: string }
+        protocols:
+          type: array
+          items: { $ref: '#/components/schemas/Protocol' }
+        acls:
+          type: array
+          items: { $ref: '#/components/schemas/DatasetACE' }
+        quotaBytes:  { type: integer, format: int64 }
+        nfs: { $ref: '#/components/schemas/ProtocolNFSOpts' }
+        smb: { $ref: '#/components/schemas/ProtocolSMBOpts' }
+    ProtocolStatus:
+      type: object
+      required: [protocol, active]
+      properties:
+        protocol: { $ref: '#/components/schemas/Protocol' }
+        active:   { type: boolean }
+        detail:   { type: string }
+    ProtocolShareDetail:
+      type: object
+      required: [share, path, acl, protocolsStatus]
+      properties:
+        share: { $ref: '#/components/schemas/ProtocolShare' }
+        path:  { type: string }
+        acl:
+          type: array
+          items: { $ref: '#/components/schemas/DatasetACE' }
+        protocolsStatus:
+          type: array
+          items: { $ref: '#/components/schemas/ProtocolStatus' }

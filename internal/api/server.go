@@ -15,6 +15,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/rdma"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/scheduler"
@@ -48,6 +49,7 @@ type Deps struct {
 	SchedulerMgr  *scheduler.Manager
 	NetworkMgr    *network.Manager
 	SystemMgr     *system.Manager
+	ProtocolShareMgr *protocolshare.Manager
 }
 
 type Server struct {
@@ -129,6 +131,19 @@ func New(d Deps) *Server {
 	var systemH *handlers.SystemHandler
 	if d.SystemMgr != nil {
 		systemH = &handlers.SystemHandler{Logger: d.Logger, Mgr: d.SystemMgr, Dispatcher: d.Dispatcher}
+	}
+	var psH *handlers.ProtocolShareHandler
+	if d.ProtocolShareMgr != nil {
+		psH = &handlers.ProtocolShareHandler{Logger: d.Logger, Mgr: d.ProtocolShareMgr}
+	}
+	psW := &handlers.ProtocolShareWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
+	var dsACLH *handlers.DatasetACLHandler
+	if d.DatasetMgr != nil {
+		dsACLH = &handlers.DatasetACLHandler{Logger: d.Logger, Dataset: d.DatasetMgr, Dispatcher: d.Dispatcher}
+	}
+	var sambaGlobalsH *handlers.SambaGlobalsHandler
+	if d.SambaMgr != nil {
+		sambaGlobalsH = &handlers.SambaGlobalsHandler{Logger: d.Logger, Mgr: d.SambaMgr, Dispatcher: d.Dispatcher}
 	}
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/disks", disksH.List)
@@ -254,6 +269,29 @@ func New(d Deps) *Server {
 		r.Post("/samba/users", sambaW.AddUser)
 		r.Delete("/samba/users/{username}", sambaW.DeleteUser)
 		r.Put("/samba/users/{username}/password", sambaW.SetUserPassword)
+
+		// Samba globals
+		if sambaGlobalsH != nil {
+			r.Get("/samba/globals", sambaGlobalsH.Get)
+			r.Put("/samba/globals", sambaGlobalsH.Set)
+		}
+
+		// ProtocolShare (unified NFS+SMB share abstraction)
+		if psH != nil {
+			r.Get("/protocol-shares", psH.List)
+			r.Get("/protocol-shares/{name}", psH.Get)
+		}
+		r.Post("/protocol-shares", psW.Create)
+		r.Patch("/protocol-shares/{name}", psW.Update)
+		r.Delete("/protocol-shares/{name}", psW.Delete)
+
+		// Dataset NFSv4 ACL
+		if dsACLH != nil {
+			r.Get("/datasets/{fullname}/acl", dsACLH.Get)
+			r.Put("/datasets/{fullname}/acl", dsACLH.Set)
+			r.Post("/datasets/{fullname}/acl/append", dsACLH.Append)
+			r.Delete("/datasets/{fullname}/acl/{index}", dsACLH.Remove)
+		}
 
 		// SMART
 		if smartH != nil {

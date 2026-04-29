@@ -19,6 +19,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/scheduler"
 	"github.com/novanas/nova-nas/internal/host/smart"
@@ -43,8 +44,9 @@ type WorkerDeps struct {
 	SambaMgr     *samba.Manager
 	SmartMgr     *smart.Manager
 	SchedulerMgr *scheduler.Manager
-	NetworkMgr   *network.Manager
-	SystemMgr    *system.Manager
+	NetworkMgr       *network.Manager
+	SystemMgr        *system.Manager
+	ProtocolShareMgr *protocolshare.Manager
 }
 
 func NewServeMux(d WorkerDeps) *asynq.ServeMux {
@@ -135,6 +137,13 @@ func NewServeMux(d WorkerDeps) *asynq.ServeMux {
 	mux.HandleFunc(string(KindSystemReboot), d.handleSystemReboot)
 	mux.HandleFunc(string(KindSystemShutdown), d.handleSystemShutdown)
 	mux.HandleFunc(string(KindSystemCancelShutdown), d.handleSystemCancelShutdown)
+	mux.HandleFunc(string(KindProtocolShareCreate), d.handleProtocolShareCreate)
+	mux.HandleFunc(string(KindProtocolShareUpdate), d.handleProtocolShareUpdate)
+	mux.HandleFunc(string(KindProtocolShareDelete), d.handleProtocolShareDelete)
+	mux.HandleFunc(string(KindDatasetSetACL), d.handleDatasetSetACL)
+	mux.HandleFunc(string(KindDatasetAppendACE), d.handleDatasetAppendACE)
+	mux.HandleFunc(string(KindDatasetRemoveACE), d.handleDatasetRemoveACE)
+	mux.HandleFunc(string(KindSambaSetGlobals), d.handleSambaSetGlobals)
 	return mux
 }
 
@@ -1273,6 +1282,104 @@ func (d WorkerDeps) handleSystemCancelShutdown(ctx context.Context, t *asynq.Tas
 	}
 	_ = d.markRunning(ctx, id)
 	err = d.SystemMgr.Cancel(ctx)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// ---------- ProtocolShare + ACL handlers ----------
+
+func (d WorkerDeps) handleProtocolShareCreate(ctx context.Context, t *asynq.Task) error {
+	var p ProtocolShareCreatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.ProtocolShareMgr.Create(ctx, p.Share)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleProtocolShareUpdate(ctx context.Context, t *asynq.Task) error {
+	var p ProtocolShareUpdatePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.ProtocolShareMgr.Update(ctx, p.Share)
+	d.finish(ctx, id, err)
+	return err
+}
+
+// handleProtocolShareDelete chooses between a "surfaces-only" delete
+// (Manager.Delete) and a full teardown (Manager.DeleteShare) based on
+// whether the payload carries pool+datasetName. Full teardown also
+// destroys the underlying dataset.
+func (d WorkerDeps) handleProtocolShareDelete(ctx context.Context, t *asynq.Task) error {
+	var p ProtocolShareDeletePayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	if p.Pool != "" && p.DatasetName != "" {
+		err = d.ProtocolShareMgr.DeleteShare(ctx, protocolshare.ProtocolShare{
+			Name:        p.Name,
+			Pool:        p.Pool,
+			DatasetName: p.DatasetName,
+		})
+	} else {
+		err = d.ProtocolShareMgr.Delete(ctx, p.Name)
+	}
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetSetACL(ctx context.Context, t *asynq.Task) error {
+	var p DatasetSetACLPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.SetACL(ctx, p.Path, p.ACEs)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetAppendACE(ctx context.Context, t *asynq.Task) error {
+	var p DatasetAppendACEPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.AppendACE(ctx, p.Path, p.ACE)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleDatasetRemoveACE(ctx context.Context, t *asynq.Task) error {
+	var p DatasetRemoveACEPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.Datasets.RemoveACE(ctx, p.Path, p.Index)
+	d.finish(ctx, id, err)
+	return err
+}
+
+func (d WorkerDeps) handleSambaSetGlobals(ctx context.Context, t *asynq.Task) error {
+	var p SambaSetGlobalsPayload
+	id, err := d.decode(t, &p)
+	if err != nil {
+		return err
+	}
+	_ = d.markRunning(ctx, id)
+	err = d.SambaMgr.SetGlobals(ctx, p.Opts)
 	d.finish(ctx, id, err)
 	return err
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
+	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/samba"
 	"github.com/novanas/nova-nas/internal/host/zfs/dataset"
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
@@ -122,6 +123,15 @@ const (
 	KindSystemReboot         Kind = "system.reboot"
 	KindSystemShutdown       Kind = "system.shutdown"
 	KindSystemCancelShutdown Kind = "system.cancel_shutdown"
+
+	// ProtocolShare + ACL
+	KindProtocolShareCreate Kind = "protocolshare.create"
+	KindProtocolShareUpdate Kind = "protocolshare.update"
+	KindProtocolShareDelete Kind = "protocolshare.delete"
+	KindDatasetSetACL       Kind = "dataset.acl.set"
+	KindDatasetAppendACE    Kind = "dataset.acl.append"
+	KindDatasetRemoveACE    Kind = "dataset.acl.remove"
+	KindSambaSetGlobals     Kind = "samba.globals.set"
 )
 
 // ---------- iSCSI payloads ----------
@@ -536,3 +546,43 @@ type SystemShutdownPayload struct {
 }
 
 type SystemCancelShutdownPayload struct{}
+
+// ---------- ProtocolShare + ACL payloads ----------
+
+type ProtocolShareCreatePayload struct {
+	Share protocolshare.ProtocolShare `json:"share"`
+}
+
+type ProtocolShareUpdatePayload struct {
+	Share protocolshare.ProtocolShare `json:"share"`
+}
+
+// ProtocolShareDeletePayload identifies the share to remove. When Pool
+// and DatasetName are both set the worker performs a full teardown
+// (samba + nfs + dataset destroy) via Manager.DeleteShare; otherwise it
+// performs the lighter Manager.Delete which only tears down the nfs +
+// samba surfaces.
+type ProtocolShareDeletePayload struct {
+	Name        string `json:"name"`
+	Pool        string `json:"pool,omitempty"`
+	DatasetName string `json:"datasetName,omitempty"`
+}
+
+type DatasetSetACLPayload struct {
+	Path string        `json:"path"`
+	ACEs []dataset.ACE `json:"aces"`
+}
+
+type DatasetAppendACEPayload struct {
+	Path string      `json:"path"`
+	ACE  dataset.ACE `json:"ace"`
+}
+
+type DatasetRemoveACEPayload struct {
+	Path  string `json:"path"`
+	Index int    `json:"index"`
+}
+
+type SambaSetGlobalsPayload struct {
+	Opts samba.GlobalsOpts `json:"opts"`
+}
