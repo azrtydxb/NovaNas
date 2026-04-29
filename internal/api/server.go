@@ -17,6 +17,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/krb5"
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
+	notifysmtp "github.com/novanas/nova-nas/internal/host/notify/smtp"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/rdma"
@@ -55,6 +56,10 @@ type Deps struct {
 	NetworkMgr    *network.Manager
 	SystemMgr     *system.Manager
 	ProtocolShareMgr *protocolshare.Manager
+	SMTPMgr          *notifysmtp.Manager
+	// EncryptionMgr is the TPM-sealed ZFS native-encryption manager.
+	// When nil, the /encryption* endpoints return 503.
+	EncryptionMgr *dataset.EncryptionManager
 
 	// Auth wiring. If Verifier is nil OR AuthDisabled is true, the
 	// /api/v1 group does not enforce authentication or per-route
@@ -191,6 +196,10 @@ func New(d Deps) *Server {
 	var sambaGlobalsH *handlers.SambaGlobalsHandler
 	if d.SambaMgr != nil {
 		sambaGlobalsH = &handlers.SambaGlobalsHandler{Logger: d.Logger, Mgr: d.SambaMgr, Dispatcher: d.Dispatcher}
+	}
+	var notifyH *handlers.NotificationsHandler
+	if d.SMTPMgr != nil {
+		notifyH = &handlers.NotificationsHandler{Logger: d.Logger, Mgr: d.SMTPMgr}
 	}
 
 	// authEnabled controls whether auth middleware and per-route
@@ -460,6 +469,46 @@ func New(d Deps) *Server {
 			}
 		})
 
+		// ---- Dataset native encryption (TPM-sealed key escrow) ----
+		// Initialize/load/unload require Write; Recover (returns the
+		// raw key in the response body) requires the dedicated
+		// admin-only Recover permission and is audit-logged by the
+		// handler in addition to the global audit middleware.
+		{
+			var encAuditor handlers.EncryptionAuditor
+			if d.Store != nil {
+				encAuditor = d.Store.Queries
+			}
+			encH := &handlers.EncryptionHandler{
+				Logger:  d.Logger,
+				Mgr:     d.EncryptionMgr,
+				Auditor: encAuditor,
+			}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPoolEncryptionWrite))
+				r.Post("/datasets/{fullname}/encryption", encH.Initialize)
+				r.Post("/datasets/{fullname}/encryption/load-key", encH.LoadKey)
+				r.Post("/datasets/{fullname}/encryption/unload-key", encH.UnloadKey)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPoolEncryptionRecover))
+				r.Post("/datasets/{fullname}/encryption/recover", encH.Recover)
+			})
+		}
+
+		// ---- Notifications (SMTP relay) ----
+		if notifyH != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermNotificationsRead))
+				r.Get("/notifications/smtp", notifyH.GetConfig)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermNotificationsWrite))
+				r.Put("/notifications/smtp", notifyH.PutConfig)
+				r.Post("/notifications/smtp/test", notifyH.PostTest)
+			})
+		}
+
 		// Jobs and scheduler — only available when the store is wired.
 		if d.Store != nil {
 			jobsH := &handlers.JobsHandler{Logger: d.Logger, Q: d.Store.Queries}
@@ -503,6 +552,37 @@ func New(d Deps) *Server {
 				r.Patch("/pools/{name}/metadata", metaH.PoolPatch)
 				r.Patch("/datasets/{fullname}/metadata", metaH.DatasetPatch)
 				r.Patch("/snapshots/{fullname}/metadata", metaH.SnapshotPatch)
+			})
+
+			// Scrub policies. Read covers list/get; write covers CRUD.
+			// The ad-hoc /api/v1/pools/{name}/scrub trigger is owned by
+			// PoolsWriteHandler.Scrub above (storage:write); this group
+			// is purely the policy resource. PermScrubRead/PermScrubWrite
+			// are also granted to nova-operator so on-call engineers can
+			// edit non-builtin policies without admin rights.
+			scrubH := &handlers.ScrubPolicyHandler{Logger: d.Logger, Q: d.Store.Queries, Dispatcher: d.Dispatcher}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermScrubRead))
+				r.Get("/scrub-policies", scrubH.List)
+				r.Get("/scrub-policies/{id}", scrubH.Get)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermScrubWrite))
+				r.Post("/scrub-policies", scrubH.Create)
+				r.Patch("/scrub-policies/{id}", scrubH.Update)
+				r.Delete("/scrub-policies/{id}", scrubH.Delete)
+			})
+
+			// Audit read & export. Gated on PermAuditRead — operator+
+			// only. nova-viewer intentionally lacks this permission so
+			// reading the audit log doesn't itself become a stealthy
+			// reconnaissance vector.
+			auditH := &handlers.AuditReadHandler{Logger: d.Logger, Q: d.Store.Queries}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermAuditRead))
+				r.Get("/audit", auditH.List)
+				r.Get("/audit/summary", auditH.Summary)
+				r.Get("/audit/export", auditH.Export)
 			})
 		}
 	})

@@ -20,6 +20,31 @@ const (
 	// grants the holder the ability to mint service keytabs.
 	PermKrb5Read  Permission = "nova:krb5:read"
 	PermKrb5Write Permission = "nova:krb5:write"
+	// Notifications: SMTP relay configuration and test sends. Write is
+	// admin-only because it can both leak credentials (read-back is
+	// redacted, but the manager still holds the cleartext) and be used
+	// to phish (the operator chooses the From address).
+	PermNotificationsRead  Permission = "nova:notifications:read"
+	PermNotificationsWrite Permission = "nova:notifications:write"
+	// Pool/dataset native-encryption management. Read covers status
+	// (is encrypted? algorithm?). Write covers initialize / load-key /
+	// unload-key. Recover is the break-glass capability that exposes
+	// the raw 32-byte ZFS key — it is admin-only and every call is
+	// audit-logged by the API handler.
+	PermPoolEncryptionRead    Permission = "nova:encryption:read"
+	PermPoolEncryptionWrite   Permission = "nova:encryption:write"
+	PermPoolEncryptionRecover Permission = "nova:encryption:recover"
+	// Replication subsystem (general — covers ZFS native, S3, and
+	// rsync-over-SSH backends). Read covers job listing/detail and run
+	// history. Write covers CRUD plus the ad-hoc /run trigger.
+	PermReplicationRead  Permission = "nova:replication:read"
+	PermReplicationWrite Permission = "nova:replication:write"
+	// Scrub policy management. Read covers listing policies and the
+	// last-fired-at metadata. Write covers policy CRUD AND the ad-hoc
+	// per-pool scrub trigger (operator+ for the trigger so on-call
+	// engineers can kick a scrub without admin rights).
+	PermScrubRead  Permission = "nova:scrub:read"
+	PermScrubWrite Permission = "nova:scrub:write"
 )
 
 // RoleMap maps Keycloak role names to a set of Permissions. Operators
@@ -36,19 +61,32 @@ var DefaultRoleMap = RoleMap{
 		PermAuditRead,
 		PermSchedulerRead, PermSchedulerWrite,
 		PermKrb5Read, PermKrb5Write,
+		PermNotificationsRead, PermNotificationsWrite,
+		PermPoolEncryptionRead, PermPoolEncryptionWrite, PermPoolEncryptionRecover,
+		PermReplicationRead, PermReplicationWrite,
+		PermScrubRead, PermScrubWrite,
 	},
 	"nova-operator": {
 		PermStorageRead, PermStorageWrite,
 		PermNetworkRead,
 		PermSystemRead,
+		PermAuditRead,
 		PermSchedulerRead, PermSchedulerWrite,
+		PermNotificationsRead,
+		PermPoolEncryptionRead, PermPoolEncryptionWrite,
+		PermReplicationRead, PermReplicationWrite,
+		PermScrubRead, PermScrubWrite,
 	},
+	// Viewers intentionally do NOT receive PermAuditRead. The audit log
+	// reveals who has accessed which resources; granting it to read-only
+	// viewers leaks reconnaissance signal. Operator and admin only.
 	"nova-viewer": {
 		PermStorageRead,
 		PermNetworkRead,
 		PermSystemRead,
-		PermAuditRead,
 		PermSchedulerRead,
+		PermReplicationRead,
+		PermScrubRead,
 	},
 	"nova-system-admin": {
 		PermStorageRead,

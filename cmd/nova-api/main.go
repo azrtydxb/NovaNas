@@ -24,6 +24,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/krb5"
 	"github.com/novanas/nova-nas/internal/host/network"
 	"github.com/novanas/nova-nas/internal/host/nfs"
+	notifysmtp "github.com/novanas/nova-nas/internal/host/notify/smtp"
 	"github.com/novanas/nova-nas/internal/host/nvmeof"
 	"github.com/novanas/nova-nas/internal/host/protocolshare"
 	"github.com/novanas/nova-nas/internal/host/rdma"
@@ -38,6 +39,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
 	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/logging"
+	"github.com/novanas/nova-nas/internal/scrubpolicy"
 	"github.com/novanas/nova-nas/internal/store"
 )
 
@@ -119,6 +121,40 @@ func main() {
 	}
 	systemMgr := &system.Manager{}
 	psMgr := protocolshare.New(datasetMgr, nfsMgr, sambaMgr)
+
+	// SMTP relay manager. Built unconditionally so the API can rotate
+	// the config at runtime even on hosts that started without one
+	// configured. When SMTP_HOST is empty Send/SendTest return
+	// ErrNotConfigured until PUT /api/v1/notifications/smtp populates it.
+	smtpCfg := notifysmtp.Config{
+		Host:        cfg.SMTP.Host,
+		Port:        cfg.SMTP.Port,
+		Username:    cfg.SMTP.Username,
+		FromAddress: cfg.SMTP.From,
+		TLSMode:     notifysmtp.TLSMode(cfg.SMTP.TLSMode),
+	}
+	if cfg.SMTP.PasswordFile != "" {
+		b, err := os.ReadFile(cfg.SMTP.PasswordFile)
+		if err != nil {
+			logger.Warn("smtp password file unreadable", "path", cfg.SMTP.PasswordFile, "err", err)
+		} else {
+			// Strip a single trailing newline; operators routinely produce
+			// these with `echo … > file`.
+			s := string(b)
+			for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+				s = s[:len(s)-1]
+			}
+			smtpCfg.Password = s
+		}
+	}
+	smtpMgr, err := notifysmtp.NewManager(smtpCfg, cfg.SMTP.MaxPerMinute)
+	if err != nil {
+		// Bad config (e.g. SMTP_HOST set but SMTP_FROM empty). Log and
+		// fall back to an unconfigured manager so the API still starts —
+		// the operator can fix it via PUT.
+		logger.Warn("smtp init", "err", err)
+		smtpMgr, _ = notifysmtp.NewManager(notifysmtp.Config{}, cfg.SMTP.MaxPerMinute)
+	}
 	schedulerMgr := scheduler.New(logger, st.Queries, snapMgr, datasetMgr, nil)
 
 	// Asynq client (dispatcher uses this)
@@ -211,6 +247,23 @@ func main() {
 		}
 	}()
 
+	// Scrub-policy manager. Bootstraps the operator-default policy on a
+	// fresh install (idempotent — re-running install or restarts never
+	// duplicate the row) then starts its own tick loop that dispatches
+	// KindPoolScrub jobs when policies are due. Runs alongside the
+	// snapshot/replication scheduler; same cancellation semantics.
+	scrubMgr := scrubpolicy.New(logger, st.Queries, poolMgr, dispatcher)
+	if _, err := scrubMgr.EnsureDefaultPolicy(ctx); err != nil {
+		logger.Error("scrubpolicy bootstrap", "err", err)
+	}
+	scrubCtx, scrubCancel := context.WithCancel(context.Background())
+	defer scrubCancel()
+	go func() {
+		if err := scrubMgr.Run(scrubCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("scrubpolicy run", "err", err)
+		}
+	}()
+
 	srv := api.New(api.Deps{
 		Logger:     logger,
 		Store:      st,
@@ -235,6 +288,8 @@ func main() {
 		NetworkMgr:       networkMgr,
 		SystemMgr:        systemMgr,
 		ProtocolShareMgr: psMgr,
+		SMTPMgr:          smtpMgr,
+		EncryptionMgr:    buildEncryptionMgr(logger, datasetMgr, secretsMgr),
 
 		Verifier:     verifier,
 		RoleMap:      auth.DefaultRoleMap,
@@ -319,6 +374,31 @@ func metricsHandlerFor(metricsAddr string, m *metrics.Metrics) http.Handler {
 		return nil
 	}
 	return m.Handler()
+}
+
+// buildEncryptionMgr constructs the ZFS native-encryption manager
+// (TPM-sealed key escrow) wired to the host TPM and the runtime
+// secrets backend.
+//
+// If the host has no TPM (e.g. in CI / VM-without-vTPM) we return
+// nil; the API surface degrades gracefully — encryption endpoints
+// respond 503 — without crashing the server.
+func buildEncryptionMgr(logger *slog.Logger, dsMgr *dataset.Manager, secretsMgr secrets.Manager) *dataset.EncryptionManager {
+	sealer, err := tpm.New(logger)
+	if err != nil {
+		logger.Warn("encryption manager: TPM unavailable; /encryption endpoints will return 503",
+			"err", err)
+		return nil
+	}
+	zfsBin := "/sbin/zfs"
+	if dsMgr != nil && dsMgr.ZFSBin != "" {
+		zfsBin = dsMgr.ZFSBin
+	}
+	return &dataset.EncryptionManager{
+		ZFSBin:  zfsBin,
+		Sealer:  sealer,
+		Secrets: secretsMgr,
+	}
 }
 
 type asynqSlogAdapter struct{ l *slog.Logger }

@@ -13,6 +13,24 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for AuditEventOutcome.
+const (
+	AuditEventOutcomeAccepted AuditEventOutcome = "accepted"
+	AuditEventOutcomeRejected AuditEventOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AuditEventOutcome enum.
+func (e AuditEventOutcome) Valid() bool {
+	switch e {
+	case AuditEventOutcomeAccepted:
+		return true
+	case AuditEventOutcomeRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DatasetType.
 const (
 	DatasetTypeFilesystem DatasetType = "filesystem"
@@ -364,6 +382,27 @@ func (e Protocol) Valid() bool {
 	}
 }
 
+// Defines values for SMTPConfigTlsMode.
+const (
+	None     SMTPConfigTlsMode = "none"
+	Starttls SMTPConfigTlsMode = "starttls"
+	Tls      SMTPConfigTlsMode = "tls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPConfigTlsMode enum.
+func (e SMTPConfigTlsMode) Valid() bool {
+	switch e {
+	case None:
+		return true
+	case Starttls:
+		return true
+	case Tls:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SambaGlobalsOptsAclProfile.
 const (
 	Nfsv4 SambaGlobalsOptsAclProfile = "nfsv4"
@@ -400,6 +439,27 @@ func (e SambaGlobalsOptsSecurityMode) Valid() bool {
 	}
 }
 
+// Defines values for ScrubPolicyPriority.
+const (
+	High   ScrubPolicyPriority = "high"
+	Low    ScrubPolicyPriority = "low"
+	Medium ScrubPolicyPriority = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ScrubPolicyPriority enum.
+func (e ScrubPolicyPriority) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VdevSpecType.
 const (
 	VdevSpecTypeDisk   VdevSpecType = "disk"
@@ -424,6 +484,60 @@ func (e VdevSpecType) Valid() bool {
 	case VdevSpecTypeRaidz3:
 		return true
 	case VdevSpecTypeStripe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAuditParamsOutcome.
+const (
+	ListAuditParamsOutcomeAccepted ListAuditParamsOutcome = "accepted"
+	ListAuditParamsOutcomeRejected ListAuditParamsOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ListAuditParamsOutcome enum.
+func (e ListAuditParamsOutcome) Valid() bool {
+	switch e {
+	case ListAuditParamsOutcomeAccepted:
+		return true
+	case ListAuditParamsOutcomeRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportAuditParamsFormat.
+const (
+	Csv   ExportAuditParamsFormat = "csv"
+	Jsonl ExportAuditParamsFormat = "jsonl"
+)
+
+// Valid indicates whether the value is a known member of the ExportAuditParamsFormat enum.
+func (e ExportAuditParamsFormat) Valid() bool {
+	switch e {
+	case Csv:
+		return true
+	case Jsonl:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportAuditParamsOutcome.
+const (
+	ExportAuditParamsOutcomeAccepted ExportAuditParamsOutcome = "accepted"
+	ExportAuditParamsOutcomeRejected ExportAuditParamsOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ExportAuditParamsOutcome enum.
+func (e ExportAuditParamsOutcome) Valid() bool {
+	switch e {
+	case ExportAuditParamsOutcomeAccepted:
+		return true
+	case ExportAuditParamsOutcomeRejected:
 		return true
 	default:
 		return false
@@ -458,6 +572,43 @@ func (e ListJobsParamsState) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AuditEvent defines model for AuditEvent.
+type AuditEvent struct {
+	// Action HTTP method + path, e.g. 'POST /api/v1/pools'
+	Action  string            `json:"action"`
+	Actor   *string           `json:"actor,omitempty"`
+	Id      int64             `json:"id"`
+	Outcome AuditEventOutcome `json:"outcome"`
+
+	// Payload Redacted request body (when JSON).
+	Payload   interface{} `json:"payload,omitempty"`
+	RequestId *string     `json:"request_id,omitempty"`
+
+	// Resource Resource path (URL of the affected object)
+	Resource  string    `json:"resource"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// AuditEventOutcome defines model for AuditEvent.Outcome.
+type AuditEventOutcome string
+
+// AuditListResponse defines model for AuditListResponse.
+type AuditListResponse struct {
+	Items []AuditEvent `json:"items"`
+
+	// NextCursor Opaque cursor; pass back as ?cursor=... to fetch the next
+	// page. Empty when there are no more rows.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// AuditSummaryRow defines model for AuditSummaryRow.
+type AuditSummaryRow struct {
+	Action  string `json:"action"`
+	Actor   string `json:"actor"`
+	Count   int64  `json:"count"`
+	Outcome string `json:"outcome"`
 }
 
 // Bookmark defines model for Bookmark.
@@ -1065,6 +1216,31 @@ type ResourceMetadata struct {
 	ZfsName     *string            `json:"zfsName,omitempty"`
 }
 
+// SMTPConfig Outbound SMTP relay configuration. The `password` field is
+// write-only — GET responses always return `"***"`. To preserve
+// the stored password during a PUT, send the literal string
+// `"***"` for `password`; any other non-empty value replaces it.
+type SMTPConfig struct {
+	FromAddress openapi_types.Email `json:"fromAddress"`
+
+	// Host SMTP relay hostname (e.g. smtp.sendgrid.net).
+	Host string `json:"host"`
+
+	// MaxPerMinute Per-recipient leaky-bucket rate limit. Default 30.
+	MaxPerMinute *int `json:"maxPerMinute,omitempty"`
+
+	// Password Cleartext on PUT, redacted on GET.
+	Password *string `json:"password,omitempty"`
+	Port     int     `json:"port"`
+
+	// TlsMode STARTTLS is recommended for port 587; tls (implicit TLS) for port 465.
+	TlsMode  SMTPConfigTlsMode `json:"tlsMode"`
+	Username *string           `json:"username,omitempty"`
+}
+
+// SMTPConfigTlsMode STARTTLS is recommended for port 587; tls (implicit TLS) for port 465.
+type SMTPConfigTlsMode string
+
 // SambaGlobalsOpts defines model for SambaGlobalsOpts.
 type SambaGlobalsOpts struct {
 	// AclProfile Default nfsv4. Selects vfs_zfsacl vs acl_xattr.
@@ -1120,6 +1296,27 @@ type SambaUserCredentials struct {
 	// Username Required on POST /samba/users; ignored on PUT password.
 	Username *string `json:"username,omitempty"`
 }
+
+// ScrubPolicy defines model for ScrubPolicy.
+type ScrubPolicy struct {
+	// Builtin true for the operator-default policy installed on a fresh install.
+	Builtin *bool `json:"builtin,omitempty"`
+
+	// Cron Standard 5-field cron expression
+	Cron        *string             `json:"cron,omitempty"`
+	Enabled     *bool               `json:"enabled,omitempty"`
+	Id          *openapi_types.UUID `json:"id,omitempty"`
+	LastError   *string             `json:"lastError,omitempty"`
+	LastFiredAt *time.Time          `json:"lastFiredAt,omitempty"`
+	Name        *string             `json:"name,omitempty"`
+
+	// Pools Either "*" (all pools at fire time) or a comma-separated list of pool names.
+	Pools    *string              `json:"pools,omitempty"`
+	Priority *ScrubPolicyPriority `json:"priority,omitempty"`
+}
+
+// ScrubPolicyPriority defines model for ScrubPolicy.Priority.
+type ScrubPolicyPriority string
 
 // SmartAttribute defines model for SmartAttribute.
 type SmartAttribute struct {
@@ -1280,11 +1477,58 @@ type Accepted struct {
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
+// Forbidden defines model for Forbidden.
+type Forbidden = Error
+
 // NotFound defines model for NotFound.
 type NotFound = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
+
+// ListAuditParams defines parameters for ListAudit.
+type ListAuditParams struct {
+	Actor  *string `form:"actor,omitempty" json:"actor,omitempty"`
+	Action *string `form:"action,omitempty" json:"action,omitempty"`
+
+	// Resource Prefix-matched against the event's resource path.
+	Resource *string                 `form:"resource,omitempty" json:"resource,omitempty"`
+	Outcome  *ListAuditParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Since    *time.Time              `form:"since,omitempty" json:"since,omitempty"`
+	Until    *time.Time              `form:"until,omitempty" json:"until,omitempty"`
+
+	// SourceIp IP or CIDR; matched against payload->>'source_ip'.
+	SourceIp *string `form:"source_ip,omitempty" json:"source_ip,omitempty"`
+	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor   *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListAuditParamsOutcome defines parameters for ListAudit.
+type ListAuditParamsOutcome string
+
+// ExportAuditParams defines parameters for ExportAudit.
+type ExportAuditParams struct {
+	Format   *ExportAuditParamsFormat  `form:"format,omitempty" json:"format,omitempty"`
+	Actor    *string                   `form:"actor,omitempty" json:"actor,omitempty"`
+	Action   *string                   `form:"action,omitempty" json:"action,omitempty"`
+	Resource *string                   `form:"resource,omitempty" json:"resource,omitempty"`
+	Outcome  *ExportAuditParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Since    *time.Time                `form:"since,omitempty" json:"since,omitempty"`
+	Until    *time.Time                `form:"until,omitempty" json:"until,omitempty"`
+	SourceIp *string                   `form:"source_ip,omitempty" json:"source_ip,omitempty"`
+}
+
+// ExportAuditParamsFormat defines parameters for ExportAudit.
+type ExportAuditParamsFormat string
+
+// ExportAuditParamsOutcome defines parameters for ExportAudit.
+type ExportAuditParamsOutcome string
+
+// SummarizeAuditParams defines parameters for SummarizeAudit.
+type SummarizeAuditParams struct {
+	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
+	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
+}
 
 // ListDatasetsParams defines parameters for ListDatasets.
 type ListDatasetsParams struct {
@@ -1378,6 +1622,11 @@ type NetworkReloadParams struct {
 // ApplyNetworkVLANParams defines parameters for ApplyNetworkVLAN.
 type ApplyNetworkVLANParams struct {
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// SendSMTPTestJSONBody defines parameters for SendSMTPTest.
+type SendSMTPTestJSONBody struct {
+	To openapi_types.Email `json:"to"`
 }
 
 // LinkNvmeofSubsystemJSONBody defines parameters for LinkNvmeofSubsystem.
@@ -1520,6 +1769,12 @@ type CreateNfsExportJSONRequestBody = NfsExport
 // UpdateNfsExportJSONRequestBody defines body for UpdateNfsExport for application/json ContentType.
 type UpdateNfsExportJSONRequestBody = NfsExport
 
+// PutSMTPConfigJSONRequestBody defines body for PutSMTPConfig for application/json ContentType.
+type PutSMTPConfigJSONRequestBody = SMTPConfig
+
+// SendSMTPTestJSONRequestBody defines body for SendSMTPTest for application/json ContentType.
+type SendSMTPTestJSONRequestBody SendSMTPTestJSONBody
+
 // SetNvmeofHostDHChapJSONRequestBody defines body for SetNvmeofHostDHChap for application/json ContentType.
 type SetNvmeofHostDHChapJSONRequestBody = NvmeofDHChapConfig
 
@@ -1588,6 +1843,12 @@ type CreateSnapshotScheduleJSONRequestBody = SnapshotSchedule
 
 // UpdateSnapshotScheduleJSONRequestBody defines body for UpdateSnapshotSchedule for application/json ContentType.
 type UpdateSnapshotScheduleJSONRequestBody = SnapshotSchedule
+
+// CreateScrubPolicyJSONRequestBody defines body for CreateScrubPolicy for application/json ContentType.
+type CreateScrubPolicyJSONRequestBody = ScrubPolicy
+
+// UpdateScrubPolicyJSONRequestBody defines body for UpdateScrubPolicy for application/json ContentType.
+type UpdateScrubPolicyJSONRequestBody = ScrubPolicy
 
 // CreateSnapshotJSONRequestBody defines body for CreateSnapshot for application/json ContentType.
 type CreateSnapshotJSONRequestBody CreateSnapshotJSONBody

@@ -42,6 +42,26 @@ type Config struct {
 
 	TLS  TLSConfig
 	Auth AuthConfig
+	SMTP SMTPConfig
+}
+
+// SMTPConfig configures the outbound SMTP relay used by transactional
+// email (password reset, invite, weekly summary) and synchronous test
+// sends from the API.
+//
+// Host empty disables outbound email; PUT /api/v1/notifications/smtp
+// can populate it later at runtime without a restart. The password is
+// loaded from a file (PasswordFile) rather than directly from the env
+// to avoid leaking it via /proc/<pid>/environ.
+type SMTPConfig struct {
+	Host         string `envconfig:"SMTP_HOST"`
+	Port         int    `envconfig:"SMTP_PORT" default:"587"`
+	Username     string `envconfig:"SMTP_USERNAME"`
+	PasswordFile string `envconfig:"SMTP_PASSWORD_FILE"`
+	From         string `envconfig:"SMTP_FROM"`
+	// TLSMode is one of "none", "starttls" (default), "tls".
+	TLSMode      string `envconfig:"SMTP_TLS_MODE" default:"starttls"`
+	MaxPerMinute int    `envconfig:"SMTP_MAX_PER_MINUTE" default:"30"`
 }
 
 // AuthConfig configures OIDC token verification for the HTTP API.

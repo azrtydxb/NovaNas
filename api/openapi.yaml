@@ -868,6 +868,134 @@ paths:
         '204':
           description: Cancelled
 
+  /audit:
+    get:
+      operationId: listAudit
+      summary: List audit events (cursor-paginated)
+      description: |
+        Returns audit events ordered ts DESC, id DESC. Pagination is
+        cursor-based: pass `next_cursor` from the previous response back as
+        the `cursor` query param. The cursor is opaque (base64) and stable
+        under concurrent inserts. Operator+ only (PermAuditRead).
+      parameters:
+        - in: query
+          name: actor
+          schema: { type: string }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: resource
+          description: Prefix-matched against the event's resource path.
+          schema: { type: string }
+        - in: query
+          name: outcome
+          schema: { type: string, enum: [accepted, rejected] }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+        - in: query
+          name: source_ip
+          description: IP or CIDR; matched against payload->>'source_ip'.
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /audit/summary:
+    get:
+      operationId: summarizeAudit
+      summary: Aggregate audit counts by (actor, action, outcome).
+      description: |
+        Returns counts grouped by (actor, action, outcome) within an
+        optional time window. Used for "who did what last week" UIs.
+        Operator+ only (PermAuditRead).
+      parameters:
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditSummaryRow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /audit/export:
+    get:
+      operationId: exportAudit
+      summary: Stream audit events as CSV or JSONL.
+      description: |
+        Streams matching events using chunked transfer encoding. Each row
+        is written as it is read from the database; the server never
+        buffers the full result set. One concurrent export per user;
+        additional requests get 429 until the first finishes. The export
+        itself is recorded in the audit log. Operator+ only.
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, jsonl], default: csv }
+        - in: query
+          name: actor
+          schema: { type: string }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: resource
+          schema: { type: string }
+        - in: query
+          name: outcome
+          schema: { type: string, enum: [accepted, rejected] }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+        - in: query
+          name: source_ip
+          schema: { type: string }
+      responses:
+        '200':
+          description: Streaming export
+          content:
+            text/csv:
+              schema: { type: string }
+            application/x-ndjson:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429':
+          description: Another export is already running for this user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /iscsi/targets:
     get:
       operationId: listIscsiTargets
@@ -1926,6 +2054,67 @@ paths:
               schema: { $ref: '#/components/schemas/ReplicationSchedule' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /scrub-policies:
+    get:
+      operationId: listScrubPolicies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScrubPolicy' }
+    post:
+      operationId: createScrubPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScrubPolicy' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScrubPolicy' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scrub-policies/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getScrubPolicy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScrubPolicy' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateScrubPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScrubPolicy' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScrubPolicy' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteScrubPolicy
+      responses:
+        '204': { description: Deleted }
+
   /scheduler/replication-schedules/{id}:
     parameters:
       - in: path
@@ -2165,6 +2354,85 @@ paths:
       responses:
         '202': { $ref: '#/components/responses/Accepted' }
 
+  /notifications/smtp:
+    get:
+      operationId: getSMTPConfig
+      summary: Read the current SMTP relay configuration
+      description: |
+        Returns the SMTP relay config used for outbound email
+        (transactional + alert pages). The password is always redacted
+        as `"***"` in the response — operators must consult the
+        configured password file out-of-band to inspect the cleartext.
+      x-required-permissions: [PermNotificationsRead]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SMTPConfig' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: putSMTPConfig
+      summary: Replace the SMTP relay configuration
+      description: |
+        Updates host/port/credentials at runtime without restarting
+        nova-api. To preserve the currently stored password without
+        re-typing it, send `"password": "***"`.
+      x-required-permissions: [PermNotificationsWrite]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SMTPConfig' }
+      responses:
+        '200':
+          description: Updated; body echoes the redacted post-update config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SMTPConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /notifications/smtp/test:
+    post:
+      operationId: sendSMTPTest
+      summary: Send a synchronous test email through the configured relay
+      description: |
+        Bypasses the outbox and rate limiter — the response reflects
+        the relay's verdict in real time. 502 with code `smtp_error`
+        means the relay refused or the connection failed; the message
+        contains the underlying error.
+      x-required-permissions: [PermNotificationsWrite]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, format: email }
+      responses:
+        '200':
+          description: Relay accepted the message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  to:     { type: string, format: email }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502':
+          description: SMTP relay refused the message or connection failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /jobs/{id}/stream:
     parameters:
       - in: path
@@ -2232,6 +2500,28 @@ components:
       properties:
         error:   { type: string }
         message: { type: string }
+    SMTPConfig:
+      type: object
+      description: |
+        Outbound SMTP relay configuration. The `password` field is
+        write-only — GET responses always return `"***"`. To preserve
+        the stored password during a PUT, send the literal string
+        `"***"` for `password`; any other non-empty value replaces it.
+      required: [host, port, fromAddress, tlsMode]
+      properties:
+        host:         { type: string, description: "SMTP relay hostname (e.g. smtp.sendgrid.net)." }
+        port:         { type: integer, minimum: 1, maximum: 65535 }
+        username:     { type: string }
+        password:     { type: string, description: "Cleartext on PUT, redacted on GET." }
+        fromAddress:  { type: string, format: email }
+        tlsMode:
+          type: string
+          enum: [none, starttls, tls]
+          description: "STARTTLS is recommended for port 587; tls (implicit TLS) for port 465."
+        maxPerMinute:
+          type: integer
+          minimum: 1
+          description: "Per-recipient leaky-bucket rate limit. Default 30."
     Identity:
       type: object
       description: Authenticated principal as projected from a verified JWT.
@@ -2364,6 +2654,38 @@ components:
         createdAt:  { type: string, format: date-time }
         startedAt:  { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }
+    AuditEvent:
+      type: object
+      required: [id, timestamp, action, resource, outcome]
+      properties:
+        id:         { type: integer, format: int64 }
+        timestamp:  { type: string, format: date-time }
+        actor:      { type: string }
+        action:     { type: string, description: "HTTP method + path, e.g. 'POST /api/v1/pools'" }
+        resource:   { type: string, description: "Resource path (URL of the affected object)" }
+        request_id: { type: string }
+        payload:    { description: "Redacted request body (when JSON)." }
+        outcome:    { type: string, enum: [accepted, rejected] }
+    AuditListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        next_cursor:
+          type: string
+          description: |
+            Opaque cursor; pass back as ?cursor=... to fetch the next
+            page. Empty when there are no more rows.
+    AuditSummaryRow:
+      type: object
+      required: [actor, action, outcome, count]
+      properties:
+        actor:   { type: string }
+        action:  { type: string }
+        outcome: { type: string }
+        count:   { type: integer, format: int64 }
     MetadataPatch:
       type: object
       properties:
@@ -2770,6 +3092,19 @@ components:
         snapshotPrefix:  { type: string }
         retentionRemote: { type: integer }
         enabled:         { type: boolean }
+
+    ScrubPolicy:
+      type: object
+      properties:
+        id:          { type: string, format: uuid, readOnly: true }
+        name:        { type: string }
+        pools:       { type: string, description: 'Either "*" (all pools at fire time) or a comma-separated list of pool names.' }
+        cron:        { type: string, description: 'Standard 5-field cron expression' }
+        priority:    { type: string, enum: [low, medium, high] }
+        enabled:     { type: boolean }
+        builtin:     { type: boolean, readOnly: true, description: 'true for the operator-default policy installed on a fresh install.' }
+        lastFiredAt: { type: string, format: date-time, readOnly: true }
+        lastError:   { type: string, readOnly: true }
 
     LiveInterface:
       type: object
