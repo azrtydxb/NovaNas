@@ -62,6 +62,22 @@ type Config struct {
 	KeycloakAdminURL              string `envconfig:"KEYCLOAK_ADMIN_URL"`
 	KeycloakAdminClientID         string `envconfig:"KEYCLOAK_ADMIN_CLIENT_ID"`
 	KeycloakAdminClientSecretFile string `envconfig:"KEYCLOAK_ADMIN_CLIENT_SECRET_FILE"`
+
+	// Tier 2 plugin engine. MarketplaceIndexURL points at index.json
+	// for the NovaNAS marketplace; MarketplaceTrustKeyPath is the
+	// cosign public key used to verify package signatures. Empty
+	// MarketplaceTrustKeyPath disables signature verification — DO
+	// NOT do this in production; it disables the entire trust chain.
+	// MarketplaceCosignBin, when set and non-empty, switches the
+	// verifier from native-Go PEM verification to shelling out to
+	// `cosign verify-blob` (operators who need rekor / transparency).
+	MarketplaceIndexURL    string `envconfig:"MARKETPLACE_INDEX_URL" default:"https://raw.githubusercontent.com/azrtydxb/NovaNas-packages/main/index.json"`
+	MarketplaceTrustKeyPath string `envconfig:"MARKETPLACE_TRUST_KEY_PATH" default:"/etc/nova-nas/trust/marketplace.pub"`
+	MarketplaceCosignBin    string `envconfig:"MARKETPLACE_COSIGN_BIN"`
+	// PluginsRoot is the on-disk directory where unpacked plugin trees
+	// (UI bundles, manifest.yaml, etc.) live. Default
+	// /var/lib/nova-nas/plugins.
+	PluginsRoot string `envconfig:"PLUGINS_ROOT" default:"/var/lib/nova-nas/plugins"`
 }
 
 // SMTPConfig configures the outbound SMTP relay used by transactional

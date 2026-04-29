@@ -42,6 +42,7 @@ import (
 	"github.com/novanas/nova-nas/internal/jobs"
 	"github.com/novanas/nova-nas/internal/logging"
 	"github.com/novanas/nova-nas/internal/notifycenter"
+	"github.com/novanas/nova-nas/internal/plugins"
 	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/scrubpolicy"
 	"github.com/novanas/nova-nas/internal/store"
@@ -405,6 +406,28 @@ func main() {
 	// surface returns 503 until the client is wired.
 	vmMgr := buildVMManager(logger)
 
+	// Tier 2 plugin engine wiring. Marketplace client is always built
+	// (the index URL is configurable). The verifier and provisioner
+	// are wired with the operator-supplied trust key + a NopProvisioner
+	// (real provisioner — datasets/keycloak/CA — is wired in a follow-
+	// up). The lifecycle manager re-mounts API routes + UI bundles for
+	// previously-installed plugins on startup.
+	pluginsMarket := plugins.NewMarketplaceClient(cfg.MarketplaceIndexURL, nil)
+	pluginsVerifier := plugins.NewVerifier(cfg.MarketplaceTrustKeyPath)
+	pluginsVerifier.CosignBin = cfg.MarketplaceCosignBin
+	pluginsRouter := plugins.NewRouter(logger, nil)
+	pluginsUI := plugins.NewUIAssets(cfg.PluginsRoot)
+	pluginsMgr := plugins.NewManager(plugins.ManagerOptions{
+		Logger:      logger,
+		Queries:     st.Queries,
+		Marketplace: pluginsMarket,
+		Verifier:    pluginsVerifier,
+		Provisioner: plugins.NopProvisioner{},
+		Router:      pluginsRouter,
+		UI:          pluginsUI,
+	})
+	go pluginsMgr.RestoreAtStartup(context.Background())
+
 	srv := api.New(api.Deps{
 		Logger:           logger,
 		Store:            st,
@@ -435,6 +458,11 @@ func main() {
 		ReplicationMgr:   replMgr,
 		WorkloadsMgr:     workloadsMgr,
 		VMMgr:            vmMgr,
+
+		PluginsMgr:    pluginsMgr,
+		PluginsRouter: pluginsRouter,
+		PluginsUI:     pluginsUI,
+		PluginsMarket: pluginsMarket,
 
 		Verifier:     verifier,
 		RoleMap:      auth.DefaultRoleMap,

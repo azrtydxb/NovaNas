@@ -2911,3 +2911,70 @@ type UpgradeWorkloadJSONRequestBody = WorkloadUpgradeRequest
 
 // RollbackWorkloadJSONRequestBody defines body for RollbackWorkload for application/json ContentType.
 type RollbackWorkloadJSONRequestBody RollbackWorkloadJSONBody
+
+// ===== Tier 2 plugin engine types (hand-extended; regenerate when oapi-codegen runs) =====
+
+// PluginIndexVersion is one published version of a plugin in the marketplace.
+type PluginIndexVersion struct {
+	Version      string     `json:"version"`
+	TarballUrl   string     `json:"tarballUrl"`
+	SignatureUrl string     `json:"signatureUrl"`
+	Sha256       *string    `json:"sha256,omitempty"`
+	Size         *int64     `json:"size,omitempty"`
+	ReleasedAt   *time.Time `json:"releasedAt,omitempty"`
+}
+
+// PluginIndexEntry is one plugin in the marketplace catalog.
+type PluginIndexEntry struct {
+	Name        string               `json:"name"`
+	DisplayName *string              `json:"displayName,omitempty"`
+	Vendor      string               `json:"vendor"`
+	Category    string               `json:"category"`
+	Description *string              `json:"description,omitempty"`
+	Icon        *string              `json:"icon,omitempty"`
+	Homepage    *string              `json:"homepage,omitempty"`
+	Versions    []PluginIndexVersion `json:"versions"`
+}
+
+// PluginIndex is the marketplace catalog response.
+type PluginIndex struct {
+	Version int                `json:"version"`
+	Updated *time.Time         `json:"updated,omitempty"`
+	Plugins []PluginIndexEntry `json:"plugins"`
+}
+
+// PluginResource is one auto-provisioned `needs:` resource.
+type PluginResource struct {
+	Type string `json:"type"`
+	Id   string `json:"id"`
+}
+
+// PluginInstallation is the response shape for an installed plugin.
+type PluginInstallation struct {
+	Id          openapi_types.UUID     `json:"id"`
+	Name        string                 `json:"name"`
+	Version     string                 `json:"version"`
+	Manifest    map[string]interface{} `json:"manifest,omitempty"`
+	Status      string                 `json:"status"`
+	InstalledAt time.Time              `json:"installedAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
+	Resources   *[]PluginResource      `json:"resources,omitempty"`
+}
+
+// PluginInstallRequest is the body of POST /plugins.
+type PluginInstallRequest struct {
+	Name       string  `json:"name"`
+	Version    *string `json:"version,omitempty"`
+	ValuesYAML *string `json:"valuesYAML,omitempty"`
+}
+
+// PluginUpgradeRequest is the body of PATCH /plugins/{name}.
+type PluginUpgradeRequest struct {
+	Version string `json:"version"`
+}
+
+// InstallPluginJSONRequestBody defines body for InstallPlugin for application/json ContentType.
+type InstallPluginJSONRequestBody = PluginInstallRequest
+
+// UpgradePluginJSONRequestBody defines body for UpgradePlugin for application/json ContentType.
+type UpgradePluginJSONRequestBody = PluginUpgradeRequest

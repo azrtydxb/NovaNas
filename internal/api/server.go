@@ -33,6 +33,7 @@ import (
 	"github.com/novanas/nova-nas/internal/host/zfs/pool"
 	"github.com/novanas/nova-nas/internal/host/zfs/snapshot"
 	"github.com/novanas/nova-nas/internal/notifycenter"
+	"github.com/novanas/nova-nas/internal/plugins"
 	"github.com/novanas/nova-nas/internal/replication"
 	"github.com/novanas/nova-nas/internal/store"
 	"github.com/novanas/nova-nas/internal/vms"
@@ -87,6 +88,17 @@ type Deps struct {
 	// 503 — the Package Center GUI degrades gracefully on hosts where
 	// k3s hasn't been bootstrapped yet.
 	WorkloadsMgr workloads.Lifecycle
+
+	// Tier 2 plugin engine. PluginsMgr orchestrates install/uninstall/
+	// upgrade; PluginsRouter mounts reverse-proxy routes for installed
+	// plugins; PluginsUI serves the static UI bundles; PluginsMarket
+	// is the marketplace client. All four are typically wired together
+	// in cmd/nova-api/main.go from the same env-derived config; tests
+	// may wire only the subset they exercise.
+	PluginsMgr     *plugins.Manager
+	PluginsRouter  *plugins.Router
+	PluginsUI      *plugins.UIAssets
+	PluginsMarket  *plugins.MarketplaceClient
 
 	// Auth wiring. If Verifier is nil OR AuthDisabled is true, the
 	// /api/v1 group does not enforce authentication or per-route
@@ -777,6 +789,46 @@ func New(d Deps) *Server {
 				r.Get("/auth/users/{id}/sessions", d.SessionsHandler.ListUserSessions)
 				r.Delete("/auth/users/{id}/sessions", d.SessionsHandler.RevokeUserSessions)
 				r.Get("/auth/users/{id}/login-history", d.SessionsHandler.ListUserLoginHistory)
+			})
+		}
+
+		// ---- Tier 2 plugins (first-party marketplace + lifecycle) ----
+		// Always mounted; when PluginsMgr is nil every endpoint responds
+		// 503 so the Aurora chrome gets a stable shape on hosts where
+		// the engine has not been wired yet (e.g. dev VMs).
+		{
+			pluginsH := &handlers.PluginsHandler{
+				Logger:      d.Logger,
+				Manager:     d.PluginsMgr,
+				Marketplace: d.PluginsMarket,
+				Router:      d.PluginsRouter,
+				UI:          d.PluginsUI,
+			}
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPluginsRead))
+				r.Get("/plugins/index", pluginsH.Index)
+				r.Get("/plugins/index/{name}", pluginsH.IndexEntry)
+				r.Get("/plugins", pluginsH.List)
+				r.Get("/plugins/{name}", pluginsH.Get)
+				// Static UI bundle. Open to any read-capable identity so
+				// Aurora can lazy-load the React module without escalating.
+				r.Get("/plugins/{name}/ui/*", pluginsH.ServeUI)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPluginsAdmin))
+				r.Post("/plugins", pluginsH.Install)
+				r.Patch("/plugins/{name}", pluginsH.Upgrade)
+				r.Delete("/plugins/{name}", pluginsH.Uninstall)
+			})
+			// Reverse-proxy: /plugins/{name}/api/* dispatches into the
+			// installed plugin's manifest-declared upstreams. Auth is
+			// enforced per-route by the manifest (bearer-passthrough vs
+			// service-token) inside the router; nova-api still requires
+			// PluginsRead so unauthenticated traffic never reaches the
+			// upstream.
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPluginsRead))
+				r.HandleFunc("/plugins/{name}/api/*", pluginsH.ServeProxy)
 			})
 		}
 

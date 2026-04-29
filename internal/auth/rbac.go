@@ -83,6 +83,16 @@ const (
 	// domains.
 	PermWorkloadsRead  Permission = "nova:workloads:read"
 	PermWorkloadsWrite Permission = "nova:workloads:write"
+
+	// Tier 2 first-party plugin engine. Read covers the marketplace
+	// catalog and the list of installed plugins; Write covers nothing
+	// today (read+admin is the simpler split for the install/upgrade/
+	// uninstall split because every mutation is a privileged operation
+	// that touches the host's config — no operator-without-admin path
+	// exists for plugins). Admin gates install/upgrade/uninstall.
+	PermPluginsRead  Permission = "nova:plugins:read"
+	PermPluginsWrite Permission = "nova:plugins:write"
+	PermPluginsAdmin Permission = "nova:plugins:admin"
 )
 
 // RoleMap maps Keycloak role names to a set of Permissions. Operators
@@ -109,6 +119,7 @@ var DefaultRoleMap = RoleMap{
 		PermSessionsRead, PermSessionsAdmin,
 		PermVMRead, PermVMWrite,
 		PermWorkloadsRead, PermWorkloadsWrite,
+		PermPluginsRead, PermPluginsWrite, PermPluginsAdmin,
 	},
 	"nova-operator": {
 		PermStorageRead, PermStorageWrite,
@@ -126,6 +137,7 @@ var DefaultRoleMap = RoleMap{
 		PermSessionsRead,
 		PermVMRead, PermVMWrite,
 		PermWorkloadsRead, PermWorkloadsWrite,
+		PermPluginsRead,
 	},
 	// Viewers intentionally do NOT receive PermAuditRead. The audit log
 	// reveals who has accessed which resources; granting it to read-only
@@ -141,6 +153,7 @@ var DefaultRoleMap = RoleMap{
 		PermSessionsRead,
 		PermVMRead,
 		PermWorkloadsRead,
+		PermPluginsRead,
 		PermNotificationsEventsRead, PermNotificationsEventsWrite,
 	},
 	"nova-system-admin": {

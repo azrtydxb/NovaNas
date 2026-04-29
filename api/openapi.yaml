@@ -3291,6 +3291,145 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  # ---- Tier 2 first-party plugin engine -----------------------------------
+  /plugins/index:
+    get:
+      operationId: listPluginIndex
+      summary: List the marketplace catalog.
+      description: |
+        Returns the cosign-verified marketplace index. Cached server-side
+        for 15 minutes; pass `?refresh=true` to force a fresh fetch.
+      x-required-permissions: [nova:plugins:read]
+      parameters:
+        - in: query
+          name: refresh
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginIndex' }
+        '502':
+          description: Marketplace unreachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /plugins/index/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPluginIndexEntry
+      summary: One plugin's metadata + version list.
+      x-required-permissions: [nova:plugins:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginIndexEntry' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /plugins:
+    get:
+      operationId: listPlugins
+      summary: List installed plugins.
+      x-required-permissions: [nova:plugins:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PluginInstallation' }
+    post:
+      operationId: installPlugin
+      summary: Install a plugin from the marketplace.
+      description: |
+        Downloads, verifies (cosign), unpacks, runs auto-provisioning of
+        any declared `needs:`, deploys the runtime (helm/systemd), mounts
+        API routes, and registers the UI bundle.
+      x-required-permissions: [nova:plugins:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PluginInstallRequest' }
+      responses:
+        '201':
+          description: Installed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginInstallation' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Already installed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /plugins/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPlugin
+      summary: One installed plugin (manifest + status + provisioned resources).
+      x-required-permissions: [nova:plugins:read]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginInstallation' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    patch:
+      operationId: upgradePlugin
+      summary: Upgrade an installed plugin to a new version.
+      x-required-permissions: [nova:plugins:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PluginUpgradeRequest' }
+      responses:
+        '200':
+          description: Upgraded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginInstallation' }
+    delete:
+      operationId: uninstallPlugin
+      summary: Uninstall a plugin.
+      description: |
+        With `?purge=true`, the engine also unwinds all auto-provisioned
+        `needs:` resources (datasets, oidcClients, …). Without purge they
+        are preserved so an immediate reinstall is fast.
+      x-required-permissions: [nova:plugins:admin]
+      parameters:
+        - in: query
+          name: purge
+          schema: { type: boolean }
+      responses:
+        '204':
+          description: Uninstalled
+
   # ---- KubeVirt VM management ----------------------------------------------
   /vms:
     get:
@@ -4965,3 +5104,70 @@ components:
         token:     { type: string }
         expiresAt: { type: string, format: date-time }
         kind:      { type: string, enum: [vnc, spice, serial] }
+
+    # ---- Tier 2 first-party plugin engine ----------------------------------
+    PluginIndexVersion:
+      type: object
+      required: [version, tarballUrl, signatureUrl]
+      properties:
+        version:      { type: string }
+        tarballUrl:   { type: string }
+        signatureUrl: { type: string }
+        sha256:       { type: string }
+        size:         { type: integer, format: int64 }
+        releasedAt:   { type: string, format: date-time }
+    PluginIndexEntry:
+      type: object
+      required: [name, vendor, category, versions]
+      properties:
+        name:        { type: string }
+        displayName: { type: string }
+        vendor:      { type: string }
+        category:    { type: string }
+        description: { type: string }
+        icon:        { type: string }
+        homepage:    { type: string }
+        versions:
+          type: array
+          items: { $ref: '#/components/schemas/PluginIndexVersion' }
+    PluginIndex:
+      type: object
+      required: [version, plugins]
+      properties:
+        version: { type: integer }
+        updated: { type: string, format: date-time }
+        plugins:
+          type: array
+          items: { $ref: '#/components/schemas/PluginIndexEntry' }
+    PluginResource:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [dataset, oidcClient, tlsCert, permission] }
+        id:   { type: string }
+    PluginInstallation:
+      type: object
+      required: [id, name, version, status]
+      properties:
+        id:          { type: string, format: uuid }
+        name:        { type: string }
+        version:     { type: string }
+        manifest:    { type: object }
+        status:      { type: string, enum: [installed, failed, upgrading] }
+        installedAt: { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/PluginResource' }
+    PluginInstallRequest:
+      type: object
+      required: [name]
+      properties:
+        name:       { type: string }
+        version:    { type: string }
+        valuesYAML: { type: string }
+    PluginUpgradeRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string }
