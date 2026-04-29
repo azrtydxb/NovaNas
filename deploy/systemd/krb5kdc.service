@@ -1,8 +1,9 @@
 [Unit]
 Description=MIT Kerberos KDC (NovaNAS embedded)
 Documentation=man:krb5kdc(8)
-After=network.target nova-kdc-bootstrap.service
+After=network.target nova-kdc-bootstrap.service nova-kdc-unseal.service
 Wants=nova-kdc-bootstrap.service
+Requires=nova-kdc-unseal.service
 ConditionPathExists=/var/lib/krb5kdc/principal
 
 [Service]

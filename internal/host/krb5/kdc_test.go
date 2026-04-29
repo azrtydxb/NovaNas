@@ -107,6 +107,38 @@ func TestBootstrap_RequiresPassword(t *testing.T) {
 	}
 }
 
+func TestStatus_StashSealedReflectsSealedBlob(t *testing.T) {
+	fs := newMemFS()
+	// Sealed blob present → StashSealed should be true. The runtime
+	// tmpfs stash is irrelevant to this signal.
+	_ = fs.WriteFile("/etc/nova-kdc/master.enc", []byte{0x01, 0x02, 0x03}, 0o600)
+
+	r := &fakeRunner{t: t, respond: func(string, []string) ([]byte, error) { return nil, nil }}
+	m := &KDCManager{Runner: r.run, FS: fs}
+	st, err := m.Status(context.Background())
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !st.StashSealed {
+		t.Errorf("expected StashSealed=true when /etc/nova-kdc/master.enc exists")
+	}
+}
+
+func TestStatus_StashSealedRespectsCustomPath(t *testing.T) {
+	fs := newMemFS()
+	_ = fs.WriteFile("/custom/sealed.enc", []byte{0x01}, 0o600)
+
+	r := &fakeRunner{t: t, respond: func(string, []string) ([]byte, error) { return nil, nil }}
+	m := &KDCManager{Cfg: KDCConfig{SealedBlobPath: "/custom/sealed.enc"}, Runner: r.run, FS: fs}
+	st, err := m.Status(context.Background())
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !st.StashSealed {
+		t.Errorf("expected StashSealed=true via custom SealedBlobPath")
+	}
+}
+
 func TestStatus_DBMissing(t *testing.T) {
 	r := &fakeRunner{t: t, respond: func(bin string, args []string) ([]byte, error) {
 		if strings.HasSuffix(bin, "systemctl") {

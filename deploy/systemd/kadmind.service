@@ -1,8 +1,8 @@
 [Unit]
 Description=MIT Kerberos Admin Server (kadmind)
 Documentation=man:kadmind(8)
-After=network.target krb5kdc.service
-Requires=krb5kdc.service
+After=network.target krb5kdc.service nova-kdc-unseal.service
+Requires=krb5kdc.service nova-kdc-unseal.service
 ConditionPathExists=/var/lib/krb5kdc/principal
 
 [Service]

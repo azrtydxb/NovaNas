@@ -42,8 +42,15 @@ type KDCConfig struct {
 	// DatabasePath is the principal-DB file (kdb5_util writes
 	// principal/principal.ok/principal.kadm5/principal.kadm5.lock here).
 	DatabasePath string
-	// StashPath is the on-disk master-key stash. mode 0600 root:root.
+	// StashPath is the runtime master-key stash. NovaNAS materializes
+	// this file at boot from a TPM-sealed blob; see cmd/nova-kdc-unseal.
+	// Defaults to /run/krb5kdc/.k5.<REALM> (tmpfs, mode 0600 root:root).
 	StashPath string
+	// SealedBlobPath is the on-disk TPM-sealed master-key blob produced
+	// by `nova-kdc-unseal --init`. Existence of this file is the signal
+	// reported as KDCStatus.StashSealed. Defaults to
+	// /etc/nova-kdc/master.enc.
+	SealedBlobPath string
 	// KadminLocalBin overrides the kadmin.local binary path.
 	KadminLocalBin string
 	// Kdb5UtilBin overrides the kdb5_util binary path.
@@ -78,8 +85,18 @@ func (m *KDCManager) stashPath() string {
 	if p := m.Cfg.StashPath; p != "" {
 		return p
 	}
-	// MIT default stash file naming convention.
-	return "/var/lib/krb5kdc/.k5." + m.realm()
+	// Runtime tmpfs path materialized by nova-kdc-unseal.service. The
+	// MIT-default location (/var/lib/krb5kdc/.k5.<REALM>) is no longer
+	// used at runtime — it only appears transiently during initial
+	// bootstrap before being TPM-sealed and shredded.
+	return "/run/krb5kdc/.k5." + m.realm()
+}
+
+func (m *KDCManager) sealedBlobPath() string {
+	if p := m.Cfg.SealedBlobPath; p != "" {
+		return p
+	}
+	return "/etc/nova-kdc/master.enc"
 }
 
 func (m *KDCManager) kadminLocalBin() string {
@@ -129,10 +146,14 @@ func (m *KDCManager) Status(ctx context.Context) (*KDCStatus, error) {
 		return nil, fmt.Errorf("stat %s: %w", m.databasePath(), err)
 	}
 
-	if _, err := m.fs().Stat(m.stashPath()); err == nil {
+	// StashSealed reports whether a TPM-sealed master-key blob exists
+	// on disk. The runtime stash on tmpfs is intentionally NOT checked
+	// here — its presence is a function of boot ordering, not of
+	// long-term protection state.
+	if _, err := m.fs().Stat(m.sealedBlobPath()); err == nil {
 		st.StashSealed = true
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("stat %s: %w", m.stashPath(), err)
+		return nil, fmt.Errorf("stat %s: %w", m.sealedBlobPath(), err)
 	}
 
 	// `systemctl is-active krb5kdc` returns exit 0 with "active" on stdout

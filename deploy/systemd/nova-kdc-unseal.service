@@ -1,0 +1,43 @@
+[Unit]
+Description=NovaNAS MIT KDC TPM-backed master-key unseal at boot
+Documentation=https://github.com/novanas/nova-nas/blob/main/docs/krb5/README.md
+DefaultDependencies=yes
+After=local-fs.target systemd-tmpfiles-setup.service
+Before=krb5kdc.service kadmind.service
+RequiresMountsFor=/run
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# /run/krb5kdc is a tmpfs sub-directory: root-owned, 0700, holds the
+# materialized plaintext stash. We re-create it every boot because /run
+# is wiped on reboot.
+ExecStartPre=/bin/mkdir -p /run/krb5kdc
+ExecStartPre=/bin/chown root:root /run/krb5kdc
+ExecStartPre=/bin/chmod 0700 /run/krb5kdc
+ExecStart=/usr/local/bin/nova-kdc-unseal
+Environment="NOVA_KDC_REALM=NOVANAS.LOCAL"
+
+# Hardening — mirrors deploy/systemd/nova-bao-tpm-unseal.service but
+# allows the few writes this unit needs.
+User=root
+Group=root
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+# /run/krb5kdc must be writable; /etc/nova-kdc is read-only (the blob).
+ReadWritePaths=/run/krb5kdc
+ReadOnlyPaths=/etc/nova-kdc
+# /dev/tpmrm0 (kernel resource manager) is required by internal/host/tpm.
+DeviceAllow=/dev/tpmrm0 rw
+DeviceAllow=/dev/tpm0 rw
+
+[Install]
+WantedBy=multi-user.target
