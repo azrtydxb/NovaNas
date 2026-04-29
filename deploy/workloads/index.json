@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-29",
+  "description": "NovaNAS curated Helm chart index. Each entry references an upstream chart that the operator can install on the embedded k3s cluster via the /api/v1/workloads API. Versions are pinned; bump them after testing.",
+  "entries": [
+    {
+      "name": "plex",
+      "displayName": "Plex Media Server",
+      "category": "media",
+      "description": "Plex media server. Streams movies, TV, music, and photos from the NAS to clients on the network.",
+      "chart": "plex-media-server",
+      "version": "9.4.7",
+      "repoURL": "https://raw.githubusercontent.com/k8s-at-home/charts/master/",
+      "appVersion": "1.40.0.7998",
+      "icon": "https://www.plex.tv/wp-content/uploads/2018/01/pmp-stp-1.png",
+      "homepage": "https://www.plex.tv/",
+      "readmeURL": "https://github.com/k8s-at-home/charts/tree/master/charts/stable/plex-media-server",
+      "defaultNamespace": "nova-app-plex",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "service": { "main": { "type": "LoadBalancer" } },
+        "persistence": { "config": { "enabled": true, "size": "5Gi" } }
+      }
+    },
+    {
+      "name": "jellyfin",
+      "displayName": "Jellyfin",
+      "category": "media",
+      "description": "Free Software Media System. The volunteer-built alternative to Plex/Emby.",
+      "chart": "jellyfin",
+      "version": "13.0.0",
+      "repoURL": "https://jellyfin.github.io/jellyfin-helm",
+      "appVersion": "10.9.7",
+      "icon": "https://jellyfin.org/images/logo.svg",
+      "homepage": "https://jellyfin.org/",
+      "readmeURL": "https://github.com/jellyfin/jellyfin-helm",
+      "defaultNamespace": "nova-app-jellyfin",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "service": { "type": "LoadBalancer", "port": { "port": 8096 } },
+        "persistence": { "config": { "enabled": true, "size": "10Gi" } }
+      }
+    },
+    {
+      "name": "nextcloud",
+      "displayName": "Nextcloud",
+      "category": "productivity",
+      "description": "Self-hosted productivity platform: file sync/share, calendar, contacts, office.",
+      "chart": "nextcloud",
+      "version": "6.6.6",
+      "repoURL": "https://nextcloud.github.io/helm/",
+      "appVersion": "30.0.2",
+      "icon": "https://nextcloud.com/wp-content/themes/next/assets/img/common/nextcloud-square-logo.png",
+      "homepage": "https://nextcloud.com/",
+      "readmeURL": "https://github.com/nextcloud/helm/tree/main/charts/nextcloud",
+      "defaultNamespace": "nova-app-nextcloud",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "nextcloud": { "host": "nextcloud.local" },
+        "persistence": { "enabled": true, "size": "20Gi" }
+      }
+    },
+    {
+      "name": "photoprism",
+      "displayName": "PhotoPrism",
+      "category": "media",
+      "description": "AI-powered photo app. Browse, organize, and share private photo collections.",
+      "chart": "photoprism",
+      "version": "0.3.4",
+      "repoURL": "https://charts.truecharts.org/",
+      "appVersion": "240915",
+      "icon": "https://photoprism.app/static/img/logo-avatar.svg",
+      "homepage": "https://photoprism.app/",
+      "readmeURL": "https://truecharts.org/charts/stable/photoprism/",
+      "defaultNamespace": "nova-app-photoprism",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "persistence": { "originals": { "enabled": true, "size": "100Gi" } }
+      }
+    },
+    {
+      "name": "vaultwarden",
+      "displayName": "Vaultwarden",
+      "category": "security",
+      "description": "Unofficial Bitwarden-compatible password manager server, written in Rust. Lightweight self-hosted alternative.",
+      "chart": "vaultwarden",
+      "version": "0.30.6",
+      "repoURL": "https://guerzon.github.io/vaultwarden",
+      "appVersion": "1.32.5",
+      "icon": "https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg",
+      "homepage": "https://github.com/dani-garcia/vaultwarden",
+      "readmeURL": "https://github.com/guerzon/vaultwarden",
+      "defaultNamespace": "nova-app-vaultwarden",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "domain": "https://vaultwarden.local",
+        "persistence": { "enabled": true, "size": "5Gi" }
+      }
+    },
+    {
+      "name": "syncthing",
+      "displayName": "Syncthing",
+      "category": "productivity",
+      "description": "Continuous file synchronization between devices. P2P, end-to-end encrypted, no central server.",
+      "chart": "syncthing",
+      "version": "11.6.0",
+      "repoURL": "https://k8s-at-home.com/charts/",
+      "appVersion": "1.27.10",
+      "icon": "https://syncthing.net/img/logo-horizontal.svg",
+      "homepage": "https://syncthing.net/",
+      "readmeURL": "https://github.com/k8s-at-home/charts/tree/master/charts/stable/syncthing",
+      "defaultNamespace": "nova-app-syncthing",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "service": { "main": { "type": "LoadBalancer" } },
+        "persistence": { "config": { "enabled": true, "size": "5Gi" } }
+      }
+    },
+    {
+      "name": "home-assistant",
+      "displayName": "Home Assistant",
+      "category": "home-automation",
+      "description": "Open-source home automation hub. Control lights, sensors, and IoT devices locally.",
+      "chart": "home-assistant",
+      "version": "13.4.2",
+      "repoURL": "https://k8s-at-home.com/charts/",
+      "appVersion": "2024.11.3",
+      "icon": "https://www.home-assistant.io/images/home-assistant-logo.svg",
+      "homepage": "https://www.home-assistant.io/",
+      "readmeURL": "https://github.com/k8s-at-home/charts/tree/master/charts/stable/home-assistant",
+      "defaultNamespace": "nova-app-home-assistant",
+      "permissions": ["nova:workloads:write"],
+      "defaultValues": {
+        "service": { "main": { "type": "LoadBalancer", "port": { "port": 8123 } } },
+        "persistence": { "config": { "enabled": true, "size": "5Gi" } }
+      }
+    }
+  ]
+}
