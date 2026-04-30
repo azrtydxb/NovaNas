@@ -5,6 +5,7 @@ import {
   storage,
   type Dataset,
   type DatasetMetadata,
+  type Snapshot,
 } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
 import { toastSuccess } from "../../store/toast";
@@ -14,21 +15,43 @@ function dsKey(d: Dataset): string {
   return d.fullname ?? d.name;
 }
 
+type TreeNodeKind = "dataset" | "snapshot";
+
 type TreeNode = {
-  name: string;        // last path segment
-  fullname: string;    // full ZFS path, e.g. "tank/csi/pvc-..."
+  kind: TreeNodeKind;
+  // Display name. For snapshots we prefix with ".snap@" so they're
+  // unmistakable in a list of dataset paths.
+  display: string;
+  fullname: string;    // full ZFS path: "tank/csi/pvc" or "tank/csi/pvc@snap"
   depth: number;
-  dataset?: Dataset;   // missing for synthetic parents
+  dataset?: Dataset;   // for dataset nodes (or synthetic parents)
+  snapshot?: Snapshot; // for snapshot nodes
   children: TreeNode[];
 };
 
-// buildTree groups datasets by their slash-separated path. Synthetic
-// nodes are inserted for any path segment that has no matching dataset
-// (rare — usually parents exist on ZFS but defensively handled).
-function buildTree(datasets: Dataset[]): TreeNode[] {
+// snapshotKey returns the part of a snapshot's identifier after the
+// "@". Backends may give us either the bare snap name or the full
+// dataset@snap form; normalize.
+function snapshotKey(s: Snapshot): string {
+  const full = s.fullname ?? s.name;
+  const at = full.indexOf("@");
+  return at >= 0 ? full.slice(at + 1) : full;
+}
+
+// snapshotParent returns the dataset name a snapshot belongs to.
+function snapshotParent(s: Snapshot): string | null {
+  if (s.dataset) return s.dataset;
+  const full = s.fullname ?? s.name;
+  const at = full.indexOf("@");
+  return at >= 0 ? full.slice(0, at) : null;
+}
+
+// buildTree groups datasets by their slash-separated path. Snapshots
+// are attached as leaf children under their parent dataset node.
+// Synthetic nodes are inserted for any missing intermediate path.
+function buildTree(datasets: Dataset[], snapshots: Snapshot[]): TreeNode[] {
   const byPath = new Map<string, TreeNode>();
   const roots: TreeNode[] = [];
-  // Sort by full path so parents are visited before children.
   const sorted = [...datasets].sort((a, b) =>
     (a.fullname ?? a.name).localeCompare(b.fullname ?? b.name)
   );
@@ -41,7 +64,8 @@ function buildTree(datasets: Dataset[]): TreeNode[] {
         continue;
       }
       const node: TreeNode = {
-        name: path[i],
+        kind: "dataset",
+        display: path[i],
         fullname,
         depth: i,
         dataset: i === path.length - 1 ? d : undefined,
@@ -50,6 +74,36 @@ function buildTree(datasets: Dataset[]): TreeNode[] {
       byPath.set(fullname, node);
       if (i === 0) roots.push(node);
       else byPath.get(path.slice(0, i).join("/"))?.children.push(node);
+    }
+  }
+  // Attach snapshots under their parent dataset, sorted newest-first
+  // (created descending, fall back to name compare).
+  const snapsByParent = new Map<string, Snapshot[]>();
+  for (const s of snapshots) {
+    const parent = snapshotParent(s);
+    if (!parent) continue;
+    const arr = snapsByParent.get(parent) ?? [];
+    arr.push(s);
+    snapsByParent.set(parent, arr);
+  }
+  for (const [parent, snaps] of snapsByParent) {
+    const node = byPath.get(parent);
+    if (!node) continue;
+    snaps.sort((a, b) => {
+      const ta = a.created ? Date.parse(a.created) : 0;
+      const tb = b.created ? Date.parse(b.created) : 0;
+      if (ta && tb && ta !== tb) return tb - ta;
+      return snapshotKey(a).localeCompare(snapshotKey(b));
+    });
+    for (const s of snaps) {
+      node.children.push({
+        kind: "snapshot",
+        display: ".snap@" + snapshotKey(s),
+        fullname: s.fullname ?? `${parent}@${snapshotKey(s)}`,
+        depth: node.depth + 1,
+        snapshot: s,
+        children: [],
+      });
     }
   }
   return roots;
@@ -83,11 +137,16 @@ export function DatasetsTab() {
   const [showCreate, setShowCreate] = useState(false);
   const q = useQuery({ queryKey: ["datasets"], queryFn: () => storage.listDatasets() });
   const datasets = q.data ?? [];
+  const snapsQ = useQuery({
+    queryKey: ["snapshots", "all"],
+    queryFn: () => storage.listSnapshots(),
+  });
+  const snapshots = snapsQ.data ?? [];
 
   // Tree state. Top-level pool roots are expanded by default so
   // first-level children are visible without an extra click.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const tree = buildTree(datasets);
+  const tree = buildTree(datasets, snapshots);
   // Auto-expand pool roots on first load.
   useEffect(() => {
     if (datasets.length === 0) return;
@@ -147,13 +206,15 @@ export function DatasetsTab() {
             </thead>
             <tbody>
               {flat.map((node) => {
+                const isSnap = node.kind === "snapshot";
                 const d = node.dataset;
+                const s = node.snapshot;
                 const k = node.fullname;
-                const used = d?.used ?? 0;
+                const used = (isSnap ? (s?.used ?? s?.size ?? 0) : (d?.used ?? 0));
                 const quota = d?.quota ?? 0;
-                const pct = quota > 0 ? used / quota : 0;
-                const enc = d ? (d.enc ?? d.encrypted ?? !!d.encryption) : false;
-                const snap = d?.snap ?? d?.snapshots ?? 0;
+                const pct = quota > 0 && !isSnap ? used / quota : 0;
+                const enc = !isSnap && d ? (d.enc ?? d.encrypted ?? !!d.encryption) : false;
+                const snapCount = d?.snap ?? d?.snapshots ?? 0;
                 const hasChildren = node.children.length > 0;
                 const isOpen = expanded.has(node.fullname);
                 return (
@@ -202,19 +263,28 @@ export function DatasetsTab() {
                           <span style={{ display: "inline-block", width: 16 }} />
                         )}
                         <Icon
-                          name={hasChildren ? "folder" : "files"}
+                          name={isSnap ? "snapshot" : "storage"}
                           size={12}
-                          style={{ marginRight: 6, opacity: 0.7, color: hasChildren ? "var(--accent)" : undefined }}
+                          style={{
+                            marginRight: 6,
+                            color: isSnap ? "var(--fg-3)" : "var(--accent)",
+                          }}
                         />
-                        <span className="mono" style={{ fontSize: 12 }}>
-                          {node.name}
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: 12,
+                            color: isSnap ? "var(--fg-3)" : undefined,
+                          }}
+                        >
+                          {node.display}
                         </span>
                       </span>
                     </td>
-                    <td className="muted">{d?.proto ?? "—"}</td>
-                    <td className="num mono">{d ? formatBytes(used) : "—"}</td>
+                    <td className="muted">{isSnap ? "—" : (d?.proto ?? "—")}</td>
+                    <td className="num mono">{used > 0 ? formatBytes(used) : (isSnap || d ? "0 B" : "—")}</td>
                     <td>
-                      {quota > 0 ? (
+                      {!isSnap && quota > 0 ? (
                         <div className="cap">
                           <div className="cap__bar">
                             <div style={{ width: `${pct * 100}%` }} />
@@ -227,9 +297,19 @@ export function DatasetsTab() {
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td className="num mono">{d ? snap : "—"}</td>
-                    <td className="muted mono" style={{ fontSize: 11 }}>{d?.comp ?? d?.compression ?? "—"}</td>
-                    <td>{enc ? <Icon name="shield" size={12} /> : <span className="muted">—</span>}</td>
+                    <td className="num mono">{isSnap ? "—" : (d ? snapCount : "—")}</td>
+                    <td className="muted mono" style={{ fontSize: 11 }}>
+                      {isSnap ? "—" : (d?.comp ?? d?.compression ?? "—")}
+                    </td>
+                    <td>
+                      {isSnap ? (
+                        <span className="muted">—</span>
+                      ) : enc ? (
+                        <Icon name="shield" size={12} />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
