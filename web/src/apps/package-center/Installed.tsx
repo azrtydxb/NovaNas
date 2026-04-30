@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { plugins, type PluginManifest } from "../../api/plugins";
+import { plugins, type Installation } from "../../api/plugins";
 import { api } from "../../api/client";
 import { Icon } from "../../components/Icon";
 import { toastSuccess } from "../../store/toast";
 
 export function Installed() {
   const qc = useQueryClient();
-  const q = useQuery<PluginManifest[]>({
+  const q = useQuery<Installation[]>({
     queryKey: ["plugins", "installed"],
     queryFn: () => plugins.listInstalled(),
   });
   const [pickedName, setPickedName] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
 
-  const cur = (q.data ?? []).find((p) => p.metadata.name === pickedName) ?? (q.data ?? [])[0];
-  const curName = cur?.metadata.name;
+  const cur = (q.data ?? []).find((p) => p.name === pickedName) ?? (q.data ?? [])[0];
+  const curName = cur?.name;
 
   const deps = useQuery({
     queryKey: ["plugin-deps", curName],
@@ -64,13 +64,13 @@ export function Installed() {
         <div className="vlist__title">INSTALLED</div>
         {q.data.map((p) => (
           <button
-            key={p.metadata.name}
-            className={cur?.metadata.name === p.metadata.name ? "is-on" : ""}
-            onClick={() => setPickedName(p.metadata.name)}
+            key={p.name}
+            className={cur?.name === p.name ? "is-on" : ""}
+            onClick={() => setPickedName(p.name)}
           >
             <Icon name="package" size={12} />
-            <span>{p.metadata.name}</span>
-            <span className="muted mono small">{p.metadata.version}</span>
+            <span>{p.name}</span>
+            <span className="muted mono small">{p.version}</span>
           </button>
         ))}
       </aside>
@@ -78,13 +78,13 @@ export function Installed() {
         <main className="installed__detail">
           <div className="installed__head">
             <div className="installed__icon">
-              {cur.metadata.name.split("-").slice(-1)[0].slice(0, 2).toUpperCase()}
+              {cur.name.split("-").slice(-1)[0].slice(0, 2).toUpperCase()}
             </div>
             <div className="installed__head-meta">
-              <div className="installed__title">{cur.metadata.name}</div>
+              <div className="installed__title">{cur.name}</div>
               <div className="muted">
-                v{cur.metadata.version}
-                {cur.metadata.vendor && <> · {cur.metadata.vendor}</>}
+                v{cur.version}
+                {cur.manifest?.metadata?.vendor && <> · {cur.manifest.metadata.vendor}</>}
               </div>
             </div>
           </div>
@@ -94,7 +94,7 @@ export function Installed() {
             </span>
           </Sect>
           {(() => {
-            const spec = cur.spec as Record<string, unknown>;
+            const spec = (cur.manifest?.spec ?? {}) as Record<string, unknown>;
             const desc = spec.description as string | undefined;
             return desc ? (
               <Sect title="Description">
@@ -128,7 +128,7 @@ export function Installed() {
             <button
               className="btn"
               disabled={restart.isPending}
-              onClick={() => restart.mutate(cur.metadata.name)}
+              onClick={() => restart.mutate(cur.name)}
             >
               <Icon name="refresh" size={11} /> {restart.isPending ? "Restarting…" : "Restart"}
             </button>
@@ -140,8 +140,8 @@ export function Installed() {
               style={{ marginLeft: "auto" }}
               disabled={uninstall.isPending}
               onClick={() => {
-                if (window.confirm(`Uninstall ${cur.metadata.name}?`)) {
-                  uninstall.mutate(cur.metadata.name);
+                if (window.confirm(`Uninstall ${cur.name}?`)) {
+                  uninstall.mutate(cur.name);
                 }
               }}
             >

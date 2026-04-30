@@ -68,6 +68,19 @@ export type PluginManifest = {
   spec: Record<string, unknown>;
 };
 
+// Installation mirrors internal/plugins/lifecycle.go Installation.
+// GET /plugins returns []Installation with top-level name/version
+// and a nested manifest (which itself has metadata + spec).
+export type Installation = {
+  id: string;
+  name: string;
+  version: string;
+  manifest?: PluginManifest | null;
+  status?: string;
+  installedAt?: string;
+  updatedAt?: string;
+};
+
 export type PermissionsSummary = {
   willCreate: { kind: string; what: string; destructive: boolean }[];
   willMount: string[];
@@ -126,7 +139,7 @@ export const plugins = {
       `/api/v1/plugins/index/${encodeURIComponent(name)}/manifest?version=${encodeURIComponent(version)}`
     ),
 
-  listInstalled: () => api<PluginManifest[]>(`/api/v1/plugins`),
+  listInstalled: () => api<Installation[]>(`/api/v1/plugins`),
 
   listDependencies: (name: string) =>
     api<{ name: string; version: string }[]>(
