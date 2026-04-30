@@ -117,7 +117,13 @@ func (h *PoolDependentsHandler) collectDatasets(ctx context.Context, pool string
 			ID:       d.Name,
 			Name:     d.Name,
 			Detail:   d.Mountpoint,
-			Blocking: false, // zpool destroy cascades
+			// Blocking even though `zpool destroy -f` cascades to
+			// children: any dataset that is mounted or holds open
+			// fds (e.g. a k3s CSI PVC) wedges the destroy in
+			// uninterruptible kernel sleep, leaving the pool ONLINE
+			// but unusable until reboot. Force the operator to drain
+			// the pool first.
+			Blocking: true,
 		})
 	}
 	return out

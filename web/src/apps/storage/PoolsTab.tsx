@@ -261,7 +261,7 @@ function PoolDetailModal({
 }
 
 const DEPENDENT_LABELS: Record<PoolDependentKind, string> = {
-  "dataset": "Datasets (will be destroyed)",
+  "dataset": "Datasets",
   "share": "Shares",
   "iscsi-target": "iSCSI targets",
   "replication-job": "Replication jobs",

@@ -1,0 +1,15 @@
+[Unit]
+Description=Reconcile current LAN IP into Keycloak nova-api client redirect URIs
+After=keycloak.service network-online.target
+Wants=network-online.target
+Requires=keycloak.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nova-reconcile-ip-redirects
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=Watch for IP address changes and trigger Keycloak redirect-URI reconcile
+After=keycloak.service network-online.target
+Wants=network-online.target
+Requires=keycloak.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nova-reconcile-ip-redirects-watcher
+Restart=always
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
