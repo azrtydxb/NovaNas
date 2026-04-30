@@ -197,6 +197,14 @@ func New(d Deps) *Server {
 	disksH := &handlers.DisksHandler{Logger: d.Logger, Lister: d.Disks}
 	poolsH := &handlers.PoolsHandler{Logger: d.Logger, Pools: d.Pools}
 	poolsWriteH := &handlers.PoolsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher, Pools: d.Pools}
+	poolDeps := &handlers.PoolDependentsHandler{
+		Logger:        d.Logger,
+		Datasets:      d.Datasets,
+		ProtocolShare: d.ProtocolShareMgr,
+		Iscsi:         d.IscsiMgr,
+		Plugins:       d.PluginsMgr,
+		Store:         d.Store,
+	}
 	dsH := &handlers.DatasetsHandler{Logger: d.Logger, Datasets: d.Datasets}
 	dsW := &handlers.DatasetsWriteHandler{Logger: d.Logger, Dispatcher: d.Dispatcher}
 	dsStream := &handlers.DatasetsStreamHandler{Logger: d.Logger, Dataset: d.DatasetMgr}
@@ -303,6 +311,7 @@ func New(d Deps) *Server {
 			r.Get("/disks", disksH.List)
 			r.Get("/pools", poolsH.List)
 			r.Get("/pools/{name}", poolsH.Get)
+			r.Get("/pools/{name}/dependents", poolDeps.Handle)
 			r.Get("/pools/import", poolsWriteH.Importable)
 			r.Get("/datasets", dsH.List)
 			r.Get("/datasets/{fullname}", dsH.Get)

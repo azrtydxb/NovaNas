@@ -29,12 +29,7 @@ export function StorageManager() {
       </div>
       <div className="win-body" style={{ padding: 0, overflow: "auto" }}>
         {tab === "pools" && (
-          <PoolsTab
-            onPick={(n) => {
-              setPoolSel(n);
-              setTab("vdev");
-            }}
-          />
+          <PoolsTab />
         )}
         {tab === "vdev" && <VdevsTab pool={poolSel} setPool={setPoolSel} />}
         {tab === "disks" && <DisksTab />}

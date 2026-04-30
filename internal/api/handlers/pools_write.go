@@ -53,7 +53,7 @@ func (h *PoolsWriteHandler) Destroy(w http.ResponseWriter, r *http.Request) {
 		Payload:   jobs.PoolDestroyPayload{Name: name},
 		Command:   "zpool destroy " + name,
 		RequestID: middleware.RequestIDOf(r.Context()),
-		UniqueKey: "pool:" + name,
+		UniqueKey: "pool:" + name + ":destroy",
 	})
 	writeDispatchResult(w, h.Logger, "pools.destroy", out, err)
 }

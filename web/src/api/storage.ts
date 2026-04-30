@@ -113,6 +113,30 @@ export type Bookmark = {
   created?: string;
 };
 
+export type PoolDependentKind =
+  | "dataset"
+  | "share"
+  | "iscsi-target"
+  | "replication-job"
+  | "replication-schedule"
+  | "snapshot-schedule"
+  | "scrub-policy"
+  | "plugin";
+
+export type PoolDependent = {
+  kind: PoolDependentKind;
+  id: string;
+  name: string;
+  detail?: string;
+  enabled?: boolean;
+  blocking: boolean;
+};
+
+export type PoolDependentsResponse = {
+  pool: string;
+  dependents: PoolDependent[];
+};
+
 const j = (b: unknown): RequestInit => ({
   method: "POST",
   body: JSON.stringify(b ?? {}),
@@ -160,6 +184,10 @@ export const storage = {
     api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/upgrade`, { method: "POST" }),
   exportPool: (name: string) =>
     api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/export`, { method: "POST" }),
+  deletePool: (name: string) =>
+    api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  getPoolDependents: (name: string) =>
+    api<PoolDependentsResponse>(`/api/v1/pools/${encodeURIComponent(name)}/dependents`),
   reguidPool: (name: string) =>
     api<unknown>(`/api/v1/pools/${encodeURIComponent(name)}/reguid`, { method: "POST" }),
   waitPool: (name: string) =>

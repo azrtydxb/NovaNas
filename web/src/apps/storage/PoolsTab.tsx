@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
-import { storage, type Pool } from "../../api/storage";
+import { storage, type Pool, type PoolDependent, type PoolDependentKind } from "../../api/storage";
 import { formatBytes } from "../../lib/format";
 import { toastSuccess } from "../../store/toast";
 import { Modal } from "./Modal";
-
-type Props = { onPick: (name: string) => void };
 
 function poolUsed(p: Pool): number {
   return p.used ?? p.alloc ?? 0;
@@ -15,7 +13,7 @@ function poolTotal(p: Pool): number {
   return p.total ?? p.size ?? 0;
 }
 
-export function PoolsTab({ onPick }: Props) {
+export function PoolsTab() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["pools"], queryFn: () => storage.listPools() });
   const pools = q.data ?? [];
@@ -142,11 +140,6 @@ export function PoolsTab({ onPick }: Props) {
         <PoolDetailModal
           pool={detail}
           onClose={() => setDetailFor(null)}
-          onVdevs={() => {
-            const n = detail.name;
-            setDetailFor(null);
-            onPick(n);
-          }}
         />
       )}
       {showCreate && <CreatePoolModal onClose={() => setShowCreate(false)} />}
@@ -163,11 +156,9 @@ export function PoolsTab({ onPick }: Props) {
 function PoolDetailModal({
   pool,
   onClose,
-  onVdevs,
 }: {
   pool: Pool;
   onClose: () => void;
-  onVdevs: () => void;
 }) {
   const qc = useQueryClient();
   const propsQ = useQuery({
@@ -177,28 +168,25 @@ function PoolDetailModal({
   const props = (propsQ.data ?? {}) as Record<string, unknown>;
 
   const inval = () => qc.invalidateQueries({ queryKey: ["pools"] });
-  const m = (label: string, fn: () => Promise<unknown>, ok: string) =>
+  const m = (label: string, fn: () => Promise<unknown>, ok: string, andClose = false) =>
     useMutation({
       meta: { label: `${label} failed` },
       mutationFn: fn,
-      onSuccess: () => { inval(); toastSuccess(ok, `Pool ${pool.name}`); },
+      onSuccess: () => {
+        inval();
+        toastSuccess(ok, `Pool ${pool.name}`);
+        if (andClose) onClose();
+      },
     });
   const scrub = m("Scrub", () => storage.scrubPool(pool.name), "Scrub started");
   const trim = m("Trim", () => storage.trimPool(pool.name), "Trim started");
   const clear = m("Clear", () => storage.clearPool(pool.name), "Errors cleared");
-  const ckpt = m("Checkpoint", () => storage.checkpointPool(pool.name), "Checkpoint taken");
-  const discardCkpt = m("Discard checkpoint", () => storage.discardCheckpoint(pool.name), "Checkpoint discarded");
-  const wait = m("Wait", () => storage.waitPool(pool.name), "Wait complete");
-  const exportPool = m("Export", () => storage.exportPool(pool.name), "Pool exported");
+  const exportPool = m("Export", () => storage.exportPool(pool.name), "Pool exported", true);
+  const [showDelete, setShowDelete] = useState(false);
 
   return (
     <Modal title={`Pool · ${pool.name}`} sub={pool.state ?? pool.health ?? ""} onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>Close</button>
-          <button className="btn btn--primary" onClick={onVdevs}>Manage VDEVs</button>
-        </>
-      }
+      footer={<button className="btn" onClick={onClose}>Close</button>}
     >
       <div className="sect">
         <div className="sect__title">Actions</div>
@@ -207,19 +195,18 @@ function PoolDetailModal({
             <button className="btn btn--sm" disabled={scrub.isPending} onClick={() => scrub.mutate()}>Scrub</button>
             <button className="btn btn--sm" disabled={trim.isPending} onClick={() => trim.mutate()}>Trim</button>
             <button className="btn btn--sm" disabled={clear.isPending} onClick={() => clear.mutate()}>Clear errors</button>
-            <button className="btn btn--sm" disabled={ckpt.isPending} onClick={() => ckpt.mutate()}>Checkpoint</button>
-            <button className="btn btn--sm" disabled={discardCkpt.isPending} onClick={() => {
-              if (window.confirm(`Discard checkpoint on "${pool.name}"?`)) discardCkpt.mutate();
-            }}>Discard ckpt</button>
-            <button className="btn btn--sm" disabled={wait.isPending} onClick={() => wait.mutate()} title="Wait for resilver/scrub to finish">Wait</button>
             <button
               className="btn btn--sm btn--danger"
               style={{ marginLeft: "auto" }}
               disabled={exportPool.isPending}
               onClick={() => {
-                if (window.confirm(`Export pool "${pool.name}"? It will be unmounted.`)) exportPool.mutate();
+                if (window.confirm(`Export pool "${pool.name}"? It will be unmounted but data is preserved.`)) exportPool.mutate();
               }}
             >Export</button>
+            <button
+              className="btn btn--sm btn--danger"
+              onClick={() => setShowDelete(true)}
+            >Delete pool</button>
           </div>
         </div>
       </div>
@@ -257,6 +244,166 @@ function PoolDetailModal({
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+      {showDelete && (
+        <DeletePoolModal
+          pool={pool.name}
+          onClose={() => setShowDelete(false)}
+          onDeleted={() => {
+            setShowDelete(false);
+            onClose();
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+const DEPENDENT_LABELS: Record<PoolDependentKind, string> = {
+  "dataset": "Datasets (will be destroyed)",
+  "share": "Shares",
+  "iscsi-target": "iSCSI targets",
+  "replication-job": "Replication jobs",
+  "replication-schedule": "Replication schedules",
+  "snapshot-schedule": "Snapshot schedules",
+  "scrub-policy": "Scrub policies",
+  "plugin": "Plugins",
+};
+
+const DEPENDENT_ORDER: PoolDependentKind[] = [
+  "plugin",
+  "share",
+  "iscsi-target",
+  "replication-job",
+  "replication-schedule",
+  "snapshot-schedule",
+  "scrub-policy",
+  "dataset",
+];
+
+function DeletePoolModal({
+  pool,
+  onClose,
+  onDeleted,
+}: {
+  pool: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const qc = useQueryClient();
+  const [confirmText, setConfirmText] = useState("");
+  const depsQ = useQuery({
+    queryKey: ["pool-dependents", pool],
+    queryFn: () => storage.getPoolDependents(pool),
+    refetchInterval: 5_000,
+  });
+  const dependents = depsQ.data?.dependents ?? [];
+  const blocking = dependents.filter((d) => d.blocking);
+  const grouped = new Map<PoolDependentKind, PoolDependent[]>();
+  for (const d of dependents) {
+    const arr = grouped.get(d.kind) ?? [];
+    arr.push(d);
+    grouped.set(d.kind, arr);
+  }
+
+  const deletePool = useMutation({
+    meta: { label: "Delete pool failed" },
+    mutationFn: () => storage.deletePool(pool),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pools"] });
+      toastSuccess("Pool deleted", pool);
+      onDeleted();
+    },
+  });
+
+  const canConfirm =
+    !depsQ.isLoading &&
+    blocking.length === 0 &&
+    confirmText === pool &&
+    !deletePool.isPending;
+
+  return (
+    <Modal
+      title={`Delete pool · ${pool}`}
+      sub="Permanently destroy the pool and all its data"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--danger"
+            disabled={!canConfirm}
+            onClick={() => deletePool.mutate()}
+          >
+            {deletePool.isPending ? "Deleting…" : "Destroy pool"}
+          </button>
+        </>
+      }
+    >
+      <div className="sect">
+        <div className="sect__title">Dependents</div>
+        <div className="sect__body">
+          {depsQ.isLoading && <div className="muted">Checking what uses this pool…</div>}
+          {depsQ.isError && (
+            <div className="discover__msg discover__msg--err">
+              Failed to load: {(depsQ.error as Error).message}
+            </div>
+          )}
+          {!depsQ.isLoading && !depsQ.isError && dependents.length === 0 && (
+            <div className="muted">Nothing references this pool.</div>
+          )}
+          {DEPENDENT_ORDER.map((kind) => {
+            const items = grouped.get(kind);
+            if (!items || items.length === 0) return null;
+            const isBlocking = items.some((i) => i.blocking);
+            return (
+              <div key={kind} style={{ marginBottom: 12 }}>
+                <div
+                  className="sect__title"
+                  style={{ color: isBlocking ? "var(--danger, #ef4444)" : undefined, fontSize: 11 }}
+                >
+                  {DEPENDENT_LABELS[kind]} ({items.length})
+                </div>
+                <table className="tbl tbl--compact">
+                  <tbody>
+                    {items.map((d) => (
+                      <tr key={`${d.kind}:${d.id}`}>
+                        <td className="mono" style={{ fontSize: 11 }}>{d.name}</td>
+                        <td className="mono muted" style={{ fontSize: 11 }}>{d.detail ?? ""}</td>
+                        <td style={{ fontSize: 11 }}>
+                          {d.enabled === false && <span className="muted">disabled</span>}
+                          {d.enabled === true && <span style={{ color: "var(--danger, #ef4444)" }}>enabled</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+          {blocking.length > 0 && (
+            <div className="muted" style={{ marginTop: 12, fontSize: 11 }}>
+              Remove or disable the {blocking.length} blocking dependent{blocking.length === 1 ? "" : "s"} above before destroying the pool. This list refreshes every 5 seconds.
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="sect">
+        <div className="sect__title">Confirm</div>
+        <div className="sect__body">
+          <div className="muted" style={{ marginBottom: 8, fontSize: 11 }}>
+            This <strong>permanently destroys all data</strong> in pool <code>{pool}</code> and cannot be undone. Type the pool name to confirm.
+          </div>
+          <input
+            type="text"
+            className="input"
+            placeholder={pool}
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            disabled={blocking.length > 0}
+            autoFocus
+          />
         </div>
       </div>
     </Modal>
