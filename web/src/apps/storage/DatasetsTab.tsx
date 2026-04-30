@@ -14,6 +14,61 @@ function dsKey(d: Dataset): string {
   return d.fullname ?? d.name;
 }
 
+type TreeNode = {
+  name: string;        // last path segment
+  fullname: string;    // full ZFS path, e.g. "tank/csi/pvc-..."
+  depth: number;
+  dataset?: Dataset;   // missing for synthetic parents
+  children: TreeNode[];
+};
+
+// buildTree groups datasets by their slash-separated path. Synthetic
+// nodes are inserted for any path segment that has no matching dataset
+// (rare — usually parents exist on ZFS but defensively handled).
+function buildTree(datasets: Dataset[]): TreeNode[] {
+  const byPath = new Map<string, TreeNode>();
+  const roots: TreeNode[] = [];
+  // Sort by full path so parents are visited before children.
+  const sorted = [...datasets].sort((a, b) =>
+    (a.fullname ?? a.name).localeCompare(b.fullname ?? b.name)
+  );
+  for (const d of sorted) {
+    const path = (d.fullname ?? d.name).split("/");
+    for (let i = 0; i < path.length; i++) {
+      const fullname = path.slice(0, i + 1).join("/");
+      if (byPath.has(fullname)) {
+        if (i === path.length - 1) byPath.get(fullname)!.dataset = d;
+        continue;
+      }
+      const node: TreeNode = {
+        name: path[i],
+        fullname,
+        depth: i,
+        dataset: i === path.length - 1 ? d : undefined,
+        children: [],
+      };
+      byPath.set(fullname, node);
+      if (i === 0) roots.push(node);
+      else byPath.get(path.slice(0, i).join("/"))?.children.push(node);
+    }
+  }
+  return roots;
+}
+
+// flattenTree walks the tree in display order, skipping branches whose
+// ancestor is collapsed.
+function flattenTree(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
+  const out: TreeNode[] = [];
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      out.push(n);
+      if (n.children.length > 0 && expanded.has(n.fullname)) walk(n.children);
+    }
+  };
+  walk(roots);
+  return out;
+}
+
 type ActionKind =
   | "rollback"
   | "clone"
@@ -28,6 +83,31 @@ export function DatasetsTab() {
   const [showCreate, setShowCreate] = useState(false);
   const q = useQuery({ queryKey: ["datasets"], queryFn: () => storage.listDatasets() });
   const datasets = q.data ?? [];
+
+  // Tree state. Top-level pool roots are expanded by default so
+  // first-level children are visible without an extra click.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const tree = buildTree(datasets);
+  // Auto-expand pool roots on first load.
+  useEffect(() => {
+    if (datasets.length === 0) return;
+    setExpanded((prev) => {
+      if (prev.size > 0) return prev;
+      const next = new Set<string>();
+      for (const root of tree) next.add(root.fullname);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasets.length]);
+  const flat = flattenTree(tree, expanded);
+  const toggle = (full: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(full)) next.delete(full);
+      else next.add(full);
+      return next;
+    });
+  };
 
   return (
     <div
@@ -57,7 +137,6 @@ export function DatasetsTab() {
             <thead>
               <tr>
                 <th>Dataset</th>
-                <th>Pool</th>
                 <th>Protocol</th>
                 <th className="num">Used</th>
                 <th>Quota</th>
@@ -67,13 +146,16 @@ export function DatasetsTab() {
               </tr>
             </thead>
             <tbody>
-              {datasets.map((d) => {
-                const k = dsKey(d);
-                const used = d.used ?? 0;
-                const quota = d.quota ?? 0;
+              {flat.map((node) => {
+                const d = node.dataset;
+                const k = node.fullname;
+                const used = d?.used ?? 0;
+                const quota = d?.quota ?? 0;
                 const pct = quota > 0 ? used / quota : 0;
-                const enc = d.enc ?? d.encrypted ?? !!d.encryption;
-                const snap = d.snap ?? d.snapshots ?? 0;
+                const enc = d ? (d.enc ?? d.encrypted ?? !!d.encryption) : false;
+                const snap = d?.snap ?? d?.snapshots ?? 0;
+                const hasChildren = node.children.length > 0;
+                const isOpen = expanded.has(node.fullname);
                 return (
                   <tr
                     key={k}
@@ -82,12 +164,55 @@ export function DatasetsTab() {
                     style={{ cursor: "pointer" }}
                   >
                     <td>
-                      <Icon name="files" size={12} style={{ verticalAlign: "-2px", marginRight: 6, opacity: 0.6 }} />
-                      {d.name}
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          paddingLeft: node.depth * 16,
+                        }}
+                      >
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            className="tree-chevron"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(node.fullname);
+                            }}
+                            aria-label={isOpen ? "Collapse" : "Expand"}
+                            style={{
+                              width: 16,
+                              height: 16,
+                              padding: 0,
+                              border: 0,
+                              background: "transparent",
+                              cursor: "pointer",
+                              color: "var(--fg-3)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+                              transition: "transform 80ms ease",
+                              marginRight: 2,
+                            }}
+                          >
+                            <Icon name="chev" size={10} />
+                          </button>
+                        ) : (
+                          <span style={{ display: "inline-block", width: 16 }} />
+                        )}
+                        <Icon
+                          name={hasChildren ? "folder" : "files"}
+                          size={12}
+                          style={{ marginRight: 6, opacity: 0.7, color: hasChildren ? "var(--accent)" : undefined }}
+                        />
+                        <span className="mono" style={{ fontSize: 12 }}>
+                          {node.name}
+                        </span>
+                      </span>
                     </td>
-                    <td className="muted mono">{d.pool ?? "—"}</td>
-                    <td className="muted">{d.proto ?? "—"}</td>
-                    <td className="num mono">{formatBytes(used)}</td>
+                    <td className="muted">{d?.proto ?? "—"}</td>
+                    <td className="num mono">{d ? formatBytes(used) : "—"}</td>
                     <td>
                       {quota > 0 ? (
                         <div className="cap">
@@ -102,8 +227,8 @@ export function DatasetsTab() {
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td className="num mono">{snap}</td>
-                    <td className="muted mono" style={{ fontSize: 11 }}>{d.comp ?? d.compression ?? "—"}</td>
+                    <td className="num mono">{d ? snap : "—"}</td>
+                    <td className="muted mono" style={{ fontSize: 11 }}>{d?.comp ?? d?.compression ?? "—"}</td>
                     <td>{enc ? <Icon name="shield" size={12} /> : <span className="muted">—</span>}</td>
                   </tr>
                 );
