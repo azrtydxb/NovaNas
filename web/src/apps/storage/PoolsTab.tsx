@@ -263,15 +263,136 @@ function PoolDetailModal({
   );
 }
 
+type Vdev = { type: string; devices: string };
+
 function CreatePoolModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [mountpoint, setMountpoint] = useState("");
+  const [ashift, setAshift] = useState("12");
+  const [autotrim, setAutotrim] = useState(true);
+  const [force, setForce] = useState(false);
+  const [vdevs, setVdevs] = useState<Vdev[]>([{ type: "stripe", devices: "" }]);
+  const [err, setErr] = useState<string | null>(null);
+
+  const updateVdev = (i: number, patch: Partial<Vdev>) =>
+    setVdevs((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
+  const removeVdev = (i: number) => setVdevs((vs) => vs.filter((_, idx) => idx !== i));
+  const addVdev = () => setVdevs((vs) => [...vs, { type: "mirror", devices: "" }]);
+
+  const m = useMutation({
+    meta: { label: "Create pool failed" },
+    mutationFn: () => {
+      const v = vdevs
+        .filter((x) => x.devices.trim().length > 0)
+        .map((x) => ({
+          type: x.type,
+          devices: x.devices.split(/[\s,]+/).map((d) => d.trim()).filter(Boolean),
+        }));
+      return storage.createPool({
+        name,
+        vdevs: v,
+        properties: { ashift, ...(autotrim ? { autotrim: "on" } : {}) },
+        mountpoint: mountpoint || undefined,
+        force,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pools"] });
+      toastSuccess("Pool created", name);
+      onClose();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const valid = name.trim() && vdevs.some((v) => v.devices.trim());
   return (
-    <Modal title="Create pool" onClose={onClose}
-      footer={<button className="btn" onClick={onClose}>Close</button>}
+    <Modal
+      title="Create pool"
+      sub="Compose vdevs from raw block devices"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={m.isPending}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={!valid || m.isPending}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Creating…" : "Create pool"}
+          </button>
+        </>
+      }
     >
-      <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
-        Pool creation flow is multi-step (select disks, pick layout, set tier).
-        The backend has no <code>POST /pools</code> endpoint yet — coming next.
-        For now, use <strong>Import</strong> to bring an existing pool online.
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Pool name</label>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="tank" autoFocus />
+      </div>
+      <div className="field">
+        <label className="field__label">Mountpoint (optional)</label>
+        <input className="input" value={mountpoint} onChange={(e) => setMountpoint(e.target.value)} placeholder="/mnt/tank" />
+      </div>
+      <div className="field">
+        <label className="field__label">vdevs</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {vdevs.map((v, i) => (
+            <div key={i} className="row gap-8" style={{ alignItems: "stretch" }}>
+              <select
+                className="input"
+                style={{ flex: "0 0 130px" }}
+                value={v.type}
+                onChange={(e) => updateVdev(i, { type: e.target.value })}
+              >
+                <option value="stripe">stripe</option>
+                <option value="mirror">mirror</option>
+                <option value="raidz1">raidz1</option>
+                <option value="raidz2">raidz2</option>
+                <option value="raidz3">raidz3</option>
+                <option value="log">log (SLOG)</option>
+                <option value="cache">cache (L2ARC)</option>
+                <option value="spare">spare</option>
+                <option value="special">special</option>
+                <option value="dedup">dedup</option>
+              </select>
+              <input
+                className="input"
+                value={v.devices}
+                onChange={(e) => updateVdev(i, { devices: e.target.value })}
+                placeholder="/dev/sda /dev/sdb"
+                style={{ flex: 1 }}
+              />
+              {vdevs.length > 1 && (
+                <button className="btn btn--sm" onClick={() => removeVdev(i)}>
+                  <Icon name="trash" size={11} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button className="btn btn--sm" style={{ alignSelf: "flex-start" }} onClick={addVdev}>
+            <Icon name="plus" size={11} /> Add vdev
+          </button>
+        </div>
+      </div>
+      <div className="field">
+        <label className="field__label">ashift</label>
+        <select className="input" value={ashift} onChange={(e) => setAshift(e.target.value)}>
+          <option value="9">9 (512B sectors)</option>
+          <option value="12">12 (4K sectors — recommended)</option>
+          <option value="13">13 (8K sectors)</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={autotrim} onChange={(e) => setAutotrim(e.target.checked)} />
+          autotrim=on
+        </label>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+          Force create (use with caution — will overwrite existing data on disks)
+        </label>
       </div>
     </Modal>
   );

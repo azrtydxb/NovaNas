@@ -124,7 +124,13 @@ export const storage = {
   getPool: (name: string) => api<Pool>(`/api/v1/pools/${encodeURIComponent(name)}`),
   getPoolProperties: (name: string) =>
     api<Record<string, unknown>>(`/api/v1/pools/${encodeURIComponent(name)}/properties`),
-  // TODO: backend missing — POST /pools (create pool). Use import flow as workaround.
+  createPool: (body: {
+    name: string;
+    vdevs: { type: string; devices: string[] }[];
+    properties?: Record<string, string>;
+    mountpoint?: string;
+    force?: boolean;
+  }) => api<Pool>(`/api/v1/pools`, j(body)),
   importPool: (body: { name?: string; force?: boolean; dir?: string }) =>
     api<unknown>(`/api/v1/pools/import`, j(body)),
   syncPools: () => api<unknown>(`/api/v1/pools/sync`, { method: "POST" }),
@@ -164,7 +170,13 @@ export const storage = {
     api<Dataset[]>(`/api/v1/datasets${pool ? `?pool=${encodeURIComponent(pool)}` : ""}`),
   getDataset: (fullname: string) =>
     api<Dataset>(`/api/v1/datasets/${encodeURIComponent(fullname)}`),
-  // TODO: backend missing — POST /datasets (create dataset).
+  createDataset: (body: {
+    name: string;
+    properties?: Record<string, string>;
+    mountpoint?: string;
+    createParents?: boolean;
+    encryption?: { keyformat: string; passphrase?: string };
+  }) => api<Dataset>(`/api/v1/datasets`, j(body)),
   rollbackDataset: (fullname: string, snapshot?: string) =>
     api<unknown>(`/api/v1/datasets/${encodeURIComponent(fullname)}/rollback`, j({ snapshot })),
   cloneDataset: (fullname: string, body: { snapshot: string; target: string }) =>

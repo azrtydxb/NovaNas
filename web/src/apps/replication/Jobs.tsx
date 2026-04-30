@@ -114,16 +114,95 @@ export function Jobs() {
 }
 
 function CreateJobStubModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [mode, setMode] = useState<"schedule" | "adhoc">("adhoc");
+  const [scheduleId, setScheduleId] = useState("");
+  const [name, setName] = useState("");
+  const [source, setSource] = useState("");
+  const [target, setTarget] = useState("");
+  const [snapshot, setSnapshot] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const m = useMutation({
+    meta: { label: "Create job failed" },
+    mutationFn: () =>
+      replication.createJob(
+        mode === "schedule"
+          ? { schedule_id: scheduleId }
+          : { name, source, target, snapshot: snapshot || undefined }
+      ),
+    onSuccess: (resp) => {
+      qc.invalidateQueries({ queryKey: ["replication-jobs"] });
+      toastSuccess("Replication job created", resp?.id ?? name);
+      onClose();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const valid =
+    mode === "schedule"
+      ? scheduleId.trim().length > 0
+      : name.trim() && source.trim() && target.trim();
+
   return (
-    <Modal title="New replication job" onClose={onClose}
-      footer={<button className="btn" onClick={onClose}>Close</button>}
+    <Modal
+      title="New replication job"
+      sub="Spawn a one-off job from a schedule, or define an ad-hoc job"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={m.isPending}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={!valid || m.isPending}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Creating…" : "Create"}
+          </button>
+        </>
+      }
     >
-      <div className="modal__err" style={{ background: "transparent", color: "var(--fg-2)" }}>
-        Replication jobs are derived from <strong>replication-schedules</strong>.
-        Create a schedule in the <strong>Schedules</strong> tab — its job IDs
-        appear here once the engine materialises them. The backend exposes no
-        direct <code>POST /replication-jobs</code> endpoint yet (TODO: backend missing).
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Source</label>
+        <div className="row gap-8" style={{ fontSize: 11 }}>
+          <label className="row gap-8">
+            <input type="radio" name="job-mode" checked={mode === "adhoc"} onChange={() => setMode("adhoc")} />
+            Ad-hoc
+          </label>
+          <label className="row gap-8">
+            <input type="radio" name="job-mode" checked={mode === "schedule"} onChange={() => setMode("schedule")} />
+            From schedule
+          </label>
+        </div>
       </div>
+      {mode === "schedule" && (
+        <div className="field">
+          <label className="field__label">Schedule ID</label>
+          <input className="input" value={scheduleId} onChange={(e) => setScheduleId(e.target.value)} placeholder="schedule-uuid" autoFocus />
+          <div className="field__hint muted">Find IDs in the Schedules tab.</div>
+        </div>
+      )}
+      {mode === "adhoc" && (
+        <>
+          <div className="field">
+            <label className="field__label">Name</label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="family-photos→offsite" autoFocus />
+          </div>
+          <div className="field">
+            <label className="field__label">Source dataset</label>
+            <input className="input" value={source} onChange={(e) => setSource(e.target.value)} placeholder="tank/photos" />
+          </div>
+          <div className="field">
+            <label className="field__label">Target ID</label>
+            <input className="input" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="offsite-s3 (from Targets tab)" />
+          </div>
+          <div className="field">
+            <label className="field__label">Snapshot (optional)</label>
+            <input className="input" value={snapshot} onChange={(e) => setSnapshot(e.target.value)} placeholder="leave blank to take a fresh one" />
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

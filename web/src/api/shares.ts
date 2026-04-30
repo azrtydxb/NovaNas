@@ -122,6 +122,8 @@ export const shares = {
     }),
   smbReload: () => api<unknown>(`/api/v1/samba/reload`, { method: "POST" }),
   getSmbGlobals: () => api<SmbGlobals>(`/api/v1/samba/globals`),
+  updateSmbGlobals: (body: SmbGlobals) =>
+    api<SmbGlobals>(`/api/v1/samba/globals`, put(body)),
 
   listSmbUsers: () => api<SmbUser[]>(`/api/v1/samba/users`),
   getSmbUser: (username: string) =>

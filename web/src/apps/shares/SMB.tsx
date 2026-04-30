@@ -386,8 +386,34 @@ function SmbPasswordModal({ username, onClose }: { username: string; onClose: ()
 }
 
 function GlobalsView() {
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ["smb-globals"], queryFn: () => shares.getSmbGlobals() });
+  const [draft, setDraft] = useState<Record<string, string> | null>(null);
   const data = q.data ?? {};
+  const editing = draft !== null;
+  const view = draft ?? data;
+
+  const m = useMutation({
+    meta: { label: "Save globals failed" },
+    mutationFn: (body: Record<string, string>) => shares.updateSmbGlobals(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smb-globals"] });
+      toastSuccess("Samba globals saved");
+      setDraft(null);
+    },
+  });
+
+  const setKey = (k: string, v: string) =>
+    setDraft((d) => ({ ...(d ?? data), [k]: v }));
+  const removeKey = (k: string) =>
+    setDraft((d) => {
+      const next = { ...(d ?? data) };
+      delete next[k];
+      return next;
+    });
+  const [newK, setNewK] = useState("");
+  const [newV, setNewV] = useState("");
+
   return (
     <div style={{ padding: 14 }}>
       <div className="sect">
@@ -399,23 +425,87 @@ function GlobalsView() {
               {(q.error as Error).message}
             </div>
           )}
-          {Object.keys(data).length === 0 && !q.isLoading && (
+          {Object.keys(view).length === 0 && !q.isLoading && (
             <div className="muted">No globals returned.</div>
           )}
-          {Object.keys(data).length > 0 && (
+          {Object.keys(view).length > 0 && (
             <table className="tbl tbl--compact">
               <tbody>
-                {Object.entries(data).map(([k, v]) => (
+                {Object.entries(view).map(([k, v]) => (
                   <tr key={k}>
                     <td className="mono" style={{ fontSize: 11 }}>{k}</td>
-                    <td className="mono muted" style={{ fontSize: 11 }}>{String(v)}</td>
+                    <td className="mono" style={{ fontSize: 11 }}>
+                      {editing ? (
+                        <input
+                          className="input"
+                          value={String(v)}
+                          onChange={(e) => setKey(k, e.target.value)}
+                        />
+                      ) : (
+                        <span className="muted">{String(v)}</span>
+                      )}
+                    </td>
+                    {editing && (
+                      <td className="num">
+                        <button className="btn btn--sm" onClick={() => removeKey(k)}>
+                          <Icon name="trash" size={11} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          <div className="muted small" style={{ marginTop: 8 }}>
-            Editing globals is not yet exposed by the backend (TODO: backend missing PUT /samba/globals).
+          {editing && (
+            <div className="row gap-8" style={{ marginTop: 8 }}>
+              <input
+                className="input"
+                placeholder="key (e.g. workgroup)"
+                value={newK}
+                onChange={(e) => setNewK(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <input
+                className="input"
+                placeholder="value"
+                value={newV}
+                onChange={(e) => setNewV(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn btn--sm"
+                disabled={!newK.trim()}
+                onClick={() => {
+                  setKey(newK.trim(), newV);
+                  setNewK("");
+                  setNewV("");
+                }}
+              >
+                <Icon name="plus" size={11} />
+              </button>
+            </div>
+          )}
+          <div className="row gap-8" style={{ marginTop: 12 }}>
+            {!editing && (
+              <button className="btn btn--sm" onClick={() => setDraft({ ...data })}>
+                <Icon name="edit" size={11} /> Edit globals
+              </button>
+            )}
+            {editing && (
+              <>
+                <button className="btn btn--sm" onClick={() => setDraft(null)} disabled={m.isPending}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn--sm btn--primary"
+                  disabled={m.isPending}
+                  onClick={() => draft && m.mutate(draft)}
+                >
+                  {m.isPending ? "Saving…" : "Save"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

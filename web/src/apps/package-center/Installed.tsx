@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { plugins, type PluginManifest } from "../../api/plugins";
 import { api } from "../../api/client";
 import { Icon } from "../../components/Icon";
-import { toastInfo, toastSuccess } from "../../store/toast";
+import { toastSuccess } from "../../store/toast";
 
 export function Installed() {
   const qc = useQueryClient();
@@ -12,6 +12,7 @@ export function Installed() {
     queryFn: () => plugins.listInstalled(),
   });
   const [pickedName, setPickedName] = useState<string | null>(null);
+  const [showLogs, setShowLogs] = useState(false);
 
   const cur = (q.data ?? []).find((p) => p.metadata.name === pickedName) ?? (q.data ?? [])[0];
   const curName = cur?.metadata.name;
@@ -35,6 +36,12 @@ export function Installed() {
       qc.invalidateQueries({ queryKey: ["plugins"] });
       toastSuccess("Plugin uninstalled", name);
     },
+  });
+
+  const restart = useMutation({
+    meta: { label: "Restart failed" },
+    mutationFn: (name: string) => plugins.restart(name),
+    onSuccess: (_d, name) => toastSuccess("Plugin restarted", name),
   });
 
   if (q.isLoading) return <div className="discover__msg">Loading installed plugins…</div>;
@@ -120,24 +127,12 @@ export function Installed() {
           <div className="installed__actions">
             <button
               className="btn"
-              onClick={() =>
-                toastInfo(
-                  "Restart not yet supported",
-                  "The plugin engine doesn't expose restart yet — coming next."
-                )
-              }
+              disabled={restart.isPending}
+              onClick={() => restart.mutate(cur.metadata.name)}
             >
-              <Icon name="refresh" size={11} /> Restart
+              <Icon name="refresh" size={11} /> {restart.isPending ? "Restarting…" : "Restart"}
             </button>
-            <button
-              className="btn"
-              onClick={() =>
-                toastInfo(
-                  "Plugin logs not yet wired",
-                  "Plugin stdout/stderr will route to the Logs app — coming next."
-                )
-              }
-            >
+            <button className="btn" onClick={() => setShowLogs(true)}>
               <Icon name="log" size={11} /> Logs
             </button>
             <button
@@ -155,6 +150,62 @@ export function Installed() {
           </div>
         </main>
       )}
+      {showLogs && curName && (
+        <PluginLogsModal name={curName} onClose={() => setShowLogs(false)} />
+      )}
+    </div>
+  );
+}
+
+function PluginLogsModal({ name, onClose }: { name: string; onClose: () => void }) {
+  const q = useQuery({
+    queryKey: ["plugin-logs", name],
+    queryFn: () => plugins.getLogs(name, 500),
+    refetchInterval: 5_000,
+  });
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" style={{ width: 760, maxWidth: "92vw" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal__head">
+          <div className="modal__icon">
+            <Icon name="log" size={16} />
+          </div>
+          <div className="modal__head-meta">
+            <div className="modal__title">Logs · {name}</div>
+            <div className="muted modal__sub">journalctl -u nova-plugin-{name} · refresh every 5s</div>
+          </div>
+          <button className="modal__close" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+        <div className="modal__body" style={{ maxHeight: "60vh", overflow: "auto" }}>
+          {q.isLoading && <div className="discover__msg muted">Loading logs…</div>}
+          {q.isError && (
+            <div className="discover__msg discover__msg--err">
+              Failed to load: {(q.error as Error).message}
+            </div>
+          )}
+          {q.data && (
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--fg-1)",
+                background: "var(--bg-0)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {q.data.lines.join("\n")}
+            </pre>
+          )}
+        </div>
+        <div className="modal__foot">
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }

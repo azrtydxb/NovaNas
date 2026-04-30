@@ -82,8 +82,17 @@ export const replication = {
     }),
   listRuns: (id: string) =>
     api<ReplicationRun[]>(`/api/v1/replication-jobs/${encodeURIComponent(id)}/runs`),
-  // TODO: backend missing — POST /replication-jobs (create), PUT /replication-jobs/{id},
-  // DELETE /replication-jobs/{id}. Jobs are derived from replication-schedules.
+  createJob: (body: {
+    schedule_id?: string;
+    name?: string;
+    source?: string;
+    target?: string;
+    snapshot?: string;
+  }) => api<{ id: string }>(`/api/v1/replication-jobs`, j(body)),
+  deleteJob: (id: string) =>
+    api<unknown>(`/api/v1/replication-jobs/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 
   // Targets
   listTargets: () =>

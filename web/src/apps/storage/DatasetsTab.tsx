@@ -25,6 +25,7 @@ type ActionKind =
 
 export function DatasetsTab() {
   const [sel, setSel] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const q = useQuery({ queryKey: ["datasets"], queryFn: () => storage.listDatasets() });
   const datasets = q.data ?? [];
 
@@ -38,14 +39,12 @@ export function DatasetsTab() {
     >
       <div style={{ overflow: "auto", padding: 14 }}>
         <div className="tbar">
-          <button className="btn btn--primary" disabled title="Backend POST /datasets is missing">
+          <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
             <Icon name="plus" size={11} />
             New dataset
           </button>
-          <span className="muted small" style={{ marginLeft: 8 }}>
-            Not yet supported — backend has no <code>POST /datasets</code> endpoint.
-          </span>
         </div>
+        {showCreate && <CreateDatasetModal onClose={() => setShowCreate(false)} />}
         {q.isLoading && <div className="empty-hint">Loading datasets…</div>}
         {q.isError && (
           <div className="empty-hint" style={{ color: "var(--err)" }}>
@@ -802,6 +801,123 @@ function SendReceiveModal({
       <div className="muted small" style={{ marginTop: 6 }}>
         Streams are tracked by the replication engine; check the Replication app for live progress.
       </div>
+    </Modal>
+  );
+}
+
+function CreateDatasetModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [mountpoint, setMountpoint] = useState("");
+  const [compression, setCompression] = useState("lz4");
+  const [recordsize, setRecordsize] = useState("128K");
+  const [atime, setAtime] = useState<"on" | "off">("off");
+  const [encrypt, setEncrypt] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
+  const [createParents, setCreateParents] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const m = useMutation({
+    meta: { label: "Create dataset failed" },
+    mutationFn: () =>
+      storage.createDataset({
+        name,
+        properties: { compression, recordsize, atime },
+        mountpoint: mountpoint || undefined,
+        createParents,
+        encryption: encrypt
+          ? { keyformat: "passphrase", passphrase }
+          : undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["datasets"] });
+      toastSuccess("Dataset created", name);
+      onClose();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const valid = name.trim() && (!encrypt || passphrase.length >= 8);
+  return (
+    <Modal
+      title="New dataset"
+      sub="Create a new ZFS dataset under an existing pool"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={m.isPending}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={!valid || m.isPending}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Creating…" : "Create"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Name</label>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="tank/home" autoFocus />
+        <div className="field__hint muted">Format: pool/path/to/dataset</div>
+      </div>
+      <div className="field">
+        <label className="field__label">Mountpoint (optional)</label>
+        <input className="input" value={mountpoint} onChange={(e) => setMountpoint(e.target.value)} placeholder="/mnt/tank/home" />
+      </div>
+      <div className="field">
+        <label className="field__label">Compression</label>
+        <select className="input" value={compression} onChange={(e) => setCompression(e.target.value)}>
+          <option value="off">off</option>
+          <option value="lz4">lz4</option>
+          <option value="zstd">zstd</option>
+          <option value="zstd-fast">zstd-fast</option>
+          <option value="gzip">gzip</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="field__label">Record size</label>
+        <select className="input" value={recordsize} onChange={(e) => setRecordsize(e.target.value)}>
+          <option value="4K">4K</option>
+          <option value="16K">16K</option>
+          <option value="64K">64K</option>
+          <option value="128K">128K (default)</option>
+          <option value="256K">256K</option>
+          <option value="1M">1M</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={atime === "on"} onChange={(e) => setAtime(e.target.checked ? "on" : "off")} />
+          Track access times (atime)
+        </label>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={createParents} onChange={(e) => setCreateParents(e.target.checked)} />
+          Create parent datasets if missing
+        </label>
+      </div>
+      <div className="field">
+        <label className="row gap-8" style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={encrypt} onChange={(e) => setEncrypt(e.target.checked)} />
+          Encrypt with passphrase
+        </label>
+      </div>
+      {encrypt && (
+        <div className="field">
+          <label className="field__label">Passphrase (≥ 8 chars)</label>
+          <input
+            type="password"
+            className="input"
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+          />
+        </div>
+      )}
     </Modal>
   );
 }

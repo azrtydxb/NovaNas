@@ -137,6 +137,16 @@ export const plugins = {
     api<{ name: string; version: string }[]>(
       `/api/v1/plugins/${encodeURIComponent(name)}/dependents`
     ),
+
+  restart: (name: string) =>
+    api<unknown>(`/api/v1/plugins/${encodeURIComponent(name)}/restart`, {
+      method: "POST",
+    }),
+
+  getLogs: (name: string, lines = 200) =>
+    api<{ lines: string[] }>(
+      `/api/v1/plugins/${encodeURIComponent(name)}/logs?lines=${lines}`
+    ),
 };
 
 export const marketplaces = {
