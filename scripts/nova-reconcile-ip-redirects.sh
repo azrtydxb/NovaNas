@@ -32,6 +32,29 @@ if [ -z "$ip" ]; then
 fi
 log "primary IPv4 = $ip"
 
+# Ensure novanas.local resolves locally on the box itself. Go's
+# pure-Go resolver (CGO_ENABLED=0 binaries) does not consult NSS, so
+# libnss-mdns can't help here — but it does read /etc/hosts. Without
+# this entry nova-api fails JWKS discovery against its own Keycloak
+# with "no such host" and rejects every JWT.
+if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*\\bnovanas\\.local\\b" /etc/hosts; then
+  echo "127.0.0.1 novanas.local NovaNAS.local" >> /etc/hosts
+  log "appended /etc/hosts entry for novanas.local"
+fi
+
+# Trust the self-signed TLS cert system-wide so Go binaries (which on
+# CGO_ENABLED=0 builds use only the system CA bundle) can verify
+# https://novanas.local:8443 — needed for nova-api to fetch JWKS from
+# its own Keycloak. Install on first boot or whenever the cert
+# changes (mtime tracked).
+CERT_SRC=/etc/nova-nas/tls/cert.pem
+CERT_DST=/usr/local/share/ca-certificates/novanas-dev.crt
+if [ -f "$CERT_SRC" ] && ! cmp -s "$CERT_SRC" "$CERT_DST" 2>/dev/null; then
+  install -m 0644 "$CERT_SRC" "$CERT_DST"
+  update-ca-certificates >/dev/null 2>&1 || true
+  log "installed novanas TLS cert into system trust store"
+fi
+
 # Wait for Keycloak (up to 60s) — restart-on-failure may stall it.
 for i in $(seq 1 30); do
   if curl -sk -o /dev/null -w "%{http_code}" "$KC_URL/realms/master/protocol/openid-connect/token" \
