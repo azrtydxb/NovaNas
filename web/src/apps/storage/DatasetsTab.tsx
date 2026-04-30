@@ -178,12 +178,36 @@ export function DatasetsTab() {
     >
       <div style={{ overflow: "auto", padding: 14 }}>
         <div className="tbar">
-          <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
-            <Icon name="plus" size={11} />
-            New dataset
-          </button>
+          {(() => {
+            const selNode = sel ? flat.find((n) => n.fullname === sel) : null;
+            // Snapshots can't host child datasets; require a dataset
+            // (or pool root) to be selected.
+            const parent =
+              selNode && selNode.kind === "dataset" ? selNode.fullname : null;
+            return (
+              <button
+                className="btn btn--primary"
+                disabled={!parent}
+                title={
+                  parent
+                    ? `New dataset under ${parent}`
+                    : "Select a pool or dataset row first"
+                }
+                onClick={() => setShowCreate(true)}
+              >
+                <Icon name="plus" size={11} />
+                {parent ? `New dataset under ${parent}` : "New dataset"}
+              </button>
+            );
+          })()}
         </div>
-        {showCreate && <CreateDatasetModal onClose={() => setShowCreate(false)} />}
+        {showCreate && (() => {
+          const selNode = sel ? flat.find((n) => n.fullname === sel) : null;
+          const parent =
+            selNode && selNode.kind === "dataset" ? selNode.fullname : null;
+          if (!parent) return null;
+          return <CreateDatasetModal parent={parent} onClose={() => setShowCreate(false)} />;
+        })()}
         {q.isLoading && <div className="empty-hint">Loading datasets…</div>}
         {q.isError && (
           <div className="empty-hint" style={{ color: "var(--err)" }}>
@@ -1010,43 +1034,53 @@ function SendReceiveModal({
   );
 }
 
-function CreateDatasetModal({ onClose }: { onClose: () => void }) {
+function CreateDatasetModal({
+  parent,
+  onClose,
+}: {
+  parent: string;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [mountpoint, setMountpoint] = useState("");
+  const [child, setChild] = useState("");
   const [compression, setCompression] = useState("lz4");
   const [recordsize, setRecordsize] = useState("128K");
   const [atime, setAtime] = useState<"on" | "off">("off");
   const [encrypt, setEncrypt] = useState(false);
   const [passphrase, setPassphrase] = useState("");
-  const [createParents, setCreateParents] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const fullname = parent + "/" + child.trim();
 
   const m = useMutation({
     meta: { label: "Create dataset failed" },
     mutationFn: () =>
       storage.createDataset({
-        name,
+        name: fullname,
         properties: { compression, recordsize, atime },
-        mountpoint: mountpoint || undefined,
-        createParents,
+        // Mountpoint is intentionally omitted: ZFS inherits from the
+        // parent and mounts the new dataset at <parent_mountpoint>/<child>.
+        // createParents is implicit — the parent already exists (we
+        // pre-fill it from the selected row).
         encryption: encrypt
           ? { keyformat: "passphrase", passphrase }
           : undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["datasets"] });
-      toastSuccess("Dataset created", name);
+      toastSuccess("Dataset created", fullname);
       onClose();
     },
     onError: (e: Error) => setErr(e.message),
   });
 
-  const valid = name.trim() && (!encrypt || passphrase.length >= 8);
+  const childOk = /^[A-Za-z0-9._-]+$/.test(child.trim());
+  const valid = childOk && (!encrypt || passphrase.length >= 8);
+
   return (
     <Modal
       title="New dataset"
-      sub="Create a new ZFS dataset under an existing pool"
+      sub={`Will be created under ${parent}`}
       onClose={onClose}
       footer={
         <>
@@ -1063,13 +1097,23 @@ function CreateDatasetModal({ onClose }: { onClose: () => void }) {
     >
       {err && <div className="modal__err">{err}</div>}
       <div className="field">
-        <label className="field__label">Name</label>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="tank/home" autoFocus />
-        <div className="field__hint muted">Format: pool/path/to/dataset</div>
+        <label className="field__label">Parent</label>
+        <div className="mono" style={{ fontSize: 12, color: "var(--fg-3)", padding: "6px 0" }}>
+          {parent}
+        </div>
       </div>
       <div className="field">
-        <label className="field__label">Mountpoint (optional)</label>
-        <input className="input" value={mountpoint} onChange={(e) => setMountpoint(e.target.value)} placeholder="/mnt/tank/home" />
+        <label className="field__label">Name</label>
+        <input
+          className="input"
+          value={child}
+          onChange={(e) => setChild(e.target.value)}
+          placeholder="home"
+          autoFocus
+        />
+        <div className="field__hint muted">
+          Will be: <span className="mono">{parent}/{child || "…"}</span>
+        </div>
       </div>
       <div className="field">
         <label className="field__label">Compression</label>
@@ -1096,12 +1140,6 @@ function CreateDatasetModal({ onClose }: { onClose: () => void }) {
         <label className="row gap-8" style={{ fontSize: 11 }}>
           <input type="checkbox" checked={atime === "on"} onChange={(e) => setAtime(e.target.checked ? "on" : "off")} />
           Track access times (atime)
-        </label>
-      </div>
-      <div className="field">
-        <label className="row gap-8" style={{ fontSize: 11 }}>
-          <input type="checkbox" checked={createParents} onChange={(e) => setCreateParents(e.target.checked)} />
-          Create parent datasets if missing
         </label>
       </div>
       <div className="field">
