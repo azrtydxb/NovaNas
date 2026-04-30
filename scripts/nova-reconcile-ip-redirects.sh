@@ -42,17 +42,19 @@ if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*\\bnovanas\\.local\\b" /et
   log "appended /etc/hosts entry for novanas.local"
 fi
 
-# Trust the self-signed TLS cert system-wide so Go binaries (which on
-# CGO_ENABLED=0 builds use only the system CA bundle) can verify
+# Trust the NovaNAS Local CA system-wide so Go binaries (CGO_ENABLED=0
+# builds use only the system CA bundle) can verify
 # https://novanas.local:8443 — needed for nova-api to fetch JWKS from
-# its own Keycloak. Install on first boot or whenever the cert
-# changes (mtime tracked).
-CERT_SRC=/etc/nova-nas/tls/cert.pem
-CERT_DST=/usr/local/share/ca-certificates/novanas-dev.crt
-if [ -f "$CERT_SRC" ] && ! cmp -s "$CERT_SRC" "$CERT_DST" 2>/dev/null; then
-  install -m 0644 "$CERT_SRC" "$CERT_DST"
+# its own Keycloak. Trusting the CA (not the leaf) means leaf cert
+# rotations re-sign without a re-trust step. Also clean up any older
+# leaf-trust entry from previous deploys.
+rm -f /usr/local/share/ca-certificates/novanas-dev.crt
+CA_SRC=/etc/nova-ca/ca.crt
+CA_DST=/usr/local/share/ca-certificates/novanas-ca.crt
+if [ -f "$CA_SRC" ] && ! cmp -s "$CA_SRC" "$CA_DST" 2>/dev/null; then
+  install -m 0644 "$CA_SRC" "$CA_DST"
   update-ca-certificates >/dev/null 2>&1 || true
-  log "installed novanas TLS cert into system trust store"
+  log "installed NovaNAS Local CA into system trust store"
 fi
 
 # Wait for Keycloak (up to 60s) — restart-on-failure may stall it.
