@@ -4,6 +4,7 @@ import { Icon } from "../../components/Icon";
 import {
   storage,
   type Dataset,
+  type DatasetDetailResp,
   type DatasetMetadata,
   type Snapshot,
 } from "../../api/storage";
@@ -341,37 +342,162 @@ export function DatasetsTab() {
           </table>
         )}
       </div>
-      {sel && (
-        <DatasetDetail
-          fullname={sel}
-          fallback={datasets.find((d) => dsKey(d) === sel)}
-          onClose={() => setSel(null)}
-        />
-      )}
+      {sel && (() => {
+        const node = flat.find((n) => n.fullname === sel);
+        if (node && node.kind === "snapshot" && node.snapshot) {
+          return (
+            <SnapshotDetail
+              snapshot={node.snapshot}
+              fullname={node.fullname}
+              onClose={() => setSel(null)}
+            />
+          );
+        }
+        return (
+          <DatasetDetail
+            fullname={sel}
+            fallback={datasets.find((d) => dsKey(d) === sel)}
+            hasChildren={!!node && node.children.some((c) => c.kind === "dataset")}
+            onClose={() => setSel(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
 
 type SubTab = "general" | "props" | "quota" | "policy" | "sharing" | "acl" | "bookmarks" | "meta";
 
+function DeleteDatasetModal({
+  fullname,
+  hasChildren,
+  onClose,
+  onDeleted,
+}: {
+  fullname: string;
+  hasChildren: boolean;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [recursive, setRecursive] = useState(false);
+  const m = useMutation({
+    meta: { label: "Delete dataset failed" },
+    mutationFn: () => storage.deleteDataset(fullname, { recursive }),
+    onSuccess: () => {
+      toastSuccess("Dataset deleted", fullname);
+      onDeleted();
+    },
+  });
+  const canConfirm =
+    confirmText === fullname && (!hasChildren || recursive) && !m.isPending;
+
+  return (
+    <Modal
+      title="Delete dataset"
+      sub={fullname}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--danger"
+            disabled={!canConfirm}
+            onClick={() => m.mutate()}
+          >
+            {m.isPending ? "Deleting…" : "Delete dataset"}
+          </button>
+        </>
+      }
+    >
+      <div className="muted small" style={{ marginBottom: 10 }}>
+        This permanently destroys <code>{fullname}</code> and all its data.
+        Any clones rooted at one of its snapshots will block deletion until
+        promoted. Shares, replication jobs, and plugins referencing this
+        path will keep their stale config — review them first.
+      </div>
+      {hasChildren && (
+        <div className="field">
+          <label className="row gap-8" style={{ fontSize: 11 }}>
+            <input
+              type="checkbox"
+              checked={recursive}
+              onChange={(e) => setRecursive(e.target.checked)}
+            />
+            Recursively destroy child datasets and snapshots
+          </label>
+          {!recursive && (
+            <div className="field__hint" style={{ color: "var(--err)" }}>
+              This dataset has children — enable recursive or delete the
+              children first.
+            </div>
+          )}
+        </div>
+      )}
+      <div className="field">
+        <label className="field__label">
+          Type the full name to confirm
+        </label>
+        <input
+          className="input"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder={fullname}
+          autoFocus
+        />
+      </div>
+    </Modal>
+  );
+}
+
 function DatasetDetail({
   fullname,
   fallback,
+  hasChildren,
   onClose,
 }: {
   fullname: string;
   fallback?: Dataset;
+  hasChildren: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<SubTab>("general");
   const [action, setAction] = useState<ActionKind>(null);
+  const [showDelete, setShowDelete] = useState(false);
 
   const q = useQuery({
     queryKey: ["dataset", fullname],
     queryFn: () => storage.getDataset(fullname),
   });
-  const d = q.data ?? fallback;
+  const detail: DatasetDetailResp | undefined = q.data;
+  // Normalize the shape so the panel doesn't have to branch on
+  // whether the live detail or the listDatasets fallback is in hand.
+  const props = detail?.properties ?? {};
+  const propNum = (k: string): number => {
+    const v = props[k];
+    if (!v || v === "none" || v === "0") return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const d: Dataset | undefined = detail
+    ? {
+        name: detail.dataset.name,
+        fullname: detail.dataset.name,
+        pool: detail.dataset.name.split("/")[0],
+        used: detail.dataset.usedBytes,
+        available: detail.dataset.availableBytes,
+        referenced: detail.dataset.referencedBytes,
+        mountpoint: detail.dataset.mountpoint,
+        compression: detail.dataset.compression ?? props["compression"],
+        comp: detail.dataset.compression ?? props["compression"],
+        recordsize: props["recordsize"],
+        atime: props["atime"],
+        encryption: props["encryption"],
+        enc: props["encryption"] !== undefined && props["encryption"] !== "off",
+        quota: propNum("quota"),
+      }
+    : fallback;
 
   const inval = () => {
     qc.invalidateQueries({ queryKey: ["dataset", fullname] });
@@ -466,19 +592,12 @@ function DatasetDetail({
       )}
 
       {tab === "quota" && (
-        <div className="sect">
-          <div className="sect__title">Quota</div>
-          <div className="sect__body">
-            <dl className="kv">
-              <dt>Used</dt><dd>{formatBytes(used)}</dd>
-              <dt>Quota</dt><dd>{quota > 0 ? formatBytes(quota) : "none"}</dd>
-              <dt>Available</dt><dd>{d.available ? formatBytes(d.available) : "—"}</dd>
-            </dl>
-            <div className="muted small" style={{ marginTop: 6 }}>
-              Editing quotas requires the property setter (TODO: backend missing for direct PUT).
-            </div>
-          </div>
-        </div>
+        <QuotaPanel
+          fullname={fullname}
+          properties={props}
+          available={d.available ?? 0}
+          used={used}
+        />
       )}
 
       {tab === "policy" && (
@@ -530,7 +649,26 @@ function DatasetDetail({
         <button className="btn btn--sm" onClick={() => setAction("rename")}>Rename</button>
         <button className="btn btn--sm" onClick={() => setAction("send")}>Send…</button>
         <button className="btn btn--sm" onClick={() => setAction("receive")}>Receive…</button>
+        <button
+          className="btn btn--sm btn--danger"
+          style={{ marginLeft: "auto" }}
+          onClick={() => setShowDelete(true)}
+        >
+          Delete
+        </button>
       </div>
+      {showDelete && (
+        <DeleteDatasetModal
+          fullname={fullname}
+          hasChildren={hasChildren}
+          onClose={() => setShowDelete(false)}
+          onDeleted={() => {
+            setShowDelete(false);
+            inval();
+            onClose();
+          }}
+        />
+      )}
 
       {action === "rollback" && (
         <RollbackModal fullname={fullname} onClose={() => setAction(null)} onDone={inval} />
@@ -548,6 +686,241 @@ function DatasetDetail({
         <SendReceiveModal mode="receive" fullname={fullname} onClose={() => setAction(null)} />
       )}
     </div>
+  );
+}
+
+// parseSize accepts ZFS-style suffixes ("10G", "512M", "1T") and bare
+// byte strings, returning bytes. Empty / "none" / "0" → 0.
+function parseSize(input: string): number | null {
+  const s = input.trim();
+  if (!s || s === "none" || s === "0") return 0;
+  const m = /^(\d+(?:\.\d+)?)\s*([KMGTP]?)B?$/i.exec(s);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  const unit = (m[2] || "").toUpperCase();
+  const mult: Record<string, number> = { "": 1, K: 1024, M: 1024**2, G: 1024**3, T: 1024**4, P: 1024**5 };
+  return Math.round(n * (mult[unit] ?? 1));
+}
+
+function QuotaPanel({
+  fullname,
+  properties,
+  available,
+  used,
+}: {
+  fullname: string;
+  properties: Record<string, string>;
+  available: number;
+  used: number;
+}) {
+  const qc = useQueryClient();
+  const [quotaInput, setQuotaInput] = useState(
+    properties.quota && properties.quota !== "none" && properties.quota !== "0"
+      ? formatBytes(Number(properties.quota))
+      : ""
+  );
+  const [refquotaInput, setRefquotaInput] = useState(
+    properties.refquota && properties.refquota !== "none" && properties.refquota !== "0"
+      ? formatBytes(Number(properties.refquota))
+      : ""
+  );
+  const [newScope, setNewScope] = useState<"user" | "group">("user");
+  const [newPrincipal, setNewPrincipal] = useState("");
+  const [newSize, setNewSize] = useState("");
+
+  const inval = () => qc.invalidateQueries({ queryKey: ["dataset", fullname] });
+  const setProps = useMutation({
+    meta: { label: "Update quota failed" },
+    mutationFn: (props: Record<string, string>) =>
+      storage.setDatasetProperties(fullname, props),
+    onSuccess: (_d, vars) => {
+      inval();
+      const k = Object.keys(vars)[0];
+      toastSuccess("Quota updated", k);
+    },
+  });
+
+  const setQuota = (key: "quota" | "refquota", input: string) => {
+    const trimmed = input.trim();
+    const value = trimmed === "" ? "none" : trimmed;
+    if (value !== "none" && parseSize(value) === null) {
+      // Bad input — let the user retry rather than POST garbage.
+      return;
+    }
+    setProps.mutate({ [key]: value });
+  };
+
+  // ZFS userquota@/groupquota@ properties — extract from the full
+  // property map. ZFS only returns these when set explicitly.
+  const userQuotas = Object.entries(properties).filter(
+    ([k, v]) =>
+      (k.startsWith("userquota@") || k.startsWith("groupquota@")) &&
+      v !== "none"
+  );
+
+  return (
+    <>
+      <div className="sect">
+        <div className="sect__title">Capacity</div>
+        <div className="sect__body">
+          <dl className="kv">
+            <dt>Used</dt><dd>{formatBytes(used)}</dd>
+            <dt>Available</dt><dd>{formatBytes(available)}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div className="sect">
+        <div className="sect__title">Dataset quota</div>
+        <div className="sect__body">
+          <div className="field">
+            <label className="field__label">Quota (incl. children + snapshots)</label>
+            <div className="row gap-8">
+              <input
+                className="input"
+                style={{ flex: 1 }}
+                value={quotaInput}
+                onChange={(e) => setQuotaInput(e.target.value)}
+                placeholder="e.g. 100G, 1T, leave blank for none"
+              />
+              <button
+                className="btn btn--sm btn--primary"
+                disabled={setProps.isPending}
+                onClick={() => setQuota("quota", quotaInput)}
+              >
+                Apply
+              </button>
+            </div>
+            <div className="field__hint muted">
+              Hard cap including all child datasets and snapshots.
+            </div>
+          </div>
+          <div className="field">
+            <label className="field__label">Reference quota (this dataset only)</label>
+            <div className="row gap-8">
+              <input
+                className="input"
+                style={{ flex: 1 }}
+                value={refquotaInput}
+                onChange={(e) => setRefquotaInput(e.target.value)}
+                placeholder="e.g. 50G"
+              />
+              <button
+                className="btn btn--sm btn--primary"
+                disabled={setProps.isPending}
+                onClick={() => setQuota("refquota", refquotaInput)}
+              >
+                Apply
+              </button>
+            </div>
+            <div className="field__hint muted">
+              Caps just this dataset's referenced data; ignores children
+              and snapshot space.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="sect">
+        <div className="sect__title">Per-user / per-group quota</div>
+        <div className="sect__body">
+          {userQuotas.length === 0 && (
+            <div className="muted small" style={{ marginBottom: 8 }}>
+              None set. ZFS supports per-user and per-group caps on the
+              data each principal owns within this dataset.
+            </div>
+          )}
+          {userQuotas.length > 0 && (
+            <table className="tbl tbl--compact">
+              <thead>
+                <tr>
+                  <th>Scope</th>
+                  <th>Principal</th>
+                  <th>Quota</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {userQuotas.map(([k, v]) => {
+                  const [scope, name] = k.split("@");
+                  return (
+                    <tr key={k}>
+                      <td className="muted">{scope.replace("quota", "")}</td>
+                      <td className="mono" style={{ fontSize: 11 }}>{name}</td>
+                      <td className="mono" style={{ fontSize: 11 }}>
+                        {formatBytes(Number(v))}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          className="btn btn--sm"
+                          disabled={setProps.isPending}
+                          onClick={() => setProps.mutate({ [k]: "none" })}
+                        >
+                          Clear
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <div className="row gap-8" style={{ marginTop: 12, alignItems: "flex-end" }}>
+            <div className="field" style={{ marginBottom: 0, width: 80 }}>
+              <label className="field__label">Scope</label>
+              <select
+                className="input"
+                value={newScope}
+                onChange={(e) => setNewScope(e.target.value as "user" | "group")}
+              >
+                <option value="user">user</option>
+                <option value="group">group</option>
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0, flex: 1 }}>
+              <label className="field__label">
+                {newScope === "user" ? "Username" : "Group name"}
+              </label>
+              <input
+                className="input"
+                value={newPrincipal}
+                onChange={(e) => setNewPrincipal(e.target.value)}
+                placeholder={newScope === "user" ? "alice" : "engineering"}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0, flex: 1 }}>
+              <label className="field__label">Quota</label>
+              <input
+                className="input"
+                value={newSize}
+                onChange={(e) => setNewSize(e.target.value)}
+                placeholder="10G"
+              />
+            </div>
+            <button
+              className="btn btn--sm btn--primary"
+              disabled={
+                setProps.isPending ||
+                !newPrincipal.trim() ||
+                parseSize(newSize) === null ||
+                parseSize(newSize) === 0
+              }
+              onClick={() => {
+                const key = `${newScope}quota@${newPrincipal.trim()}`;
+                setProps.mutate({ [key]: newSize.trim() }, {
+                  onSuccess: () => {
+                    setNewPrincipal("");
+                    setNewSize("");
+                  },
+                });
+              }}
+            >
+              Set
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1029,6 +1402,288 @@ function SendReceiveModal({
       )}
       <div className="muted small" style={{ marginTop: 6 }}>
         Streams are tracked by the replication engine; check the Replication app for live progress.
+      </div>
+    </Modal>
+  );
+}
+
+function SnapshotDetail({
+  snapshot,
+  fullname,
+  onClose,
+}: {
+  snapshot: Snapshot;
+  fullname: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRollback, setConfirmRollback] = useState(false);
+  const [showClone, setShowClone] = useState(false);
+  const [holdTag, setHoldTag] = useState("");
+
+  const parent = snapshotParent(snapshot) ?? "";
+  const snapName = snapshotKey(snapshot);
+
+  const inval = () => {
+    qc.invalidateQueries({ queryKey: ["snapshots"] });
+    qc.invalidateQueries({ queryKey: ["datasets"] });
+    qc.invalidateQueries({ queryKey: ["snapshot-holds", fullname] });
+  };
+
+  const holdsQ = useQuery({
+    queryKey: ["snapshot-holds", fullname],
+    queryFn: () => storage.listHolds(fullname),
+  });
+  const holds = holdsQ.data ?? [];
+
+  const rollback = useMutation({
+    meta: { label: "Rollback failed" },
+    mutationFn: () => storage.rollbackDataset(parent, snapName),
+    onSuccess: () => {
+      inval();
+      toastSuccess("Dataset rolled back", `${parent} → ${snapName}`);
+      setConfirmRollback(false);
+    },
+  });
+
+  const del = useMutation({
+    meta: { label: "Delete snapshot failed" },
+    mutationFn: () => storage.deleteSnapshot(fullname),
+    onSuccess: () => {
+      inval();
+      toastSuccess("Snapshot deleted", fullname);
+      onClose();
+    },
+  });
+
+  const hold = useMutation({
+    meta: { label: "Hold failed" },
+    mutationFn: (tag: string) => storage.holdSnapshot(fullname, tag),
+    onSuccess: (_d, tag) => { inval(); toastSuccess("Hold added", tag); setHoldTag(""); },
+  });
+
+  const release = useMutation({
+    meta: { label: "Release failed" },
+    mutationFn: (tag: string) => storage.releaseSnapshot(fullname, tag),
+    onSuccess: (_d, tag) => { inval(); toastSuccess("Hold released", tag); },
+  });
+
+  return (
+    <div className="side-detail">
+      <div className="side-detail__head">
+        <div>
+          <div className="muted mono" style={{ fontSize: 10 }}>SNAPSHOT</div>
+          <div className="side-detail__title">{snapName}</div>
+          <div className="muted mono" style={{ fontSize: 11 }}>of {parent}</div>
+        </div>
+        <button className="btn btn--sm" onClick={onClose}>
+          <Icon name="close" size={10} />
+        </button>
+      </div>
+
+      <div className="sect">
+        <div className="sect__title">Details</div>
+        <div className="sect__body">
+          <dl className="kv">
+            <dt>Created</dt>
+            <dd className="mono" style={{ fontSize: 11 }}>
+              {snapshot.created ?? "—"}
+            </dd>
+            <dt>Used</dt>
+            <dd>
+              {snapshot.used != null
+                ? formatBytes(snapshot.used)
+                : snapshot.size != null
+                  ? formatBytes(snapshot.size)
+                  : "—"}
+            </dd>
+            <dt>Holds</dt>
+            <dd>{holds.length === 0 ? "—" : `${holds.length} active`}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div className="sect">
+        <div className="sect__title">Holds</div>
+        <div className="sect__body">
+          {holds.length === 0 && (
+            <div className="muted small" style={{ marginBottom: 8 }}>
+              No holds. A held snapshot can't be deleted until the hold is released.
+            </div>
+          )}
+          {holds.map((tag: string) => (
+            <div key={tag} className="row gap-8" style={{ alignItems: "center", marginBottom: 4 }}>
+              <span className="mono" style={{ fontSize: 11, flex: 1 }}>{tag}</span>
+              <button
+                className="btn btn--sm"
+                disabled={release.isPending}
+                onClick={() => release.mutate(tag)}
+              >
+                Release
+              </button>
+            </div>
+          ))}
+          <div className="row gap-8" style={{ marginTop: 8 }}>
+            <input
+              className="input"
+              style={{ flex: 1 }}
+              placeholder="hold tag"
+              value={holdTag}
+              onChange={(e) => setHoldTag(e.target.value)}
+            />
+            <button
+              className="btn btn--sm"
+              disabled={!holdTag.trim() || hold.isPending}
+              onClick={() => hold.mutate(holdTag.trim())}
+            >
+              Hold
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="row gap-8"
+        style={{ padding: "10px 12px", borderTop: "1px solid var(--line)", flexWrap: "wrap" }}
+      >
+        <button
+          className="btn btn--sm"
+          onClick={() => setConfirmRollback(true)}
+          title={`Rollback ${parent} to this snapshot`}
+        >
+          Rollback to here
+        </button>
+        <button className="btn btn--sm" onClick={() => setShowClone(true)}>
+          Clone…
+        </button>
+        <button
+          className="btn btn--sm btn--danger"
+          style={{ marginLeft: "auto" }}
+          disabled={holds.length > 0}
+          title={
+            holds.length > 0
+              ? "Release all holds before deleting"
+              : "Delete this snapshot"
+          }
+          onClick={() => setConfirmDelete(true)}
+        >
+          Delete
+        </button>
+      </div>
+
+      {confirmRollback && (
+        <Modal
+          title="Rollback dataset"
+          sub={`${parent} will be reverted to @${snapName}`}
+          onClose={() => setConfirmRollback(false)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setConfirmRollback(false)}>Cancel</button>
+              <button
+                className="btn btn--danger"
+                disabled={rollback.isPending}
+                onClick={() => rollback.mutate()}
+              >
+                {rollback.isPending ? "Rolling back…" : "Rollback"}
+              </button>
+            </>
+          }
+        >
+          <div className="muted small">
+            All changes to <code>{parent}</code> after this snapshot will be lost.
+            Snapshots taken after this one will also be destroyed.
+          </div>
+        </Modal>
+      )}
+
+      {showClone && (
+        <CloneModalPrefilled
+          dataset={parent}
+          snapshot={snapName}
+          onClose={() => setShowClone(false)}
+          onDone={inval}
+        />
+      )}
+
+      {confirmDelete && (
+        <Modal
+          title="Delete snapshot"
+          sub={fullname}
+          onClose={() => setConfirmDelete(false)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setConfirmDelete(false)}>Cancel</button>
+              <button
+                className="btn btn--danger"
+                disabled={del.isPending}
+                onClick={() => del.mutate()}
+              >
+                {del.isPending ? "Deleting…" : "Delete"}
+              </button>
+            </>
+          }
+        >
+          <div className="muted small">
+            This permanently destroys the snapshot. Datasets cloned from it
+            will block deletion until promoted.
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function CloneModalPrefilled({
+  dataset,
+  snapshot,
+  onClose,
+  onDone,
+}: {
+  dataset: string;
+  snapshot: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [target, setTarget] = useState(`${dataset}-clone`);
+  const [err, setErr] = useState<string | null>(null);
+  const m = useMutation({
+    meta: { label: "Clone failed" },
+    mutationFn: () => storage.cloneDataset(dataset, { snapshot, target }),
+    onSuccess: () => { onDone(); onClose(); toastSuccess("Snapshot cloned", target); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <Modal
+      title="Clone snapshot"
+      sub={`${dataset}@${snapshot}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn--primary"
+            disabled={m.isPending || !target.trim()}
+            onClick={() => { setErr(null); m.mutate(); }}
+          >
+            {m.isPending ? "Cloning…" : "Clone"}
+          </button>
+        </>
+      }
+    >
+      {err && <div className="modal__err">{err}</div>}
+      <div className="field">
+        <label className="field__label">Target dataset (full path)</label>
+        <input
+          className="input"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="pool/clone-name"
+          autoFocus
+        />
+        <div className="field__hint muted">
+          A new dataset rooted at the snapshot's contents.
+        </div>
       </div>
     </Modal>
   );

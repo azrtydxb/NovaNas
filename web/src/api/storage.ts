@@ -107,6 +107,24 @@ export type AclEntry = {
 
 export type DatasetMetadata = Record<string, string>;
 
+// DatasetDetailResp mirrors internal/host/zfs/dataset Detail.
+// `dataset` carries the parsed `zfs list` row; `properties` is the
+// full `zfs get all` map (every ZFS property as a string, including
+// quota, refquota, userquota@<user>, groupquota@<group>).
+export type DatasetDetailResp = {
+  dataset: {
+    name: string;
+    type: string;
+    usedBytes?: number;
+    availableBytes?: number;
+    referencedBytes?: number;
+    mountpoint?: string;
+    compression?: string;
+    recordSizeBytes?: number;
+  };
+  properties: Record<string, string>;
+};
+
 export type Bookmark = {
   name: string;
   fullname?: string;
@@ -197,7 +215,12 @@ export const storage = {
   listDatasets: (pool?: string) =>
     api<Dataset[]>(`/api/v1/datasets${pool ? `?pool=${encodeURIComponent(pool)}` : ""}`),
   getDataset: (fullname: string) =>
-    api<Dataset>(`/api/v1/datasets/${encodeURIComponent(fullname)}`),
+    api<DatasetDetailResp>(`/api/v1/datasets/${encodeURIComponent(fullname)}`),
+  setDatasetProperties: (fullname: string, properties: Record<string, string>) =>
+    api<unknown>(`/api/v1/datasets/${encodeURIComponent(fullname)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ properties }),
+    }),
   createDataset: (body: {
     name: string;
     properties?: Record<string, string>;
@@ -213,6 +236,13 @@ export const storage = {
     api<unknown>(`/api/v1/datasets/${encodeURIComponent(fullname)}/promote`, { method: "POST" }),
   renameDataset: (fullname: string, target: string) =>
     api<unknown>(`/api/v1/datasets/${encodeURIComponent(fullname)}/rename`, j({ target })),
+  deleteDataset: (fullname: string, opts?: { recursive?: boolean }) => {
+    const qs = opts?.recursive ? "?recursive=true" : "";
+    return api<unknown>(
+      `/api/v1/datasets/${encodeURIComponent(fullname)}${qs}`,
+      { method: "DELETE" }
+    );
+  },
   diffDataset: (fullname: string, body: { from?: string; to?: string }) =>
     api<unknown>(`/api/v1/datasets/${encodeURIComponent(fullname)}/diff`, j(body)),
   sendDataset: (fullname: string, body: unknown) =>
