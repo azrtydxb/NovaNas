@@ -846,9 +846,14 @@ func New(d Deps) *Server {
 				r.Get("/plugins/{name}", pluginsH.Get)
 				r.Get("/plugins/{name}/dependencies", pluginsH.Dependencies)
 				r.Get("/plugins/{name}/dependents", pluginsH.Dependents)
+				r.Get("/plugins/{name}/logs", pluginsH.Logs)
 				// Static UI bundle. Open to any read-capable identity so
 				// Aurora can lazy-load the React module without escalating.
 				r.Get("/plugins/{name}/ui/*", pluginsH.ServeUI)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(require(auth.PermPluginsWrite))
+				r.Post("/plugins/{name}/restart", pluginsH.Restart)
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(require(auth.PermPluginsAdmin))

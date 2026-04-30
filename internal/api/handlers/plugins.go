@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -267,6 +268,48 @@ func (h *PluginsHandler) Uninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Restart POST /plugins/{name}/restart — bounces the plugin's runtime
+// unit via the wired deployer. 204 on success.
+func (h *PluginsHandler) Restart(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	name := chi.URLParam(r, "name")
+	if err := h.Manager.Restart(r.Context(), name); err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Logs GET /plugins/{name}/logs?lines=N — returns the most recent N
+// journal lines for the plugin's runtime unit. lines defaults to 200,
+// capped at 5000.
+func (h *PluginsHandler) Logs(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	name := chi.URLParam(r, "name")
+	lines := 200
+	if raw := r.URL.Query().Get("lines"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			middleware.WriteError(w, http.StatusBadRequest, "invalid_argument", "lines must be a positive integer")
+			return
+		}
+		lines = n
+	}
+	out, err := h.Manager.Logs(r.Context(), name, lines)
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	if out == nil {
+		out = []string{}
+	}
+	middleware.WriteJSON(w, h.Logger, http.StatusOK, map[string]any{"lines": out})
 }
 
 // ServeUI is the catch-all for /plugins/{name}/ui/{path:*}.

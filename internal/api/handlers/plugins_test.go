@@ -37,6 +37,55 @@ func TestPluginsHandler_NotConfigured(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("Install: want 503, got %d", rec.Code)
 	}
+	rec = httptest.NewRecorder()
+	h.Restart(rec, httptest.NewRequest(http.MethodPost, "/plugins/x/restart", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Restart: want 503, got %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.Logs(rec, httptest.NewRequest(http.MethodGet, "/plugins/x/logs", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Logs: want 503, got %d", rec.Code)
+	}
+}
+
+// Restart with no Queries wired: Manager.Restart returns ErrNotFound,
+// handler maps that to 404.
+func TestPluginsHandler_RestartNotFound(t *testing.T) {
+	mgr := plugins.NewManager(plugins.ManagerOptions{})
+	h := &PluginsHandler{Manager: mgr}
+	rec := httptest.NewRecorder()
+	h.Restart(rec, httptest.NewRequest(http.MethodPost, "/plugins/x/restart", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// Logs with bad lines query string returns 400 before touching the manager.
+func TestPluginsHandler_LogsBadLines(t *testing.T) {
+	mgr := plugins.NewManager(plugins.ManagerOptions{})
+	h := &PluginsHandler{Manager: mgr}
+	rec := httptest.NewRecorder()
+	h.Logs(rec, httptest.NewRequest(http.MethodGet, "/plugins/x/logs?lines=abc", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.Logs(rec, httptest.NewRequest(http.MethodGet, "/plugins/x/logs?lines=-5", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 for negative, got %d", rec.Code)
+	}
+}
+
+// Logs with no Queries wired returns 404 (plugin not found).
+func TestPluginsHandler_LogsNotFound(t *testing.T) {
+	mgr := plugins.NewManager(plugins.ManagerOptions{})
+	h := &PluginsHandler{Manager: mgr}
+	rec := httptest.NewRecorder()
+	h.Logs(rec, httptest.NewRequest(http.MethodGet, "/plugins/x/logs", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 // Index 503 when marketplace not configured.

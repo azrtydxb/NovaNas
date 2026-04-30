@@ -115,6 +115,8 @@ type Manager struct {
 type Deployer interface {
 	Install(ctx context.Context, manifest *Plugin) error
 	Uninstall(ctx context.Context, plugin string) error
+	Restart(ctx context.Context, plugin string) error
+	Logs(ctx context.Context, plugin string, lines int) ([]string, error)
 }
 
 // ManagerOptions wires a Manager.
@@ -498,6 +500,43 @@ func (m *Manager) Get(ctx context.Context, name string) (*Installation, error) {
 		inst.Resources = append(inst.Resources, ResourceRef{Type: NeedKind(r.ResourceType), ID: r.ResourceID})
 	}
 	return inst, nil
+}
+
+// Restart bounces the plugin's runtime via the wired Deployer. The
+// plugin must be installed (a DB row must exist) — restarting an
+// unknown plugin returns ErrNotFound rather than asking systemd to
+// chase a unit that is not on disk. Without a Deployer, restart is
+// not available (503 at the HTTP layer).
+func (m *Manager) Restart(ctx context.Context, name string) error {
+	if m.Queries == nil {
+		return ErrNotFound
+	}
+	if _, err := m.Queries.GetPluginByName(ctx, name); err != nil {
+		return ErrNotFound
+	}
+	if m.Deployer == nil {
+		return errors.New("plugins: restart: no deployer configured")
+	}
+	lock := m.lockFor(name)
+	lock.Lock()
+	defer lock.Unlock()
+	return m.Deployer.Restart(ctx, name)
+}
+
+// Logs fetches the most recent journal lines for the plugin's runtime
+// unit. Same not-installed contract as Restart; lines is forwarded to
+// the Deployer (which clamps to a sane range).
+func (m *Manager) Logs(ctx context.Context, name string, lines int) ([]string, error) {
+	if m.Queries == nil {
+		return nil, ErrNotFound
+	}
+	if _, err := m.Queries.GetPluginByName(ctx, name); err != nil {
+		return nil, ErrNotFound
+	}
+	if m.Deployer == nil {
+		return nil, errors.New("plugins: logs: no deployer configured")
+	}
+	return m.Deployer.Logs(ctx, name, lines)
 }
 
 // RestoreAtStartup re-mounts API routes and re-registers UI bundles

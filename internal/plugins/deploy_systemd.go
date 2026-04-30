@@ -50,6 +50,38 @@ func (s *SystemctlExec) Run(ctx context.Context, args ...string) error {
 	return nil
 }
 
+// JournalctlRunner abstracts read-only journalctl invocations so tests
+// can stub the captured output.
+type JournalctlRunner interface {
+	Run(ctx context.Context, args ...string) ([]byte, error)
+}
+
+// JournalctlExec is the production journalctl runner.
+type JournalctlExec struct {
+	Bin string
+}
+
+// Run executes journalctl with the supplied args and returns stdout.
+// On non-zero exit the combined output is included in the error so the
+// caller can surface it to operators.
+func (j *JournalctlExec) Run(ctx context.Context, args ...string) ([]byte, error) {
+	bin := j.Bin
+	if bin == "" {
+		bin = "/bin/journalctl"
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		stderr := ""
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			stderr = strings.TrimSpace(string(ee.Stderr))
+		}
+		return nil, fmt.Errorf("journalctl %s: %w (%s)", strings.Join(args, " "), err, stderr)
+	}
+	return out, nil
+}
+
 // SystemdDeployer extracts a plugin's systemd unit, rewrites
 // ${PLUGIN_ROOT} to the absolute install path, drops the unit at
 // /etc/systemd/system/nova-plugin-<name>.service, and brings it up.
@@ -58,7 +90,10 @@ func (s *SystemctlExec) Run(ctx context.Context, args ...string) error {
 type SystemdDeployer struct {
 	PluginsRoot string
 	Runner      SystemctlRunner
-	Logger      *slog.Logger
+	// Journal handles read-only `journalctl` calls for plugin log
+	// retrieval. nil falls back to JournalctlExec at first use.
+	Journal JournalctlRunner
+	Logger  *slog.Logger
 	// UnitDirOverride redirects the install-target directory for
 	// /etc/systemd/system. Tests set this to a t.TempDir().
 	UnitDirOverride string
@@ -232,4 +267,57 @@ func (d *SystemdDeployer) Uninstall(ctx context.Context, plugin string) error {
 		d.Logger.Info("plugins: systemd unit removed", "plugin", plugin)
 	}
 	return firstErr
+}
+
+// Restart runs `systemctl restart nova-plugin-<name>.service`. The
+// runner is responsible for surfacing stderr in any returned error so
+// the HTTP layer can echo it back to operators.
+func (d *SystemdDeployer) Restart(ctx context.Context, plugin string) error {
+	if plugin == "" {
+		return errors.New("plugins: restart: empty plugin name")
+	}
+	if d.Runner == nil {
+		return errors.New("plugins: restart: no systemctl runner configured")
+	}
+	if err := d.Runner.Run(ctx, "restart", d.unitName(plugin)); err != nil {
+		return err
+	}
+	if d.Logger != nil {
+		d.Logger.Info("plugins: systemd unit restarted", "plugin", plugin)
+	}
+	return nil
+}
+
+// Logs returns the most recent N journal lines for the plugin's unit.
+// lines is clamped to [1,5000]; values <=0 fall back to 200.
+func (d *SystemdDeployer) Logs(ctx context.Context, plugin string, lines int) ([]string, error) {
+	if plugin == "" {
+		return nil, errors.New("plugins: logs: empty plugin name")
+	}
+	if lines <= 0 {
+		lines = 200
+	}
+	if lines > 5000 {
+		lines = 5000
+	}
+	runner := d.Journal
+	if runner == nil {
+		runner = &JournalctlExec{}
+	}
+	args := []string{
+		"-u", d.unitName(plugin),
+		"-n", fmt.Sprintf("%d", lines),
+		"--no-pager",
+		"--output=short-iso",
+	}
+	out, err := runner.Run(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	// Split on newlines; drop the trailing empty produced by journalctl.
+	raw := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(raw) == 1 && raw[0] == "" {
+		return []string{}, nil
+	}
+	return raw, nil
 }
