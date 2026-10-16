@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   zfs-e2e:
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'needs-e2e')
-    runs-on: [self-hosted, zfs]
+    # disabled: needs a ZFS-capable host; no runner in the fleet exposes /dev/zfs
+    if: false
+    runs-on: arc-azrtydxb-amd64
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
