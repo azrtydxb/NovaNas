@@ -38,6 +38,10 @@ func (stubPools) Get(_ context.Context, name string) (*pool.Detail, error) {
 	return nil, pool.ErrNotFound
 }
 
+func (stubPools) Importable(_ context.Context) ([]pool.ImportablePool, error) {
+	return []pool.ImportablePool{{Name: "tank"}}, nil
+}
+
 type stubDatasets struct{}
 
 func (stubDatasets) List(_ context.Context, _ string) ([]dataset.Dataset, error) {

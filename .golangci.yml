@@ -1,3 +1,4 @@
+version: "2"
 run:
   timeout: 5m
 linters:
@@ -7,17 +8,19 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - revive
     - gosec
     - misspell
-linters-settings:
-  revive:
+  settings:
+    revive:
+      rules:
+        - name: exported
+  exclusions:
     rules:
-      - name: exported
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
+      - path: _test\.go
+        linters:
+          - gosec
+formatters:
+  enable:
+    - gofmt
+    - goimports
