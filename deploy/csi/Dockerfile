@@ -15,7 +15,7 @@
 ############################
 # Stage 1: build the binary
 ############################
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-bookworm AS build
 
 ENV CGO_ENABLED=0 \
     GOOS=linux \
