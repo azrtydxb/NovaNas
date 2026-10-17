@@ -6,6 +6,6 @@
     "gen": "openapi --input ../../api/openapi.yaml --output ./src --client fetch --useUnionTypes"
   },
   "devDependencies": {
-    "openapi-typescript-codegen": "^0.29.0"
+    "openapi-typescript-codegen": "^0.31.0"
   }
 }
