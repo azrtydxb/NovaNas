@@ -1,10 +1,14 @@
 name: e2e
 
 on:
-  pull_request:
-    types: [labeled, synchronize]
+  # e2e is a full-tier job: never on PRs. Nightly + manual only, matching
+  # the org three-tier model. The job stays disabled until a runner with
+  # /dev/zfs exists.
   push:
     branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
