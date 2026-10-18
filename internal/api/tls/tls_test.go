@@ -327,7 +327,10 @@ func TestServe_ContextCancel(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve returned error after ctx cancel: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Serve did not return after ctx cancel")
 	}
