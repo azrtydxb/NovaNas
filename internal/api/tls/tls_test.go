@@ -225,13 +225,13 @@ func TestServe_TLS11Rejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})}
 	go srv.Serve(ln) //nolint:errcheck
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	// Client forcing TLS 1.1 should fail handshake.
 	conn, err := tls.Dial("tcp", ln.Addr().String(), &tls.Config{
@@ -240,7 +240,7 @@ func TestServe_TLS11Rejected(t *testing.T) {
 		MaxVersion:         tls.VersionTLS11,
 	})
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Fatal("expected TLS 1.1 handshake to fail, but it succeeded")
 	}
 }
@@ -269,10 +269,10 @@ func TestServe_HotReloadEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})}
 	go srv.Serve(ln) //nolint:errcheck
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	cn1 := dialAndGetCN(t, ln.Addr().String())
 	if cn1 != "host-a" {
@@ -327,7 +327,10 @@ func TestServe_ContextCancel(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve returned error after ctx cancel: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Serve did not return after ctx cancel")
 	}
@@ -341,7 +344,7 @@ func dialAndGetCN(t *testing.T, addr string) string {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	state := conn.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
 		t.Fatal("no peer certs")

@@ -39,9 +39,9 @@ func uuidString(id pgtype.UUID) string {
 // uses Kind to group by category and Blocking to decide whether the
 // pool delete confirmation can be enabled.
 type PoolDependent struct {
-	Kind     string `json:"kind"`     // dataset|share|iscsi-target|replication-job|replication-schedule|snapshot-schedule|scrub-policy|plugin
-	ID       string `json:"id"`       // primary key the deletion endpoint expects
-	Name     string `json:"name"`     // display name
+	Kind     string `json:"kind"` // dataset|share|iscsi-target|replication-job|replication-schedule|snapshot-schedule|scrub-policy|plugin
+	ID       string `json:"id"`   // primary key the deletion endpoint expects
+	Name     string `json:"name"` // display name
 	Detail   string `json:"detail,omitempty"`
 	Enabled  *bool  `json:"enabled,omitempty"`
 	Blocking bool   `json:"blocking"` // true → must be removed before destroying the pool
@@ -113,10 +113,10 @@ func (h *PoolDependentsHandler) collectDatasets(ctx context.Context, pool string
 			continue
 		}
 		out = append(out, PoolDependent{
-			Kind:     "dataset",
-			ID:       d.Name,
-			Name:     d.Name,
-			Detail:   d.Mountpoint,
+			Kind:   "dataset",
+			ID:     d.Name,
+			Name:   d.Name,
+			Detail: d.Mountpoint,
 			// Blocking even though `zpool destroy -f` cascades to
 			// children: any dataset that is mounted or holds open
 			// fds (e.g. a k3s CSI PVC) wedges the destroy in

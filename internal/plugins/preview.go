@@ -142,7 +142,7 @@ func readManifestFromTarball(tarball []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("plugins: gzip: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
@@ -152,7 +152,7 @@ func readManifestFromTarball(tarball []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("plugins: tar: %w", err)
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 		// Match the lifecycle's tarball convention: manifest.yaml at

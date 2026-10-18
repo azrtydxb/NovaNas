@@ -107,7 +107,7 @@ func TestUnsealFailsAfterPCRChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer tpmConn.Close()
+	defer func() { _ = tpmConn.Close() }()
 	if _, err := (&tpm2.PCRExtend{
 		PCRHandle: tpm2.AuthHandle{
 			Handle: tpm2.TPMHandle(16),

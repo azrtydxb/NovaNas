@@ -82,7 +82,7 @@ func run(logger *slog.Logger, zfsBin string, perOpTimeout time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("tpm.New: %w", err)
 	}
-	defer sealer.Close()
+	defer func() { _ = sealer.Close() }()
 
 	mgr := &dataset.EncryptionManager{
 		ZFSBin:  zfsBin,

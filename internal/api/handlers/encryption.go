@@ -100,13 +100,13 @@ func (h *EncryptionHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	spec := &dataset.CreateSpec{
-		Parent:               parent,
-		Name:                 name,
-		Type:                 body.Type,
-		VolumeSizeBytes:      body.VolumeSizeBytes,
-		Properties:           body.Properties,
-		EncryptionEnabled:    true,
-		EncryptionAlgorithm:  body.Algorithm,
+		Parent:              parent,
+		Name:                name,
+		Type:                body.Type,
+		VolumeSizeBytes:     body.VolumeSizeBytes,
+		Properties:          body.Properties,
+		EncryptionEnabled:   true,
+		EncryptionAlgorithm: body.Algorithm,
 	}
 	if h.Mgr == nil {
 		middleware.WriteError(w, http.StatusServiceUnavailable, "no_tpm", "encryption manager not configured (no TPM?)")
@@ -200,9 +200,9 @@ func (h *EncryptionHandler) Recover(w http.ResponseWriter, r *http.Request) {
 	if h.Auditor != nil {
 		actor := actorFromIdentity(id)
 		payload, _ := json.Marshal(map[string]string{
-			"dataset":  full,
-			"caller":   actor,
-			"at":       time.Now().UTC().Format(time.RFC3339),
+			"dataset": full,
+			"caller":  actor,
+			"at":      time.Now().UTC().Format(time.RFC3339),
 		})
 		if auditErr := h.Auditor.InsertAudit(r.Context(), storedb.InsertAuditParams{
 			Actor:     actorPtr(actor),

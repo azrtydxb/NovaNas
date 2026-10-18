@@ -167,4 +167,3 @@ func die(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
 	os.Exit(2)
 }
-

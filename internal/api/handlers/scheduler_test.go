@@ -240,5 +240,6 @@ func TestSchedulerListEmpty(t *testing.T) {
 	}
 	if rr.Body.String() != "[]\n" && rr.Body.String() != "[]" {
 		// WriteJSON appends a newline via encoder; accept either.
+		t.Fatalf("unexpected body: %q", rr.Body.String())
 	}
 }

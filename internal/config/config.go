@@ -71,7 +71,7 @@ type Config struct {
 	// MarketplaceCosignBin, when set and non-empty, switches the
 	// verifier from native-Go PEM verification to shelling out to
 	// `cosign verify-blob` (operators who need rekor / transparency).
-	MarketplaceIndexURL    string `envconfig:"MARKETPLACE_INDEX_URL" default:"https://raw.githubusercontent.com/azrtydxb/NovaNas-packages/main/index.json"`
+	MarketplaceIndexURL     string `envconfig:"MARKETPLACE_INDEX_URL" default:"https://raw.githubusercontent.com/azrtydxb/NovaNas-packages/main/index.json"`
 	MarketplaceTrustKeyPath string `envconfig:"MARKETPLACE_TRUST_KEY_PATH" default:"/etc/nova-nas/trust/marketplace.pub"`
 	MarketplaceCosignBin    string `envconfig:"MARKETPLACE_COSIGN_BIN"`
 	// PluginsRoot is the on-disk directory where unpacked plugin trees

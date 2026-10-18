@@ -18,12 +18,12 @@ import (
 type fakeKeycloak struct {
 	mu sync.Mutex
 	// keyed by Keycloak-internal UUID
-	clients      map[string]*kcClient
-	clientUUIDs  []string
-	secrets      map[string]string // uuid -> rotated secret
-	saUsers      map[string]string // clientUUID -> user UUID
-	users        map[string]map[string]bool // userID -> set(roleNames)
-	realmRoles   map[string]*kcRole
+	clients     map[string]*kcClient
+	clientUUIDs []string
+	secrets     map[string]string          // uuid -> rotated secret
+	saUsers     map[string]string          // clientUUID -> user UUID
+	users       map[string]map[string]bool // userID -> set(roleNames)
+	realmRoles  map[string]*kcRole
 
 	// counters
 	createCalls int

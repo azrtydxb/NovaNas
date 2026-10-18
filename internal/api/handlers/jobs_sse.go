@@ -51,7 +51,7 @@ func (h *SSEJobsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	sub := h.Redis.Subscribe(ctx, "job:"+idStr+":update")
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	ch := sub.Channel()
 
 	// Now read the snapshot. Any state change between subscribe and now
@@ -73,7 +73,7 @@ func (h *SSEJobsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// Hint to nginx to disable response buffering on this stream; harmless
 	// when no proxy is in the way.
 	w.Header().Set("X-Accel-Buffering", "no")
-	fmt.Fprintf(w, "event: state\ndata: %s\n\n", job.State)
+	_, _ = fmt.Fprintf(w, "event: state\ndata: %s\n\n", job.State)
 	flusher.Flush()
 
 	if isTerminalJobState(job.State) {
@@ -88,13 +88,13 @@ func (h *SSEJobsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			fmt.Fprint(w, ": keepalive\n\n")
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case msg, ok := <-ch:
 			if !ok {
 				return
 			}
-			fmt.Fprintf(w, "event: state\ndata: %s\n\n", msg.Payload)
+			_, _ = fmt.Fprintf(w, "event: state\ndata: %s\n\n", msg.Payload)
 			flusher.Flush()
 			if isTerminalJobState(msg.Payload) {
 				return

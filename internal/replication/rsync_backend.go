@@ -97,23 +97,21 @@ func (b *RsyncBackend) buildArgs(j Job) []string {
 // and returns N, or 0 if not found.
 func parseRsyncBytes(stdout string) int64 {
 	const marker = "Total bytes sent: "
-	for {
-		idx := indexOf(stdout, marker)
-		if idx < 0 {
-			return 0
-		}
-		stdout = stdout[idx+len(marker):]
-		end := indexOf(stdout, "\n")
-		if end < 0 {
-			end = len(stdout)
-		}
-		raw := trimCommas(stdout[:end])
-		n, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
-			return 0
-		}
-		return n
+	idx := indexOf(stdout, marker)
+	if idx < 0 {
+		return 0
 	}
+	stdout = stdout[idx+len(marker):]
+	end := indexOf(stdout, "\n")
+	if end < 0 {
+		end = len(stdout)
+	}
+	raw := trimCommas(stdout[:end])
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func indexOf(s, sub string) int {

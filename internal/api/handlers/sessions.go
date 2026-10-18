@@ -76,7 +76,7 @@ func (c *KeycloakAdminClient) token(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("keycloak token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("keycloak token: %d %s", resp.StatusCode, string(body))
@@ -165,7 +165,7 @@ func (h *SessionsHandler) proxy(w http.ResponseWriter, resp *http.Response, err 
 		middleware.WriteError(w, http.StatusBadGateway, "keycloak_unreachable", err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
@@ -218,7 +218,7 @@ func (h *SessionsHandler) RevokeOwnSession(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if !owns {
 		middleware.WriteError(w, http.StatusNotFound, "not_found", "no session with that id for caller")
 		return

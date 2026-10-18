@@ -115,8 +115,8 @@ type EncryptionManager struct {
 	ZFSBin      string
 	Sealer      tpm.SealUnsealer
 	Secrets     SecretsManager
-	StdinRunner exec.StdinRunner   // override for tests
-	Now         func() time.Time   // override for tests; default time.Now
+	StdinRunner exec.StdinRunner // override for tests
+	Now         func() time.Time // override for tests; default time.Now
 }
 
 // runStdin returns the configured StdinRunner or exec.RunStdin.

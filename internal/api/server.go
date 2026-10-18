@@ -95,10 +95,10 @@ type Deps struct {
 	// is the marketplace client. All four are typically wired together
 	// in cmd/nova-api/main.go from the same env-derived config; tests
 	// may wire only the subset they exercise.
-	PluginsMgr     *plugins.Manager
-	PluginsRouter  *plugins.Router
-	PluginsUI      *plugins.UIAssets
-	PluginsMarket  *plugins.MarketplaceClient
+	PluginsMgr    *plugins.Manager
+	PluginsRouter *plugins.Router
+	PluginsUI     *plugins.UIAssets
+	PluginsMarket *plugins.MarketplaceClient
 	// MarketplacesStore + MarketplacesMulti drive the multi-source
 	// marketplace registry surfaced at /marketplaces. When Store is
 	// nil the routes respond 503.

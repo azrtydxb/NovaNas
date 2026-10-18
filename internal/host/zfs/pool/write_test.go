@@ -6,7 +6,7 @@ func TestBuildCreateArgs_Mirror(t *testing.T) {
 	spec := CreateSpec{
 		Name: "tank",
 		Vdevs: []VdevSpec{{
-			Type: "mirror",
+			Type:  "mirror",
 			Disks: []string{"/dev/disk/by-id/wwn-0xA", "/dev/disk/by-id/wwn-0xB"},
 		}},
 	}

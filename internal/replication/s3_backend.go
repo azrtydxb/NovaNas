@@ -129,7 +129,7 @@ func (b *S3Backend) push(ctx context.Context, j Job, fsys S3FS) (RunResult, erro
 		if rerr != nil {
 			return rerr
 		}
-		key := rel
+		var key string
 		if prefix != "" {
 			key = prefix + "/" + filepath.ToSlash(rel)
 		} else {

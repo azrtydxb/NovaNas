@@ -17,14 +17,18 @@ import (
 // Each plugin has /var/lib/nova-nas/plugins/<name>/{ui,manifest.yaml,data,...}.
 const DefaultPluginsRoot = "/var/lib/nova-nas/plugins"
 
+// maxExtractBytes caps the total uncompressed size of a plugin tarball
+// extraction, bounding the impact of a gzip decompression bomb.
+const maxExtractBytes int64 = 512 << 20
+
 // UIAssets serves /api/v1/plugins/{name}/ui/* from the unpacked
 // per-plugin tree. The set of registered plugins is mutated by the
 // lifecycle manager; reads are concurrent.
 type UIAssets struct {
 	Root string
 
-	mu       sync.RWMutex
-	plugins  map[string]string // name -> ui dir
+	mu      sync.RWMutex
+	plugins map[string]string // name -> ui dir
 }
 
 // NewUIAssets constructs a UIAssets rooted at root. Empty falls back
@@ -109,8 +113,9 @@ func ExtractTarball(tarball []byte, destDir string) (manifestBytes []byte, uiDir
 	if err != nil {
 		return nil, "", fmt.Errorf("plugins: gzip: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
+	remaining := maxExtractBytes
 	var hasUI bool
 	for {
 		hdr, err := tr.Next()
@@ -137,18 +142,24 @@ func ExtractTarball(tarball []byte, destDir string) (manifestBytes []byte, uiDir
 			if rel == "ui" {
 				hasUI = true
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
+			if hdr.Size > remaining {
+				return nil, "", fmt.Errorf("plugins: tarball exceeds %d bytes", maxExtractBytes)
+			}
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 				return nil, "", err
 			}
-			f, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+			f, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 			if err != nil {
 				return nil, "", err
 			}
-			if _, err := io.Copy(f, tr); err != nil {
+			// Bound the copy so a decompression bomb cannot exhaust the disk.
+			n, cErr := io.CopyN(f, tr, remaining)
+			if cErr != nil && !errors.Is(cErr, io.EOF) {
 				_ = f.Close()
-				return nil, "", err
+				return nil, "", cErr
 			}
+			remaining -= n
 			if err := f.Close(); err != nil {
 				return nil, "", err
 			}

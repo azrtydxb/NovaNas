@@ -57,11 +57,11 @@ func marshalSealedBlob(pcrs []uint8, pub, priv []byte) ([]byte, error) {
 	out := make([]byte, 0, 4+2+2+len(pcrs)+2+len(pub)+2+len(priv))
 	out = append(out, wireMagic...)
 	out = binary.BigEndian.AppendUint16(out, wireVersion)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(pcrs)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(pcrs))) //nolint:gosec // at most maxPCRs (24) entries.
 	out = append(out, pcrs...)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(pub)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(pub))) //nolint:gosec // TPM public blobs are far below 64 KiB.
 	out = append(out, pub...)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(priv)))
+	out = binary.BigEndian.AppendUint16(out, uint16(len(priv))) //nolint:gosec // TPM private blobs are far below 64 KiB.
 	out = append(out, priv...)
 	return out, nil
 }

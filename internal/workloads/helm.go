@@ -189,7 +189,7 @@ func (h *realHelm) Get(_ context.Context, name string) (*release.Release, error)
 	get := action.NewGet(cfg)
 	rel, err := get.Run(name)
 	if err != nil {
-		if errors.Is(err, driverNotFound) || strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, errDriverNotFound) || strings.Contains(err.Error(), "not found") {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("workloads: helm get %q: %w", name, err)
@@ -197,12 +197,12 @@ func (h *realHelm) Get(_ context.Context, name string) (*release.Release, error)
 	return rel, nil
 }
 
-// driverNotFound is helm's storage-driver "release not found" sentinel,
+// errDriverNotFound is helm's storage-driver "release not found" sentinel,
 // which is unfortunately defined in an internal driver package. We
 // match by error string elsewhere; this var exists so future helm
 // versions that export the sentinel can be wired in by replacing this
 // declaration.
-var driverNotFound = errors.New("release: not found")
+var errDriverNotFound = errors.New("release: not found")
 
 func (h *realHelm) ensureNamespace(ctx context.Context, ns string) error {
 	if h.clientset == nil {
@@ -351,15 +351,12 @@ func (h *realHelm) Rollback(_ context.Context, name string, revision int) (*rele
 // values.schema.json for an index entry. Best-effort — failures are
 // returned to the caller but should not block the GUI from displaying
 // the catalog metadata.
-func FetchChartReadme(_ context.Context, settings *cli.EnvSettings, entry IndexEntry) (string, map[string]interface{}, error) {
-	if settings == nil {
-		settings = cli.New()
-	}
+func FetchChartReadme(_ context.Context, _ *cli.EnvSettings, entry IndexEntry) (string, map[string]interface{}, error) {
 	tmp, err := os.MkdirTemp("", "nova-helm-fetch-*")
 	if err != nil {
 		return "", nil, err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	chartRef := entry.Chart
 	g, err := getter.NewHTTPGetter()
@@ -392,7 +389,7 @@ func FetchChartReadme(_ context.Context, settings *cli.EnvSettings, entry IndexE
 		return "", nil, fmt.Errorf("fetch chart: %w", err)
 	}
 	out := filepath.Join(tmp, chartRef+".tgz")
-	if err := os.WriteFile(out, tgz.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(out, tgz.Bytes(), 0o600); err != nil {
 		return "", nil, err
 	}
 	ch, err := loader.Load(out)
@@ -433,7 +430,7 @@ func loadIndexBytes(b []byte) (*repo.IndexFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(b); err != nil {
 		_ = tmp.Close()
 		return nil, err

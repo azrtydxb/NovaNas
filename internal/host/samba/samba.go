@@ -94,7 +94,7 @@ func (osFileWriter) Write(path string, data []byte, perm os.FileMode) error {
 	}
 	return os.WriteFile(path, data, perm)
 }
-func (osFileWriter) Remove(path string) error            { return os.Remove(path) }
+func (osFileWriter) Remove(path string) error             { return os.Remove(path) }
 func (osFileWriter) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
 func (osFileWriter) ReadDir(path string) ([]os.DirEntry, error) {
 	return os.ReadDir(path)
@@ -253,7 +253,7 @@ func validateUsername(u string) error {
 		return fmt.Errorf("username too long (>32): %q", u)
 	}
 	first := u[0]
-	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
+	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') && first != '_' {
 		return fmt.Errorf("username must start with a letter or underscore: %q", u)
 	}
 	for _, r := range u {

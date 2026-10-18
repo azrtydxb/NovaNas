@@ -29,9 +29,10 @@ type DatasetProvisioner struct {
 
 // resourceID encodes the full dataset path inside the synthetic ID so
 // rollback can re-derive the name without an extra DB read.
-//   format: "dataset:<plugin>/<full-name>" — full-name has '/' in it,
-//   so we anchor on the first ":" and the first "/" after it to split
-//   plugin from path.
+//
+//	format: "dataset:<plugin>/<full-name>" — full-name has '/' in it,
+//	so we anchor on the first ":" and the first "/" after it to split
+//	plugin from path.
 func datasetResourceID(plugin, full string) string {
 	return fmt.Sprintf("dataset:%s/%s", plugin, full)
 }

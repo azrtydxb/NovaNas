@@ -61,7 +61,7 @@ func WrapAEAD(plaintext []byte, sealer SealUnsealer) ([]byte, error) {
 
 	out := make([]byte, 0, 2+len(sealedDEK)+len(nonce)+len(ct))
 	hdr := make([]byte, 2)
-	binary.BigEndian.PutUint16(hdr, uint16(len(sealedDEK)))
+	binary.BigEndian.PutUint16(hdr, uint16(len(sealedDEK))) //nolint:gosec // sealedDEK is a fixed 32-byte DEK.
 	out = append(out, hdr...)
 	out = append(out, sealedDEK...)
 	out = append(out, nonce...)

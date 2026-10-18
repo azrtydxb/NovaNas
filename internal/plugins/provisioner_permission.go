@@ -44,11 +44,11 @@ func parsePermissionResourceID(id string) (plugin, role string, ok bool) {
 }
 
 type kcRole struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	ContainerID   string `json:"containerId,omitempty"`
-	ClientRole    bool   `json:"clientRole,omitempty"`
-	Composite     bool   `json:"composite,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ContainerID string `json:"containerId,omitempty"`
+	ClientRole  bool   `json:"clientRole,omitempty"`
+	Composite   bool   `json:"composite,omitempty"`
 }
 
 type kcUser struct {
@@ -149,7 +149,7 @@ func (p *PermissionProvisioner) findRealmRole(ctx context.Context, name string) 
 	if err != nil {
 		return nil, fmt.Errorf("plugins: keycloak get role: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
 	}
@@ -170,7 +170,7 @@ func (p *PermissionProvisioner) serviceAccountUserID(ctx context.Context, client
 	if err != nil {
 		return "", fmt.Errorf("plugins: keycloak list clients: %w", err)
 	}
-	defer listResp.Body.Close()
+	defer func() { _ = listResp.Body.Close() }()
 	if listResp.StatusCode/100 != 2 {
 		return "", fmt.Errorf("plugins: keycloak list clients: %d", listResp.StatusCode)
 	}
@@ -192,7 +192,7 @@ func (p *PermissionProvisioner) serviceAccountUserID(ctx context.Context, client
 	if err != nil {
 		return "", fmt.Errorf("plugins: keycloak sa user: %w", err)
 	}
-	defer saResp.Body.Close()
+	defer func() { _ = saResp.Body.Close() }()
 	if saResp.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(saResp.Body)
 		return "", fmt.Errorf("plugins: keycloak sa user: %d %s", saResp.StatusCode, string(body))
@@ -214,7 +214,7 @@ func (p *PermissionProvisioner) userHasRealmRole(ctx context.Context, userID, ro
 	if err != nil {
 		return false, fmt.Errorf("plugins: keycloak list role mappings: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		return false, fmt.Errorf("plugins: keycloak list role mappings: %d", resp.StatusCode)
 	}

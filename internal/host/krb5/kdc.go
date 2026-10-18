@@ -81,17 +81,6 @@ func (m *KDCManager) databasePath() string {
 	return "/var/lib/krb5kdc/principal"
 }
 
-func (m *KDCManager) stashPath() string {
-	if p := m.Cfg.StashPath; p != "" {
-		return p
-	}
-	// Runtime tmpfs path materialized by nova-kdc-unseal.service. The
-	// MIT-default location (/var/lib/krb5kdc/.k5.<REALM>) is no longer
-	// used at runtime — it only appears transiently during initial
-	// bootstrap before being TPM-sealed and shredded.
-	return "/run/krb5kdc/.k5." + m.realm()
-}
-
 func (m *KDCManager) sealedBlobPath() string {
 	if p := m.Cfg.SealedBlobPath; p != "" {
 		return p

@@ -35,8 +35,8 @@ var ErrNotFound = errors.New("export not found")
 
 // Export is a publishable NFS share.
 type Export struct {
-	Name    string       `json:"name"`    // filename-safe; identifies the export file
-	Path    string       `json:"path"`    // host path (e.g. /tank/share1)
+	Name    string       `json:"name"` // filename-safe; identifies the export file
+	Path    string       `json:"path"` // host path (e.g. /tank/share1)
 	Clients []ClientRule `json:"clients"`
 }
 

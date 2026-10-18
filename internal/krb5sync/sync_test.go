@@ -169,14 +169,14 @@ func TestIsServicePrincipal(t *testing.T) {
 func TestPrincipalUserPattern(t *testing.T) {
 	realm := "NOVANAS.LOCAL"
 	cases := map[string]bool{
-		"alice@NOVANAS.LOCAL":           true,
-		"alice/acme@NOVANAS.LOCAL":      true,
-		"nfs/host@NOVANAS.LOCAL":        false, // service
-		"krbtgt/x@NOVANAS.LOCAL":        false,
-		"alice@OTHER.REALM":             false,
-		"":                              false,
-		"@NOVANAS.LOCAL":                false,
-		"a/b/c@NOVANAS.LOCAL":           false, // 2 slashes
+		"alice@NOVANAS.LOCAL":      true,
+		"alice/acme@NOVANAS.LOCAL": true,
+		"nfs/host@NOVANAS.LOCAL":   false, // service
+		"krbtgt/x@NOVANAS.LOCAL":   false,
+		"alice@OTHER.REALM":        false,
+		"":                         false,
+		"@NOVANAS.LOCAL":           false,
+		"a/b/c@NOVANAS.LOCAL":      false, // 2 slashes
 	}
 	for in, want := range cases {
 		if got := PrincipalUserPattern(in, realm); got != want {
@@ -193,10 +193,10 @@ func TestReconcileOnceCreatesAndDeletes(t *testing.T) {
 	// KDC starts with: a service principal we must never touch, an old
 	// principal whose user is gone (must be deleted), and one we keep.
 	kdc := newFakeKDC(
-		"nfs/host@NOVANAS.LOCAL",         // service, never touched
+		"nfs/host@NOVANAS.LOCAL", // service, never touched
 		"krbtgt/NOVANAS.LOCAL@NOVANAS.LOCAL",
-		"alice/acme@NOVANAS.LOCAL",       // already correct
-		"orphan/old@NOVANAS.LOCAL",       // user-shaped but no Keycloak match -> delete
+		"alice/acme@NOVANAS.LOCAL", // already correct
+		"orphan/old@NOVANAS.LOCAL", // user-shaped but no Keycloak match -> delete
 	)
 	st := NewMemState(NewState())
 	rec := NewReconciler(kc, kdc, st, Config{Realm: "NOVANAS.LOCAL"})

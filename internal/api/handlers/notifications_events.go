@@ -50,8 +50,8 @@ func (h *NotificationsEventsHandler) List(w http.ResponseWriter, r *http.Request
 		OnlySnoozed:      q.Get("onlySnoozed") == "true",
 	}
 	if lim := q.Get("limit"); lim != "" {
-		if n, err := strconv.Atoi(lim); err == nil && n > 0 {
-			f.Limit = int32(n)
+		if n, err := strconv.Atoi(lim); err == nil && n > 0 && n <= 1<<31-1 {
+			f.Limit = int32(n) //nolint:gosec // n is bounded to the int32 range above.
 		}
 	}
 	if cur := q.Get("cursor"); cur != "" {
@@ -82,7 +82,7 @@ func (h *NotificationsEventsHandler) List(w http.ResponseWriter, r *http.Request
 		Items      []notifycenter.Event `json:"items"`
 		NextCursor string               `json:"nextCursor,omitempty"`
 	}{Items: events}
-	if len(events) > 0 && f.Limit > 0 && int32(len(events)) == f.Limit {
+	if len(events) > 0 && f.Limit > 0 && len(events) == int(f.Limit) {
 		last := events[len(events)-1]
 		resp.NextCursor = last.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + last.ID
 	}
@@ -216,7 +216,7 @@ func (h *NotificationsEventsHandler) Stream(w http.ResponseWriter, r *http.Reque
 
 	// Initial heartbeat so clients can detect connect-success without
 	// waiting for the first event or the 15s keepalive tick.
-	fmt.Fprint(w, ": connected\n\n")
+	_, _ = fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 
 	keepalive := time.NewTicker(nceHeartbeatInterval)
@@ -227,7 +227,7 @@ func (h *NotificationsEventsHandler) Stream(w http.ResponseWriter, r *http.Reque
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			fmt.Fprint(w, ": keepalive\n\n")
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case ev, ok := <-ch:
 			if !ok {
@@ -237,7 +237,7 @@ func (h *NotificationsEventsHandler) Stream(w http.ResponseWriter, r *http.Reque
 			if err != nil {
 				continue
 			}
-			fmt.Fprintf(w, "event: notification\ndata: %s\n\n", buf)
+			_, _ = fmt.Fprintf(w, "event: notification\ndata: %s\n\n", buf)
 			flusher.Flush()
 		}
 	}

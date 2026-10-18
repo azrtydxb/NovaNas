@@ -162,7 +162,7 @@ func (d *SystemdDeployer) Install(ctx context.Context, manifest *Plugin) error {
 	if err := os.MkdirAll(d.unitDir(), 0o755); err != nil {
 		return fmt.Errorf("plugins: deploy: mkdir %q: %w", d.unitDir(), err)
 	}
-	if err := os.WriteFile(dstPath, []byte(rewritten), 0o644); err != nil {
+	if err := os.WriteFile(dstPath, []byte(rewritten), 0o600); err != nil {
 		return fmt.Errorf("plugins: deploy: write unit %q: %w", dstPath, err)
 	}
 	if d.Logger != nil {

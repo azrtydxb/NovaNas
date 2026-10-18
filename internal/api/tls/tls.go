@@ -208,10 +208,7 @@ func (s *ReloadableServer) tlsConfig() (*tls.Config, error) {
 	}
 	cfg := &tls.Config{
 		MinVersion: minVer,
-		// Deprecated in Go 1.18 and ignored, but harmless and
-		// communicates intent for older toolchains.
-		PreferServerCipherSuites: true,
-		NextProtos:               []string{"h2", "http/1.1"},
+		NextProtos: []string{"h2", "http/1.1"},
 		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			c := s.current.Load()
 			if c == nil {
@@ -304,7 +301,7 @@ func (s *ReloadableServer) watchLoop(ctx context.Context) {
 		s.pollLoop(ctx)
 		return
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if err := w.Add(dir); err != nil {
 		s.log.Warn("tls: cannot watch cert dir; falling back to polling", "dir", dir, "err", err)
@@ -478,10 +475,7 @@ func (s *ReloadableServer) generateSelfSigned(certPath, keyPath string) error {
 	}
 
 	dns := []string{hostname, "localhost"}
-	ips := []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
-	for _, ip := range interfaceIPs() {
-		ips = append(ips, ip)
-	}
+	ips := append([]net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, interfaceIPs()...)
 	tmpl.DNSNames = dedupStrings(dns)
 	tmpl.IPAddresses = dedupIPs(ips)
 
@@ -495,7 +489,7 @@ func (s *ReloadableServer) generateSelfSigned(certPath, keyPath string) error {
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return fmt.Errorf("write cert: %w", err)
 	}
 

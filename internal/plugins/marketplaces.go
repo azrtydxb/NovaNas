@@ -67,10 +67,10 @@ type MarketplacesStore interface {
 // from; collisions (same plugin name across multiple marketplaces)
 // produce multiple entries.
 type MergedIndex struct {
-	Version int                  `json:"version"`
-	Updated time.Time            `json:"updated,omitempty"`
-	Plugins []MergedIndexPlugin  `json:"plugins"`
-	Sources []MergedIndexSource  `json:"sources"`
+	Version int                 `json:"version"`
+	Updated time.Time           `json:"updated,omitempty"`
+	Plugins []MergedIndexPlugin `json:"plugins"`
+	Sources []MergedIndexSource `json:"sources"`
 }
 
 // MergedIndexPlugin is one tagged plugin entry in the merged index.
@@ -88,7 +88,7 @@ type MergedIndexSource struct {
 	Name        string    `json:"name"`
 	IndexURL    string    `json:"indexUrl"`
 	PluginCount int       `json:"pluginCount"`
-	Status      string    `json:"status"`           // "ok" | "error"
+	Status      string    `json:"status"` // "ok" | "error"
 	Error       string    `json:"error,omitempty"`
 	FetchedAt   time.Time `json:"fetchedAt"`
 }
@@ -123,8 +123,7 @@ func NewMultiMarketplaceClient(store MarketplacesStore, h *http.Client) *MultiMa
 }
 
 // clientFor returns a per-marketplace MarketplaceClient, constructing
-// it on first use. The cache is keyed by ID; callers refreshing trust
-// keys or removing a marketplace must call invalidate(id).
+// it on first use.
 func (mc *MultiMarketplaceClient) clientFor(m Marketplace) *MarketplaceClient {
 	mc.mu.RLock()
 	c, ok := mc.clients[m.ID]
@@ -140,12 +139,6 @@ func (mc *MultiMarketplaceClient) clientFor(m Marketplace) *MarketplaceClient {
 	c = NewMarketplaceClientFor(m, mc.HTTP)
 	mc.clients[m.ID] = c
 	return c
-}
-
-func (mc *MultiMarketplaceClient) invalidate(id uuid.UUID) {
-	mc.mu.Lock()
-	delete(mc.clients, id)
-	mc.mu.Unlock()
 }
 
 // FetchAll fetches every enabled marketplace's index in parallel and
@@ -315,7 +308,7 @@ func (mc *MultiMarketplaceClient) writePinnedKey(m Marketplace) (string, error) 
 		return "", err
 	}
 	path := filepath.Join(dir, m.ID.String()+".pub")
-	if err := os.WriteFile(path, []byte(m.TrustKeyPEM), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(m.TrustKeyPEM), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil

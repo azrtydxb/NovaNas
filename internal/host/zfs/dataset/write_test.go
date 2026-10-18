@@ -27,11 +27,11 @@ func TestBuildCreateArgs_Filesystem(t *testing.T) {
 
 func TestBuildCreateArgs_Volume(t *testing.T) {
 	spec := CreateSpec{
-		Parent: "tank",
-		Name:   "vol1",
-		Type:   "volume",
+		Parent:          "tank",
+		Name:            "vol1",
+		Type:            "volume",
 		VolumeSizeBytes: 1 << 30,
-		Properties: map[string]string{"compression": "off"},
+		Properties:      map[string]string{"compression": "off"},
 	}
 	args, err := buildCreateArgs(spec)
 	if err != nil {

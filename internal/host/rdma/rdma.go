@@ -31,10 +31,10 @@ type Adapter struct {
 
 // AdapterPort describes a single port of an Adapter.
 type AdapterPort struct {
-	Number    int      `json:"number"`            // 1-indexed
-	State     string   `json:"state"`             // "ACTIVE", "DOWN", "INIT", "ARMED"
-	LinkLayer string   `json:"linkLayer"`         // "InfiniBand" or "Ethernet" (RoCE)
-	GIDs      []string `json:"gids,omitempty"`    // optional, port/<n>/gids/0...
+	Number    int      `json:"number"`         // 1-indexed
+	State     string   `json:"state"`          // "ACTIVE", "DOWN", "INIT", "ARMED"
+	LinkLayer string   `json:"linkLayer"`      // "InfiniBand" or "Ethernet" (RoCE)
+	GIDs      []string `json:"gids,omitempty"` // optional, port/<n>/gids/0...
 }
 
 func (l *Lister) sysPath() string {

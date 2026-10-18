@@ -263,9 +263,9 @@ func (m *Manager) Create(ctx context.Context, req CreateRequest) (*VM, error) {
 
 	// Ensure namespace exists. Idempotent.
 	if err := m.Kube.CreateNamespace(ctx, ns, map[string]string{
-		"novanas.io/managed":    "true",
-		"novanas.io/component":  "vm",
-		"novanas.io/vm":         req.Name,
+		"novanas.io/managed":   "true",
+		"novanas.io/component": "vm",
+		"novanas.io/vm":        req.Name,
 	}); err != nil {
 		return nil, fmt.Errorf("create namespace: %w", err)
 	}

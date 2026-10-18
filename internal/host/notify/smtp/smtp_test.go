@@ -14,22 +14,21 @@ import (
 // message over a plaintext connection (no STARTTLS, no AUTH). It records
 // the SMTP transcript and returns the DATA payload to the caller.
 type fakeSMTPServer struct {
-	mu          sync.Mutex
-	mailFrom    string
-	rcpts       []string
-	data        string
+	mu           sync.Mutex
+	mailFrom     string
+	rcpts        []string
+	data         string
 	conversation []string
-	requireAuth bool
 }
 
 func (f *fakeSMTPServer) handle(c net.Conn) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	r := bufio.NewReader(c)
 	w := bufio.NewWriter(c)
 	write := func(s string) {
-		w.WriteString(s)
-		w.WriteString("\r\n")
-		w.Flush()
+		_, _ = w.WriteString(s)
+		_, _ = w.WriteString("\r\n")
+		_ = w.Flush()
 	}
 	write("220 fake.smtp ESMTP")
 	inData := false
@@ -52,11 +51,9 @@ func (f *fakeSMTPServer) handle(c net.Conn) {
 				write("250 OK queued")
 				continue
 			}
-			if strings.HasPrefix(line, ".") {
-				line = line[1:]
-			}
-			dataBuf.WriteString(line)
-			dataBuf.WriteString("\r\n")
+			line = strings.TrimPrefix(line, ".")
+			_, _ = dataBuf.WriteString(line)
+			_, _ = dataBuf.WriteString("\r\n")
 			continue
 		}
 		up := strings.ToUpper(line)
@@ -104,7 +101,7 @@ func startFakeServer(t *testing.T) (addr string, srv *fakeSMTPServer, stop func(
 			go srv.handle(c)
 		}
 	}()
-	return ln.Addr().String(), srv, func() { ln.Close() }
+	return ln.Addr().String(), srv, func() { _ = ln.Close() }
 }
 
 func TestSend_Plaintext(t *testing.T) {

@@ -397,8 +397,8 @@ func TestValidateConfigOK(t *testing.T) {
 
 func TestValidateIdmapd(t *testing.T) {
 	bad := []IdmapdConfig{
-		{},                                  // empty domain
-		{Domain: "not a host!"},             // invalid DNS
+		{},                      // empty domain
+		{Domain: "not a host!"}, // invalid DNS
 		{Domain: "example.com", Verbosity: -1},
 		{Domain: "example.com", Verbosity: 10},
 	}

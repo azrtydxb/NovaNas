@@ -17,8 +17,8 @@ type fakeBackend struct {
 	exec     func(Job) (RunResult, error)
 }
 
-func (f *fakeBackend) Kind() BackendKind                          { return f.kind }
-func (f *fakeBackend) Validate(_ context.Context, j Job) error    { return f.validate(j) }
+func (f *fakeBackend) Kind() BackendKind                       { return f.kind }
+func (f *fakeBackend) Validate(_ context.Context, j Job) error { return f.validate(j) }
 func (f *fakeBackend) Execute(_ context.Context, in ExecuteContext) (RunResult, error) {
 	return f.exec(in.Job)
 }
@@ -97,7 +97,9 @@ func TestManagerRunSuccessUpdatesLastSnapshot(t *testing.T) {
 	be := &fakeBackend{
 		kind:     BackendZFS,
 		validate: func(Job) error { return nil },
-		exec:     func(Job) (RunResult, error) { return RunResult{BytesTransferred: 42, Snapshot: "tank/data@repl-1"}, nil },
+		exec: func(Job) (RunResult, error) {
+			return RunResult{BytesTransferred: 42, Snapshot: "tank/data@repl-1"}, nil
+		},
 	}
 	m := newTestManager(t, be)
 	ctx := context.Background()

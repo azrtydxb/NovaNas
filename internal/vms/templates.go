@@ -13,22 +13,22 @@ import (
 // VM from this image" choice. It mirrors the structure in
 // deploy/vms/templates.json.
 type Template struct {
-	ID                       string `json:"id"`
-	DisplayName              string `json:"displayName"`
-	OS                       string `json:"os"`
-	Family                   string `json:"family"`
-	Version                  string `json:"version"`
-	Arch                     string `json:"arch"`
-	ImageURL                 string `json:"imageURL"`
-	ImageFormat              string `json:"imageFormat"`
-	DefaultCPU               int    `json:"defaultCPU"`
-	DefaultMemoryMB          int    `json:"defaultMemoryMB"`
-	DefaultDiskGB            int    `json:"defaultDiskGB"`
-	CloudInitFriendly        bool   `json:"cloudInitFriendly"`
-	GuestUser                string `json:"guestUser,omitempty"`
-	RequiresUserSuppliedISO  bool   `json:"requiresUserSuppliedISO,omitempty"`
-	RequiresLicenseKey       bool   `json:"requiresLicenseKey,omitempty"`
-	Description              string `json:"description,omitempty"`
+	ID                      string `json:"id"`
+	DisplayName             string `json:"displayName"`
+	OS                      string `json:"os"`
+	Family                  string `json:"family"`
+	Version                 string `json:"version"`
+	Arch                    string `json:"arch"`
+	ImageURL                string `json:"imageURL"`
+	ImageFormat             string `json:"imageFormat"`
+	DefaultCPU              int    `json:"defaultCPU"`
+	DefaultMemoryMB         int    `json:"defaultMemoryMB"`
+	DefaultDiskGB           int    `json:"defaultDiskGB"`
+	CloudInitFriendly       bool   `json:"cloudInitFriendly"`
+	GuestUser               string `json:"guestUser,omitempty"`
+	RequiresUserSuppliedISO bool   `json:"requiresUserSuppliedISO,omitempty"`
+	RequiresLicenseKey      bool   `json:"requiresLicenseKey,omitempty"`
+	Description             string `json:"description,omitempty"`
 }
 
 // templateFile is the on-disk schema.

@@ -14,14 +14,14 @@ import (
 )
 
 type fakeNvmeofReader struct {
-	subs       []nvmeof.Subsystem
-	subsErr    error
-	detail     *nvmeof.SubsystemDetail
-	getErr     error
-	ports      []nvmeof.Port
-	portErr    error
-	dhchap     nvmeof.DHChapDetail
-	dhchapErr  error
+	subs      []nvmeof.Subsystem
+	subsErr   error
+	detail    *nvmeof.SubsystemDetail
+	getErr    error
+	ports     []nvmeof.Port
+	portErr   error
+	dhchap    nvmeof.DHChapDetail
+	dhchapErr error
 }
 
 func (f *fakeNvmeofReader) ListSubsystems(_ context.Context) ([]nvmeof.Subsystem, error) {

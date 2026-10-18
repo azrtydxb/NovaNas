@@ -422,17 +422,17 @@ func atomicWrite(fsys FileSystem, path string, data []byte, perm os.FileMode) er
 // osFS is the production FileSystem implementation backed by package os.
 type osFS struct{}
 
-func (osFS) ReadFile(p string) ([]byte, error)               { return os.ReadFile(p) }
+func (osFS) ReadFile(p string) ([]byte, error)                 { return os.ReadFile(p) }
 func (osFS) WriteFile(p string, d []byte, m os.FileMode) error { return os.WriteFile(p, d, m) }
-func (osFS) Stat(p string) (os.FileInfo, error)              { return os.Stat(p) }
-func (osFS) Remove(p string) error                           { return os.Remove(p) }
+func (osFS) Stat(p string) (os.FileInfo, error)                { return os.Stat(p) }
+func (osFS) Remove(p string) error                             { return os.Remove(p) }
 
 func (osFS) fsync(p string) error {
 	f, err := os.OpenFile(p, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return f.Sync()
 }
 
@@ -442,12 +442,13 @@ func (osFS) fsync(p string) error {
 // files in the wild use nested braces (the realms section opens a brace
 // per realm) and { } on their own lines. We only need to handle the
 // shape our renderer produces plus the common operator-typed variants:
-//   * leading/trailing whitespace
-//   * comments starting with '#' or ';'
-//   * section headers in [brackets]
-//   * key = value lines
-//   * "REALM = {" opening a nested block
-//   * lines containing only "}" closing the nested block
+//   - leading/trailing whitespace
+//   - comments starting with '#' or ';'
+//   - section headers in [brackets]
+//   - key = value lines
+//   - "REALM = {" opening a nested block
+//   - lines containing only "}" closing the nested block
+//
 // Anything else is ignored.
 func parseKrb5Conf(data []byte) (*Config, error) {
 	cfg := &Config{Realms: map[string]Realm{}, DomainRealm: map[string]string{}}
@@ -540,31 +541,31 @@ func parseKrb5Conf(data []byte) (*Config, error) {
 // output is produced for identical input.
 func renderKrb5Conf(cfg Config) []byte {
 	var b bytes.Buffer
-	b.WriteString("[libdefaults]\n")
+	_, _ = b.WriteString("[libdefaults]\n")
 	if cfg.DefaultRealm != "" {
-		fmt.Fprintf(&b, "    default_realm = %s\n", cfg.DefaultRealm)
+		_, _ = fmt.Fprintf(&b, "    default_realm = %s\n", cfg.DefaultRealm)
 	}
-	fmt.Fprintf(&b, "    dns_lookup_kdc = %s\n", boolStr(cfg.DNSLookupKDC))
-	fmt.Fprintf(&b, "    dns_lookup_realm = %s\n", boolStr(cfg.DNSLookupRealm))
-	b.WriteString("\n[realms]\n")
+	_, _ = fmt.Fprintf(&b, "    dns_lookup_kdc = %s\n", boolStr(cfg.DNSLookupKDC))
+	_, _ = fmt.Fprintf(&b, "    dns_lookup_realm = %s\n", boolStr(cfg.DNSLookupRealm))
+	_, _ = b.WriteString("\n[realms]\n")
 	for _, name := range sortedKeys(cfg.Realms) {
 		r := cfg.Realms[name]
-		fmt.Fprintf(&b, "    %s = {\n", name)
+		_, _ = fmt.Fprintf(&b, "    %s = {\n", name)
 		for _, kdc := range r.KDC {
-			fmt.Fprintf(&b, "        kdc = %s\n", kdc)
+			_, _ = fmt.Fprintf(&b, "        kdc = %s\n", kdc)
 		}
 		if r.AdminServer != "" {
-			fmt.Fprintf(&b, "        admin_server = %s\n", r.AdminServer)
+			_, _ = fmt.Fprintf(&b, "        admin_server = %s\n", r.AdminServer)
 		}
 		if r.DefaultDomain != "" {
-			fmt.Fprintf(&b, "        default_domain = %s\n", r.DefaultDomain)
+			_, _ = fmt.Fprintf(&b, "        default_domain = %s\n", r.DefaultDomain)
 		}
-		b.WriteString("    }\n")
+		_, _ = b.WriteString("    }\n")
 	}
 	if len(cfg.DomainRealm) > 0 {
-		b.WriteString("\n[domain_realm]\n")
+		_, _ = b.WriteString("\n[domain_realm]\n")
 		for _, k := range sortedKeys(cfg.DomainRealm) {
-			fmt.Fprintf(&b, "    %s = %s\n", k, cfg.DomainRealm[k])
+			_, _ = fmt.Fprintf(&b, "    %s = %s\n", k, cfg.DomainRealm[k])
 		}
 	}
 	return b.Bytes()
@@ -634,14 +635,14 @@ func renderIdmapdConf(cfg IdmapdConfig) []byte {
 		nobodyGroup = "nogroup"
 	}
 	var b bytes.Buffer
-	b.WriteString("[General]\n")
-	fmt.Fprintf(&b, "Verbosity = %d\n", cfg.Verbosity)
-	fmt.Fprintf(&b, "Domain = %s\n", cfg.Domain)
-	b.WriteString("\n[Translation]\n")
-	fmt.Fprintf(&b, "Method = %s\n", method)
-	b.WriteString("\n[Mapping]\n")
-	fmt.Fprintf(&b, "Nobody-User = %s\n", nobodyUser)
-	fmt.Fprintf(&b, "Nobody-Group = %s\n", nobodyGroup)
+	_, _ = b.WriteString("[General]\n")
+	_, _ = fmt.Fprintf(&b, "Verbosity = %d\n", cfg.Verbosity)
+	_, _ = fmt.Fprintf(&b, "Domain = %s\n", cfg.Domain)
+	_, _ = b.WriteString("\n[Translation]\n")
+	_, _ = fmt.Fprintf(&b, "Method = %s\n", method)
+	_, _ = b.WriteString("\n[Mapping]\n")
+	_, _ = fmt.Fprintf(&b, "Nobody-User = %s\n", nobodyUser)
+	_, _ = fmt.Fprintf(&b, "Nobody-Group = %s\n", nobodyGroup)
 	return b.Bytes()
 }
 
@@ -693,25 +694,27 @@ func validateGssdDefaults(cfg GssdDefaults) error {
 //	GSSDARGS="<args>"
 func renderGssdDefaults(cfg GssdDefaults) []byte {
 	var b bytes.Buffer
-	b.WriteString("# managed by nova-nas\n")
+	_, _ = b.WriteString("# managed by nova-nas\n")
 	if cfg.Enabled {
-		b.WriteString("NEED_GSSD=yes\n")
+		_, _ = b.WriteString("NEED_GSSD=yes\n")
 	} else {
-		b.WriteString("NEED_GSSD=no\n")
+		_, _ = b.WriteString("NEED_GSSD=no\n")
 	}
 	if cfg.UseGssProxy {
-		b.WriteString("GSS_USE_PROXY=yes\n")
+		_, _ = b.WriteString("GSS_USE_PROXY=yes\n")
 	} else {
-		b.WriteString("GSS_USE_PROXY=no\n")
+		_, _ = b.WriteString("GSS_USE_PROXY=no\n")
 	}
-	fmt.Fprintf(&b, "GSSDARGS=%q\n", cfg.Args)
+	_, _ = fmt.Fprintf(&b, "GSSDARGS=%q\n", cfg.Args)
 	return b.Bytes()
 }
 
 // klistRowRE matches a klist -k -t -e row. Format:
-//   KVNO Timestamp           Principal
-//   ---- ------------------- -------------------------------
-//      2 04/29/2026 06:18:00 nfs/host.example.com@EXAMPLE.COM (aes256-cts-hmac-sha1-96)
+//
+//	KVNO Timestamp           Principal
+//	---- ------------------- -------------------------------
+//	   2 04/29/2026 06:18:00 nfs/host.example.com@EXAMPLE.COM (aes256-cts-hmac-sha1-96)
+//
 // We accept timestamps in the locale-default (MM/DD/YYYY HH:MM:SS) form
 // which is what klist emits with no LC_ALL override on Debian/RHEL.
 var klistRowRE = regexp.MustCompile(`^\s*(\d+)\s+\S+\s+\S+\s+(\S+)\s+\(([^)]+)\)\s*$`)

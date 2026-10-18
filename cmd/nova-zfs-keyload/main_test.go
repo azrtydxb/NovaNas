@@ -15,7 +15,7 @@ import (
 // LoadKey was called for that dataset; values control the returned
 // error (nil = success).
 type fakeLoader struct {
-	listed []string
+	listed  []string
 	listErr error
 	load    map[string]error
 	called  []string

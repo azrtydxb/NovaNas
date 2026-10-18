@@ -73,7 +73,7 @@ func runInit(logger *slog.Logger, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("tpm.New: %w", err)
 	}
-	defer sealer.Close()
+	defer func() { _ = sealer.Close() }()
 
 	// Read plaintext unseal keys from stdin
 	plaintext, err := io.ReadAll(os.Stdin)
@@ -134,7 +134,7 @@ func runUnseal(logger *slog.Logger, configPath, baoAddr string, maxRetries int, 
 	if err != nil {
 		return fmt.Errorf("tpm.New: %w", err)
 	}
-	defer sealer.Close()
+	defer func() { _ = sealer.Close() }()
 
 	// Unwrap: TPM-unseal the DEK, AES-GCM decrypt the payload.
 	plaintext, err := tpm.UnwrapAEAD(sealed, sealer)
@@ -158,7 +158,7 @@ func runUnseal(logger *slog.Logger, configPath, baoAddr string, maxRetries int, 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // OpenBao serves a self-signed cert on the local unseal endpoint.
 		},
 	}
 
@@ -196,7 +196,7 @@ func runUnseal(logger *slog.Logger, configPath, baoAddr string, maxRetries int, 
 			}
 
 			respBody, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			// Success: 2xx status
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
