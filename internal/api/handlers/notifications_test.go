@@ -32,7 +32,7 @@ func newFakeSMTP(t *testing.T) *fakeSMTP {
 		t.Fatalf("listen: %v", err)
 	}
 	tcp := ln.Addr().(*net.TCPAddr)
-	f := &fakeSMTP{addr: tcp.IP.String(), port: tcp.Port, stop: func() { ln.Close() }}
+	f := &fakeSMTP{addr: tcp.IP.String(), port: tcp.Port, stop: func() { _ = ln.Close() }}
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -46,10 +46,10 @@ func newFakeSMTP(t *testing.T) *fakeSMTP {
 }
 
 func (f *fakeSMTP) serve(c net.Conn) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	r := bufio.NewReader(c)
 	w := bufio.NewWriter(c)
-	put := func(s string) { w.WriteString(s + "\r\n"); w.Flush() }
+	put := func(s string) { _, _ = w.WriteString(s + "\r\n"); _ = w.Flush() }
 	put("220 fake")
 	inData := false
 	var buf bytes.Buffer
@@ -68,11 +68,9 @@ func (f *fakeSMTP) serve(c net.Conn) {
 				put("250 OK")
 				continue
 			}
-			if strings.HasPrefix(line, ".") {
-				line = line[1:]
-			}
-			buf.WriteString(line)
-			buf.WriteString("\n")
+			line = strings.TrimPrefix(line, ".")
+			_, _ = buf.WriteString(line)
+			_, _ = buf.WriteString("\n")
 			continue
 		}
 		up := strings.ToUpper(line)

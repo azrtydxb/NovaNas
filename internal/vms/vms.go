@@ -67,11 +67,11 @@ type VM struct {
 //   - "blank"         — empty zvol-backed PVC for data
 //   - "url:<https://…>" — operator-supplied HTTP image
 type VMDisk struct {
-	Name      string `json:"name"`
-	SizeGB    int    `json:"sizeGB"`
-	Source    string `json:"source"`
-	Boot      bool   `json:"boot,omitempty"`
-	Bus       string `json:"bus,omitempty"` // virtio (default), sata, scsi
+	Name         string `json:"name"`
+	SizeGB       int    `json:"sizeGB"`
+	Source       string `json:"source"`
+	Boot         bool   `json:"boot,omitempty"`
+	Bus          string `json:"bus,omitempty"` // virtio (default), sata, scsi
 	StorageClass string `json:"storageClass,omitempty"`
 }
 
@@ -102,34 +102,34 @@ type VMCloudInit struct {
 
 // CreateRequest is what POST /api/v1/vms accepts.
 type CreateRequest struct {
-	Namespace  string      `json:"namespace,omitempty"` // optional; default vm-<name>
-	Name       string      `json:"name"`
-	TemplateID string      `json:"templateID,omitempty"`
-	CPU        int         `json:"cpu"`
-	MemoryMB   int         `json:"memoryMB"`
-	Disks      []VMDisk    `json:"disks,omitempty"`
-	Networks   []VMNetwork `json:"networks,omitempty"`
-	CloudInit  VMCloudInit `json:"cloudInit,omitempty"`
-	StartOnCreate bool     `json:"startOnCreate,omitempty"`
+	Namespace     string            `json:"namespace,omitempty"` // optional; default vm-<name>
+	Name          string            `json:"name"`
+	TemplateID    string            `json:"templateID,omitempty"`
+	CPU           int               `json:"cpu"`
+	MemoryMB      int               `json:"memoryMB"`
+	Disks         []VMDisk          `json:"disks,omitempty"`
+	Networks      []VMNetwork       `json:"networks,omitempty"`
+	CloudInit     VMCloudInit       `json:"cloudInit,omitempty"`
+	StartOnCreate bool              `json:"startOnCreate,omitempty"`
 	Labels        map[string]string `json:"labels,omitempty"`
 }
 
 // PatchRequest is the writable subset for PATCH.
 type PatchRequest struct {
-	CPU      *int     `json:"cpu,omitempty"`
-	MemoryMB *int     `json:"memoryMB,omitempty"`
-	Disks    []VMDisk `json:"disks,omitempty"` // when present, replaces disks
+	CPU      *int              `json:"cpu,omitempty"`
+	MemoryMB *int              `json:"memoryMB,omitempty"`
+	Disks    []VMDisk          `json:"disks,omitempty"` // when present, replaces disks
 	Labels   map[string]string `json:"labels,omitempty"`
 }
 
 // Snapshot is the API view of a VirtualMachineSnapshot.
 type Snapshot struct {
-	Namespace string    `json:"namespace"`
-	Name      string    `json:"name"`
-	VMName    string    `json:"vmName"`
-	Phase     string    `json:"phase,omitempty"`
-	ReadyToUse bool     `json:"readyToUse,omitempty"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
+	Namespace  string    `json:"namespace"`
+	Name       string    `json:"name"`
+	VMName     string    `json:"vmName"`
+	Phase      string    `json:"phase,omitempty"`
+	ReadyToUse bool      `json:"readyToUse,omitempty"`
+	CreatedAt  time.Time `json:"createdAt,omitempty"`
 }
 
 // CreateSnapshotRequest is the body for POST /api/v1/vm-snapshots.
@@ -141,11 +141,11 @@ type CreateSnapshotRequest struct {
 
 // Restore is the API view of a VirtualMachineRestore.
 type Restore struct {
-	Namespace  string `json:"namespace"`
-	Name       string `json:"name"`
-	VMName     string `json:"vmName"`
+	Namespace    string `json:"namespace"`
+	Name         string `json:"name"`
+	VMName       string `json:"vmName"`
 	SnapshotName string `json:"snapshotName"`
-	Complete   bool   `json:"complete"`
+	Complete     bool   `json:"complete"`
 }
 
 // CreateRestoreRequest is the body for POST /api/v1/vm-restores.

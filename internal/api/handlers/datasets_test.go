@@ -15,11 +15,11 @@ import (
 )
 
 type fakeDatasetMgr struct {
-	list      []dataset.Dataset
-	listErr   error
-	lastRoot  string
-	detail    *dataset.Detail
-	getErr    error
+	list     []dataset.Dataset
+	listErr  error
+	lastRoot string
+	detail   *dataset.Detail
+	getErr   error
 }
 
 func (f *fakeDatasetMgr) List(_ context.Context, root string) ([]dataset.Dataset, error) {

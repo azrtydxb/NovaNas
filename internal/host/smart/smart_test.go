@@ -336,16 +336,16 @@ func TestGet_ExitBit1_DeviceOpenFailed(t *testing.T) {
 
 func TestValidateDevicePath(t *testing.T) {
 	cases := []struct {
-		in  string
-		ok  bool
+		in string
+		ok bool
 	}{
 		{"/dev/sda", true},
 		{"/dev/nvme0n1", true},
 		{"/dev/disk/by-id/wwn-0x123", true},
 		{"", false},
-		{"sda", false},          // not absolute /dev
-		{"/etc/passwd", false},  // wrong prefix
-		{"-/dev/sda", false},    // leading dash
+		{"sda", false},         // not absolute /dev
+		{"/etc/passwd", false}, // wrong prefix
+		{"-/dev/sda", false},   // leading dash
 		{"/dev/../etc/x", false},
 		{"/dev/sda;ls", false},
 		{"/dev/sda foo", false},

@@ -19,9 +19,9 @@ type fakeKube struct {
 	mu sync.Mutex
 
 	namespaces map[string]map[string]string // ns -> labels
-	vms        map[string]*VM                // ns/name -> vm
-	snapshots  map[string]*Snapshot          // ns/name
-	restores   map[string]*Restore           // ns/name
+	vms        map[string]*VM               // ns/name -> vm
+	snapshots  map[string]*Snapshot         // ns/name
+	restores   map[string]*Restore          // ns/name
 
 	nodes int
 

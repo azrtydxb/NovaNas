@@ -596,7 +596,7 @@ func (m *Manager) writeTimesyncdConf(servers []string) error {
 	buf.WriteString("FallbackNTP=\n")
 	path := filepath.Join(dir, "timesyncd.conf")
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {

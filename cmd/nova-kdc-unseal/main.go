@@ -4,22 +4,22 @@
 //
 // Two modes:
 //
-//   --init    Read a plaintext stash file (typically the
-//             /var/lib/krb5kdc/.k5.<REALM> produced by `kdb5_util create
-//             -s`), TPM-seal it, and write the sealed blob to
-//             --blob (default /etc/nova-kdc/master.enc, mode 0600).
-//             After a successful init the operator MUST shred the
-//             plaintext stash — this binary prints a warning to that
-//             effect but does not delete the file itself.
+//	--init    Read a plaintext stash file (typically the
+//	          /var/lib/krb5kdc/.k5.<REALM> produced by `kdb5_util create
+//	          -s`), TPM-seal it, and write the sealed blob to
+//	          --blob (default /etc/nova-kdc/master.enc, mode 0600).
+//	          After a successful init the operator MUST shred the
+//	          plaintext stash — this binary prints a warning to that
+//	          effect but does not delete the file itself.
 //
-//   default   Read the sealed blob, TPM-unseal, and write the plaintext
-//             stash to --run-stash (default /run/krb5kdc/.k5.<REALM>,
-//             mode 0600 root). Idempotent: if the run-stash already
-//             exists with non-zero size we assume an earlier run
-//             succeeded and exit 0. If the sealed blob does not exist
-//             (operator opted out of TPM-sealing) we also exit 0 — the
-//             KDC will fall back to whatever is configured for
-//             key_stash_file in kdc.conf.
+//	default   Read the sealed blob, TPM-unseal, and write the plaintext
+//	          stash to --run-stash (default /run/krb5kdc/.k5.<REALM>,
+//	          mode 0600 root). Idempotent: if the run-stash already
+//	          exists with non-zero size we assume an earlier run
+//	          succeeded and exit 0. If the sealed blob does not exist
+//	          (operator opted out of TPM-sealing) we also exit 0 — the
+//	          KDC will fall back to whatever is configured for
+//	          key_stash_file in kdc.conf.
 //
 // Wire format (and wrap/unwrap implementation) is shared with
 // nova-bao-unseal via internal/host/tpm.WrapAEAD / UnwrapAEAD.
@@ -119,7 +119,7 @@ func runInit(logger *slog.Logger, blobPath, inputPath string) error {
 	if err != nil {
 		return fmt.Errorf("tpm.New: %w", err)
 	}
-	defer sealer.Close()
+	defer func() { _ = sealer.Close() }()
 
 	sealed, err := tpm.WrapAEAD(plaintext, sealer)
 	if err != nil {
@@ -169,7 +169,7 @@ func runUnseal(logger *slog.Logger, blobPath, runStash string) error {
 	if err != nil {
 		return fmt.Errorf("tpm.New: %w", err)
 	}
-	defer sealer.Close()
+	defer func() { _ = sealer.Close() }()
 
 	plaintext, err := tpm.UnwrapAEAD(sealed, sealer)
 	if err != nil {

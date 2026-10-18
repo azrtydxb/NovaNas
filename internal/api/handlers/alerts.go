@@ -70,7 +70,7 @@ func (h *AlertsHandler) proxyJSON(ctx context.Context, w http.ResponseWriter, me
 		middleware.WriteError(w, http.StatusBadGateway, "alertmanager_unreachable", "Alertmanager upstream is not reachable")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
@@ -101,7 +101,7 @@ func (h *AlertsHandler) GetAlert(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, http.StatusBadGateway, "alertmanager_unreachable", "Alertmanager upstream is not reachable")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)

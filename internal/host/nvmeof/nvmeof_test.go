@@ -124,12 +124,12 @@ func TestValidateNQN(t *testing.T) {
 	}
 	bad := []string{
 		"",
-		"foo",                            // missing prefix
-		"nqn.",                           // empty after prefix
-		"nqn.-bad",                       // leading dash
-		"nqn.has space",                  // space
-		"nqn.has/slash",                  // slash
-		"nqn.has\x00null",                // NUL
+		"foo",                             // missing prefix
+		"nqn.",                            // empty after prefix
+		"nqn.-bad",                        // leading dash
+		"nqn.has space",                   // space
+		"nqn.has/slash",                   // slash
+		"nqn.has\x00null",                 // NUL
 		"nqn." + strings.Repeat("x", 220), // too long (224)
 	}
 	for _, n := range bad {

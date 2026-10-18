@@ -132,7 +132,7 @@ func (f *fakeClient) CreateDataset(ctx context.Context, spec CreateDatasetSpec) 
 	} else {
 		// Pick up quota from properties if set.
 		if q, ok := spec.Properties["quota"]; ok {
-			fmt.Sscanf(q, "%d", &ds.Quota)
+			_, _ = fmt.Sscanf(q, "%d", &ds.Quota)
 		}
 	}
 	f.datasets[full] = ds
@@ -160,10 +160,10 @@ func (f *fakeClient) SetDatasetProps(ctx context.Context, fullname string, props
 		return nil, notFoundErr{fullname}
 	}
 	if v, ok := props["volsize"]; ok {
-		fmt.Sscanf(v, "%d", &ds.Volsize)
+		_, _ = fmt.Sscanf(v, "%d", &ds.Volsize)
 	}
 	if v, ok := props["quota"]; ok {
-		fmt.Sscanf(v, "%d", &ds.Quota)
+		_, _ = fmt.Sscanf(v, "%d", &ds.Quota)
 	}
 	return f.newJob(), nil
 }

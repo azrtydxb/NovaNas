@@ -102,8 +102,8 @@ func TestBuildCreateTargetArgs_OK(t *testing.T) {
 func TestBuildCreateTargetArgs_BadIQN(t *testing.T) {
 	cases := []string{
 		"",
-		"foo",                                   // missing iqn. prefix
-		"-iqn.2020-01.io.example:tank",          // leading dash
+		"foo",                          // missing iqn. prefix
+		"-iqn.2020-01.io.example:tank", // leading dash
 		"iqn.2020-01.io.example:tank with space",
 		"iqn.2020-01.io.example:tank;rm",
 	}

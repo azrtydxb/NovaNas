@@ -39,11 +39,11 @@ const Kind = "Plugin"
 type Category string
 
 const (
-	CategoryStorage      Category = "storage"
-	CategoryNetworking   Category = "networking"
+	CategoryStorage       Category = "storage"
+	CategoryNetworking    Category = "networking"
 	CategoryObservability Category = "observability"
-	CategoryDeveloper    Category = "developer"
-	CategoryUtility      Category = "utility"
+	CategoryDeveloper     Category = "developer"
+	CategoryUtility       Category = "utility"
 )
 
 var validCategories = map[Category]bool{
@@ -239,13 +239,13 @@ type PluginSpec struct {
 	DisplayCategory DisplayCategory `yaml:"displayCategory,omitempty" json:"displayCategory,omitempty"`
 	Tags            []string        `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Icon            string          `yaml:"icon,omitempty" json:"icon,omitempty"`
-	Deployment   Deployment   `yaml:"deployment" json:"deployment"`
-	Needs        []Need       `yaml:"needs,omitempty" json:"needs,omitempty"`
-	Dependencies []Dependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
-	API          APISpec      `yaml:"api,omitempty" json:"api,omitempty"`
-	UI           UISpec       `yaml:"ui,omitempty" json:"ui,omitempty"`
-	Health       Health       `yaml:"health,omitempty" json:"health,omitempty"`
-	Lifecycle    Lifecycle    `yaml:"lifecycle,omitempty" json:"lifecycle,omitempty"`
+	Deployment      Deployment      `yaml:"deployment" json:"deployment"`
+	Needs           []Need          `yaml:"needs,omitempty" json:"needs,omitempty"`
+	Dependencies    []Dependency    `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	API             APISpec         `yaml:"api,omitempty" json:"api,omitempty"`
+	UI              UISpec          `yaml:"ui,omitempty" json:"ui,omitempty"`
+	Health          Health          `yaml:"health,omitempty" json:"health,omitempty"`
+	Lifecycle       Lifecycle       `yaml:"lifecycle,omitempty" json:"lifecycle,omitempty"`
 }
 
 // DependencySource enumerates where the engine should look up a
@@ -342,7 +342,7 @@ type UISpec struct {
 }
 
 type UIWindow struct {
-	Name   string `yaml:"name" json:"name"`     // human title
+	Name   string `yaml:"name" json:"name"` // human title
 	Icon   string `yaml:"icon,omitempty" json:"icon,omitempty"`
 	Route  string `yaml:"route" json:"route"`   // Aurora route, e.g. "/apps/rustfs"
 	Bundle string `yaml:"bundle" json:"bundle"` // entry file in ui/, e.g. "main.js"
@@ -351,7 +351,7 @@ type UIWindow struct {
 // Health describes how nova-api probes the plugin process. Optional —
 // Aurora uses these to colour the running indicator on the UI window.
 type Health struct {
-	Path           string `yaml:"path,omitempty" json:"path,omitempty"`
+	Path            string `yaml:"path,omitempty" json:"path,omitempty"`
 	IntervalSeconds int    `yaml:"intervalSeconds,omitempty" json:"intervalSeconds,omitempty"`
 	TimeoutSeconds  int    `yaml:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }

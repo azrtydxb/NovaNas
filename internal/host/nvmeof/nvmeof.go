@@ -153,17 +153,19 @@ func adrfamFor(ip net.IP) (string, error) {
 
 // ----------------------- Subsystems -----------------------
 
-func subsysDir(nqn string) string                  { return path.Join("nvmet/subsystems", nqn) }
-func subsysAttr(nqn, attr string) string           { return path.Join(subsysDir(nqn), attr) }
-func subsysNS(nqn string, nsid int) string         { return path.Join(subsysDir(nqn), "namespaces", strconv.Itoa(nsid)) }
+func subsysDir(nqn string) string        { return path.Join("nvmet/subsystems", nqn) }
+func subsysAttr(nqn, attr string) string { return path.Join(subsysDir(nqn), attr) }
+func subsysNS(nqn string, nsid int) string {
+	return path.Join(subsysDir(nqn), "namespaces", strconv.Itoa(nsid))
+}
 func subsysNSAttr(nqn string, nsid int, a string) string {
 	return path.Join(subsysNS(nqn, nsid), a)
 }
 func subsysAllowedHostLink(nqn, hostNQN string) string {
 	return path.Join(subsysDir(nqn), "allowed_hosts", hostNQN)
 }
-func hostDir(hostNQN string) string  { return path.Join("nvmet/hosts", hostNQN) }
-func portDir(id int) string          { return path.Join("nvmet/ports", strconv.Itoa(id)) }
+func hostDir(hostNQN string) string { return path.Join("nvmet/hosts", hostNQN) }
+func portDir(id int) string         { return path.Join("nvmet/ports", strconv.Itoa(id)) }
 func portAttr(id int, a string) string {
 	return path.Join(portDir(id), a)
 }

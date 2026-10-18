@@ -33,19 +33,19 @@ import (
 )
 
 type WorkerDeps struct {
-	Logger       *slog.Logger
-	Queries      *storedb.Queries
-	Redis        *redis.Client
-	Pools        *pool.Manager
-	Datasets     *dataset.Manager
-	Snapshots    *snapshot.Manager
-	IscsiMgr     *iscsi.Manager
-	NvmeofMgr    *nvmeof.Manager
-	NfsMgr       *nfs.Manager
-	Krb5Mgr      *krb5.Manager
-	SambaMgr     *samba.Manager
-	SmartMgr     *smart.Manager
-	SchedulerMgr *scheduler.Manager
+	Logger           *slog.Logger
+	Queries          *storedb.Queries
+	Redis            *redis.Client
+	Pools            *pool.Manager
+	Datasets         *dataset.Manager
+	Snapshots        *snapshot.Manager
+	IscsiMgr         *iscsi.Manager
+	NvmeofMgr        *nvmeof.Manager
+	NfsMgr           *nfs.Manager
+	Krb5Mgr          *krb5.Manager
+	SambaMgr         *samba.Manager
+	SmartMgr         *smart.Manager
+	SchedulerMgr     *scheduler.Manager
 	NetworkMgr       *network.Manager
 	SystemMgr        *system.Manager
 	ProtocolShareMgr *protocolshare.Manager
@@ -222,7 +222,7 @@ func (d WorkerDeps) finish(ctx context.Context, id uuid.UUID, runErr error) {
 		var he *exec.HostError
 		if errors.As(runErr, &he) {
 			stderr = he.Stderr
-			ec := int32(he.ExitCode)
+			ec := int32(he.ExitCode) //nolint:gosec // process exit codes fit in int32.
 			exitCode = &ec
 		}
 	}

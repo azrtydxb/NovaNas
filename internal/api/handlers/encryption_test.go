@@ -178,8 +178,8 @@ func TestEncryption_InitializeRejectsBadBody(t *testing.T) {
 	defer srv.Close()
 
 	for name, body := range map[string]string{
-		"bad-json": "not json",
-		"bad-type": `{"type":"snapshot"}`,
+		"bad-json":        "not json",
+		"bad-type":        `{"type":"snapshot"}`,
 		"missing-volsize": `{"type":"volume"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -308,4 +308,3 @@ func TestEncryption_NoMgr_503(t *testing.T) {
 		t.Errorf("status=%d", resp.StatusCode)
 	}
 }
-

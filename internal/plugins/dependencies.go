@@ -211,10 +211,10 @@ func (r *Resolver) tree(ctx context.Context, m *Plugin, visiting map[string]bool
 // resolveState carries DFS bookkeeping across the recursion.
 type resolveState struct {
 	r           *Resolver
-	visiting    map[string]bool        // names on the current DFS stack — cycle detection
-	resolved    map[string]*PlanStep   // name → final plan step (deduped)
-	order       []string               // installation order (excludes root)
-	constraints map[string][]string    // name → list of constraints accumulated from parents
+	visiting    map[string]bool      // names on the current DFS stack — cycle detection
+	resolved    map[string]*PlanStep // name → final plan step (deduped)
+	order       []string             // installation order (excludes root)
+	constraints map[string][]string  // name → list of constraints accumulated from parents
 }
 
 func (st *resolveState) walk(ctx context.Context, m *Plugin, depth int) error {

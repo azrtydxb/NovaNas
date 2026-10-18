@@ -18,8 +18,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	storedb "github.com/novanas/nova-nas/internal/store/gen"
 	"github.com/novanas/nova-nas/internal/notifycenter"
+	storedb "github.com/novanas/nova-nas/internal/store/gen"
 )
 
 // nceFakeQ is a tiny in-memory implementation of notifycenter.Queries
@@ -235,7 +235,7 @@ func TestNotificationsEvents_ListAndUnreadCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -256,7 +256,7 @@ func TestNotificationsEvents_ListAndUnreadCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	var c struct{ Count int64 }
 	if err := json.NewDecoder(resp2.Body).Decode(&c); err != nil {
 		t.Fatal(err)
@@ -272,7 +272,7 @@ func TestNotificationsEvents_BadFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
@@ -291,7 +291,7 @@ func TestNotificationsEvents_MarkReadDismissSnooze(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != 200 {
 			t.Fatalf("op %s: status %d", op, resp.StatusCode)
 		}
@@ -302,7 +302,7 @@ func TestNotificationsEvents_MarkReadDismissSnooze(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("snooze status %d", resp.StatusCode)
 	}
@@ -312,7 +312,7 @@ func TestNotificationsEvents_MarkReadDismissSnooze(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 for bad id, got %d", resp.StatusCode)
 	}
@@ -331,7 +331,7 @@ func TestNotificationsEvents_MarkAllRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -339,7 +339,7 @@ func TestNotificationsEvents_MarkAllRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	var c struct{ Count int64 }
 	_ = json.NewDecoder(resp2.Body).Decode(&c)
 	if c.Count != 0 {
@@ -359,7 +359,7 @@ func TestNotificationsEvents_SSEStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
 		t.Fatalf("content-type=%q", got)
 	}
@@ -438,7 +438,7 @@ func readSSEFrame(br *bufio.Reader) (string, error) {
 			}
 			return "", err
 		}
-		buf.WriteString(line)
+		_, _ = buf.WriteString(line)
 		if line == "\n" || line == "\r\n" {
 			return buf.String(), nil
 		}

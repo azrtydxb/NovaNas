@@ -521,7 +521,7 @@ func (m *Manager) SetACL(ctx context.Context, path string, aces []ACE) error {
 		if err != nil {
 			return fmt.Errorf("ACE %d: %w", i, err)
 		}
-		buf.WriteString(s)
+		_, _ = buf.WriteString(s)
 		buf.WriteByte('\n')
 	}
 	f, err := os.CreateTemp("", "nfs4acl-*.txt")
@@ -532,9 +532,9 @@ func (m *Manager) SetACL(ctx context.Context, path string, aces []ACE) error {
 	// Best-effort cleanup; -S reads the file synchronously so it's safe
 	// to remove on the way out regardless of whether nfs4_setfacl
 	// succeeded.
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 	if _, werr := f.Write(buf.Bytes()); werr != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("write temp ACL file: %w", werr)
 	}
 	if cerr := f.Close(); cerr != nil {

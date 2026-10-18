@@ -121,12 +121,12 @@ func (r RetentionPolicy) IsZero() bool {
 
 // Job is the persistent description of a replication.
 type Job struct {
-	ID          uuid.UUID       `json:"id"`
-	Name        string          `json:"name"`
-	Backend     BackendKind     `json:"backend"`
-	Direction   Direction       `json:"direction"`
-	Source      Source          `json:"source"`
-	Destination Destination     `json:"destination"`
+	ID          uuid.UUID   `json:"id"`
+	Name        string      `json:"name"`
+	Backend     BackendKind `json:"backend"`
+	Direction   Direction   `json:"direction"`
+	Source      Source      `json:"source"`
+	Destination Destination `json:"destination"`
 	// Schedule is a standard cron expression. Empty = manual only.
 	Schedule  string          `json:"schedule"`
 	Retention RetentionPolicy `json:"retention"`

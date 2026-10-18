@@ -339,8 +339,8 @@ func TestManager_ListExports_OK(t *testing.T) {
 	fw.dirEntries = []os.DirEntry{
 		stubDirEntry{name: "nova-nas-b.exports"},
 		stubDirEntry{name: "nova-nas-a.exports"},
-		stubDirEntry{name: "other.exports"},        // wrong prefix
-		stubDirEntry{name: "nova-nas-foo.txt"},     // wrong suffix
+		stubDirEntry{name: "other.exports"},    // wrong prefix
+		stubDirEntry{name: "nova-nas-foo.txt"}, // wrong suffix
 		stubDirEntry{name: "nova-nas-sub", dir: true},
 	}
 	fw.files["/etc/exports.d/nova-nas-a.exports"] = []byte("/tank/a 10.0.0.0/24(rw)\n")

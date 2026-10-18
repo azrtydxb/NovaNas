@@ -122,7 +122,7 @@ func (b *BaoBackend) do(ctx context.Context, method, u string, body []byte) (int
 	if err != nil {
 		return 0, nil, fmt.Errorf("secrets: bao %s %s: %w", method, u, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	rb, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return resp.StatusCode, nil, fmt.Errorf("secrets: bao read body: %w", err)

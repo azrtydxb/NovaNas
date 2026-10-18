@@ -16,12 +16,10 @@ import (
 // by the manager. It does not aim for SQL fidelity — only the
 // behavior the manager observes.
 type fakeQ struct {
-	mu      sync.Mutex
-	rows    []storedb.Notification
-	bySrc   map[string]uuid.UUID // (source|source_id) -> id
-	states  map[stateKey]storedb.NotificationState
-	failOn  string // optional: name of method to fail
-	failErr error
+	mu     sync.Mutex
+	rows   []storedb.Notification
+	bySrc  map[string]uuid.UUID // (source|source_id) -> id
+	states map[stateKey]storedb.NotificationState
 }
 
 type stateKey struct {

@@ -61,11 +61,11 @@ func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := int32(100)
 	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 500 {
-		limit = int32(v)
+		limit = int32(v) //nolint:gosec // v is bounded to 1..500 above.
 	}
 	offset := int32(0)
-	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v >= 0 {
-		offset = int32(v)
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v >= 0 && v <= 1<<31-1 {
+		offset = int32(v) //nolint:gosec // v is bounded to the int32 range above.
 	}
 	params := storedb.ListJobsParams{Limit: limit, Offset: offset}
 	if state := r.URL.Query().Get("state"); state != "" {

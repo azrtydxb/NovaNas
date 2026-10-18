@@ -275,18 +275,6 @@ func managedZFSProps() map[string]string {
 	}
 }
 
-// ownedKeys is the set of property keys this package considers
-// reserved. A caller may not pre-populate them via Properties.
-var ownedKeys = map[string]struct{}{
-	"acltype":         {},
-	"aclmode":         {},
-	"aclinherit":      {},
-	"xattr":           {},
-	"casesensitivity": {},
-	"utf8only":        {},
-	"normalization":   {},
-}
-
 // buildCreateSpec produces a dataset.CreateSpec for the share. It
 // rejects callers that try to force any of the owned ZFS properties.
 func (m *Manager) buildCreateSpec(s ProtocolShare) (dataset.CreateSpec, error) {
@@ -343,12 +331,10 @@ func (m *Manager) Create(ctx context.Context, share ProtocolShare) error {
 		return err
 	}
 	// SMB requires NFSv4 ACLs on the dataset. We own those properties
-	// so any caller-provided override of acltype is rejected.
-	if hasProtocol(share.Protocols, ProtocolSMB) {
-		// (No external Properties bag in ProtocolShare today; this
-		// guard is for defense-in-depth in case a future field exposes
-		// raw ZFS properties — see TODO below.)
-	}
+	// so any caller-provided override of acltype is rejected. (No external
+	// Properties bag in ProtocolShare today; this guard is for
+	// defense-in-depth in case a future field exposes raw ZFS properties —
+	// see TODO below.)
 
 	spec, err := m.buildCreateSpec(share)
 	if err != nil {

@@ -43,8 +43,8 @@ func makeTarball(t *testing.T, manifest string, extra map[string]string) []byte 
 
 func TestExtractTarball_ManifestAndUI(t *testing.T) {
 	tar := makeTarball(t, goodManifest, map[string]string{
-		"ui/main.js":    "console.log('hi');",
-		"ui/style.css":  "body{}",
+		"ui/main.js":   "console.log('hi');",
+		"ui/style.css": "body{}",
 	})
 	dir := t.TempDir()
 	manifest, uiDir, err := ExtractTarball(tar, dir)
@@ -63,10 +63,10 @@ func TestExtractTarball_MissingManifest(t *testing.T) {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	tw.WriteHeader(&tar.Header{Name: "ui/main.js", Mode: 0o644, Size: 5, Typeflag: tar.TypeReg})
-	tw.Write([]byte("hello"))
-	tw.Close()
-	gz.Close()
+	_ = tw.WriteHeader(&tar.Header{Name: "ui/main.js", Mode: 0o644, Size: 5, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("hello"))
+	_ = tw.Close()
+	_ = gz.Close()
 	if _, _, err := ExtractTarball(buf.Bytes(), t.TempDir()); err == nil {
 		t.Fatal("expected missing-manifest error")
 	}
@@ -76,10 +76,10 @@ func TestExtractTarball_PathTraversal(t *testing.T) {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	tw.WriteHeader(&tar.Header{Name: "../etc/passwd", Mode: 0o644, Size: 1, Typeflag: tar.TypeReg})
-	tw.Write([]byte("x"))
-	tw.Close()
-	gz.Close()
+	_ = tw.WriteHeader(&tar.Header{Name: "../etc/passwd", Mode: 0o644, Size: 1, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("x"))
+	_ = tw.Close()
+	_ = gz.Close()
 	if _, _, err := ExtractTarball(buf.Bytes(), t.TempDir()); err == nil {
 		t.Fatal("expected path-traversal rejection")
 	}
@@ -90,7 +90,7 @@ func TestRouter_MountUnmount_ServeProxy(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Upstream-Path", r.URL.Path)
 		w.WriteHeader(200)
-		w.Write([]byte("upstream-ok"))
+		_, _ = w.Write([]byte("upstream-ok"))
 	}))
 	defer upstream.Close()
 

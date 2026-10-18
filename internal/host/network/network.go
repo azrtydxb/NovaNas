@@ -3,7 +3,7 @@
 // files for plain interfaces, VLANs, and bonds, then asks networkd to
 // reload via `networkctl reload`.
 //
-// Safety model
+// # Safety model
 //
 // This package is intended to be reachable from an HTTP API. A
 // misconfigured interface can cut off management access to the host.
@@ -128,8 +128,8 @@ func (osFileWriter) Write(path string, data []byte, perm os.FileMode) error {
 	}
 	return os.WriteFile(path, data, perm)
 }
-func (osFileWriter) Remove(path string) error           { return os.Remove(path) }
-func (osFileWriter) ReadFile(p string) ([]byte, error)  { return os.ReadFile(p) }
+func (osFileWriter) Remove(path string) error          { return os.Remove(path) }
+func (osFileWriter) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) }
 func (osFileWriter) ReadDir(p string) ([]os.DirEntry, error) {
 	return os.ReadDir(p)
 }
@@ -394,34 +394,34 @@ func validateBond(b Bond) error {
 // Address blocks -> Route block.
 func renderNetworkFile(c InterfaceConfig) []byte {
 	var b bytes.Buffer
-	b.WriteString("[Match]\n")
-	fmt.Fprintf(&b, "Name=%s\n", c.MatchName)
+	_, _ = b.WriteString("[Match]\n")
+	_, _ = fmt.Fprintf(&b, "Name=%s\n", c.MatchName)
 	b.WriteByte('\n')
 
-	b.WriteString("[Network]\n")
+	_, _ = b.WriteString("[Network]\n")
 	if c.DHCP != "" {
-		fmt.Fprintf(&b, "DHCP=%s\n", c.DHCP)
+		_, _ = fmt.Fprintf(&b, "DHCP=%s\n", c.DHCP)
 	}
 	for _, d := range c.DNS {
-		fmt.Fprintf(&b, "DNS=%s\n", d)
+		_, _ = fmt.Fprintf(&b, "DNS=%s\n", d)
 	}
 	if len(c.Domains) > 0 {
-		fmt.Fprintf(&b, "Domains=%s\n", strings.Join(c.Domains, " "))
+		_, _ = fmt.Fprintf(&b, "Domains=%s\n", strings.Join(c.Domains, " "))
 	}
 	if c.LinkLocal != "" {
-		fmt.Fprintf(&b, "LinkLocalAddressing=%s\n", c.LinkLocal)
+		_, _ = fmt.Fprintf(&b, "LinkLocalAddressing=%s\n", c.LinkLocal)
 	}
 	if c.MTU > 0 {
-		fmt.Fprintf(&b, "MTUBytes=%d\n", c.MTU)
+		_, _ = fmt.Fprintf(&b, "MTUBytes=%d\n", c.MTU)
 	}
 
 	for _, a := range c.Addresses {
-		b.WriteString("\n[Address]\n")
-		fmt.Fprintf(&b, "Address=%s\n", a)
+		_, _ = b.WriteString("\n[Address]\n")
+		_, _ = fmt.Fprintf(&b, "Address=%s\n", a)
 	}
 	if c.Gateway != "" {
-		b.WriteString("\n[Route]\n")
-		fmt.Fprintf(&b, "Gateway=%s\n", c.Gateway)
+		_, _ = b.WriteString("\n[Route]\n")
+		_, _ = fmt.Fprintf(&b, "Gateway=%s\n", c.Gateway)
 	}
 	return b.Bytes()
 }
@@ -429,69 +429,69 @@ func renderNetworkFile(c InterfaceConfig) []byte {
 // renderVLANNetdev: [NetDev] + [VLAN] sections that define the device.
 func renderVLANNetdev(v VLAN) []byte {
 	var b bytes.Buffer
-	b.WriteString("[NetDev]\n")
-	fmt.Fprintf(&b, "Name=%s\n", v.Name)
-	b.WriteString("Kind=vlan\n")
+	_, _ = b.WriteString("[NetDev]\n")
+	_, _ = fmt.Fprintf(&b, "Name=%s\n", v.Name)
+	_, _ = b.WriteString("Kind=vlan\n")
 	b.WriteByte('\n')
-	b.WriteString("[VLAN]\n")
-	fmt.Fprintf(&b, "Id=%d\n", v.ID)
+	_, _ = b.WriteString("[VLAN]\n")
+	_, _ = fmt.Fprintf(&b, "Id=%d\n", v.ID)
 	return b.Bytes()
 }
 
 // renderVLANParentNetwork attaches the VLAN to its parent kernel iface.
 func renderVLANParentNetwork(v VLAN) []byte {
 	var b bytes.Buffer
-	b.WriteString("[Match]\n")
-	fmt.Fprintf(&b, "Name=%s\n", v.Parent)
+	_, _ = b.WriteString("[Match]\n")
+	_, _ = fmt.Fprintf(&b, "Name=%s\n", v.Parent)
 	b.WriteByte('\n')
-	b.WriteString("[Network]\n")
-	fmt.Fprintf(&b, "VLAN=%s\n", v.Name)
+	_, _ = b.WriteString("[Network]\n")
+	_, _ = fmt.Fprintf(&b, "VLAN=%s\n", v.Name)
 	return b.Bytes()
 }
 
 // renderVLANNetwork configures the VLAN device itself (addresses).
 func renderVLANNetwork(v VLAN) []byte {
 	var b bytes.Buffer
-	b.WriteString("[Match]\n")
-	fmt.Fprintf(&b, "Name=%s\n", v.Name)
+	_, _ = b.WriteString("[Match]\n")
+	_, _ = fmt.Fprintf(&b, "Name=%s\n", v.Name)
 	b.WriteByte('\n')
-	b.WriteString("[Network]\n")
+	_, _ = b.WriteString("[Network]\n")
 	if v.Address == "" {
-		b.WriteString("DHCP=yes\n")
+		_, _ = b.WriteString("DHCP=yes\n")
 	}
 	if v.Address != "" {
-		b.WriteString("\n[Address]\n")
-		fmt.Fprintf(&b, "Address=%s\n", v.Address)
+		_, _ = b.WriteString("\n[Address]\n")
+		_, _ = fmt.Fprintf(&b, "Address=%s\n", v.Address)
 	}
 	return b.Bytes()
 }
 
 func renderBondNetdev(b Bond) []byte {
 	var w bytes.Buffer
-	w.WriteString("[NetDev]\n")
-	fmt.Fprintf(&w, "Name=%s\n", b.Name)
-	w.WriteString("Kind=bond\n")
+	_, _ = w.WriteString("[NetDev]\n")
+	_, _ = fmt.Fprintf(&w, "Name=%s\n", b.Name)
+	_, _ = w.WriteString("Kind=bond\n")
 	w.WriteByte('\n')
-	w.WriteString("[Bond]\n")
-	fmt.Fprintf(&w, "Mode=%s\n", b.Mode)
+	_, _ = w.WriteString("[Bond]\n")
+	_, _ = fmt.Fprintf(&w, "Mode=%s\n", b.Mode)
 	if b.MIIMonSec > 0 {
-		fmt.Fprintf(&w, "MIIMonitorSec=%ds\n", b.MIIMonSec)
+		_, _ = fmt.Fprintf(&w, "MIIMonitorSec=%ds\n", b.MIIMonSec)
 	}
 	return w.Bytes()
 }
 
 func renderBondNetwork(b Bond) []byte {
 	var w bytes.Buffer
-	w.WriteString("[Match]\n")
-	fmt.Fprintf(&w, "Name=%s\n", b.Name)
+	_, _ = w.WriteString("[Match]\n")
+	_, _ = fmt.Fprintf(&w, "Name=%s\n", b.Name)
 	w.WriteByte('\n')
-	w.WriteString("[Network]\n")
+	_, _ = w.WriteString("[Network]\n")
 	if b.Address == "" {
-		w.WriteString("DHCP=yes\n")
+		_, _ = w.WriteString("DHCP=yes\n")
 	}
 	if b.Address != "" {
-		w.WriteString("\n[Address]\n")
-		fmt.Fprintf(&w, "Address=%s\n", b.Address)
+		_, _ = w.WriteString("\n[Address]\n")
+		_, _ = fmt.Fprintf(&w, "Address=%s\n", b.Address)
 	}
 	return w.Bytes()
 }
@@ -499,11 +499,11 @@ func renderBondNetwork(b Bond) []byte {
 // renderBondMemberNetwork marks a kernel iface as a slave of bondName.
 func renderBondMemberNetwork(bondName, memberName string) []byte {
 	var w bytes.Buffer
-	w.WriteString("[Match]\n")
-	fmt.Fprintf(&w, "Name=%s\n", memberName)
+	_, _ = w.WriteString("[Match]\n")
+	_, _ = fmt.Fprintf(&w, "Name=%s\n", memberName)
 	w.WriteByte('\n')
-	w.WriteString("[Network]\n")
-	fmt.Fprintf(&w, "Bond=%s\n", bondName)
+	_, _ = w.WriteString("[Network]\n")
+	_, _ = fmt.Fprintf(&w, "Bond=%s\n", bondName)
 	return w.Bytes()
 }
 
@@ -961,7 +961,7 @@ func parseInterfaceConfig(name string, data []byte) (*InterfaceConfig, error) {
 	}
 	if mtu := firstSectionValue(secs, "Network", "MTUBytes"); mtu != "" {
 		var n int
-		fmt.Sscanf(mtu, "%d", &n)
+		_, _ = fmt.Sscanf(mtu, "%d", &n)
 		c.MTU = n
 	}
 	c.Addresses = addressBlocks(secs)
@@ -973,7 +973,7 @@ func parseVLAN(name string, netdev, netw []byte) (*VLAN, error) {
 	dsecs := parseINI(netdev)
 	id := 0
 	if idStr := firstSectionValue(dsecs, "VLAN", "Id"); idStr != "" {
-		fmt.Sscanf(idStr, "%d", &id)
+		_, _ = fmt.Sscanf(idStr, "%d", &id)
 	}
 	v := &VLAN{Name: name, ID: id}
 	if len(netw) > 0 {
@@ -998,7 +998,7 @@ func parseBond(name string, netdev, netw []byte) (*Bond, error) {
 	if s := firstSectionValue(dsecs, "Bond", "MIIMonitorSec"); s != "" {
 		// strip trailing 's' if present.
 		s = strings.TrimSuffix(s, "s")
-		fmt.Sscanf(s, "%d", &mii)
+		_, _ = fmt.Sscanf(s, "%d", &mii)
 	}
 	b := &Bond{Name: name, Mode: mode, MIIMonSec: mii}
 	if len(netw) > 0 {

@@ -165,7 +165,7 @@ func trialPolicyDigest(t transport.TPM, sel tpm2.TPMLPCRSelection) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("tpm: trial PolicySession: %w", err)
 	}
-	defer cleanup()
+	defer func() { _ = cleanup() }()
 
 	if _, err := (&tpm2.PolicyPCR{
 		PolicySession: sess.Handle(),
@@ -255,7 +255,7 @@ func (s *Sealer) Seal(plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tpm: open: %w", err)
 	}
-	defer t.Close()
+	defer func() { _ = t.Close() }()
 
 	sel := s.pcrSelection()
 
@@ -347,7 +347,7 @@ func (s *Sealer) Unseal(sealed []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tpm: open: %w", err)
 	}
-	defer t.Close()
+	defer func() { _ = t.Close() }()
 
 	var out []byte
 	err = s.withSRK(t, func(parent tpm2.AuthHandle) error {
@@ -369,7 +369,7 @@ func (s *Sealer) Unseal(sealed []byte) ([]byte, error) {
 		if err != nil {
 			return fmt.Errorf("tpm: PolicySession: %w", err)
 		}
-		defer cleanup()
+		defer func() { _ = cleanup() }()
 
 		if _, err := (&tpm2.PolicyPCR{
 			PolicySession: sess.Handle(),

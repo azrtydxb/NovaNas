@@ -384,7 +384,9 @@ func TestPoolsImportable_HostError500(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rr.Code)
 	}
-	var env struct{ Error string `json:"error"` }
+	var env struct {
+		Error string `json:"error"`
+	}
 	_ = json.NewDecoder(rr.Body).Decode(&env)
 	if env.Error != "list_error" {
 		t.Errorf("error=%q", env.Error)

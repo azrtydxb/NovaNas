@@ -115,7 +115,7 @@ func (v *Verifier) verifyWithCosign(ctx context.Context, tarball, signature []by
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(tarball); err != nil {
 		_ = tmp.Close()
 		return err
@@ -126,7 +126,7 @@ func (v *Verifier) verifyWithCosign(ctx context.Context, tarball, signature []by
 	if err != nil {
 		return err
 	}
-	defer os.Remove(sigTmp.Name())
+	defer func() { _ = os.Remove(sigTmp.Name()) }()
 	if _, err := sigTmp.Write(signature); err != nil {
 		_ = sigTmp.Close()
 		return err

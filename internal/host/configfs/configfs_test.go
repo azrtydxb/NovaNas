@@ -15,16 +15,16 @@ func newManager(t *testing.T) *Manager {
 
 func TestValidateRel_Rejections(t *testing.T) {
 	cases := map[string]string{
-		"empty":            "",
-		"leading slash":    "/foo",
-		"path traversal":   "foo/../bar",
-		"single dotdot":    "..",
-		"NUL byte":         "foo\x00bar",
-		"backslash":        "foo\\bar",
-		"control char":     "foo\x01bar",
-		"empty segment":    "foo//bar",
-		"only slash":       "/",
-		"trailing dotdot":  "foo/..",
+		"empty":           "",
+		"leading slash":   "/foo",
+		"path traversal":  "foo/../bar",
+		"single dotdot":   "..",
+		"NUL byte":        "foo\x00bar",
+		"backslash":       "foo\\bar",
+		"control char":    "foo\x01bar",
+		"empty segment":   "foo//bar",
+		"only slash":      "/",
+		"trailing dotdot": "foo/..",
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {

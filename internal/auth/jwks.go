@@ -133,7 +133,7 @@ func (c *jwksCache) discoverJWKSURI(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("auth: oidc discovery: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("auth: oidc discovery: status %d", resp.StatusCode)
 	}
@@ -160,7 +160,7 @@ func (c *jwksCache) fetchJWKS(ctx context.Context, jwksURI string) (map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("auth: jwks fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("auth: jwks fetch: status %d", resp.StatusCode)
 	}
@@ -234,11 +234,14 @@ func parseJWK(k jwk) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int).SetBytes(xB),
-			Y:     new(big.Int).SetBytes(yB),
-		}, nil
+		raw := make([]byte, 0, len(xB)+len(yB))
+		raw = append(raw, xB...)
+		raw = append(raw, yB...)
+		pub, err := ecdsa.ParseUncompressedPublicKey(curve, raw)
+		if err != nil {
+			return nil, fmt.Errorf("ec jwk: parse public key: %w", err)
+		}
+		return pub, nil
 	default:
 		return nil, fmt.Errorf("unsupported kty %q", k.Kty)
 	}

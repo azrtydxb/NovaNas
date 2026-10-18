@@ -200,7 +200,7 @@ func do(t *testing.T, r chi.Router, method, path string, body any) (*http.Respon
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	rb, _ := io.ReadAll(resp.Body)
 	return resp, rb
 }

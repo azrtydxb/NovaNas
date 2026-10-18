@@ -687,7 +687,7 @@ func (m *Manager) planInstall(ctx context.Context, name, version, marketplaceID 
 	if err != nil {
 		return nil, nil, err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	manifestBytes, _, err := ExtractTarball(tarball, tmp)
 	if err != nil {
 		return nil, nil, err
@@ -817,7 +817,7 @@ func (m *Manager) ManifestForPlanning(ctx context.Context, name, version string)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	manifestBytes, _, err := ExtractTarball(tarball, tmp)
 	if err != nil {
 		return nil, err

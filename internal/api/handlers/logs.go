@@ -62,7 +62,7 @@ func (h *LogsHandler) proxyStream(ctx context.Context, w http.ResponseWriter, ta
 		middleware.WriteError(w, http.StatusBadGateway, "loki_unreachable", "Loki upstream is not reachable")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "application/json")

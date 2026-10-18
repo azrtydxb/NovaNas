@@ -10,12 +10,12 @@ import (
 )
 
 type Snapshot struct {
-	Name           string `json:"name"`
-	Dataset        string `json:"dataset"`
-	ShortName      string `json:"shortName"`
-	UsedBytes      uint64 `json:"usedBytes"`
+	Name            string `json:"name"`
+	Dataset         string `json:"dataset"`
+	ShortName       string `json:"shortName"`
+	UsedBytes       uint64 `json:"usedBytes"`
 	ReferencedBytes uint64 `json:"referencedBytes"`
-	CreationUnix   int64  `json:"creationUnix"`
+	CreationUnix    int64  `json:"creationUnix"`
 }
 
 func parseList(data []byte) ([]Snapshot, error) {

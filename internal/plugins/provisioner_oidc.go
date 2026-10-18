@@ -58,16 +58,16 @@ func oidcSecretPath(plugin string) string {
 // kcClient is the JSON shape Keycloak's admin REST API uses for
 // /clients. Only the fields we set / read are listed.
 type kcClient struct {
-	ID                      string   `json:"id,omitempty"`
-	ClientID                string   `json:"clientId"`
-	Enabled                 bool     `json:"enabled"`
-	PublicClient            bool     `json:"publicClient"`
-	ServiceAccountsEnabled  bool     `json:"serviceAccountsEnabled"`
-	StandardFlowEnabled     bool     `json:"standardFlowEnabled"`
-	DirectAccessGrantsOn    bool     `json:"directAccessGrantsEnabled"`
-	RedirectURIs            []string `json:"redirectUris,omitempty"`
-	WebOrigins              []string `json:"webOrigins,omitempty"`
-	ProtocolMappers         []kcProtocolMapper `json:"protocolMappers,omitempty"`
+	ID                     string             `json:"id,omitempty"`
+	ClientID               string             `json:"clientId"`
+	Enabled                bool               `json:"enabled"`
+	PublicClient           bool               `json:"publicClient"`
+	ServiceAccountsEnabled bool               `json:"serviceAccountsEnabled"`
+	StandardFlowEnabled    bool               `json:"standardFlowEnabled"`
+	DirectAccessGrantsOn   bool               `json:"directAccessGrantsEnabled"`
+	RedirectURIs           []string           `json:"redirectUris,omitempty"`
+	WebOrigins             []string           `json:"webOrigins,omitempty"`
+	ProtocolMappers        []kcProtocolMapper `json:"protocolMappers,omitempty"`
 }
 
 type kcProtocolMapper struct {
@@ -146,7 +146,7 @@ func (p *OIDCClientProvisioner) Provision(ctx context.Context, plugin string, n 
 		if err != nil {
 			return "", fmt.Errorf("plugins: keycloak get secret: %w", err)
 		}
-		defer getResp.Body.Close()
+		defer func() { _ = getResp.Body.Close() }()
 		if getResp.StatusCode/100 != 2 {
 			return "", fmt.Errorf("plugins: keycloak get secret: %d", getResp.StatusCode)
 		}
@@ -207,7 +207,7 @@ func (p *OIDCClientProvisioner) findClientUUID(ctx context.Context, clientID str
 	if err != nil {
 		return "", fmt.Errorf("plugins: keycloak list clients: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		return "", fmt.Errorf("plugins: keycloak list clients: %d", resp.StatusCode)
 	}

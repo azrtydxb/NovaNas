@@ -76,10 +76,10 @@ func (p *TLSCertProvisioner) Provision(ctx context.Context, plugin string, n TLS
 	if err != nil {
 		return "", fmt.Errorf("plugins: tlsCert issue: %w", err)
 	}
-	if err := os.WriteFile(certPath, out.CertPEM, 0o644); err != nil {
+	if err := os.WriteFile(certPath, out.CertPEM, 0o600); err != nil {
 		return "", fmt.Errorf("plugins: write cert: %w", err)
 	}
-	if err := os.WriteFile(keyPath, out.KeyPEM, 0o640); err != nil {
+	if err := os.WriteFile(keyPath, out.KeyPEM, 0o600); err != nil {
 		return "", fmt.Errorf("plugins: write key: %w", err)
 	}
 	if p.Logger != nil {

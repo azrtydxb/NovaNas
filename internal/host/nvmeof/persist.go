@@ -82,9 +82,7 @@ func (m *Manager) Save(ctx context.Context) (*SavedConfig, error) {
 			Serial:       d.Subsystem.Serial,
 		}
 		for _, ns := range d.Namespaces {
-			ss.Namespaces = append(ss.Namespaces, SavedNamespace{
-				NSID: ns.NSID, DevicePath: ns.DevicePath, Enabled: ns.Enabled,
-			})
+			ss.Namespaces = append(ss.Namespaces, SavedNamespace(ns))
 		}
 		sort.Slice(ss.Namespaces, func(i, j int) bool {
 			return ss.Namespaces[i].NSID < ss.Namespaces[j].NSID
@@ -212,9 +210,7 @@ func (m *Manager) Restore(ctx context.Context, cfg SavedConfig) error {
 			return fmt.Errorf("restore: subsystem %q: %w", s.NQN, err)
 		}
 		for _, ns := range s.Namespaces {
-			if err := m.AddNamespace(ctx, s.NQN, Namespace{
-				NSID: ns.NSID, DevicePath: ns.DevicePath, Enabled: ns.Enabled,
-			}); err != nil {
+			if err := m.AddNamespace(ctx, s.NQN, Namespace(ns)); err != nil {
 				return fmt.Errorf("restore: namespace %d on %q: %w", ns.NSID, s.NQN, err)
 			}
 		}

@@ -22,8 +22,8 @@ const IndexCacheTTL = 15 * time.Minute
 
 // Index is the on-the-wire shape of marketplace index.json.
 type Index struct {
-	Version int            `json:"version"`
-	Updated time.Time      `json:"updated,omitempty"`
+	Version int           `json:"version"`
+	Updated time.Time     `json:"updated,omitempty"`
 	Plugins []IndexPlugin `json:"plugins"`
 }
 
@@ -43,19 +43,19 @@ type IndexPlugin struct {
 
 // IndexVersion is one release of a plugin.
 type IndexVersion struct {
-	Version      string `json:"version"`
-	TarballURL   string `json:"tarballUrl"`
-	SignatureURL string `json:"signatureUrl"`
-	SHA256       string `json:"sha256,omitempty"`
-	Size         int64  `json:"size,omitempty"`
+	Version      string    `json:"version"`
+	TarballURL   string    `json:"tarballUrl"`
+	SignatureURL string    `json:"signatureUrl"`
+	SHA256       string    `json:"sha256,omitempty"`
+	Size         int64     `json:"size,omitempty"`
 	ReleasedAt   time.Time `json:"releasedAt,omitempty"`
 }
 
 // MarketplaceClient fetches and caches the marketplace index and the
 // release artifacts (tarball + signature).
 type MarketplaceClient struct {
-	IndexURL   string
-	HTTP       *http.Client
+	IndexURL string
+	HTTP     *http.Client
 
 	mu       sync.RWMutex
 	cache    *Index
@@ -154,7 +154,7 @@ func (c *MarketplaceClient) fetch(ctx context.Context) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("plugins: marketplace HTTP %d", resp.StatusCode)
 	}
@@ -187,7 +187,7 @@ func (c *MarketplaceClient) getBytes(ctx context.Context, url string) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("plugins: HTTP %d for %s", resp.StatusCode, url)
 	}

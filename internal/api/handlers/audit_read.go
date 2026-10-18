@@ -266,7 +266,7 @@ func parseFilter(q map[string][]string, allowCursor bool) (*auditFilter, string)
 		if v > auditMaxPageSize {
 			return nil, fmt.Sprintf("limit must be <= %d", auditMaxPageSize)
 		}
-		f.pageSize = int32(v)
+		f.pageSize = int32(v) //nolint:gosec // v is bounded by auditMaxPageSize above.
 	}
 
 	if allowCursor {
@@ -328,13 +328,13 @@ func (h *AuditReadHandler) List(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		out = append(out, rowToEvent(r))
-		if int32(len(out)) >= f.pageSize {
+		if len(out) >= int(f.pageSize) {
 			break
 		}
 	}
 
 	resp := AuditListResponse{Items: out}
-	if int32(len(out)) == f.pageSize && len(out) > 0 {
+	if len(out) == int(f.pageSize) && len(out) > 0 {
 		last := out[len(out)-1]
 		resp.NextCursor = encodeCursor(last.Timestamp, last.ID)
 	}
@@ -521,7 +521,7 @@ func (h *AuditReadHandler) Export(w http.ResponseWriter, r *http.Request) {
 			id := row.ID
 			cursorID = &id
 		}
-		if int32(len(rows)) < pageSize {
+		if len(rows) < int(pageSize) {
 			break
 		}
 	}

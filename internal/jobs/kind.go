@@ -87,10 +87,10 @@ const (
 	KindNfsReload       Kind = "nfs.reload"
 
 	// Kerberos
-	KindKrb5SetConfig     Kind = "krb5.config.set"
-	KindKrb5SetIdmapd     Kind = "krb5.idmapd.set"
-	KindKrb5UploadKeytab  Kind = "krb5.keytab.upload"
-	KindKrb5DeleteKeytab  Kind = "krb5.keytab.delete"
+	KindKrb5SetConfig    Kind = "krb5.config.set"
+	KindKrb5SetIdmapd    Kind = "krb5.idmapd.set"
+	KindKrb5UploadKeytab Kind = "krb5.keytab.upload"
+	KindKrb5DeleteKeytab Kind = "krb5.keytab.delete"
 
 	// Samba
 	KindSambaShareCreate     Kind = "samba.share.create"

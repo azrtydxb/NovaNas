@@ -18,10 +18,10 @@ func (f *fakeSnapper) Create(_ context.Context, ds, short string, _ bool) error 
 }
 
 type fakeSender struct {
-	body            []byte
-	gotIncremental  string
-	gotSnapshot     string
-	err             error
+	body           []byte
+	gotIncremental string
+	gotSnapshot    string
+	err            error
 }
 
 func (f *fakeSender) Send(_ context.Context, snap, incFrom string, w io.Writer) error {

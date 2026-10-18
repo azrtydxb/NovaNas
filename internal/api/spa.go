@@ -38,7 +38,7 @@ func spaHandler(root string) http.HandlerFunc {
 		// to index.html so the SPA can render the route.
 		if info, err := http.Dir(root).Open(clean); err == nil {
 			st, _ := info.Stat()
-			info.Close()
+			_ = info.Close()
 			if st != nil && !st.IsDir() {
 				fs.ServeHTTP(w, r)
 				return

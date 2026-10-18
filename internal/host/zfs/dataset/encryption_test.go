@@ -167,12 +167,12 @@ func TestGenerateRawKey_Length(t *testing.T) {
 
 func TestCreateEncryptedArgs_Filesystem(t *testing.T) {
 	spec := CreateSpec{
-		Parent:               "tank",
-		Name:                 "secret",
-		Type:                 "filesystem",
-		EncryptionEnabled:    true,
-		EncryptionAlgorithm:  "aes-256-gcm",
-		Properties:           map[string]string{"compression": "lz4"},
+		Parent:              "tank",
+		Name:                "secret",
+		Type:                "filesystem",
+		EncryptionEnabled:   true,
+		EncryptionAlgorithm: "aes-256-gcm",
+		Properties:          map[string]string{"compression": "lz4"},
 	}
 	args, err := CreateEncryptedArgs(spec)
 	if err != nil {

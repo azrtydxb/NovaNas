@@ -272,15 +272,15 @@ func TestValidateHostname(t *testing.T) {
 		}
 	}
 	bad := map[string]string{
-		"":             "empty",
+		"":                      "empty",
 		strings.Repeat("a", 64): "too long",
-		"-bad":           "leading hyphen",
-		"bad-":           "trailing hyphen",
-		"has space":      "space",
-		"has.dot":        "dot",
-		"has_underscore": "underscore",
-		"unicode-é":      "non-ascii",
-		"with\x00nul":    "NUL",
+		"-bad":                  "leading hyphen",
+		"bad-":                  "trailing hyphen",
+		"has space":             "space",
+		"has.dot":               "dot",
+		"has_underscore":        "underscore",
+		"unicode-é":             "non-ascii",
+		"with\x00nul":           "NUL",
 	}
 	for n, why := range bad {
 		if err := validateHostname(n); err == nil {

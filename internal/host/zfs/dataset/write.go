@@ -26,8 +26,8 @@ type CreateSpec struct {
 	// EncryptionEnabled / EncryptionAlgorithm fields are NOT consumed
 	// by buildCreateArgs (see CreateEncryptedArgs in encryption.go);
 	// the regular Create path rejects them.
-	EncryptionEnabled    bool   `json:"encryptionEnabled,omitempty"`
-	EncryptionAlgorithm  string `json:"encryptionAlgorithm,omitempty"`
+	EncryptionEnabled   bool   `json:"encryptionEnabled,omitempty"`
+	EncryptionAlgorithm string `json:"encryptionAlgorithm,omitempty"`
 }
 
 func buildCreateArgs(spec CreateSpec) ([]string, error) {

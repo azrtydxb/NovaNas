@@ -14,11 +14,11 @@ import (
 // ---------- shared fakes ----------
 
 type captureRunner struct {
-	calls   [][]string // each call: [bin, args...]
-	out     []byte
-	err     error
-	errFor  map[string]error // by bin
-	outFor  map[string][]byte
+	calls  [][]string // each call: [bin, args...]
+	out    []byte
+	err    error
+	errFor map[string]error // by bin
+	outFor map[string][]byte
 }
 
 func (c *captureRunner) run(_ context.Context, bin string, args ...string) ([]byte, error) {

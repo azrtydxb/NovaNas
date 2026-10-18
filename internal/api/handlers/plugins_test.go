@@ -109,7 +109,9 @@ func TestPluginsHandler_BadInstallBody(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("want 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	var env struct{ Error string `json:"error"` }
+	var env struct {
+		Error string `json:"error"`
+	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &env)
 	if env.Error == "" {
 		t.Errorf("expected error envelope, got %s", rec.Body.String())

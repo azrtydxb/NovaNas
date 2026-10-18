@@ -214,11 +214,11 @@ type smartctlOutput struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"device"`
-	ModelName        string `json:"model_name"`
-	ModelFamily      string `json:"model_family"`
-	SerialNumber     string `json:"serial_number"`
-	FirmwareVersion  string `json:"firmware_version"`
-	UserCapacity     struct {
+	ModelName       string `json:"model_name"`
+	ModelFamily     string `json:"model_family"`
+	SerialNumber    string `json:"serial_number"`
+	FirmwareVersion string `json:"firmware_version"`
+	UserCapacity    struct {
 		Bytes int64 `json:"bytes"`
 	} `json:"user_capacity"`
 	NVMeTotalCapacity *int64 `json:"nvme_total_capacity,omitempty"`
@@ -267,16 +267,16 @@ type ataAttr struct {
 }
 
 type nvmeLog struct {
-	CriticalWarning             int  `json:"critical_warning"`
-	Temperature                 *int `json:"temperature"`
-	AvailableSpare              *int `json:"available_spare"`
-	AvailableSpareThreshold     *int `json:"available_spare_threshold"`
-	PercentageUsed              *int `json:"percentage_used"`
-	PowerCycles                 *int `json:"power_cycles"`
-	PowerOnHours                *int `json:"power_on_hours"`
-	UnsafeShutdowns             *int `json:"unsafe_shutdowns"`
-	MediaErrors                 *int `json:"media_errors"`
-	NumErrLogEntries            *int `json:"num_err_log_entries"`
+	CriticalWarning         int  `json:"critical_warning"`
+	Temperature             *int `json:"temperature"`
+	AvailableSpare          *int `json:"available_spare"`
+	AvailableSpareThreshold *int `json:"available_spare_threshold"`
+	PercentageUsed          *int `json:"percentage_used"`
+	PowerCycles             *int `json:"power_cycles"`
+	PowerOnHours            *int `json:"power_on_hours"`
+	UnsafeShutdowns         *int `json:"unsafe_shutdowns"`
+	MediaErrors             *int `json:"media_errors"`
+	NumErrLogEntries        *int `json:"num_err_log_entries"`
 }
 
 type ataSelfTestEntry struct {

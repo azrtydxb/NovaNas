@@ -76,7 +76,7 @@ type Status struct {
 }
 
 type Vdev struct {
-	Type     string `json:"type"`     // mirror, raidz1, raidz2, raidz3, stripe, log, cache, spare
+	Type     string `json:"type"` // mirror, raidz1, raidz2, raidz3, stripe, log, cache, spare
 	Path     string `json:"path,omitempty"`
 	State    string `json:"state"`
 	ReadErr  uint64 `json:"readErrors"`
@@ -164,6 +164,9 @@ func parseStatus(data []byte) (*Status, error) {
 		if depth < 0 {
 			continue // not a config row
 		}
+		if depth >= len(parents) {
+			continue // deeper than the levels we track
+		}
 		v := classifyVdev(name, state)
 
 		// Pool root: first depth-0 row. Skip; subsequent depth-1 rows
@@ -177,11 +180,11 @@ func parseStatus(data []byte) (*Status, error) {
 		// Append v to its parent's children list (or st.Vdevs if no parent
 		// at depth-1), then record v as the parent for depth+1 rows.
 		var inserted *Vdev
-		if depth == 0 || parents[depth-1] == nil {
+		if depth == 0 || parents[depth-1] == nil { //nolint:gosec // depth < len(parents) is checked above.
 			st.Vdevs = append(st.Vdevs, v)
 			inserted = &st.Vdevs[len(st.Vdevs)-1]
 		} else {
-			p := parents[depth-1]
+			p := parents[depth-1] //nolint:gosec // depth > 0 and depth < len(parents) here.
 			p.Children = append(p.Children, v)
 			inserted = &p.Children[len(p.Children)-1]
 		}

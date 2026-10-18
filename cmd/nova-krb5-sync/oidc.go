@@ -60,7 +60,7 @@ func (s *novaTokenSource) fetch(ctx context.Context) (string, time.Time, error) 
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("oidc: token endpoint: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", time.Time{}, fmt.Errorf("oidc: token endpoint returned %d: %s", resp.StatusCode, truncate(string(body), 256))
@@ -75,13 +75,13 @@ func (s *novaTokenSource) fetch(ctx context.Context) (string, time.Time, error) 
 	if tr.AccessToken == "" {
 		return "", time.Time{}, errors.New("oidc: empty access_token")
 	}
-	exp := time.Time{}
+	// Unknown expiry defaults to a conservative 60s so the refresh loop
+	// retries quickly rather than treating the token as immortal.
+	exp := time.Now().Add(60 * time.Second)
 	if jwtExp, ok := decodeJWTExp(tr.AccessToken); ok {
 		exp = jwtExp
 	} else if tr.ExpiresIn > 0 {
 		exp = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
-	} else {
-		exp = time.Now().Add(60 * time.Second)
 	}
 	return tr.AccessToken, exp, nil
 }

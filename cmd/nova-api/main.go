@@ -64,12 +64,12 @@ var (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "config:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "config:", err)
 		os.Exit(1)
 	}
 	logger, err := logging.New(cfg.LogLevel, os.Stderr)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logger:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "logger:", err)
 		os.Exit(1)
 	}
 
@@ -178,20 +178,20 @@ func main() {
 	// Asynq client (dispatcher uses this)
 	asynqRedisOpt, err := asynq.ParseRedisURI(cfg.RedisURL)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "redis parse:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "redis parse:", err)
 		os.Exit(1)
 	}
 	asyncClient := asynq.NewClient(asynqRedisOpt)
-	defer asyncClient.Close()
+	defer func() { _ = asyncClient.Close() }()
 
 	// Plain redis client (for SSE pub/sub)
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "redis url:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "redis url:", err)
 		os.Exit(1)
 	}
 	redisClient := redis.NewClient(redisOpts)
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Metrics registry. Owned by main so the same handle can be wired
 	// into the dispatcher, worker, and HTTP server, plus the optional

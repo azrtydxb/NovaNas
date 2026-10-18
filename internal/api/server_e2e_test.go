@@ -36,13 +36,10 @@ func (f *fakeDispatcher) Dispatch(_ context.Context, in jobs.DispatchInput) (job
 // fixed data. Each method writes its caller's intent so tests can assert
 // "the route resolved to the expected manager call."
 type fakeManager struct {
-	pools     []pool.Pool
-	datasets  []dataset.Dataset
-	snapshots []snapshot.Snapshot
-	disks     []disks.Disk
+	pools []pool.Pool
 }
 
-func (f *fakeManager) List(_ context.Context) ([]pool.Pool, error)     { return f.pools, nil }
+func (f *fakeManager) List(_ context.Context) ([]pool.Pool, error) { return f.pools, nil }
 func (f *fakeManager) Get(_ context.Context, _ string) (*pool.Detail, error) {
 	return &pool.Detail{Pool: pool.Pool{Name: "tank"}}, nil
 }

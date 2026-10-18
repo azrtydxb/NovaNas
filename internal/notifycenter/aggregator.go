@@ -105,11 +105,11 @@ func (a *Aggregator) tick(ctx context.Context) {
 // alertmanagerAlert mirrors the relevant subset of /api/v2/alerts.
 // Only the fields we project are decoded.
 type alertmanagerAlert struct {
-	Fingerprint string            `json:"fingerprint"`
-	StartsAt    time.Time         `json:"startsAt"`
-	Labels      map[string]string `json:"labels"`
-	Annotations map[string]string `json:"annotations"`
-	GeneratorURL string           `json:"generatorURL"`
+	Fingerprint  string            `json:"fingerprint"`
+	StartsAt     time.Time         `json:"startsAt"`
+	Labels       map[string]string `json:"labels"`
+	Annotations  map[string]string `json:"annotations"`
+	GeneratorURL string            `json:"generatorURL"`
 }
 
 func (a *Aggregator) pollAlertmanager(ctx context.Context) error {
@@ -123,7 +123,7 @@ func (a *Aggregator) pollAlertmanager(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("alertmanager returned %d", resp.StatusCode)
 	}

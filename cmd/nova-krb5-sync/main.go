@@ -325,7 +325,7 @@ func sdNotify(msg string, logger *slog.Logger) {
 		logger.Debug("sd_notify dial failed", "err", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if _, err := conn.Write([]byte(msg)); err != nil {
 		logger.Debug("sd_notify write failed", "err", err)
 	}

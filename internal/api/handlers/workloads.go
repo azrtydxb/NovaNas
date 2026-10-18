@@ -235,7 +235,7 @@ func (h *WorkloadsHandler) Logs(w http.ResponseWriter, r *http.Request) {
 		h.writeErr(w, err)
 		return
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

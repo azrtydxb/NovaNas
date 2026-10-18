@@ -670,7 +670,7 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 		if finalScan == nil {
-			return fmt.Errorf("Scan field never populated")
+			return fmt.Errorf("scan field never populated")
 		}
 		if finalScan.State != "finished" {
 			return fmt.Errorf("scrub did not finish within 60s; last state=%q", finalScan.State)
@@ -857,7 +857,7 @@ func main() {
 		if err := dm.SetProps(ctx, full, map[string]string{"quota": "64M"}); err != nil {
 			return err
 		}
-		os.Remove(big) // discard partial write
+		_ = os.Remove(big) // discard partial write
 		if err := writeRandom(big, 16<<20); err != nil {
 			return fmt.Errorf("write after quota raise: %w", err)
 		}
@@ -936,7 +936,7 @@ func main() {
 			}
 		}
 		if !seenFs || !seenVol {
-			return fmt.Errorf("List missed entries: fs=%v vol=%v (got %d datasets)", seenFs, seenVol, len(ds))
+			return fmt.Errorf("list missed entries: fs=%v vol=%v (got %d datasets)", seenFs, seenVol, len(ds))
 		}
 		fmt.Printf("  List returned both filesystem and volume with correct Type\n")
 
@@ -2180,14 +2180,14 @@ func main() {
 			return fmt.Errorf("open iscsi dev: %w", err)
 		}
 		if _, err := f.Write(payload); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("write iscsi dev: %w", err)
 		}
 		if err := f.Sync(); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("fsync iscsi dev: %w", err)
 		}
-		f.Close()
+		_ = f.Close()
 		hashWritten := sha256bytes(payload)
 
 		readBack, err := readBlockAt(devPath, 0, len(payload))
@@ -2368,14 +2368,14 @@ func main() {
 			return fmt.Errorf("open nvme dev: %w", err)
 		}
 		if _, err := f.Write(payload); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("write nvme dev: %w", err)
 		}
 		if err := f.Sync(); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("fsync nvme dev: %w", err)
 		}
-		f.Close()
+		_ = f.Close()
 		hashWritten := sha256bytes(payload)
 
 		readBack, err := readBlockAt(nvmeDev, 0, len(payload))
@@ -2659,14 +2659,14 @@ func main() {
 			return fmt.Errorf("open nvme dev: %w", err)
 		}
 		if _, err := f.Write(payload); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("write nvme dev: %w", err)
 		}
 		if err := f.Sync(); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("fsync nvme dev: %w", err)
 		}
-		f.Close()
+		_ = f.Close()
 		hashWritten := sha256bytes(payload)
 		readBack, err := readBlockAt(nvmeDev, 0, len(payload))
 		if err != nil {
@@ -2762,7 +2762,7 @@ func main() {
 		if err := nm.SaveToFile(ctx, snapPath); err != nil {
 			return fmt.Errorf("SaveToFile: %w", err)
 		}
-		defer os.Remove(snapPath)
+		defer func() { _ = os.Remove(snapPath) }()
 		fmt.Printf("  saved nvmet snapshot to %s\n", snapPath)
 
 		// Tear down (simulating reboot wiping nvmet RAM state).
@@ -2866,7 +2866,7 @@ func main() {
 		// Marker file for visibility check.
 		markerPath := filepath.Join(mp, "marker.txt")
 		markerBody := []byte("hello from host fs\n")
-		if err := os.WriteFile(markerPath, markerBody, 0o644); err != nil {
+		if err := os.WriteFile(markerPath, markerBody, 0o600); err != nil {
 			return fmt.Errorf("write marker: %w", err)
 		}
 
@@ -2996,7 +2996,7 @@ func main() {
 			// Restore (or remove) the host config files.
 			restore := func(p string, pre []byte, had bool) {
 				if had {
-					_ = os.WriteFile(p, pre, 0o644)
+					_ = os.WriteFile(p, pre, 0o600)
 				} else {
 					_ = os.Remove(p)
 				}
@@ -3057,7 +3057,7 @@ func main() {
         supported_enctypes = aes256-cts-hmac-sha1-96:normal aes128-cts-hmac-sha1-96:normal
     }
 `
-		if err := os.WriteFile(kdcConf, []byte(kdcConfBody), 0o644); err != nil {
+		if err := os.WriteFile(kdcConf, []byte(kdcConfBody), 0o600); err != nil {
 			return fmt.Errorf("step4 write kdc.conf: %w", err)
 		}
 
@@ -3197,7 +3197,7 @@ func main() {
 			Name: exportName,
 			Path: exportMP,
 			Clients: []nfs.ClientRule{{
-				Spec:    "127.0.0.1",
+				Spec: "127.0.0.1",
 				// all_squash + anonuid/gid=0: with sec=krb5 and no user
 				// TGT in the kernel keyring, the kernel uses machine
 				// creds and idmapd maps unknown principals to nobody.
@@ -3361,7 +3361,7 @@ func main() {
 		defer func() { _ = dm.Destroy(ctx, full, false) }()
 
 		markerPath := filepath.Join(mp, "marker.txt")
-		if err := os.WriteFile(markerPath, []byte("samba marker\n"), 0o644); err != nil {
+		if err := os.WriteFile(markerPath, []byte("samba marker\n"), 0o600); err != nil {
 			return fmt.Errorf("write marker: %w", err)
 		}
 
@@ -3802,7 +3802,7 @@ func main() {
 		// 12. Write via NFS.
 		nfsFilePath := filepath.Join(nfsMP, "from-nfs.txt")
 		nfsBodyW := []byte("hello via nfs\n")
-		if err := os.WriteFile(nfsFilePath, nfsBodyW, 0o644); err != nil {
+		if err := os.WriteFile(nfsFilePath, nfsBodyW, 0o600); err != nil {
 			return fmt.Errorf("write via nfs: %w", err)
 		}
 		nfsHash := sha256bytes(nfsBodyW)
@@ -3821,7 +3821,7 @@ func main() {
 			// 14. Write via CIFS.
 			smbFilePath := filepath.Join(smbMP, "from-smb.txt")
 			smbBodyW := []byte("hello via smb\n")
-			if err := os.WriteFile(smbFilePath, smbBodyW, 0o644); err != nil {
+			if err := os.WriteFile(smbFilePath, smbBodyW, 0o600); err != nil {
 				fmt.Printf("  WARN write via cifs failed (guest write perms?): %v\n", err)
 			} else {
 				// 15. Read via NFS.
@@ -3843,7 +3843,7 @@ func main() {
 		// erroring or wiping). We just verify the chmod itself succeeds
 		// and the file mode is updated; ACL diffing requires patched
 		// nfs4-acl-tools which Debian doesn't ship.
-		if err := os.Chmod(nfsFilePath, 0o775); err != nil {
+		if err := os.Chmod(nfsFilePath, 0o775); err != nil { //nolint:gosec // deliberate chmod exercise for the aclmode=passthrough check.
 			fmt.Printf("  WARN chmod for aclmode-passthrough test failed: %v\n", err)
 		} else if st, err := os.Stat(nfsFilePath); err == nil {
 			fmt.Printf("  chmod 0775 succeeded under aclmode=passthrough (mode now %o)\n", st.Mode().Perm())
@@ -3980,7 +3980,7 @@ func main() {
 		}
 		if !restoredViaSet {
 			if hadPre {
-				if err := os.WriteFile(globalsFile, preBytes, 0o644); err != nil {
+				if err := os.WriteFile(globalsFile, preBytes, 0o600); err != nil {
 					fmt.Printf("  WARN restore prior bytes: %v\n", err)
 				} else {
 					fmt.Printf("  restored prior globals file bytes\n")
@@ -4094,7 +4094,7 @@ func splitEnv(name string) []string {
 }
 
 func die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
+	_, _ = fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
 	os.Exit(2)
 }
 
@@ -4104,7 +4104,7 @@ func writePayload(path string, size int) {
 	if err != nil {
 		die("create %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, 1<<16)
 	for i := range buf {
 		buf[i] = byte(i)
@@ -4136,7 +4136,7 @@ func writeBlockAt(path string, off int64, buf []byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.WriteAt(buf, off); err != nil {
 		return err
 	}
@@ -4149,7 +4149,7 @@ func readBlockAt(path string, off int64, n int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, n)
 	if _, err := f.ReadAt(buf, off); err != nil {
 		return nil, err
@@ -4165,7 +4165,7 @@ func writeRandom(path string, size int) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, 1<<16)
 	for i := range buf {
 		buf[i] = byte(i * 7)
@@ -4187,7 +4187,7 @@ func sha256file(path string) string {
 	if err != nil {
 		die("open %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		die("hash %s: %v", path, err)
@@ -4423,7 +4423,7 @@ func nvmetClearConfigfs() {
 			if nsids, err := os.ReadDir(filepath.Join(sdir, "namespaces")); err == nil {
 				for _, n := range nsids {
 					ndir := filepath.Join(sdir, "namespaces", n.Name())
-					_ = os.WriteFile(filepath.Join(ndir, "enable"), []byte("0"), 0o644)
+					_ = os.WriteFile(filepath.Join(ndir, "enable"), []byte("0"), 0o600)
 					_ = os.Remove(ndir)
 					cleared++
 				}

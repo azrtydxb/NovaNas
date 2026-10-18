@@ -58,33 +58,33 @@ type ReplicationHandler struct {
 // jobRequest is the wire shape for create + update. PATCH is full-replace
 // of mutable fields (matches the rest of the API).
 type jobRequest struct {
-	Name         string                       `json:"name"`
-	Backend      replication.BackendKind      `json:"backend"`
-	Direction    replication.Direction        `json:"direction"`
-	Source       replication.Source           `json:"source"`
-	Destination  replication.Destination      `json:"destination"`
-	Schedule     string                       `json:"schedule"`
-	Retention    replication.RetentionPolicy  `json:"retention"`
-	Enabled      *bool                        `json:"enabled,omitempty"`
-	SecretRef    string                       `json:"secretRef,omitempty"`
-	LastSnapshot *string                      `json:"lastSnapshot,omitempty"`
+	Name         string                      `json:"name"`
+	Backend      replication.BackendKind     `json:"backend"`
+	Direction    replication.Direction       `json:"direction"`
+	Source       replication.Source          `json:"source"`
+	Destination  replication.Destination     `json:"destination"`
+	Schedule     string                      `json:"schedule"`
+	Retention    replication.RetentionPolicy `json:"retention"`
+	Enabled      *bool                       `json:"enabled,omitempty"`
+	SecretRef    string                      `json:"secretRef,omitempty"`
+	LastSnapshot *string                     `json:"lastSnapshot,omitempty"`
 }
 
 // jobResponse mirrors replication.Job with a stable wire shape.
 type jobResponse struct {
-	ID           string                       `json:"id"`
-	Name         string                       `json:"name"`
-	Backend      replication.BackendKind      `json:"backend"`
-	Direction    replication.Direction        `json:"direction"`
-	Source       replication.Source           `json:"source"`
-	Destination  replication.Destination      `json:"destination"`
-	Schedule     string                       `json:"schedule"`
-	Retention    replication.RetentionPolicy  `json:"retention"`
-	Enabled      bool                         `json:"enabled"`
-	SecretRef    string                       `json:"secretRef,omitempty"`
-	LastSnapshot string                       `json:"lastSnapshot,omitempty"`
-	CreatedAt    time.Time                    `json:"createdAt"`
-	UpdatedAt    time.Time                    `json:"updatedAt"`
+	ID           string                      `json:"id"`
+	Name         string                      `json:"name"`
+	Backend      replication.BackendKind     `json:"backend"`
+	Direction    replication.Direction       `json:"direction"`
+	Source       replication.Source          `json:"source"`
+	Destination  replication.Destination     `json:"destination"`
+	Schedule     string                      `json:"schedule"`
+	Retention    replication.RetentionPolicy `json:"retention"`
+	Enabled      bool                        `json:"enabled"`
+	SecretRef    string                      `json:"secretRef,omitempty"`
+	LastSnapshot string                      `json:"lastSnapshot,omitempty"`
+	CreatedAt    time.Time                   `json:"createdAt"`
+	UpdatedAt    time.Time                   `json:"updatedAt"`
 }
 
 // runResponse mirrors replication.Run.
