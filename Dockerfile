@@ -2,7 +2,7 @@
 
 # Multi-stage Dockerfile for nova-api. Used for CI runs and dev images;
 # production deploys via the .deb package onto the host (see deploy/).
-FROM golang:1.25-alpine AS build
+FROM golang:1.27-alpine AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
